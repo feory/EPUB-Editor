@@ -1,0 +1,27 @@
+<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+  <!-- Book shadow -->
+  <rect x="10" y="14" width="84" height="102" rx="7" fill="#000000" opacity="0.3" transform="scale(0.875) translate(3,0)"/>
+  <!-- Book back -->
+  <rect x="5" y="10" width="84" height="102" rx="7" fill="#111111" opacity="0.6" transform="scale(0.875) translate(3,0)"/>
+  <!-- Book body -->
+  <rect x="2" y="6" width="74" height="90" rx="6" fill="#111111"/>
+  <!-- Book cover -->
+  <rect x="7" y="1" width="74" height="90" rx="6" fill="#1a1a1a"/>
+  <!-- Spine -->
+  <rect x="7" y="1" width="10" height="90" rx="3" fill="#000000"/>
+  <!-- Text lines -->
+  <rect x="22" y="16" width="44" height="4" rx="2" fill="white" opacity="0.55"/>
+  <rect x="22" y="25" width="34" height="3" rx="1.5" fill="white" opacity="0.35"/>
+  <rect x="22" y="33" width="38" height="3" rx="1.5" fill="white" opacity="0.3"/>
+  <rect x="22" y="41" width="26" height="3" rx="1.5" fill="white" opacity="0.2"/>
+  <!-- Screen overlay -->
+  <rect x="28" y="50" width="52" height="39" rx="5" fill="#0F172A"/>
+  <rect x="31" y="53" width="46" height="30" rx="3" fill="#1E293B"/>
+  <!-- Cursor -->
+  <rect x="35" y="58" width="3" height="13" rx="1.5" fill="#38BDF8" opacity="0.95"/>
+  <!-- Code lines -->
+  <rect x="42" y="59" width="25" height="2.5" rx="1.25" fill="#38BDF8" opacity="0.7"/>
+  <rect x="42" y="65" width="19" height="2.5" rx="1.25" fill="#38BDF8" opacity="0.5"/>
+  <rect x="42" y="71" width="22" height="2.5" rx="1.25" fill="#38BDF8" opacity="0.35"/>
+  <rect x="35" y="77" width="31" height="2.5" rx="1.25" fill="#38BDF8" opacity="0.25"/>
+</svg>

@@ -1,0 +1,49 @@
+services:
+  languagetool:
+    image: erikvl87/languagetool
+    container_name: epub-languagetool
+    restart: unless-stopped
+    environment:
+      - Java_Xms=512m
+      - Java_Xmx=1g
+    expose:
+      - "8010"
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: epub-backend
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      - ELECTRON_DISABLE_SANDBOX=1
+      - ELECTRON_NO_SANDBOX=1
+      - LANGUAGETOOL_URL=http://languagetool:8010
+      - ALLOWED_ORIGIN=http://localhost:8049
+      - NODE_ENV=production
+    shm_size: '2gb'
+    volumes:
+      - ./data:/app/data
+      - ./ebooks.db:/app/ebooks.db
+    depends_on:
+      - languagetool
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3999/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: epub-frontend
+    restart: unless-stopped
+    ports:
+      - "8049:80"
+    depends_on:
+      backend:
+        condition: service_healthy
