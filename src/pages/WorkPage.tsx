@@ -343,6 +343,7 @@ export function WorkPage() {
           onCleanIndex={() => editorRef.current?.cleanIndexSelection()}
           onFixLinks={handleFixLinks}
           onConversions={() => setShowConversions(true)}
+          onApplyDropCaps={work.handleApplyDropCaps}
           onEditToc={() => setShowToc(true)}
           readOnly={work.readOnly}
         />

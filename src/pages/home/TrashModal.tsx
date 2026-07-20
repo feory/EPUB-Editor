@@ -13,8 +13,10 @@ interface TrashModalProps {
     trashEbooks: Ebook[];
     onRestore: (isbn: string) => void;
     onPermanentDelete: (isbn: string) => void;
+    onPermanentDeleteAll: (isbns: string[]) => void;
     isRestoring: boolean;
     isDeleting: boolean;
+    isDeletingAll: boolean;
 }
 
 const daysRemaining = (deletedAt: string) => {
@@ -24,10 +26,11 @@ const daysRemaining = (deletedAt: string) => {
 
 export const TrashModal: React.FC<TrashModalProps> = ({
     isOpen, onClose, trashEbooks,
-    onRestore, onPermanentDelete, isRestoring, isDeleting,
+    onRestore, onPermanentDelete, onPermanentDeleteAll, isRestoring, isDeleting, isDeletingAll,
 }) => {
     const [permDeleteIsbn, setPermDeleteIsbn] = useState<string | null>(null);
     const [restoreConfirmIsbn, setRestoreConfirmIsbn] = useState<string | null>(null);
+    const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
     const [query, setQuery] = useState('');
     const [page, setPage] = useState(1);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -63,7 +66,7 @@ export const TrashModal: React.FC<TrashModalProps> = ({
 
     if (!isOpen) return null;
 
-    const handleClose = () => { setPermDeleteIsbn(null); setRestoreConfirmIsbn(null); setQuery(''); setPage(1); setSearchOpen(false); onClose(); };
+    const handleClose = () => { setPermDeleteIsbn(null); setRestoreConfirmIsbn(null); setConfirmDeleteAll(false); setQuery(''); setPage(1); setSearchOpen(false); onClose(); };
     const handleQueryChange = (value: string) => { setQuery(value); setPage(1); };
 
     return (
@@ -78,6 +81,36 @@ export const TrashModal: React.FC<TrashModalProps> = ({
                         )}
                     </div>
                     <div className="flex items-center gap-2 flex-1 justify-end">
+                        {trashEbooks.length > 0 && (
+                            confirmDeleteAll ? (
+                                <div className="flex items-center gap-1 animate-in fade-in duration-150">
+                                    <span className="text-xs text-slate-500">Eliminar {trashEbooks.length} ebook(s)?</span>
+                                    <button
+                                        className="p-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50"
+                                        onClick={() => onPermanentDeleteAll(trashEbooks.map(e => e.ebook_isbn))}
+                                        disabled={isDeletingAll}
+                                        title="Confirmar eliminação de tudo"
+                                    >
+                                        {isDeletingAll ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                                    </button>
+                                    <button
+                                        className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                                        onClick={() => setConfirmDeleteAll(false)}
+                                        title="Cancelar"
+                                    >
+                                        <X size={15} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setConfirmDeleteAll(true)}
+                                    className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-all shrink-0"
+                                    title="Eliminar tudo"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            )
+                        )}
                         {trashEbooks.length > 0 && (
                             searchOpen ? (
                                 <div ref={searchRef} className="relative w-56 animate-in fade-in slide-in-from-right-2 duration-200">

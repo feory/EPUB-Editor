@@ -6,7 +6,7 @@ import { useStyles } from '../../context/StyleContext';
 import type { ImageSettings } from '../../components/MarginPreview';
 import { useContentWorker } from '../../hooks/useContentWorker';
 import { compressHtml, decompressHtml } from '../../utils/compression';
-import { cleanEditorHtml } from '../../utils/html-cleaner';
+import { cleanEditorHtml, applyDropCapToFirstParagraph } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { moveChapters, renameChapterPart } from '../../utils/toc';
 import type { DocxStyleMapping } from '../../services/document-importer';
@@ -173,6 +173,31 @@ export function useEbookWork(isbn: string | undefined) {
         if (isbn) saveMutation.mutate({ content: updatedHtml });
     }, [chapterSync, isbn, saveMutation, showNotification]);
 
+    // --- Aplicar capitular ao 1º parágrafo real de cada capítulo (livro inteiro) ---
+    const handleApplyDropCaps = useCallback(() => {
+        const syncedHtml = chapterSync.getSyncedHtmlContent();
+        const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
+        let applied = 0, already = 0;
+        const updatedParts = parts.map((p) => {
+            const r = applyDropCapToFirstParagraph(p);
+            if (r.status === 'applied') applied++;
+            else if (r.status === 'already') already++;
+            return r.part;
+        });
+        const updatedHtml = updatedParts.join('');
+        if (updatedHtml === syncedHtml) {
+            showNotification('info', already > 0
+                ? `Todos os capítulos já tinham capitular (${already}).`
+                : 'Nenhum capítulo elegível para capitular.');
+            return;
+        }
+        const prevIndex = contentState.activeChapterIndex;
+        dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
+        if (prevIndex !== -1) dispatch({ type: 'CHANGE_CHAPTER', index: prevIndex });
+        showNotification('success', `${applied} ${applied === 1 ? 'capitular aplicada' : 'capitulares aplicadas'}${already > 0 ? `, ${already} já ${already === 1 ? 'tinha' : 'tinham'}` : ''}.`);
+        if (isbn) saveMutation.mutate({ content: updatedHtml });
+    }, [chapterSync, isbn, saveMutation, showNotification, contentState.activeChapterIndex]);
+
     // --- Return public API (identical shape to original) ---
     return {
         status: ebook?.status,
@@ -245,6 +270,7 @@ export function useEbookWork(isbn: string | undefined) {
 
         handleEditChapterTitle,
         handleReorderChapter,
+        handleApplyDropCaps,
 
         handleImportPdf: useCallback(
             (file: File, h: number, f: number, settings: ImageSettings, options: ImportOptions) =>

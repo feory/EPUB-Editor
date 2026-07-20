@@ -78,7 +78,17 @@ bun run build
 bun run lint
 ```
 
-## Versão atual: 0.9.4.3
+## Versão atual: 0.9.4.4
+
+### 0.9.4.4 | Capitulares automáticas, Reciclagem em massa, Capítulo sem Título
+- **Ferramenta "Aplicar Capitulares"** (Ferramentas → Auxílio): percorre o livro inteiro e aplica capitular ao 1º parágrafo real de cada capítulo, saltando footnote/alinea/epígrafe(`p-quote`,`p-center`)/Ficha Técnica/vazios; idempotente (salta capítulos que já têm). `applyDropCapToFirstParagraph` (`src/utils/html-cleaner.ts`, `DOMParser`, mesmo padrão de `prependFichaTecnica`) + `handleApplyDropCaps` (`useEbookWork.ts`, reusa o padrão `getSyncedHtmlContent→splitHtmlIntoParts→LOAD_CONTENT` de `handleEditChapterTitle`). Toast com contagem ("N capitulares aplicadas, M já tinham").
+  - Falas de diálogo ("— texto…"): CSS `::first-letter` não funde travessão (Unicode Pd) com a letra seguinte, por isso este caso gera `<span class="drop-cap">— L</span>` explícito em vez de `p.drop-cap::first-letter` — traço+letra sem o espaço de separação lá dentro (senão ficava um vão gigante a 2.5em).
+- **Reciclagem**: botão "Eliminar tudo" no cabeçalho do `TrashModal` (confirmação inline Check/X, mesmo padrão do resto da UI) — `permanentDeleteAllMutation` em `HomePage.tsx` corre `Promise.all` de `permanentDelete` por isbn.
+- **Editor**: borda azul de foco do TinyMCE (`.tox-edit-area::before`, cor default `#006ce7` do skin oxide) removida via override em `src/index.css`.
+- **"Capítulo sem Título"**:
+  - Ao criar, insere agora também um `<p>` vazio a seguir ao marcador, pronto para o conteúdo, com o cursor lá colocado (`setup.ts`, comando `mceChapterBreak`).
+  - Fix: esse parágrafo desaparecia ao criar o capítulo a partir de dentro de outro capítulo (só sobrevivia no "Documento Completo"). Causa: `cleanEditorDOM` (corre no `SetContent` do TinyMCE, disparado pela troca automática de capítulo) apagava qualquer `<p>` vazio sem classe — incluindo o placeholder novo. Fix: poupa o `<p>` que segue imediatamente um marcador `chapter-break`.
+  - Disponível agora também no menu "+" de inserção de bloco (antes só no botão do toolbar) — lógica de diálogo extraída para `editor.addCommand('mceChapterBreak', …)`, chamado tanto pelo botão como pelo novo item do menu (`plusAction` em `useBlockOverlays.ts`).
 
 ### 0.9.4.3 | Lint pré-existente, reposicionamento de pesquisas, Editor CSS
 - **27 erros de lint pré-existentes corrigidos** (não introduzidos nesta sessão, `/simplify` + `Explore` avaliaram o raio de impacto antes de mexer):

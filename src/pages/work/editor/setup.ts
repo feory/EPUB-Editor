@@ -25,38 +25,47 @@ export function createEditorSetup(deps: SetupDeps) {
     const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, onUndo, onRedo, startHtmlEdit, openStyleMenu, wireOverlays } = deps;
 
     return (editor: Editor) => {
+        editor.addCommand('mceChapterBreak', () => {
+            const bookmark = editor.selection.getBookmark(2, true);
+            editor.windowManager.open({
+                title: 'Capítulo sem Título',
+                body: {
+                    type: 'panel',
+                    items: [{ type: 'input', name: 'title', label: 'Título do capítulo', placeholder: 'Capítulo' }],
+                },
+                buttons: [
+                    { type: 'cancel', text: 'Cancelar' },
+                    { type: 'submit', text: 'Inserir', primary: true },
+                ],
+                onSubmit: (api: any) => {
+                    const data = api.getData() as { title: string };
+                    const safeTitle = (data.title.trim() || 'Capítulo').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    api.close();
+                    editor.selection.moveToBookmark(bookmark);
+                    const node = editor.selection.getNode();
+                    const block = editor.dom.getParent(node, 'p,h1,h2,h3,h4,h5,h6') as HTMLElement | null;
+                    // Marcador + parágrafo vazio a seguir, pronto para o conteúdo do capítulo.
+                    const html = `<p class="chapter-break" data-title="${safeTitle}"></p><p><br data-mce-bogus="1"></p>`;
+                    if (block && (block.textContent || '').trim() === '') {
+                        editor.dom.setOuterHTML(block, html);
+                    } else {
+                        editor.insertContent(html);
+                    }
+                    editor.dispatch('Change');
+                    const markers = editor.dom.select('p.chapter-break');
+                    const inserted = markers[markers.length - 1];
+                    const after = inserted?.nextSibling as HTMLElement | null;
+                    if (after && after.nodeName === 'P') editor.selection.setCursorLocation(after, 0);
+                    editor.focus();
+                    editor.nodeChanged();
+                },
+            });
+        });
+
         editor.ui.registry.addButton('chapterbreak', {
             icon: 'ps-chapterbreak',
             tooltip: 'Capítulo sem Título',
-            onAction: () => {
-                const bookmark = editor.selection.getBookmark(2, true);
-                editor.windowManager.open({
-                    title: 'Capítulo sem Título',
-                    body: {
-                        type: 'panel',
-                        items: [{ type: 'input', name: 'title', label: 'Título do capítulo', placeholder: 'Capítulo' }],
-                    },
-                    buttons: [
-                        { type: 'cancel', text: 'Cancelar' },
-                        { type: 'submit', text: 'Inserir', primary: true },
-                    ],
-                    onSubmit: (api: any) => {
-                        const data = api.getData() as { title: string };
-                        const safeTitle = (data.title.trim() || 'Capítulo').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                        api.close();
-                        editor.selection.moveToBookmark(bookmark);
-                        const node = editor.selection.getNode();
-                        const block = editor.dom.getParent(node, 'p,h1,h2,h3,h4,h5,h6') as HTMLElement | null;
-                        const marker = `<p class="chapter-break" data-title="${safeTitle}"></p>`;
-                        if (block && (block.textContent || '').trim() === '') {
-                            editor.dom.setOuterHTML(block, marker);
-                            editor.dispatch('Change');
-                        } else {
-                            editor.insertContent(marker);
-                        }
-                    },
-                });
-            },
+            onAction: () => editor.execCommand('mceChapterBreak'),
         });
 
         // Arrastar imagem: criar o blob COM o file.name original (o drop

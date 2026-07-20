@@ -177,6 +177,11 @@ export function HomePage() {
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', 'Ebook eliminado.', 3000); },
         onError: () => { showNotification('error', 'Erro ao eliminar permanentemente.'); },
     });
+    const permanentDeleteAllMutation = useMutation({
+        mutationFn: (isbns: string[]) => Promise.all(isbns.map((isbn) => ebooksApi.permanentDelete(isbn))),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', 'Reciclagem esvaziada.', 3000); },
+        onError: () => { showNotification('error', 'Erro ao esvaziar a reciclagem.'); },
+    });
     const cleanupMutation = useMutation({
         mutationFn: () => ebooksApi.cleanupHistory(),
         onSuccess: (res) => { showNotification('success', `Limpeza concluída! Removidos ${res.data.deletedCount} ficheiros (${res.data.sizeSavedMB} MB).`); },
@@ -454,8 +459,10 @@ export function HomePage() {
                 trashEbooks={trashEbooks}
                 onRestore={(isbn) => restoreEbookMutation.mutate(isbn)}
                 onPermanentDelete={(isbn) => permanentDeleteMutation.mutate(isbn)}
+                onPermanentDeleteAll={(isbns) => permanentDeleteAllMutation.mutate(isbns)}
                 isRestoring={restoreEbookMutation.isPending}
                 isDeleting={permanentDeleteMutation.isPending}
+                isDeletingAll={permanentDeleteAllMutation.isPending}
             />
 
             {sharingEbook && (

@@ -496,6 +496,54 @@ export function prependFichaTecnica(html: string): string {
   return '<p class="chapter-break" data-title="Ficha Técnica"></p>' + doc.body.innerHTML;
 }
 
+const DROP_CAP_SKIP_CLASSES = ['footnote', 'alinea', 'p-quote', 'p-center'];
+// Fala de diálogo ("— texto…", ver convertListsToDialogue): CSS ::first-letter não funde
+// travessão (Unicode Pd) com a letra seguinte, por isso este caso usa span.drop-cap explícito
+// a envolver "— L" em vez de p.drop-cap::first-letter.
+const DIALOGUE_DASH_PATTERN = /^(—\s*)([^\s—])/;
+
+/**
+ * Aplica 'drop-cap' ao primeiro parágrafo real do corpo de um capítulo (part do split),
+ * saltando footnote/alinea/epígrafe(p-quote,p-center)/Ficha Técnica/vazios.
+ * Idempotente: se já tem, devolve status 'already' sem alterar o HTML.
+ */
+export function applyDropCapToFirstParagraph(part: string): { part: string; status: 'applied' | 'already' | 'none' } {
+  const doc = new DOMParser().parseFromString(part, 'text/html');
+  const heading = doc.body.querySelector(':scope > h1, :scope > h2');
+  if (!heading) return { part, status: 'none' }; // quebra sem título (Ficha Técnica etc.)
+
+  for (let el = heading.nextElementSibling; el; el = el.nextElementSibling) {
+    if (el.tagName !== 'P') continue;
+    const cls = el.classList;
+    if (DROP_CAP_SKIP_CLASSES.some((c) => cls.contains(c))) continue;
+    if (cls.contains('p-small') && cls.contains('p-non-indent')) continue;
+    if ((el.textContent || '').trim() === '') continue;
+
+    const firstEl = el.firstElementChild;
+    if (cls.contains('drop-cap') || (firstEl?.tagName === 'SPAN' && firstEl.classList.contains('drop-cap'))) {
+      return { part, status: 'already' };
+    }
+
+    const firstChild = el.firstChild;
+    if (firstChild?.nodeType === Node.TEXT_NODE) {
+      const text = firstChild.textContent || '';
+      const m = text.match(DIALOGUE_DASH_PATTERN);
+      if (m) {
+        const span = doc.createElement('span');
+        span.className = 'drop-cap';
+        span.textContent = '—' + m[2]; // sem o espaço de m[1] — ao tamanho 2.5em ficava um vão enorme
+        firstChild.textContent = text.slice(m[0].length);
+        el.insertBefore(span, firstChild);
+        return { part: doc.body.innerHTML, status: 'applied' };
+      }
+    }
+
+    cls.add('drop-cap');
+    return { part: doc.body.innerHTML, status: 'applied' };
+  }
+  return { part, status: 'none' };
+}
+
 /**
  * DOM-based cleaning for TinyMCE SetContent event
  * More efficient than regex for DOM manipulation
@@ -506,6 +554,10 @@ export function cleanEditorDOM(body: HTMLElement): void {
   emptyParas.forEach((p: HTMLParagraphElement) => {
     if (p.className.trim() !== '') return;
     if (p.querySelector('img, hr, figure, table, video, audio, iframe')) return;
+    // Placeholder logo a seguir a um capítulo sem título (marcador chapter-break plano,
+    // sem heading a seguir) — mantém, é onde o utilizador vai escrever o conteúdo.
+    const prev = p.previousElementSibling;
+    if (prev && /\bchapter-break\b/.test(prev.className)) return;
     const text = p.textContent || '';
     const html = p.innerHTML || '';
     if (text.trim() === '' || /^(&nbsp;|\s|&#160;|&#xa0;)+$/.test(html.trim())) {

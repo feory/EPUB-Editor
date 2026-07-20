@@ -229,6 +229,12 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             editor.nodeChanged();
             return;
         }
+        if (type === 'chapterbreak') { // marcador+conteúdo próprios, ver comando mceChapterBreak
+            editor.selection.select(block);
+            editor.selection.collapse(false);
+            editor.execCommand('mceChapterBreak');
+            return;
+        }
         const p = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
         block.parentNode.insertBefore(p, block.nextSibling);
         editor.selection.setCursorLocation(p, 0);

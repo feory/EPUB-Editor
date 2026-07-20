@@ -201,3 +201,8 @@ body {
 .tox .tox-menu .tox-collection__item--active { background-color: #f1f5f9 !important; }
 /* Item selecionado (estilo aplicado): fundo destacado */
 .tox .tox-menu .tox-collection__item--enabled { background-color: #e2e8f0 !important; }
+
+/* Remove borda azul de foco à volta da área de edição */
+.tox .tox-edit-area::before {
+  border: none !important;
+}
