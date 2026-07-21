@@ -121,7 +121,12 @@ function resolveStyle(name: string, mapping: DocxStyleMapping): { tag: string; c
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // Separadores de linha do InDesign (line/paragraph separator) e tabs → espaço.
-const cleanText = (s: string) => s.replace(/[\u2028\u2029\t]+/g, " ");
+// "palavra- -composta": artefacto de hifenação Word→InDesign (hífen de quebra de linha a
+// coincidir com o hífen próprio de uma palavra composta, ex. "ginásio- -sede", "destacou- -se")
+// → um só hífen, sem espaço.
+const cleanText = (s: string) => s
+    .replace(/[\u2028\u2029\t]+/g, " ")
+    .replace(/(\p{L})-\s+-(\p{L})/gu, "$1-$2");
 
 function styleName(attr: string | null): string {
     return (attr || '').split('/').pop() || '';
@@ -439,9 +444,18 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
             // Juntar os segmentos com <br> (o split de capítulos troca <br> por espaço no TOC).
             let body = segs.map(s => s.text).filter(Boolean).join('<br>');
             if (!body && segs.every(s => s.notes.length === 0)) continue;
+            // Nº de capítulo/parte SOZINHO (ex. "1", "23") mapeado pelo utilizador para heading
+            // — estilo próprio do livro (ex. "CAP_#"), não coberto pelo 'merge' hardcoded do
+            // STYLE_MAP (esse só conhece os nomes fixos "CAPÍTULOS_#"/"PARTES_#"). Funciona como
+            // rótulo à espera do título seguinte, tal como o 'merge' — nunca funde por TAG (isso
+            // fundiria também duas heading NÃO relacionadas, ex. divisória de Parte + 1º capítulo).
+            if (/^\d{1,3}\.?$/.test(body) && segs.every(s => s.notes.length === 0)) {
+                pendingLabel = body;
+                continue;
+            }
             if (pendingLabel) { body = `${pendingLabel}<br>${body}`; pendingLabel = ''; }
-            // Heading CONSECUTIVO do mesmo estilo do anterior (ver lastHeadingStyle) → funde
-            // no <hN> já emitido (linha extra, <br>) em vez de abrir um novo.
+            // Heading CONSECUTIVO do mesmo ESTILO do anterior (ver lastHeadingStyle) → funde no
+            // <hN> já emitido (linha extra, <br>) em vez de abrir um novo.
             if (sn && sn === lastHeadingStyle && out.length > 0 && out[out.length - 1].endsWith(`</${tag}>`)) {
                 const last = out[out.length - 1];
                 out[out.length - 1] = last.slice(0, -(`</${tag}>`.length)) + '<br>' + body + `</${tag}>`;
