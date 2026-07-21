@@ -45,3 +45,5 @@ temp/
 # Local scratch / personal files (accidentally caught by git add -A)
 graphify-out/
 .~lock.*#
+
+CLAUDE.md
