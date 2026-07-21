@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../utils/format';
-import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings } from './page-list';
+import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings, verifyBlankSpacing } from './page-list';
 import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures } from './idml-figures';
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from './document-importer';
 
@@ -474,12 +474,17 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
         lastHeadingStyle = null; // corpo normal a seguir → quebra a sequência de headings
         for (const seg of segs) {
             if (!seg.text && seg.notes.length === 0) { blankBefore = true; continue; } // linha em branco
-            // Linha em branco antes deste parágrafo → também conta como espaçamento (p-top),
-            // tal como SpaceBefore/SpaceAfter (spacingClasses) — mesmo gate DETECT_SPACING.
-            const blankTop = (DETECT_SPACING && blankBefore && tag === 'p') ? 'p-top' : '';
+            // Linha em branco antes deste parágrafo é um sinal FRACO de espaçamento (ao contrário
+            // de SpaceBefore/SpaceAfter, que é um atributo real do IDML): muitos livros têm linhas
+            // em branco no manuscrito que não correspondem a nenhum espaço visível no miolo
+            // impresso (hábito de escrita, não intenção tipográfica). Por isso não aplica p-top
+            // diretamente aqui — marca como CANDIDATO (data-blank-top) para confirmVerifyBlankSpacing
+            // decidir depois, com o PDF de impressão como árbitro (gap real vs. entrelinha normal
+            // da página); sem PDF, o candidato fica sem p-top (mais seguro que assumir).
+            const blankCandidate = DETECT_SPACING && blankBefore && tag === 'p';
             blankBefore = false;
-            const classes = blankTop ? [...baseClasses, blankTop] : baseClasses;
-            const attr = (classes.length ? ` class="${classes.join(' ')}"` : '') + styleAttr;
+            const attr = (baseClasses.length ? ` class="${baseClasses.join(' ')}"` : '')
+                + styleAttr + (blankCandidate ? ' data-blank-top="1"' : '');
             out.push(`<${tag}${attr}>${seg.text}</${tag}>`);
             // definições de nota logo a seguir ao parágrafo que as referencia (mesmo capítulo)
             for (const def of seg.notes) out.push(def);
@@ -820,6 +825,11 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
             .filter((a): a is { anchor: string; headingHtml: string } => !!a.headingHtml);
         html = insertChapterHeadings(html, withHtml).html;
     }
+    // Linhas em branco manuais (candidatas a p-top, ver renderStory/data-blank-top) só confirmam
+    // espaçamento real com o PDF de impressão como árbitro (gap vs. entrelinha normal da página)
+    // — sem PDF ficam sem p-top (mais seguro que assumir; muitos livros têm linhas em branco no
+    // manuscrito sem correspondência nenhuma no miolo impresso).
+    if (DETECT_SPACING) html = await verifyBlankSpacing(html, pdf?.slice(0));
     let pageBreaks: { inserted: number; total: number } | undefined;
     // Page-list: alinhar as páginas do PDF de impressão ao texto e inserir marcadores.
     if (pdf) {

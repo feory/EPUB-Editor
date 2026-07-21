@@ -205,6 +205,64 @@ export function insertChapterHeadings(html: string, anchors: { anchor: string; h
     return { html: doc.body.innerHTML, inserted: points.length, total: anchors.length };
 }
 
+function median(nums: number[]): number {
+    if (nums.length === 0) return 0;
+    const s = [...nums].sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * Confirma cada candidato a p-top por linha em branco manual (marcado `data-blank-top` por
+ * renderStory/idml-importer) contra o PDF de impressão: uma linha em branco no manuscrito nem
+ * sempre corresponde a espaço visível no miolo (hábito de escrita, não intenção tipográfica) —
+ * só se o gap vertical antes do parágrafo, no PDF, for CLARAMENTE maior que a entrelinha normal
+ * da página (>1.4×) é que fica p-top; caso contrário, ou sem PDF, fica sem p-top (mais seguro
+ * que assumir).
+ */
+export async function verifyBlankSpacing(html: string, data?: ArrayBuffer): Promise<string> {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const candidates = Array.from(doc.querySelectorAll('[data-blank-top]'));
+    if (candidates.length === 0) return html;
+    if (!data) {
+        for (const el of candidates) el.removeAttribute('data-blank-top');
+        return doc.body.innerHTML;
+    }
+
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const pages: { y: number; text: string }[][] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const items = (await page.getTextContent()).items as { str: string; transform: number[] }[];
+        const lineMap = new Map<number, { x: number; str: string }[]>();
+        for (const it of items) {
+            if (!it.str || !it.str.trim()) continue;
+            const y = Math.round(it.transform[5]);
+            (lineMap.get(y) ?? lineMap.set(y, []).get(y)!).push({ x: it.transform[4], str: it.str });
+        }
+        const lines = [...lineMap.entries()].sort((a, b) => b[0] - a[0])
+            .map(([y, parts]) => ({ y, text: normalize(parts.sort((a, b) => a.x - b.x).map(p => p.str).join('')) }));
+        pages.push(lines);
+    }
+
+    for (const el of candidates) {
+        el.removeAttribute('data-blank-top');
+        const key = normalize(el.textContent || '').slice(0, 40);
+        if (key.length < 15) continue; // demasiado curto para ser fiável — sem p-top
+        for (const lines of pages) {
+            const idx = lines.findIndex(l => l.text.startsWith(key));
+            if (idx <= 0) continue; // não encontrado nesta página, ou é a 1ª linha (sem anterior p/ comparar)
+            const gap = lines[idx - 1].y - lines[idx].y;
+            const gaps: number[] = [];
+            for (let k = 1; k < lines.length; k++) gaps.push(lines[k - 1].y - lines[k].y);
+            const normalGap = median(gaps.filter(g => g > 0 && g < 40)); // exclui outliers (colunas/quebras de página)
+            if (normalGap > 0 && gap > normalGap * 1.4) el.classList.add('p-top');
+            break;
+        }
+    }
+    return doc.body.innerHTML;
+}
+
 // Índices da maior subsequência estritamente crescente de `arr` (LIS, O(n log n)).
 function longestIncreasing(arr: number[]): number[] {
     const tails: number[] = [];   // tails[k] = índice do menor fim de uma subseq. de comprimento k+1
