@@ -133,7 +133,7 @@ function styleName(attr: string | null): string {
 }
 
 interface NoteCounter { n: number; star: number; defs: string[] }
-interface Segment { text: string; notes: string[] }
+interface Segment { text: string; notes: string[]; raw?: string }
 
 // Aplica itálico/negrito (FontStyle do CharacterStyleRange) a um pedaço de texto já escapado.
 function withFontStyle(text: string, fs: string): string {
@@ -161,6 +161,42 @@ async function scanCharStyles(zip: JSZip): Promise<Map<string, { fontStyle?: str
         if (fontStyle || cap || position) map.set(self, { fontStyle, cap, position });
     }
     return map;
+}
+
+// Cor de preenchimento das células de tabela (Resources/Graphic.xml) — CMYK ou RGB.
+// ponytail: estado por idmlZip, mesmo padrão de CHAR_STYLES/PARA_INDENTS.
+let COLORS = new Map<string, { space: 'CMYK' | 'RGB'; values: number[] }>();
+
+async function scanColors(zip: JSZip): Promise<Map<string, { space: 'CMYK' | 'RGB'; values: number[] }>> {
+    const xml = await zip.file('Resources/Graphic.xml')?.async('string') ?? '';
+    const map = new Map<string, { space: 'CMYK' | 'RGB'; values: number[] }>();
+    for (const m of xml.matchAll(/<Color\b([^>]*)\/>/g)) {
+        const self = /\bSelf="([^"]*)"/.exec(m[1])?.[1];
+        const space = /\bSpace="([^"]*)"/.exec(m[1])?.[1];
+        const colorValue = /\bColorValue="([^"]*)"/.exec(m[1])?.[1];
+        if (!self || !colorValue || (space !== 'CMYK' && space !== 'RGB')) continue;
+        map.set(self, { space, values: colorValue.split(' ').map(Number) });
+    }
+    return map;
+}
+
+// FillColor/FillTint de uma célula de tabela → "rgb(r,g,b)" CSS, ou '' sem preenchimento
+// ("Swatch/None", cor desconhecida, ou tint 0). Tint = mistura com o papel (branco): reduz cada
+// componente proporcionalmente antes de converter CMYK→RGB (fórmula standard: R=255(1-C)(1-K)).
+function resolveFillColor(colorRef: string | null, tintAttr: string | null): string {
+    if (!colorRef || colorRef === 'Swatch/None' || colorRef === 'Color/None') return '';
+    const tint = (parseFloat(tintAttr ?? '100') || 0) / 100;
+    if (tint <= 0) return '';
+    const def = COLORS.get(colorRef);
+    if (!def) return '';
+    if (def.space === 'RGB') {
+        const [r, g, b] = def.values;
+        const mix = (c: number) => Math.round(255 - (255 - c) * tint);
+        return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+    }
+    const [c, m, y, k] = def.values.map(v => (v / 100) * tint);
+    const rgb = (a: number) => Math.round(255 * (1 - a) * (1 - k));
+    return `rgb(${rgb(c)},${rgb(m)},${rgb(y)})`;
 }
 
 // Recuo de parágrafo (LeftIndent/FirstLineIndent, em PONTOS) definido no estilo de parágrafo
@@ -275,7 +311,7 @@ function renderPsr(psr: Element, counter: NoteCounter): Segment[] {
 
     // Processa os filhos de um CharacterStyleRange (ou de um container como HyperlinkTextSource)
     // recursivamente. Os atributos de formatação (fs/cap/pos) vêm do CharacterStyleRange pai.
-    const processChildren = (parent: Element, fs: string, cap: string, pos: string) => {
+    const processChildren = (parent: Element, fs: string, cap: string, pos: string, color: string) => {
         for (const child of Array.from(parent.childNodes)) {
             if (child.nodeType !== 1) continue;
             const el = child as Element;
@@ -288,8 +324,20 @@ function renderPsr(psr: Element, counter: NoteCounter): Segment[] {
                 if (piece.trim()) {
                     if (/Superscript/i.test(pos)) piece = `<sup>${piece}</sup>`;
                     else if (/Subscript/i.test(pos)) piece = `<sub>${piece}</sub>`;
+                    // Cor de texto explícita do run (ex. header de tabela com fundo escuro, texto
+                    // "Color/Paper" branco) — sem isto ficava sempre preto, ilegível sobre fundos
+                    // escuros. Só aplica quando resolveFillColor devolve algo (Swatch/None → '').
+                    if (color) piece = `<span style="color:${color}">${piece}</span>`;
                 }
                 cur += piece;
+            } else if (el.tagName === 'Table') {
+                // Tabela nativa do InDesign, ancorada inline no run — bloco à parte (não cabe
+                // dentro do <p> do parágrafo-âncora). Só fecha o texto acumulado até aqui (se
+                // houver algum — o parágrafo-âncora tipicamente está vazio, sem isto deixava um
+                // segmento vazio a mais → falso positivo de "linha em branco"); emite a tabela
+                // como segmento raw (renderStory insere sem envolver em <tag>).
+                if (cur.trim() || curNotes.length) flush(); else { cur = ''; curNotes = []; }
+                segs.push({ text: '', notes: [], raw: renderIdmlTable(el, counter) });
             } else if (el.tagName === 'Br') {
                 flush(); // quebra de parágrafo
             } else if (el.tagName === 'Footnote') {
@@ -339,7 +387,8 @@ function renderPsr(psr: Element, counter: NoteCounter): Segment[] {
                 const childFs = el.getAttribute('FontStyle') || fs;
                 const childCap = el.getAttribute('Capitalization') || cap;
                 const childPos = el.getAttribute('Position') || pos;
-                processChildren(el, childFs, childCap, childPos);
+                const childColor = resolveFillColor(el.getAttribute('FillColor'), el.getAttribute('FillTint')) || color;
+                processChildren(el, childFs, childCap, childPos, childColor);
             }
         }
     };
@@ -361,13 +410,57 @@ function renderPsr(psr: Element, counter: NoteCounter): Segment[] {
             // Subscript → <sub>. Atributo direto do run (ex. ×5732 em "Direito das Migrações")
             // ou herdado do estilo de carácter. As notas (<Footnote>) têm o seu próprio <sup>.
             const pos = csr.getAttribute('Position') || acsDef?.position || '';
-            processChildren(csr, fs, cap, pos);
+            // Cor de texto do run (ex. cabeçalho de tabela com fundo escuro, texto branco) —
+            // "Swatch/None"/preto/cor desconhecida resolvem para '' (resolveFillColor), sem efeito.
+            const color = resolveFillColor(csr.getAttribute('FillColor'), csr.getAttribute('FillTint'));
+            processChildren(csr, fs, cap, pos, color);
         } else if (child.tagName === 'HyperlinkTextSource') {
-            processChildren(child, paraFS, '', '');
+            processChildren(child, paraFS, '', '', '');
         }
     }
     flush();
     return segs; // inclui segmentos vazios (linha em branco = <Br/> duplo); o caller decide
+}
+
+// Tabela nativa do InDesign (elemento <Table>, ancorada inline num CharacterStyleRange) → <table>
+// HTML. `Cell/@Name` = "coluna:linha" (0-based) — agrupa por linha, ordena por coluna dentro da
+// linha; `HeaderRowCount` linhas iniciais viram <th>. Sem suporte a células fundidas (RowSpan/
+// ColumnSpan > 1 — não visto nos livros testados); célula fundida cai para célula normal.
+function renderIdmlTable(tableEl: Element, counter: NoteCounter): string {
+    const headerRows = parseInt(tableEl.getAttribute('HeaderRowCount') || '0') || 0;
+    const grid = new Map<number, Map<number, { html: string; bg: string }>>(); // linha → coluna → célula
+    let maxRow = -1;
+    for (const cell of Array.from(tableEl.children)) {
+        if (cell.tagName !== 'Cell') continue;
+        const [colStr, rowStr] = (cell.getAttribute('Name') || '0:0').split(':');
+        const col = parseInt(colStr) || 0;
+        const row = parseInt(rowStr) || 0;
+        maxRow = Math.max(maxRow, row);
+        const lines: string[] = [];
+        for (const psr of Array.from(cell.children)) {
+            if (psr.tagName !== 'ParagraphStyleRange') continue;
+            const text = renderPsr(psr, counter).map(s => s.text).filter(Boolean).join('<br>');
+            if (text) lines.push(text);
+        }
+        const bg = resolveFillColor(cell.getAttribute('FillColor'), cell.getAttribute('FillTint'));
+        let rowMap = grid.get(row);
+        if (!rowMap) { rowMap = new Map(); grid.set(row, rowMap); }
+        rowMap.set(col, { html: lines.join('<br>'), bg });
+    }
+    const out: string[] = ['<table>'];
+    for (let r = 0; r <= maxRow; r++) {
+        const rowMap = grid.get(r);
+        if (!rowMap) continue;
+        const tag = r < headerRows ? 'th' : 'td';
+        const cols = [...rowMap.keys()].sort((a, b) => a - b);
+        out.push(`<tr>${cols.map(c => {
+            const cell = rowMap.get(c);
+            const style = cell?.bg ? ` style="background-color:${cell.bg}"` : '';
+            return `<${tag}${style}>${cell?.html || ''}</${tag}>`;
+        }).join('')}</tr>`);
+    }
+    out.push('</table>');
+    return out.join('');
 }
 
 // Título "disfarçado" de corpo: alguns títulos (ex. "Índice", "Índice remissivo") usam o
@@ -473,6 +566,7 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
 
         lastHeadingStyle = null; // corpo normal a seguir → quebra a sequência de headings
         for (const seg of segs) {
+            if (seg.raw) { out.push(seg.raw); continue; } // tabela — já é HTML de bloco, não envolver em <tag>
             if (!seg.text && seg.notes.length === 0) { blankBefore = true; continue; } // linha em branco
             // Linha em branco antes deste parágrafo é um sinal FRACO de espaçamento (ao contrário
             // de SpaceBefore/SpaceAfter, que é um atributo real do IDML): muitos livros têm linhas
@@ -760,6 +854,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     for (const idmlZip of idmlZips) {
         CHAR_STYLES = await scanCharStyles(idmlZip); // negrito/itálico/versaletes por estilo de carácter
         PARA_INDENTS = await scanParaIndents(idmlZip); // recuo de bloco (LeftIndent) por estilo de parágrafo
+        COLORS = await scanColors(idmlZip); // cores de preenchimento das células de tabela
         const { ordered, frameCount } = await readingOrder(idmlZip);
         for (const storyId of ordered) {
             const xml = await idmlZip.file(`Stories/Story_${storyId}.xml`)?.async('string');
