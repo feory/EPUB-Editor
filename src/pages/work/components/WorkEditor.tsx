@@ -123,9 +123,12 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         editorRef.current?.mode?.set(readOnly ? 'readonly' : 'design');
     }, [readOnly]);
 
-    useEffect(() => {
-        const editor = editorRef.current;
-        if (!editor) return;
+    // Injeta o CSS do livro no <head> do iframe. Chamada tanto pela useEffect abaixo (updates
+    // ao vivo enquanto o editor já está montado — currentCss muda ao editar no Editor CSS)
+    // como pelo onInit (garante o CSS logo no arranque de CADA montagem nova do editor; se só
+    // dependesse da useEffect, sair/voltar a entrar num projeto com o MESMO currentCss de antes
+    // não disparava re-render — o iframe novo ficava sem nenhum estilo).
+    const applyCustomStyles = (editor: TinyMCEEditor) => {
         const editorDoc = editor.getDoc();
         if (!editorDoc) return;
         let styleElement = editorDoc.getElementById('custom-editor-styles') as HTMLStyleElement;
@@ -134,8 +137,13 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             styleElement.id = 'custom-editor-styles';
             editorDoc.head.appendChild(styleElement);
         }
-        styleElement.textContent = currentCss +
-            editorFontCss(editorFont, editorFontSize);
+        styleElement.textContent = currentCss + editorFontCss(editorFont, editorFontSize);
+    };
+
+    useEffect(() => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        applyCustomStyles(editor);
     }, [currentCss, editorFont, editorFontSize]);
 
     useEffect(() => {
@@ -672,7 +680,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             <div className="relative">
                 <Editor
                     licenseKey="gpl"
-                    onInit={(_evt, editor) => { editorRef.current = editor; if (readOnlyRef.current) editor.mode.set('readonly'); }}
+                    onInit={(_evt, editor) => { editorRef.current = editor; if (readOnlyRef.current) editor.mode.set('readonly'); applyCustomStyles(editor); }}
                     value={htmlContent}
                     onEditorChange={(content) => { if (!isDiffHighlightingRef.current) setHtmlContent(content); }}
                     init={{
@@ -734,7 +742,14 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             onImageUploadedRef.current?.();
                             return `/api/ebooks/${isbn}/images/${imageId}`;
                         },
-                        content_style: buildContentStyle(currentCss),
+                        // Só os extras estáticos do editor aqui — o CSS do livro é sempre o injetado
+                        // pela useEffect abaixo (currentCss), nunca este valor de arranque do TinyMCE:
+                        // content_style só é lido UMA VEZ no mount (@tinymce/tinymce-react não o
+                        // reaplica em re-renders), e nesse instante currentCss pode ainda ser o
+                        // DEFAULT_CSS (o CSS guardado do livro carrega de forma assíncrona) — ficava
+                        // congelado com esse valor antigo para sempre, sem refletir alterações
+                        // salvas no Editor CSS (ex: .p-quote).
+                        content_style: buildContentStyle(''),
                         style_formats: STYLE_FORMATS,
                         text_patterns: TEXT_PATTERNS,
                         browser_spellcheck: true,

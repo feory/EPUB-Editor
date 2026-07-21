@@ -59,7 +59,7 @@ export const DEFAULT_CSS = `
     .p-center     { text-align: center !important; text-indent: 0 !important; }
     .p-space      { margin-top: 100px !important; }
     .p-bottom     { margin-bottom: 30px !important; }
-    .p-quote      { margin-left: 4.5em !important; margin-top: 30px !important; margin-bottom: 30px !important; font-size: 0.85em !important; }
+    .p-quote      { margin-left: 4.5em !important; font-size: 0.85em !important; }
     .p-bold       { font-weight: bold !important; }
     .p-italic     { font-style: italic !important; }
     .p-bold-italic { font-weight: bold !important; font-style: italic !important; }

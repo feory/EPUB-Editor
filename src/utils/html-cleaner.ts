@@ -300,6 +300,7 @@ export interface ImportOptions {
   noIndentAfterBold: boolean;
   wrapBoldWithNext: boolean;
   convertListsToDialogue: boolean;
+  detectParagraphSpacing?: boolean; // IDML: SpaceBefore/SpaceAfter → p-top/p-bottom
 }
 
 // Classes that already control indentation — skip these when applying p-indent

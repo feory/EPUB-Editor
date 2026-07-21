@@ -124,7 +124,7 @@ export const generateContentOpf = (
     <meta property="schema:accessibilityFeature">alternativeText</meta>
     <meta property="schema:accessModeSufficient">textual,visual</meta>
     <meta property="schema:accessModeSufficient">textual</meta>
-    ${(metadata.physical_isbn || hasPageList) ? `<meta property="schema:pageBreakSource" refines="#src-id">${escapeXml(metadata.physical_isbn || 'Edição impressa')}</meta>` : ''}
+    ${(metadata.physical_isbn || hasPageList) ? `<meta refines="#src-id" property="source-of">pagination</meta>` : ''}
   </metadata>
   <manifest>
     ${cover.xhtmlItem}

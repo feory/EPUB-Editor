@@ -341,9 +341,7 @@ export function WorkPage() {
           onShowStyleEditor={() => setShowStyleEditor(true)}
           onShowFonts={() => setShowFonts(true)}
           onCleanIndex={() => editorRef.current?.cleanIndexSelection()}
-          onFixLinks={handleFixLinks}
           onConversions={() => setShowConversions(true)}
-          onApplyDropCaps={work.handleApplyDropCaps}
           onEditToc={() => setShowToc(true)}
           readOnly={work.readOnly}
         />
@@ -551,6 +549,7 @@ export function WorkPage() {
       {showConversions && (
         <ConversionsModal
           onApply={(options) => editorRef.current?.applyConversions(options)}
+          onApplyDropCaps={work.handleApplyDropCaps}
           onClose={() => setShowConversions(false)}
         />
       )}

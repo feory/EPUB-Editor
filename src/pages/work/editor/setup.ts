@@ -148,8 +148,10 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.addShortcut('meta+2,ctrl+2', 'Título 2', () => editor.execCommand('FormatBlock', false, 'h2'));
         editor.addShortcut('meta+3,ctrl+3', 'Título 3', () => editor.execCommand('FormatBlock', false, 'h3'));
         editor.addShortcut('meta+p,ctrl+p', 'Parágrafo Padrão', () => editor.execCommand('FormatBlock', false, 'p'));
-        editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', () => editor.formatter.apply('p-indent'));
-        editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', () => editor.formatter.apply('p-top'));
+        // formatter.apply() sozinho não dispara 'Change' — sem isto o React nunca sincroniza
+        // a classe aplicada, perdida ao gravar (mesmo motivo de editor.dispatch('Change') em styleAction).
+        editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', () => { editor.formatter.apply('p-indent'); editor.dispatch('Change'); editor.nodeChanged(); });
+        editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', () => { editor.formatter.apply('p-top'); editor.dispatch('Change'); editor.nodeChanged(); });
 
         editor.on('init', () => {
             editor.formatter.register('p-indent', { block: 'p', classes: 'p-indent' });
@@ -221,7 +223,12 @@ export function createEditorSetup(deps: SetupDeps) {
             editor.ui.registry.addToggleButton(name, {
                 icon,
                 tooltip,
-                onAction: () => { editor.formatter.toggle(format); if (/^h[123]$/.test(format)) syncChapterMarker(); },
+                onAction: () => {
+                    editor.formatter.toggle(format);
+                    if (/^h[123]$/.test(format)) syncChapterMarker();
+                    editor.dispatch('Change'); // sem isto o React não sincroniza a classe aplicada
+                    editor.nodeChanged();
+                },
                 onSetup: (api) => {
                     editor.formatter.formatChanged(format, (active) => api.setActive(active));
                     return () => {};

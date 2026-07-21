@@ -161,11 +161,15 @@ async function scanCharStyles(zip: JSZip): Promise<Map<string, { fontStyle?: str
 // Recuo de parágrafo (LeftIndent/FirstLineIndent, em PONTOS) definido no estilo de parágrafo
 // (Resources/Styles.xml). Honrado como margin-left + text-indent (hanging quando First<0).
 // ponytail: pt→em com divisor fixo 12 (corpo não tem PointSize fiável nos runs); afinar se preciso.
-let PARA_INDENTS = new Map<string, { left: number; first: number; fontStyle?: string }>();
+let PARA_INDENTS = new Map<string, { left: number; first: number; fontStyle?: string; spaceBefore: number; spaceAfter: number }>();
 
-async function scanParaIndents(zip: JSZip): Promise<Map<string, { left: number; first: number; fontStyle?: string }>> {
+// Ativado via opções de importação (checkbox só aparece se scanIdmlStyles detetar espaçamento
+// no ficheiro) — a maioria dos livros não precisa, cada estilo já define o seu via CSS.
+let DETECT_SPACING = false;
+
+async function scanParaIndents(zip: JSZip): Promise<Map<string, { left: number; first: number; fontStyle?: string; spaceBefore: number; spaceAfter: number }>> {
     const xml = await zip.file('Resources/Styles.xml')?.async('string') ?? '';
-    const map = new Map<string, { left: number; first: number; fontStyle?: string }>();
+    const map = new Map<string, { left: number; first: number; fontStyle?: string; spaceBefore: number; spaceAfter: number }>();
     for (const m of xml.matchAll(/<ParagraphStyle\b([^>]*)>/g)) {
         const self = /\bSelf="([^"]*)"/.exec(m[1])?.[1];
         if (!self) continue;
@@ -174,7 +178,10 @@ async function scanParaIndents(zip: JSZip): Promise<Map<string, { left: number; 
         // FontStyle no estilo de PARÁGRAFO (ex. Num2 Bold) → herdado pelos runs sem override
         // próprio (o marcador "a)"/"i)" das alíneas; o corpo tem FontStyle="Roman" explícito).
         const fontStyle = /\bFontStyle="([^"]*)"/.exec(m[1])?.[1];
-        if (left || first || fontStyle) map.set(self, { left, first, fontStyle });
+        // Espaço antes/depois do parágrafo, em pontos (SpaceBefore/SpaceAfter do InDesign).
+        const spaceBefore = parseFloat(/\bSpaceBefore="([^"]*)"/.exec(m[1])?.[1] || '0') || 0;
+        const spaceAfter = parseFloat(/\bSpaceAfter="([^"]*)"/.exec(m[1])?.[1] || '0') || 0;
+        if (left || first || fontStyle || spaceBefore || spaceAfter) map.set(self, { left, first, fontStyle, spaceBefore, spaceAfter });
     }
     return map;
 }
@@ -190,6 +197,58 @@ function indentStyle(psr: Element, fullPS: string): string {
     let s = `margin-left:${em(left)}`;
     if (first) s += `;text-indent:${em(first)}`; // negativo = hanging (1ª linha sai)
     return ` style="${s}"`;
+}
+
+// Traduz SpaceBefore/SpaceAfter (estilo + override do parágrafo, mesmo padrão de indentStyle)
+// em p-top/p-bottom — só quando DETECT_SPACING está ligado (opção de importação).
+function spacingClasses(psr: Element, fullPS: string): string {
+    if (!DETECT_SPACING) return '';
+    const def = PARA_INDENTS.get(fullPS);
+    const beforeAttr = psr.getAttribute('SpaceBefore');
+    const before = beforeAttr !== null ? parseFloat(beforeAttr) || 0 : def?.spaceBefore || 0;
+    const afterAttr = psr.getAttribute('SpaceAfter');
+    const after = afterAttr !== null ? parseFloat(afterAttr) || 0 : def?.spaceAfter || 0;
+    const classes: string[] = [];
+    if (before > 0) classes.push('p-top');
+    if (after > 0) classes.push('p-bottom');
+    return classes.join(' ');
+}
+
+export interface SpacingStyleInfo {
+    name: string;   // estilo IDML (ex. "RECOLHIDOS", "TXT")
+    count: number;  // nº de parágrafos deste estilo com espaçamento
+    before: number; // pt (amostra — 1º valor visto; instâncias podem variar ligeiramente)
+    after: number;  // pt
+}
+
+// Acumula, por estilo, quantos parágrafos têm espaçamento — SpaceBefore/SpaceAfter (estilo/
+// override) OU linha em branco manual antes do parágrafo (mesmo sinal que spacingClasses/o
+// loop principal de renderStory honram) — sem aplicar nada. Conta como "linha em branco" com
+// before=after=0 quando é só esse o sinal (a UI mostra sem valor em pt).
+function accumulateSpacing(
+    story: Element,
+    indents: Map<string, { spaceBefore: number; spaceAfter: number }>,
+    acc: Map<string, SpacingStyleInfo>,
+): void {
+    const dummyCounter: NoteCounter = { n: 0, star: 0, defs: [] }; // scan só — descartado
+    let blankBefore = false;
+    for (const psr of Array.from(story.children)) {
+        if (psr.tagName !== 'ParagraphStyleRange') continue;
+        const fullPS = psr.getAttribute('AppliedParagraphStyle') || '';
+        const name = styleName(fullPS);
+        const def = indents.get(fullPS);
+        const before = parseFloat(psr.getAttribute('SpaceBefore') || '') || def?.spaceBefore || 0;
+        const after = parseFloat(psr.getAttribute('SpaceAfter') || '') || def?.spaceAfter || 0;
+        for (const seg of renderPsr(psr, dummyCounter)) {
+            if (!seg.text && seg.notes.length === 0) { blankBefore = true; continue; }
+            const hasSpacing = before > 0 || after > 0 || blankBefore;
+            blankBefore = false;
+            if (!hasSpacing || !name) continue;
+            let e = acc.get(name);
+            if (!e) { e = { name, count: 0, before, after }; acc.set(name, e); }
+            e.count++;
+        }
+    }
 }
 
 /**
@@ -332,6 +391,9 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
     const out: string[] = [];
     let pendingLabel = ''; // nº de capítulo/parte à espera do título seguinte
     let inIndexChapter = false; // dentro de um capítulo "Índice"/"Índice remissivo" (título heurístico)
+    // Linha em branco manual (segmento vazio) antes de um <p> → também conta como espaçamento
+    // (muitos livros usam isto em vez de SpaceBefore/SpaceAfter); só com DETECT_SPACING ligado.
+    let blankBefore = false;
     for (const psr of Array.from(story.children)) {
         if (psr.tagName !== 'ParagraphStyleRange') continue; // ignora ranges aninhados (notas)
         const fullPS = psr.getAttribute('AppliedParagraphStyle') || '';
@@ -363,8 +425,9 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
         // Honrar o LeftIndent do IDML só em <p> PLANO e NÃO mapeado (estilo escolhido vence; índice = auto).
         const mapped = !indexBody && !!(mapping[sn] && mapping[sn].target !== 'auto');
         const { tag, cls } = heurTitle ? { tag: 'h1' as const, cls: '' } : map;
-        const attr = cls ? ` class="${cls}"`
-            : (tag === 'p' && !mapped) ? indentStyle(psr, fullPS) : '';
+        const spacing = tag === 'p' ? spacingClasses(psr, fullPS) : '';
+        const baseClasses = [cls, spacing].filter(Boolean);
+        const styleAttr = (!cls && tag === 'p' && !mapped) ? indentStyle(psr, fullPS) : '';
 
         if (/^h[1-6]$/.test(tag)) {
             // TÍTULO: o <Br/> é quebra de LINHA (número + título), não de parágrafo → UM só heading.
@@ -372,13 +435,21 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
             let body = segs.map(s => s.text).filter(Boolean).join('<br>');
             if (!body && segs.every(s => s.notes.length === 0)) continue;
             if (pendingLabel) { body = `${pendingLabel}<br>${body}`; pendingLabel = ''; }
+            const attr = baseClasses.length ? ` class="${baseClasses.join(' ')}"` : '';
             out.push(`<${tag}${attr}>${body}</${tag}>`);
             for (const seg of segs) for (const def of seg.notes) out.push(def);
+            blankBefore = false; // título consome a linha em branco anterior
             continue;
         }
 
         for (const seg of segs) {
-            if (!seg.text && seg.notes.length === 0) continue; // segmento vazio (linha em branco)
+            if (!seg.text && seg.notes.length === 0) { blankBefore = true; continue; } // linha em branco
+            // Linha em branco antes deste parágrafo → também conta como espaçamento (p-top),
+            // tal como SpaceBefore/SpaceAfter (spacingClasses) — mesmo gate DETECT_SPACING.
+            const blankTop = (DETECT_SPACING && blankBefore && tag === 'p') ? 'p-top' : '';
+            blankBefore = false;
+            const classes = blankTop ? [...baseClasses, blankTop] : baseClasses;
+            const attr = (classes.length ? ` class="${classes.join(' ')}"` : '') + styleAttr;
             out.push(`<${tag}${attr}>${seg.text}</${tag}>`);
             // definições de nota logo a seguir ao parágrafo que as referencia (mesmo capítulo)
             for (const def of seg.notes) out.push(def);
@@ -605,10 +676,11 @@ async function readingOrder(zip: JSZip): Promise<{ ordered: string[]; frameCount
     return { ordered, frameCount };
 }
 
-export async function extractIdml(file: File, options: { styleMapping?: DocxStyleMapping; pdf?: ArrayBuffer } = {}): Promise<ExtractedDocument> {
+export async function extractIdml(file: File, options: { styleMapping?: DocxStyleMapping; pdf?: ArrayBuffer; detectParagraphSpacing?: boolean } = {}): Promise<ExtractedDocument> {
     const { idmlZips, links, pdf: zipPdf } = await loadIdmlPackage(file);
     const pdf = options.pdf ?? zipPdf;
     const mapping = options.styleMapping ?? {};
+    DETECT_SPACING = options.detectParagraphSpacing ?? false;
     const counter: NoteCounter = { n: 0, star: 0, defs: [] }; // numeração de notas contínua entre IDMLs
     const parts: string[] = [];
     const titleBlocks: { num: number; html: string }[] = []; // títulos de artigo (coletânea)
@@ -712,12 +784,19 @@ const IDML_SUGGEST: Record<string, DocxStyleTarget> = {
  * dentro de <Footnote> inline) — com contagem, exemplo e destino sugerido. Alimenta a
  * modal de mapeamento de estilos para o utilizador escolher o alvo no editor.
  */
-export async function scanIdmlStyles(file: File): Promise<DocxStyleInfo[]> {
+export interface IdmlScanResult {
+    styles: DocxStyleInfo[];
+    spacing: SpacingStyleInfo[]; // breakdown por estilo (vazio = nada detetado)
+}
+
+export async function scanIdmlStyles(file: File): Promise<IdmlScanResult> {
     try {
         const { idmlZips } = await loadIdmlPackage(file);
         const used = new Map<string, { count: number; sample: string }>();
+        const spacingAcc = new Map<string, SpacingStyleInfo>();
         for (const idmlZip of idmlZips) {
             const { ordered, frameCount } = await readingOrder(idmlZip);
+            const indents = await scanParaIndents(idmlZip);
             for (const storyId of ordered) {
                 const xml = await idmlZip.file(`Stories/Story_${storyId}.xml`)?.async('string');
                 if (!xml) continue;
@@ -725,6 +804,7 @@ export async function scanIdmlStyles(file: File): Promise<DocxStyleInfo[]> {
                 if (!threaded && !STRUCTURAL_STYLES.test(xml)) continue;
                 const story = new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('Story')[0];
                 if (!story) continue;
+                accumulateSpacing(story, indents, spacingAcc);
                 for (const psr of Array.from(story.children)) {
                     if (psr.tagName !== 'ParagraphStyleRange') continue;
                     const name = styleName(psr.getAttribute('AppliedParagraphStyle'));
@@ -736,12 +816,14 @@ export async function scanIdmlStyles(file: File): Promise<DocxStyleInfo[]> {
                 }
             }
         }
-        return [...used].map(([name, { count, sample }]) => ({
+        const styles = [...used].map(([name, { count, sample }]) => ({
             styleId: name, name, count, sample,
             suggested: IDML_SUGGEST[name] ?? 'auto', suggestedCentered: false,
         })).sort((a, b) => b.count - a.count);
+        const spacing = [...spacingAcc.values()].sort((a, b) => b.count - a.count);
+        return { styles, spacing };
     } catch (err) {
         console.error('scanIdmlStyles falhou', err);
-        return [];
+        return { styles: [], spacing: [] };
     }
 }

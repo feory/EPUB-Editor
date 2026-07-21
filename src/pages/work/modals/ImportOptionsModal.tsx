@@ -6,6 +6,7 @@ import { ModalCloseButton } from '../../../components/ModalCloseButton';
 import { CONVERSION_OPTIONS } from './conversionOptions';
 import { scanDocxStyles } from '../../../services/document-importer';
 import { scanIdmlStyles } from '../../../services/idml-importer';
+import type { SpacingStyleInfo } from '../../../services/idml-importer';
 import type { DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from '../../../services/document-importer';
 
 interface ImportOptionsModalProps {
@@ -53,6 +54,7 @@ const ImportOptionsModalComponent: React.FC<ImportOptionsModalProps> = ({ file, 
         noIndentAfterBold: false,
         wrapBoldWithNext: false,
         convertListsToDialogue: false,
+        detectParagraphSpacing: false,
     });
 
     const isDocx = fileName.toLowerCase().endsWith('.docx');
@@ -63,17 +65,27 @@ const ImportOptionsModalComponent: React.FC<ImportOptionsModalProps> = ({ file, 
     const [styles, setStyles] = useState<DocxStyleInfo[]>([]);
     const [mapping, setMapping] = useState<DocxStyleMapping>({});
     const [tab, setTab] = useState<'mapping' | 'conversions'>(isMapping ? 'mapping' : 'conversions');
+    const [spacing, setSpacing] = useState<SpacingStyleInfo[]>([]); // IDML: breakdown por estilo detetado na análise
 
     useEffect(() => {
         if (!isMapping) return;
         let cancelled = false;
         (async () => {
             try {
-                const scanned = isIdml ? await scanIdmlStyles(file) : await scanDocxStyles(await file.arrayBuffer());
-                if (cancelled) return;
-                scanned.sort((a, b) => displayStyleName(a.name).localeCompare(displayStyleName(b.name), 'pt'));
-                setStyles(scanned);
-                setMapping(Object.fromEntries(scanned.map(s => [s.styleId, { target: s.suggested, centered: s.suggestedCentered }])));
+                if (isIdml) {
+                    const { styles: scanned, spacing: detected } = await scanIdmlStyles(file);
+                    if (cancelled) return;
+                    scanned.sort((a, b) => displayStyleName(a.name).localeCompare(displayStyleName(b.name), 'pt'));
+                    setStyles(scanned);
+                    setMapping(Object.fromEntries(scanned.map(s => [s.styleId, { target: s.suggested, centered: s.suggestedCentered }])));
+                    setSpacing(detected);
+                } else {
+                    const scanned = await scanDocxStyles(await file.arrayBuffer());
+                    if (cancelled) return;
+                    scanned.sort((a, b) => displayStyleName(a.name).localeCompare(displayStyleName(b.name), 'pt'));
+                    setStyles(scanned);
+                    setMapping(Object.fromEntries(scanned.map(s => [s.styleId, { target: s.suggested, centered: s.suggestedCentered }])));
+                }
             } finally {
                 if (!cancelled) setScanning(false);
             }
@@ -173,6 +185,40 @@ const ImportOptionsModalComponent: React.FC<ImportOptionsModalProps> = ({ file, 
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {isIdml && spacing.length > 0 && (
+                        <label className="flex items-start gap-3 p-3 rounded-xl border border-border bg-slate-50/50 cursor-pointer hover:border-primary transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={options.detectParagraphSpacing ?? false}
+                                onChange={() => toggle('detectParagraphSpacing')}
+                                className="mt-0.5 accent-primary"
+                            />
+                            <span className="text-sm text-text-main flex-1">
+                                Aplicar espaçamento entre parágrafos detetado
+                                <span className="text-text-muted"> ({spacing.reduce((n, s) => n + s.count, 0)} parágrafos)</span>
+                            </span>
+                            <span className="relative group shrink-0">
+                                <Info size={16} className="text-text-muted hover:text-primary transition-colors" />
+                                <div className="absolute right-0 bottom-full mb-2 w-72 p-2.5 rounded-lg bg-slate-900 text-white text-xs leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg">
+                                    <p className="mb-1.5">Espaço antes/depois definido no InDesign, ou linha em branco manual. Aplica aos parágrafos e citações correspondentes.</p>
+                                    <div className="flex flex-col gap-0.5">
+                                        {spacing.map(s => (
+                                            <div key={s.name} className="flex items-center gap-1.5">
+                                                <span className="font-semibold">{displayStyleName(s.name)}</span>
+                                                <span className="text-slate-400 shrink-0">×{s.count}</span>
+                                                <span className="text-slate-300 truncate">
+                                                    {s.before <= 0 && s.after <= 0
+                                                        ? 'linha em branco'
+                                                        : [s.before > 0 ? `topo ${Math.round(s.before)}pt` : '', s.after > 0 ? `fundo ${Math.round(s.after)}pt` : ''].filter(Boolean).join(' · ')}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </span>
+                        </label>
                     )}
 
                     {tab === 'conversions' && !isEpub && optionList.map(({ key, label, description }) => (

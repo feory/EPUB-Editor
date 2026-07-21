@@ -7,10 +7,11 @@ import { CONVERSION_OPTIONS } from './conversionOptions';
 
 interface ConversionsModalProps {
     onApply: (options: ImportOptions) => void;
+    onApplyDropCaps: () => void;
     onClose: () => void;
 }
 
-const ConversionsModalComponent: React.FC<ConversionsModalProps> = ({ onApply, onClose }) => {
+const ConversionsModalComponent: React.FC<ConversionsModalProps> = ({ onApply, onApplyDropCaps, onClose }) => {
     useBodyScrollLock();
     const [options, setOptions] = useState<ImportOptions>({
         indentAllParagraphs: false,
@@ -20,8 +21,10 @@ const ConversionsModalComponent: React.FC<ConversionsModalProps> = ({ onApply, o
         convertListsToDialogue: false,
     });
 
+    const [applyDropCaps, setApplyDropCaps] = useState(false);
+
     const toggle = (key: keyof ImportOptions) => setOptions(prev => ({ ...prev, [key]: !prev[key] }));
-    const anySelected = CONVERSION_OPTIONS.some(o => options[o.key]);
+    const anySelected = CONVERSION_OPTIONS.some(o => options[o.key]) || applyDropCaps;
 
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
@@ -56,6 +59,22 @@ const ConversionsModalComponent: React.FC<ConversionsModalProps> = ({ onApply, o
                             </span>
                         </label>
                     ))}
+
+                    <label className="flex items-start gap-3 p-3 rounded-xl border border-border bg-slate-50/50 cursor-pointer hover:border-slate-700 transition-colors">
+                        <input
+                            type="checkbox"
+                            checked={applyDropCaps}
+                            onChange={() => setApplyDropCaps(prev => !prev)}
+                            className="mt-0.5 accent-slate-700"
+                        />
+                        <span className="text-sm text-slate-700 flex-1">Aplicar Capitulares</span>
+                        <span className="relative group shrink-0">
+                            <Info size={16} className="text-text-muted hover:text-primary transition-colors" />
+                            <span className="absolute right-0 bottom-full mb-2 w-64 p-2.5 rounded-lg bg-slate-900 text-white text-xs leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg">
+                                Aplica capitular ao 1º parágrafo de cada capítulo.
+                            </span>
+                        </span>
+                    </label>
                 </div>
 
                 <div className="p-6 bg-slate-50 border-t border-border flex gap-3">
@@ -68,7 +87,11 @@ const ConversionsModalComponent: React.FC<ConversionsModalProps> = ({ onApply, o
                     <button
                         className="flex-1 py-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={!anySelected}
-                        onClick={() => { onApply(options); onClose(); }}
+                        onClick={() => {
+                            if (CONVERSION_OPTIONS.some(o => options[o.key])) onApply(options);
+                            if (applyDropCaps) onApplyDropCaps();
+                            onClose();
+                        }}
                     >
                         Aplicar
                     </button>

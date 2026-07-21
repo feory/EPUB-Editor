@@ -59,7 +59,7 @@ export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImp
 
     const importDocumentMutation = useMutation({
         mutationFn: async ({ file, options, styleMapping }: { file: File; options: ImportOptions; styleMapping?: DocxStyleMapping }) => {
-            const result = await extractDocument(file, { convertListsToDialogue: options.convertListsToDialogue, styleMapping });
+            const result = await extractDocument(file, { convertListsToDialogue: options.convertListsToDialogue, styleMapping, detectParagraphSpacing: options.detectParagraphSpacing });
             let finalHtml = result.html;
 
             if (result.images.size > 0) {
