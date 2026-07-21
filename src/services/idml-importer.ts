@@ -15,7 +15,8 @@ const MIME: Record<string, string> = {
  *  - um `.idml` (que JÁ é um zip com designmap.xml à raiz) → sem imagens;
  *  - um `.zip` da pasta do InDesign (Folder/Os Retornados.idml + Folder/Links/*.jpg|png) →
  *    devolve o idml interno + os bytes das imagens da Links/ (para a galeria).
- * `__MACOSX`/`._*` (lixo macOS) e não-rasters (.pdf/.indd/fonts) são ignorados.
+ * `.pdf`/`.eps`/`.psd` são convertidos (JPEG/PNG); `__MACOSX`/`._*` (lixo macOS), `.indd` e
+ * fontes são ignorados.
  */
 async function loadIdmlPackage(file: File): Promise<{ idmlZips: JSZip[]; links: { name: string; blob: Blob }[]; pdf?: ArrayBuffer }> {
     const outer = await JSZip.loadAsync(await file.arrayBuffer());
@@ -47,6 +48,11 @@ async function loadIdmlPackage(file: File): Promise<{ idmlZips: JSZip[]; links: 
             // Ghostscript (cor, alta-res). Nome normalizado p/ .png → id da galeria limpo ("001");
             // o tipo postscript sinaliza ao upload para o mandar como .eps.
             links.push({ name: base.replace(/\.eps$/i, '.png'), blob: await entry.async('blob').then(b => b.slice(0, b.size, 'application/postscript')) });
+        } else if (/\.psd$/i.test(base)) {
+            // figura em PSD (Photoshop) → enviar CRU; o servidor rasteriza com ImageMagick
+            // (mesmo padrão do EPS/Ghostscript). Nome normalizado p/ .png; o tipo assinala ao
+            // upload para mandar como .psd.
+            links.push({ name: base.replace(/\.psd$/i, '.png'), blob: await entry.async('blob').then(b => b.slice(0, b.size, 'image/vnd.adobe.photoshop')) });
         }
     }
 

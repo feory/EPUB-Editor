@@ -128,10 +128,11 @@ function parseTables(storyXml: string): string[] {
 
 const RASTER = /\.(jpe?g|png|gif|tiff?|webp)$/i;
 // loadIdmlPackage converte estas para raster antes de as pôr na galeria (PDF→JPEG via
-// Ghostscript/pdfToJpeg, EPS→PNG rasterizado) — mesma renomeação aqui, para o imageId calculado
-// bater com a chave real da galeria (sanitizeImageFilename não reconhece .pdf/.eps).
-const CONVERTIBLE = /\.(pdf|eps)$/i;
-const toRasterName = (n: string) => n.replace(/\.pdf$/i, '.jpg').replace(/\.eps$/i, '.png');
+// Ghostscript/pdfToJpeg, EPS/PSD→PNG rasterizado com Ghostscript/ImageMagick) — mesma renomeação
+// aqui, para o imageId calculado bater com a chave real da galeria (sanitizeImageFilename não
+// reconhece .pdf/.eps/.psd).
+const CONVERTIBLE = /\.(pdf|eps|psd)$/i;
+const toRasterName = (n: string) => n.replace(/\.pdf$/i, '.jpg').replace(/\.eps$/i, '.png').replace(/\.psd$/i, '.png');
 
 export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promise<Figure[]> {
     const storyCache = new Map<string, string>();

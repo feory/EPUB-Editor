@@ -683,7 +683,21 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             <div className="relative">
                 <Editor
                     licenseKey="gpl"
-                    onInit={(_evt, editor) => { editorRef.current = editor; if (readOnlyRef.current) editor.mode.set('readonly'); applyCustomStyles(editor); }}
+                    onInit={(_evt, editor) => {
+                        editorRef.current = editor;
+                        if (readOnlyRef.current) editor.mode.set('readonly');
+                        applyCustomStyles(editor);
+                        // toolbar_sticky não recalcula a largura quando o CONTENTOR muda de
+                        // tamanho por razão que não é resize da janela (ex. painel Estrutura a
+                        // abrir/fechar) — fica preso à largura antiga. ResizeObserver + resize
+                        // sintético (o sinal que o TinyMCE já escuta) força a reavaliação.
+                        const container = editor.getContainer();
+                        if (container) {
+                            const ro = new ResizeObserver(() => window.dispatchEvent(new Event('resize')));
+                            ro.observe(container);
+                            editor.on('remove', () => ro.disconnect());
+                        }
+                    }}
                     value={htmlContent}
                     onEditorChange={(content) => { if (!isDiffHighlightingRef.current) setHtmlContent(content); }}
                     init={{

@@ -8,6 +8,10 @@ import { debugLog } from '../log.js';
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'];
 const MAX_IMAGE_SIZE = 2_000_000;
+// EPS/PSD são ficheiros de ORIGEM (naturalmente maiores — vetorial com preview embutido, ou
+// Photoshop com layers), convertidos para PNG e descartados de imediato; limite próprio, mais
+// alto, só para o upload cru (o ficheiro final guardado continua sujeito ao MAX_IMAGE_SIZE).
+const MAX_SOURCE_IMAGE_SIZE = 50_000_000;
 
 // File may vanish between existence check and unlink (TOCTOU); ignore missing-file errors.
 function safeUnlink(path) {
@@ -38,6 +42,25 @@ async function epsToPng(buffer) {
       if (sharp) return await sharp.default(Buffer.from(buffer, off, len), { failOn: 'none' }).png().toBuffer();
     }
   }
+  return null;
+}
+
+// Rasteriza um PSD (Photoshop) para PNG com ImageMagick (composite/frame [0], não as layers
+// individuais). `magick` (IMv7, ex. Homebrew) ou `convert` (IMv6, ex. apt Debian) — nomes do
+// binário diferem consoante a distribuição/versão instalada.
+async function psdToPng(buffer) {
+  const base = join(tmpdir(), `psd-${crypto.randomUUID()}`);
+  const psdPath = `${base}.psd`, pngPath = `${base}.png`;
+  await Bun.write(psdPath, buffer);
+  try {
+    for (const cmd of ['magick', 'convert']) {
+      try {
+        const proc = Bun.spawn([cmd, `${psdPath}[0]`, pngPath], { stdout: 'ignore', stderr: 'ignore' });
+        await proc.exited;
+        if (proc.exitCode === 0 && existsSync(pngPath)) return await Bun.file(pngPath).arrayBuffer();
+      } catch { /* binário ausente — tenta o próximo */ }
+    }
+  } finally { safeUnlink(psdPath); safeUnlink(pngPath); }
   return null;
 }
 
@@ -207,7 +230,7 @@ export async function batchImages(req, isbn) {
   const images = formData.getAll('images');
   const saved = [];
 
-  if (images.some(f => f.size > MAX_IMAGE_SIZE)) {
+  if (images.some(f => f.size > (/\.(eps|psd)$/i.test(f.name) ? MAX_SOURCE_IMAGE_SIZE : MAX_IMAGE_SIZE))) {
     return Response.json({ error: 'Image too large' }, { status: 413, headers: corsHeaders });
   }
 
@@ -218,6 +241,14 @@ export async function batchImages(req, isbn) {
       const png = await epsToPng(await file.arrayBuffer());
       if (png) { await Bun.write(join(imagesDir, `${id}.png`), png); saved.push({ id, filename: `${id}.png` }); }
       else debugLog(`[EPS] conversão falhou (gs ausente?): ${file.name}`);
+      return;
+    }
+    // PSD (Photoshop) → rasterizar com ImageMagick e guardar como PNG.
+    if (/\.psd$/i.test(file.name)) {
+      const id = sanitizeName(file.name.replace(/\.psd$/i, '')) || 'image';
+      const png = await psdToPng(await file.arrayBuffer());
+      if (png) { await Bun.write(join(imagesDir, `${id}.png`), png); saved.push({ id, filename: `${id}.png` }); }
+      else debugLog(`[PSD] conversão falhou (ImageMagick ausente?): ${file.name}`);
       return;
     }
     let filename = sanitizeName(file.name);

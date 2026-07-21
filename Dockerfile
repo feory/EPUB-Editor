@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gosu \
     ghostscript \
+    imagemagick \
     default-jre-headless \
     ca-certificates \
     gnupg \

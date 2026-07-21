@@ -66,8 +66,11 @@ export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImp
                 const formData = new FormData();
                 for (const [id, blob] of result.images.entries()) {
                     // extensão real do blob (jpeg/png/…) — não forçar .png (jpeg da Links/ ficaria mal rotulado).
-                    // EPS (application/postscript) → enviar como .eps; o servidor converte com Ghostscript.
-                    const ext = blob.type === 'application/postscript' ? 'eps' : (blob.type.split('/')[1] || 'png');
+                    // EPS (application/postscript) → enviar como .eps (Ghostscript); PSD
+                    // (image/vnd.adobe.photoshop) → enviar como .psd (ImageMagick), servidor converte.
+                    const ext = blob.type === 'application/postscript' ? 'eps'
+                        : blob.type === 'image/vnd.adobe.photoshop' ? 'psd'
+                        : (blob.type.split('/')[1] || 'png');
                     formData.append('images', blob, `${id}.${ext}`);
                 }
                 await ebooksApi.uploadImages(isbn!, formData);
