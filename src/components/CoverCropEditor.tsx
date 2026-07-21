@@ -7,13 +7,14 @@ interface CoverCropEditorProps {
     imageUrl: string;
     onSave: (croppedBlob: Blob) => void;
     onCancel: () => void;
+    label?: string;
 }
 
 function createInitialCrop(_mediaWidth: number, _mediaHeight: number): Crop {
     return { unit: '%', x: 0, y: 0, width: 100, height: 100 };
 }
 
-export function CoverCropEditor({ imageUrl, onSave, onCancel }: CoverCropEditorProps) {
+export function CoverCropEditor({ imageUrl, onSave, onCancel, label = 'Ajuste a area de corte para a capa' }: CoverCropEditorProps) {
     const imgRef = useRef<HTMLImageElement>(null);
     const [crop, setCrop] = useState<Crop>();
     const [completedCrop, setCompletedCrop] = useState<Crop>();
@@ -116,7 +117,7 @@ export function CoverCropEditor({ imageUrl, onSave, onCancel }: CoverCropEditorP
         <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2 text-sm text-text-muted">
                 <CropIcon size={16} />
-                <span>Ajuste a area de corte para a capa</span>
+                <span>{label}</span>
             </div>
 
             <div className="relative bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center p-4 min-h-[300px]">

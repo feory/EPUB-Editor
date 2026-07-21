@@ -16,6 +16,8 @@ import { runGrammarCheck } from '../utils/grammarCheck';
 import { editorFontCss } from '../utils/editorFonts';
 import { useBlockOverlays } from '../editor/useBlockOverlays';
 import { BlockOverlays } from '../editor/overlays/BlockOverlays';
+import { useImageCrop } from './images/useImageCrop';
+import { ImageCropModal } from './images/ImageCropModal';
 import { createEditorSetup } from '../editor/setup';
 import { buildContentStyle } from '../editor/contentStyles';
 import { EDITOR_PLUGINS, EDITOR_TOOLBAR, QUICKBARS_SELECTION_TOOLBAR, STYLE_FORMATS, TEXT_PATTERNS } from '../editor/config';
@@ -114,6 +116,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     onImageUploadedRef.current = onImageUploaded;
     const { getCurrentCss } = useStyles();
     const currentCss = getCurrentCss();
+    const imageCrop = useImageCrop(isbn ?? '');
 
 
     // Modo leitura (2º utilizador no mesmo projeto) — alterna o editor em runtime
@@ -701,11 +704,15 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         toolbar: EDITOR_TOOLBAR,
                         toolbar_sticky: true,
                         toolbar_sticky_offset: 57, // altura da navbar da app (WorkToolbar), sem folga
+                        // "imagecrop" à frente do default do TinyMCE (link linkchecker image editimage
+                        // table spellchecker configurepermanentpen) — só acrescenta, não troca nada.
+                        contextmenu: 'imagecrop link linkchecker image editimage table spellchecker configurepermanentpen',
                         setup: createEditorSetup({
                             setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, onUndo, onRedo,
                             startHtmlEdit: overlays.startHtmlEdit,
                             openStyleMenu: overlays.openStyleMenu,
                             wireOverlays: overlays.wireEditor,
+                            onCropImage: imageCrop.handleOpenCrop,
                         }),
                         automatic_uploads: true,
                         paste_data_images: true,
@@ -761,6 +768,14 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 />
                 <BlockOverlays {...overlays} readOnly={readOnly} />
             </div>
+            {imageCrop.cropImage && (
+                <ImageCropModal
+                    imageId={imageCrop.cropImage.id}
+                    imageUrl={imageCrop.cropImage.url}
+                    onSave={imageCrop.handleCropSave}
+                    onCancel={imageCrop.handleCropCancel}
+                />
+            )}
         </div>
     );
 });

@@ -7,6 +7,7 @@ import { BatchActionsBar } from './images/BatchActionsBar';
 import { ImageToolbar } from './images/ImageToolbar';
 import { ImageCard } from './images/ImageCard';
 import { ImageLightbox } from './images/ImageLightbox';
+import { ImageCropModal } from './images/ImageCropModal';
 
 interface ImageGallerySidebarProps {
     isbn: string;
@@ -87,7 +88,10 @@ const ImageGallerySidebarComponent: React.FC<ImageGallerySidebarProps> = ({
                         isExporting={gallery.isExporting}
                         onSelectAll={gallery.selectAll}
                         onExportSelected={gallery.handleExportSelected}
-                        onDeleteSelected={gallery.handleDeleteSelected}
+                        confirmingDelete={gallery.confirmDeleteSelected}
+                        onRequestDeleteSelected={gallery.requestDeleteSelected}
+                        onConfirmDeleteSelected={gallery.handleDeleteSelected}
+                        onCancelDeleteSelected={gallery.cancelDeleteSelected}
                         onClearSelection={gallery.clearSelection}
                     />
                 )}
@@ -121,7 +125,11 @@ const ImageGallerySidebarComponent: React.FC<ImageGallerySidebarProps> = ({
                                     onLocate={gallery.handleLocateImage}
                                     onView={gallery.setLightboxImage}
                                     onDelete={gallery.handleDeleteImage}
+                                    confirmingDelete={gallery.confirmDeleteId === image.id}
+                                    onRequestDelete={gallery.requestDeleteImage}
+                                    onCancelDelete={gallery.cancelDeleteImage}
                                     onReplaceImage={gallery.handleReplaceImage}
+                                    onCropImage={gallery.handleOpenCrop}
                                     onStartRename={gallery.startRename}
                                     onConfirmRename={gallery.handleRenameImage}
                                     onCancelRename={gallery.cancelRename}
@@ -156,6 +164,15 @@ const ImageGallerySidebarComponent: React.FC<ImageGallerySidebarProps> = ({
                     image={gallery.lightboxImage}
                     isbn={isbn}
                     onClose={() => gallery.setLightboxImage(null)}
+                />
+            )}
+
+            {gallery.cropImage && (
+                <ImageCropModal
+                    imageId={gallery.cropImage.id}
+                    imageUrl={gallery.cropImage.url}
+                    onSave={gallery.handleCropSave}
+                    onCancel={gallery.handleCropCancel}
                 />
             )}
         </>

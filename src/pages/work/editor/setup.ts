@@ -14,6 +14,7 @@ interface SetupDeps {
     onRedo?: () => void;
     startHtmlEdit: (top: HTMLElement) => void;
     openStyleMenu: (kind: 'para' | 'head') => void;
+    onCropImage: (imageId: string) => void;
     wireOverlays: (
         editor: TinyMCEEditor,
         ctx: { blockOf: (n: Node | null) => Element | null; getHiddenBlock: () => Element | null },
@@ -22,7 +23,7 @@ interface SetupDeps {
 
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
-    const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, onUndo, onRedo, startHtmlEdit, openStyleMenu, wireOverlays } = deps;
+    const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, onUndo, onRedo, startHtmlEdit, openStyleMenu, wireOverlays, onCropImage } = deps;
 
     return (editor: Editor) => {
         editor.addCommand('mceChapterBreak', () => {
@@ -205,6 +206,17 @@ export function createEditorSetup(deps: SetupDeps) {
             position: 'node',
             scope: 'node',
             items: 'imgalignleft imgaligncenter imgalignright',
+        });
+
+        // Botão direito em cima de uma imagem → "Cortar imagem" (editor de corte, mesmo
+        // mecanismo da Galeria: grava sobre o mesmo data-image-id).
+        editor.ui.registry.addMenuItem('imagecrop', {
+            text: 'Cortar imagem',
+            onAction: () => {
+                const node = editor.selection.getNode();
+                const imageId = node?.nodeName === 'IMG' ? node.getAttribute('data-image-id') : null;
+                if (imageId) onCropImage(imageId);
+            },
         });
 
         registerEditorIcons(editor);

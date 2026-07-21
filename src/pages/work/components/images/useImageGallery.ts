@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { ebooksApi } from '../../../../api/ebooks-api';
 import { useNotification } from '../../../../context/NotificationContext';
 import { sanitizeImageFilename } from '../../../../utils/format';
+import { useImageCrop } from './useImageCrop';
 import type { WorkEditorRef } from '../WorkEditor';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -39,6 +40,8 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
     const [images, setImages] = useState<Map<string, ImageData>>(new Map());
     const [searchQuery, setSearchQuery] = useState('');
     const [lightboxImage, setLightboxImage] = useState<ImageData | null>(null);
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [confirmDeleteSelected, setConfirmDeleteSelected] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [filter, setFilter] = useState<'all' | 'used' | 'unused'>('all');
     const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -103,18 +106,23 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
         return () => clearTimeout(t);
     }, [htmlContent]);
 
-    const loadImage = useCallback(async (imageId: string) => {
-        // Skip if already loaded/loading (cards re-mount on virtual-scroll → avoid re-fetch)
+    const loadImage = useCallback(async (imageId: string, force = false) => {
+        // Skip if already loaded/loading (cards re-mount on virtual-scroll → avoid re-fetch).
+        // force=true ignora este atalho — usado logo a seguir a um upload/substituição/corte,
+        // onde o setImages(...) que limpou o blob antigo ainda não comitou quando este corre
+        // (imagesRef.current só atualiza no próximo render), senão o fetch nunca dispara.
         const existing = imagesRef.current.get(imageId);
-        if (existing && (existing.blob || existing.loading)) return;
+        if (!force && existing && (existing.blob || existing.loading)) return;
         setImages(prev => {
             const newMap = new Map(prev);
             const img = newMap.get(imageId);
-            if (img && !img.loading && !img.blob) newMap.set(imageId, { ...img, loading: true });
+            if (img && !img.loading) newMap.set(imageId, { ...img, loading: true });
             return newMap;
         });
         try {
-            const response = await fetch(`/api/ebooks/${isbn}/images/${imageId}?thumbnail=true`);
+            // cache-bust: mesma URL de antes, bytes novos no servidor — sem isto o browser
+            // podia servir a resposta em cache da 1ª vez que esta imagem foi pedida.
+            const response = await fetch(`/api/ebooks/${isbn}/images/${imageId}?thumbnail=true&v=${Date.now()}`);
             if (!response.ok) throw new Error('Failed to load thumbnail');
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
@@ -239,13 +247,15 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
         );
     }, [filteredImages]);
 
+    const requestDeleteSelected = useCallback(() => {
+        if (selectedIds.size === 0) return;
+        setConfirmDeleteSelected(true);
+    }, [selectedIds]);
+    const cancelDeleteSelected = useCallback(() => setConfirmDeleteSelected(false), []);
+
     const handleDeleteSelected = useCallback(async () => {
         if (selectedIds.size === 0) return;
-        const usedCount = Array.from(selectedIds).filter(id => (images.get(id)?.usageCount ?? 0) > 0).length;
-        const message = usedCount > 0
-            ? `${selectedIds.size} imagens selecionadas (${usedCount} usadas no documento). Tem certeza que deseja apagar todas?`
-            : `Apagar ${selectedIds.size} imagens não usadas?`;
-        if (!window.confirm(message)) return;
+        setConfirmDeleteSelected(false);
         try {
             const idsToRemove = Array.from(selectedIds);
             if (editorRef.current) {
@@ -284,13 +294,25 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
                 if (img) { if (img.url) URL.revokeObjectURL(img.url); m.set(imageId, { ...img, url: '', blob: null }); }
                 return m;
             });
-            loadImage(imageId);
+            loadImage(imageId, true);
             showNotification('success', 'Imagem substituída com sucesso', 2000);
         } catch (error) {
             console.error('Failed to replace image:', error);
             showNotification('error', 'Erro ao substituir imagem');
         }
     }, [isbn, loadImage, showNotification]);
+
+    // Corte de imagem: ver useImageCrop — atualiza o cache local (url/blob) para forçar reload
+    // da thumbnail depois de gravar (mesmo pós-processamento de handleReplaceImage).
+    const { cropImage, handleOpenCrop, handleCropSave, handleCropCancel } = useImageCrop(isbn, useCallback((imageId: string) => {
+        setImages(prev => {
+            const m = new Map(prev);
+            const img = m.get(imageId);
+            if (img) { if (img.url) URL.revokeObjectURL(img.url); m.set(imageId, { ...img, url: '', blob: null }); }
+            return m;
+        });
+        loadImage(imageId, true);
+    }, [loadImage]));
 
     const exportImagesToZip = useCallback(async (imagesToExport: ImageData[], zipName: string) => {
         if (imagesToExport.length === 0) { showNotification('error', 'Nenhuma imagem para exportar'); return; }
@@ -334,11 +356,11 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
         await exportImagesToZip(Array.from(selectedIds).map(id => images.get(id)).filter(Boolean) as ImageData[], 'imagens_selecionadas.zip');
     }, [selectedIds, images, exportImagesToZip]);
 
+    const requestDeleteImage = useCallback((id: string) => setConfirmDeleteId(id), []);
+    const cancelDeleteImage = useCallback(() => setConfirmDeleteId(null), []);
+
     const handleDeleteImage = useCallback(async (imageData: ImageData) => {
-        const message = imageData.usageCount > 0
-            ? `Esta imagem é usada ${imageData.usageCount} vezes no documento. Será removida do documento e apagada da pasta. Tem certeza?`
-            : 'Tem certeza que deseja apagar esta imagem da pasta?';
-        if (!window.confirm(message)) return;
+        setConfirmDeleteId(null);
         try {
             if (editorRef.current) {
                 const newHtml = editorRef.current.removeImagesById([imageData.id]);
@@ -408,10 +430,13 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
         renamingId, setRenamingId, newName, setNewName,
         selectedIds, isUploading, isExporting,
         lightboxImage, setLightboxImage,
+        cropImage, handleOpenCrop, handleCropSave, handleCropCancel,
         filterMenuRef, exportMenuRef, searchInputRef,
         toggleSelection, clearSelection, selectAll,
         startRename, cancelRename, loadImage,
         handleDeleteSelected, handleExportSelected, handleExportZip,
+        confirmDeleteId, requestDeleteImage, cancelDeleteImage,
+        confirmDeleteSelected, requestDeleteSelected, cancelDeleteSelected,
         handleInsertAtCursor, handleLocateImage, handleRenameImage, handleReplaceImage,
         handleDeleteImage, handleFileUpload, handleDrop, handleDragOver,
     };

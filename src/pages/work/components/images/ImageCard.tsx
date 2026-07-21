@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Maximize2, Trash2, Edit2, Check, X, Loader2, AlertCircle, Square, RefreshCw, Crosshair } from 'lucide-react';
+import { Plus, Maximize2, Trash2, Edit2, Check, X, Loader2, AlertCircle, Square, RefreshCw, Crosshair, Crop } from 'lucide-react';
 import { formatFileSize } from '../../../../utils/format';
 import type { ImageData } from './useImageGallery';
 
@@ -15,7 +15,11 @@ interface ImageCardProps {
     onLocate: (img: ImageData) => void;
     onView: (img: ImageData) => void;
     onDelete: (img: ImageData) => void;
+    confirmingDelete: boolean;
+    onRequestDelete: (id: string) => void;
+    onCancelDelete: () => void;
     onReplaceImage: (id: string, file: File) => void;
+    onCropImage: (id: string) => void;
     onStartRename: (id: string) => void;
     onConfirmRename: (id: string, name: string) => void;
     onCancelRename: () => void;
@@ -26,7 +30,7 @@ const ImageCardComponent: React.FC<ImageCardProps> = ({
     image, isbn,
     isSelected, isRenaming, newName,
     onNewNameChange, onToggleSelect,
-    onInsert, onLocate, onView, onDelete, onReplaceImage,
+    onInsert, onLocate, onView, onDelete, confirmingDelete, onRequestDelete, onCancelDelete, onReplaceImage, onCropImage,
     onStartRename, onConfirmRename, onCancelRename,
     onVisible,
 }) => {
@@ -133,48 +137,74 @@ const ImageCardComponent: React.FC<ImageCardProps> = ({
                 </div>
             )}
 
-            <div className="flex gap-1 pt-1">
-                <button
-                    onClick={() => onInsert(image)}
-                    className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors"
-                    title="Inserir no cursor"
-                >
-                    <Plus size={14} />
-                </button>
-                <label
-                    className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors cursor-pointer"
-                    title="Substituir imagem"
-                >
-                    <RefreshCw size={14} />
-                    <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) onReplaceImage(image.id, f); }}
-                        className="hidden"
-                    />
-                </label>
-                <button
-                    onClick={() => onLocate(image)}
-                    className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors"
-                    title="Localizar no editor"
-                >
-                    <Crosshair size={14} />
-                </button>
-                <button
-                    onClick={() => onView(image)}
-                    className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors"
-                    title="Ver imagem completa"
-                >
-                    <Maximize2 size={14} />
-                </button>
-                <button
-                    onClick={() => onDelete(image)}
-                    className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors"
-                    title="Apagar imagem"
-                >
-                    <Trash2 size={14} />
-                </button>
-            </div>
+            {confirmingDelete ? (
+                <div className="flex gap-1 pt-1">
+                    <button
+                        onClick={() => onDelete(image)}
+                        className="flex-1 flex items-center justify-center bg-rose-500 hover:bg-rose-600 text-white p-1.5 rounded-lg transition-colors"
+                        title="Confirmar eliminação"
+                    >
+                        <Check size={14} />
+                    </button>
+                    <button
+                        onClick={onCancelDelete}
+                        className="flex-1 flex items-center justify-center bg-slate-200 hover:bg-slate-300 text-slate-600 p-1.5 rounded-lg transition-colors"
+                        title="Cancelar"
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+            ) : (
+                <div className="flex gap-1 pt-1">
+                    <button
+                        onClick={() => onInsert(image)}
+                        className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors"
+                        title="Inserir no cursor"
+                    >
+                        <Plus size={14} />
+                    </button>
+                    <label
+                        className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors cursor-pointer"
+                        title="Substituir imagem"
+                    >
+                        <RefreshCw size={14} />
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) onReplaceImage(image.id, f); }}
+                            className="hidden"
+                        />
+                    </label>
+                    <button
+                        onClick={() => onCropImage(image.id)}
+                        className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors"
+                        title="Cortar imagem"
+                    >
+                        <Crop size={14} />
+                    </button>
+                    <button
+                        onClick={() => onLocate(image)}
+                        className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors"
+                        title="Localizar no editor"
+                    >
+                        <Crosshair size={14} />
+                    </button>
+                    <button
+                        onClick={() => onView(image)}
+                        className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors"
+                        title="Ver imagem completa"
+                    >
+                        <Maximize2 size={14} />
+                    </button>
+                    <button
+                        onClick={() => onRequestDelete(image.id)}
+                        className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors"
+                        title="Apagar imagem"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                </div>
+            )}
         </div>
     </div>
     );
