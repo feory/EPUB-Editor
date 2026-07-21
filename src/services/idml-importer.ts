@@ -391,6 +391,11 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
     const out: string[] = [];
     let pendingLabel = ''; // nº de capítulo/parte à espera do título seguinte
     let inIndexChapter = false; // dentro de um capítulo "Índice"/"Índice remissivo" (título heurístico)
+    // Estilo do último heading emitido, para fundir headings CONSECUTIVOS do mesmo estilo
+    // (nº de capítulo + subtítulo(s) em parágrafos próprios, todos com o mesmo estilo de
+    // título) num só <hN> — o InDesign separa-os, mas visualmente formam um título único.
+    // null sempre que corpo normal é emitido a seguir (a sequência quebra-se).
+    let lastHeadingStyle: string | null = null;
     // Linha em branco manual (segmento vazio) antes de um <p> → também conta como espaçamento
     // (muitos livros usam isto em vez de SpaceBefore/SpaceAfter); só com DETECT_SPACING ligado.
     let blankBefore = false;
@@ -435,13 +440,24 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
             let body = segs.map(s => s.text).filter(Boolean).join('<br>');
             if (!body && segs.every(s => s.notes.length === 0)) continue;
             if (pendingLabel) { body = `${pendingLabel}<br>${body}`; pendingLabel = ''; }
+            // Heading CONSECUTIVO do mesmo estilo do anterior (ver lastHeadingStyle) → funde
+            // no <hN> já emitido (linha extra, <br>) em vez de abrir um novo.
+            if (sn && sn === lastHeadingStyle && out.length > 0 && out[out.length - 1].endsWith(`</${tag}>`)) {
+                const last = out[out.length - 1];
+                out[out.length - 1] = last.slice(0, -(`</${tag}>`.length)) + '<br>' + body + `</${tag}>`;
+                for (const seg of segs) for (const def of seg.notes) out.push(def);
+                blankBefore = false;
+                continue;
+            }
             const attr = baseClasses.length ? ` class="${baseClasses.join(' ')}"` : '';
             out.push(`<${tag}${attr}>${body}</${tag}>`);
             for (const seg of segs) for (const def of seg.notes) out.push(def);
             blankBefore = false; // título consome a linha em branco anterior
+            lastHeadingStyle = sn || null;
             continue;
         }
 
+        lastHeadingStyle = null; // corpo normal a seguir → quebra a sequência de headings
         for (const seg of segs) {
             if (!seg.text && seg.notes.length === 0) { blankBefore = true; continue; } // linha em branco
             // Linha em branco antes deste parágrafo → também conta como espaçamento (p-top),
@@ -750,7 +766,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     }
     // Figuras: imagem/tabela + legenda no ponto da referência no corpo (todos os IDMLs).
     const figs: Awaited<ReturnType<typeof buildFigures>> = [];
-    for (const idmlZip of idmlZips) figs.push(...await buildFigures(idmlZip));
+    for (const idmlZip of idmlZips) figs.push(...await buildFigures(idmlZip, DETECT_SPACING));
     const figRes = insertFigures(html, figs);
     html = figRes.html;
 

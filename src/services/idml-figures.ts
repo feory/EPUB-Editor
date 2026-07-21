@@ -17,13 +17,15 @@ export interface Figure {
     tableHtml?: string;                    // <table> reconstruída — Quadros (sem raster)
     label?: { kind: FigureKind; num: string }; // string: "2.1" não cabe em number sem colidir com "2.10"
     captionLines: string[];                // legenda + fonte + notas (cada uma um <p>); [0] = legenda
+    captionSpacing?: string;               // classe p-top/p-bottom para captionLines[0] (DETECT_SPACING)
 }
 
 // separadores de linha do InDesign → espaço
 const clean = (s: string) => s.replace(/[\u2028\u2029\t]+/g, ' ').replace(/\s+/g, ' ').trim();
 
-// Nº simples ("5") ou decimal capítulo.figura ("11.4").
-const LABEL_RE = /^(gr[áa]fico|fig|quadro|tabela|mapa)\.?\s*(\d+(?:\.\d+)?)/i;
+// Nº simples ("5") ou decimal capítulo.figura ("11.4"). "figuras?" antes de "fig" — alguns
+// livros escrevem a palavra completa ("Figura 2:"), não só a abreviatura.
+const LABEL_RE = /^(gr[áa]fico|figuras?|fig|quadro|tabela|mapa)\.?\s*(\d+(?:\.\d+)?)/i;
 const NOTE_RE = /^\s*([*†‡]|nota\s*:)/i; // marcador de nota de tabela
 
 // Nomes de estilo de legenda/nota variam por livro (ex. "LEGENDAS" vs "Figura titulo").
@@ -32,7 +34,7 @@ const NOTE_STYLE_RE = /^txt$/i;
 
 function toLabel(lab: RegExpMatchArray): Figure['label'] {
     const kr = lab[1].toLowerCase();
-    const kind: FigureKind = kr.startsWith('gr') ? 'gráfico' : kr === 'fig' ? 'fig' : (kr as FigureKind);
+    const kind: FigureKind = kr.startsWith('gr') ? 'gráfico' : kr.startsWith('fig') ? 'fig' : (kr as FigureKind);
     return { kind, num: lab[2] };
 }
 
@@ -46,20 +48,52 @@ const numPattern = (num: string) => num.split('.').map(p => `0*${parseInt(p, 10)
 // sítios diferentes (nome de ficheiro "001" vs texto "1") por igualdade, não por regex.
 const normalizeNum = (num: string) => num.split('.').map(p => parseInt(p, 10)).join('.');
 
+// Espaço antes/depois (pt) por estilo de parágrafo (Resources/Styles.xml) — mesmo sinal que
+// spacingClasses em idml-importer.ts, mas independente (idml-figures.ts é regex-only, sem
+// DOMParser). Chave = nome do estilo SEM o prefixo "ParagraphStyle/".
+function scanSpacingStyles(stylesXml: string): Map<string, { before: number; after: number }> {
+    const map = new Map<string, { before: number; after: number }>();
+    for (const m of stylesXml.matchAll(/<ParagraphStyle\b([^>]*)>/g)) {
+        const self = /\bSelf="ParagraphStyle\/([^"]*)"/.exec(m[1])?.[1];
+        if (!self) continue;
+        const before = parseFloat(/\bSpaceBefore="([^"]*)"/.exec(m[1])?.[1] || '0') || 0;
+        const after = parseFloat(/\bSpaceAfter="([^"]*)"/.exec(m[1])?.[1] || '0') || 0;
+        if (before || after) map.set(self, { before, after });
+    }
+    return map;
+}
+
 // Parágrafos de legenda de uma story: legenda (legenda/fonte) + notas TXT (começadas por *,
 // fora das células da tabela). Remove os PI <?ACE?> (auto-número) que partiriam o texto.
-function captionParasOf(storyXml: string): { text: string; label?: Figure['label'] }[] {
+// spacingStyles/detectSpacing: mesmo mecanismo do corpo principal (SpaceBefore/SpaceAfter,
+// estilo + override do parágrafo) → p-top/p-bottom em spacingCls, só na 1ª linha da legenda.
+function captionParasOf(
+    storyXml: string,
+    spacingStyles: Map<string, { before: number; after: number }>,
+    detectSpacing: boolean,
+): { text: string; label?: Figure['label']; spacingCls?: string }[] {
     const xml = storyXml.replace(/<\?ACE[^>]*\?>/g, '').replace(/<Table\b[\s\S]*?<\/Table>/g, '');
-    const out: { text: string; label?: Figure['label'] }[] = [];
-    const re = /AppliedParagraphStyle="ParagraphStyle\/([^"]+)"[^>]*>([\s\S]*?)<\/ParagraphStyleRange>/g;
+    const out: { text: string; label?: Figure['label']; spacingCls?: string }[] = [];
+    const re = /<ParagraphStyleRange([^>]*)>([\s\S]*?)<\/ParagraphStyleRange>/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(xml)) !== null) {
-        const style = m[1];
+        const attrs = m[1];
+        const style = /AppliedParagraphStyle="ParagraphStyle\/([^"]+)"/.exec(attrs)?.[1] || '';
+        let spacingCls = '';
+        if (detectSpacing) {
+            const def = spacingStyles.get(style);
+            const before = parseFloat(/\bSpaceBefore="([^"]*)"/.exec(attrs)?.[1] || '') || def?.before || 0;
+            const after = parseFloat(/\bSpaceAfter="([^"]*)"/.exec(attrs)?.[1] || '') || def?.after || 0;
+            spacingCls = [before > 0 ? 'p-top' : '', after > 0 ? 'p-bottom' : ''].filter(Boolean).join(' ');
+        }
         for (const seg of m[2].split(/<Br\s*\/>/)) {
             const t = clean((seg.match(/<Content>([^<]*)<\/Content>/g) || []).map(c => c.replace(/<[^>]+>/g, '')).join(''));
             if (!t) continue;
             const lab = t.match(LABEL_RE);
-            if (CAPTION_STYLE_RE.test(style)) out.push({ text: t, label: lab ? toLabel(lab) : undefined });
+            // Estilo de legenda reconhecido (LEGENDAS/Figura titulo) OU, independentemente do
+            // estilo, texto que começa mesmo por um rótulo de figura ("Figura 2:", "Gráfico 1")
+            // — alguns livros centram a legenda num parágrafo TXT normal, sem estilo dedicado.
+            if (CAPTION_STYLE_RE.test(style) || lab) out.push({ text: t, label: lab ? toLabel(lab) : undefined, spacingCls });
             else if (NOTE_STYLE_RE.test(style) && NOTE_RE.test(t)) out.push({ text: t }); // nota de tabela
         }
     }
@@ -93,13 +127,21 @@ function parseTables(storyXml: string): string[] {
 }
 
 const RASTER = /\.(jpe?g|png|gif|tiff?|webp)$/i;
+// loadIdmlPackage converte estas para raster antes de as pôr na galeria (PDF→JPEG via
+// Ghostscript/pdfToJpeg, EPS→PNG rasterizado) — mesma renomeação aqui, para o imageId calculado
+// bater com a chave real da galeria (sanitizeImageFilename não reconhece .pdf/.eps).
+const CONVERTIBLE = /\.(pdf|eps)$/i;
+const toRasterName = (n: string) => n.replace(/\.pdf$/i, '.jpg').replace(/\.eps$/i, '.png');
 
-export async function buildFigures(idmlZip: JSZip): Promise<Figure[]> {
+export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promise<Figure[]> {
     const storyCache = new Map<string, string>();
     const story = async (id: string) => {
         if (!storyCache.has(id)) storyCache.set(id, await idmlZip.file(`Stories/Story_${id}.xml`)?.async('string') ?? '');
         return storyCache.get(id)!;
     };
+    const spacingStyles = detectSpacing
+        ? scanSpacingStyles(await idmlZip.file('Resources/Styles.xml')?.async('string') ?? '')
+        : new Map<string, { before: number; after: number }>();
 
     const figures: Figure[] = [];
     const usedImages = new Set<string>();
@@ -108,22 +150,28 @@ export async function buildFigures(idmlZip: JSZip): Promise<Figure[]> {
         const sx = await f.async('string');
         const imgs = [...sx.matchAll(/LinkResourceURI="([^"]*)"/g)]
             .map(mm => decodeURIComponent(mm[1].split('/').pop() || ''))
-            .filter(n => RASTER.test(n));
+            .filter(n => RASTER.test(n) || CONVERTIBLE.test(n));
         // legendas (legenda/fonte/notas) das stories nesta spread — para casar com as IMAGENS
         // (imagem e legenda vivem em frames/stories DIFERENTES na mesma spread).
         const storyIds = [...new Set([...sx.matchAll(/ParentStory="([^"]+)"/g)].map(mm => mm[1]))];
         const caps: ReturnType<typeof captionParasOf> = [];
-        for (const sid of storyIds) { const stx = await story(sid); caps.push(...captionParasOf(stx)); }
+        for (const sid of storyIds) { const stx = await story(sid); caps.push(...captionParasOf(stx, spacingStyles, detectSpacing)); }
         // linhas sem rótulo (fonte/notas) — anexadas à legenda da figura desta spread
         const extras = [...new Set(caps.filter(c => !c.label).map(c => c.text))];
 
         // figuras RASTER (imagem) → legenda gráfico/fig/mapa (não quadro/tabela)
-        const imgCap = caps.find(c => c.label && c.label.kind !== 'quadro' && c.label.kind !== 'tabela');
+        const figCaps = caps.filter(c => c.label && c.label.kind !== 'quadro' && c.label.kind !== 'tabela');
         for (const img of imgs) {
-            const imageId = sanitizeImageFilename(img).imageId;
+            const imageId = sanitizeImageFilename(toRasterName(img)).imageId;
             if (usedImages.has(imageId)) continue;
             usedImages.add(imageId);
-            figures.push({ imageId, label: imgCap?.label, captionLines: imgCap ? [imgCap.text, ...extras] : [] });
+            // Nº extraído do NOME do ficheiro ("Figura 2.pdf" → "2") casado com o label.num certo
+            // — necessário quando a story partilhada pelas spreads (corpo principal, referenciado
+            // por TODAS) tem várias legendas embutidas: sem isto, a 1ª do livro inteiro "ganhava"
+            // sempre, em vez da legenda da imagem desta spread especificamente.
+            const fileNum = img.match(/(\d+(?:\.\d+)?)/)?.[1];
+            const imgCap = (fileNum && figCaps.find(c => normalizeNum(c.label!.num) === normalizeNum(fileNum))) || figCaps[0];
+            figures.push({ imageId, label: imgCap?.label, captionLines: imgCap ? [imgCap.text, ...extras] : [], captionSpacing: imgCap?.spacingCls });
         }
         // figuras TABELA (Quadro): tabela e legenda vivem na MESMA story (confirmado na prática —
         // duas tabelas de stories diferentes podem partilhar uma spread, e casar pela spread
@@ -132,13 +180,13 @@ export async function buildFigures(idmlZip: JSZip): Promise<Figure[]> {
             const stx = await story(sid);
             const stTables = parseTables(stx);
             if (stTables.length === 0) continue;
-            const stCaps = captionParasOf(stx);
+            const stCaps = captionParasOf(stx, spacingStyles, detectSpacing);
             const tblCap = stCaps.find(c => c.label && (c.label.kind === 'quadro' || c.label.kind === 'tabela'));
             const stExtras = [...new Set(stCaps.filter(c => !c.label).map(c => c.text))];
             for (const tbl of stTables) {
                 if (usedTables.has(tbl)) continue; // story threaded por vários frames/spreads → mesma tabela repetida
                 usedTables.add(tbl);
-                figures.push({ tableHtml: tbl, label: tblCap?.label, captionLines: tblCap ? [tblCap.text, ...stExtras] : [] });
+                figures.push({ tableHtml: tbl, label: tblCap?.label, captionLines: tblCap ? [tblCap.text, ...stExtras] : [], captionSpacing: tblCap?.spacingCls });
             }
         }
     }
@@ -188,7 +236,9 @@ export function insertFigures(html: string, figures: Figure[]): { html: string; 
         const target = blocks.find(b => re.test(b.textContent || ''));
         if (!target) continue;
         const frag = doc.createElement('div');
-        frag.innerHTML = visual + fig.captionLines.map(l => `<p class="p-legendas">${escapeHtml(l)}</p>`).join('');
+        frag.innerHTML = visual + fig.captionLines.map((l, i) =>
+            `<p class="${['p-legendas', i === 0 ? fig.captionSpacing : ''].filter(Boolean).join(' ')}">${escapeHtml(l)}</p>`
+        ).join('');
         // inserir os filhos do frag a seguir ao bloco-alvo, por ordem
         let ref: Node = target;
         while (frag.firstChild) { const node = frag.firstChild; target.parentNode!.insertBefore(node, ref.nextSibling); ref = node; }
@@ -259,12 +309,12 @@ export function placeInlineFigures(html: string, imageIds: string[]): { html: st
         img.setAttribute('data-image-id', id);
         img.setAttribute('src', 'placeholder');
         img.setAttribute('alt', cap.textContent || '');
-        cap.className = 'p-legendas';
+        cap.classList.add('p-legendas'); // preserva classes já presentes (ex. p-top do corpo)
         // imagem DEPOIS da legenda (+ "Fonte:" seguinte, se existir) — convenção destes livros.
         let insertAfter: Element = cap;
         const next = cap.nextElementSibling;
         if (next && next.tagName === 'P' && SOURCE_RE.test(next.textContent || '')) {
-            next.className = 'p-legendas';
+            next.classList.add('p-legendas');
             insertAfter = next;
         }
         insertAfter.parentNode!.insertBefore(img, insertAfter.nextElementSibling);
