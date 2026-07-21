@@ -147,10 +147,12 @@ export function HomePage() {
         }
     };
     const updateStatusMutation = useMutation({
-        mutationFn: ({ isbn, status }: { isbn: string; status: Ebook['status'] }) => ebooksApi.updateStatus(isbn, status),
+        mutationFn: ({ isbn, status }: { isbn: string; status: Ebook['status']; title: string }) => ebooksApi.updateStatus(isbn, status),
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['ebooks'] });
             queryClient.invalidateQueries({ queryKey: ['ebook', variables.isbn] });
+            if (variables.status === 'completed') showNotification('success', `Ebook ${variables.title} concluído!`, 3000);
+            else showNotification('success', `Ebook ${variables.title} reaberto.`, 3000);
         },
     });
     const uploadCoverMutation = useMutation({
@@ -163,13 +165,13 @@ export function HomePage() {
         onError: () => { showNotification('error', 'Erro ao carregar capa.'); },
     });
     const deleteEbookMutation = useMutation({
-        mutationFn: (isbn: string) => ebooksApi.deleteEbook(isbn),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', 'Registo movido para a reciclagem.', 3000); },
+        mutationFn: (vars: { isbn: string; title: string }) => ebooksApi.deleteEbook(vars.isbn),
+        onSuccess: (_data, vars) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', `Ebook ${vars.title} movido para a reciclagem.`, 3000); },
         onError: () => { showNotification('error', 'Erro ao eliminar o registo.'); },
     });
     const restoreEbookMutation = useMutation({
-        mutationFn: (isbn: string) => ebooksApi.restoreEbook(isbn),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', 'Registo restaurado com sucesso.', 3000); },
+        mutationFn: (vars: { isbn: string; title: string }) => ebooksApi.restoreEbook(vars.isbn),
+        onSuccess: (_data, vars) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', `Ebook ${vars.title} restaurado.`, 3000); },
         onError: () => { showNotification('error', 'Erro ao restaurar o registo.'); },
     });
     const permanentDeleteMutation = useMutation({
@@ -191,7 +193,7 @@ export function HomePage() {
     const toggleStatus = (e: React.MouseEvent, ebook: Ebook) => {
         e.stopPropagation();
         const newStatus = ebook.status === 'in_progress' ? 'completed' : 'in_progress';
-        updateStatusMutation.mutate({ isbn: ebook.ebook_isbn, status: newStatus });
+        updateStatusMutation.mutate({ isbn: ebook.ebook_isbn, status: newStatus, title: ebook.title });
     };
 
     const openShareModal = (e: React.MouseEvent, ebook: Ebook) => {
@@ -393,7 +395,7 @@ export function HomePage() {
                                         onOpenCover={openCoverModal}
                                         onComplete={toggleStatus}
                                         onShare={openShareModal}
-                                        onDelete={(isbn) => deleteEbookMutation.mutate(isbn)}
+                                        onDelete={(isbn) => deleteEbookMutation.mutate({ isbn, title: inProgressEbooks.find(e => e.ebook_isbn === isbn)?.title || '' })}
                                         isDeleting={deleteEbookMutation.isPending}
                                         coverVersions={coverVersions}
                                         onDownloadEpub={handleDownloadEpub}
@@ -407,7 +409,7 @@ export function HomePage() {
                                         onOpenCover={openCoverModal}
                                         onComplete={toggleStatus}
                                         onShare={openShareModal}
-                                        onDelete={(isbn) => deleteEbookMutation.mutate(isbn)}
+                                        onDelete={(isbn) => deleteEbookMutation.mutate({ isbn, title: inProgressEbooks.find(e => e.ebook_isbn === isbn)?.title || '' })}
                                         isDeleting={deleteEbookMutation.isPending}
                                         coverVersions={coverVersions}
                                         onDownloadEpub={handleDownloadEpub}
@@ -457,7 +459,7 @@ export function HomePage() {
                 isOpen={trashOpen}
                 onClose={() => setTrashOpen(false)}
                 trashEbooks={trashEbooks}
-                onRestore={(isbn) => restoreEbookMutation.mutate(isbn)}
+                onRestore={(isbn) => restoreEbookMutation.mutate({ isbn, title: trashEbooks.find(e => e.ebook_isbn === isbn)?.title || '' })}
                 onPermanentDelete={(isbn) => permanentDeleteMutation.mutate(isbn)}
                 onPermanentDeleteAll={(isbns) => permanentDeleteAllMutation.mutate(isbns)}
                 isRestoring={restoreEbookMutation.isPending}

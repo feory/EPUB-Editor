@@ -206,3 +206,13 @@ body {
 .tox .tox-edit-area::before {
   border: none !important;
 }
+
+/* Toolbar sticky (toolbar_sticky:true) oculta por omissão, só aparece com o rato por cima */
+.tox.tox-tinymce--toolbar-sticky-on .tox-editor-header {
+  opacity: 0;
+  transition: opacity 0.7s ease-in 0.15s;
+}
+.tox.tox-tinymce--toolbar-sticky-on .tox-editor-header:hover {
+  opacity: 1;
+  transition: opacity 0.6s ease-out;
+}

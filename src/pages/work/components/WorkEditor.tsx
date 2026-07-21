@@ -691,6 +691,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         quickbars_selection_toolbar: QUICKBARS_SELECTION_TOOLBAR,
                         toolbar_mode: 'wrap',
                         toolbar: EDITOR_TOOLBAR,
+                        toolbar_sticky: true,
+                        toolbar_sticky_offset: 57, // altura da navbar da app (WorkToolbar), sem folga
                         setup: createEditorSetup({
                             setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, onUndo, onRedo,
                             startHtmlEdit: overlays.startHtmlEdit,

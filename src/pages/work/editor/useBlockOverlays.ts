@@ -324,6 +324,8 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const isPlusBlock = (block: HTMLElement | null): block is HTMLElement =>
             !!block && block !== editor.getBody() && /^(P|H[1-6])$/.test(block.nodeName)
             && !/\bchapter-break/.test(block.className);
+        // Rato por cima da toolbar (sticky ou não) → mini-menu de bloco escondido (ver forcePopAbove).
+        let toolbarHovered = false;
         const hideAddBtn = () => fadeOutAddBtn(); // esconder com fade-out suave
         const placeAddBtn = (block: HTMLElement, br: DOMRect, ir: DOMRect) => {
             cancelAddBtnFade(); setAddBtnFading(false); // reaparece opaco
@@ -428,6 +430,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const forcePopAbove = () => {
             const pop = document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
             if (!pop || !pop.offsetHeight) return; // ausente/escondido pelo TinyMCE
+            if (toolbarHovered) { pop.style.visibility = 'hidden'; return; } // rato na toolbar → esconde bubble e mini-menu por igual
             if (!editor.selection.isCollapsed()) return; // seleção de texto → é o bubble, não mexer
             if (plusMenuOpenRef.current) { pop.style.visibility = 'hidden'; return; } // menu de inserção aberto
             const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
@@ -489,6 +492,29 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                 addBtnHideTimerRef.current = setTimeout(fadeOutAddBtn, 120);
             });
             editor.getBody().addEventListener('mouseenter', cancelAddBtnHide);
+            // Toolbar por cima do editor: rato em cima dela esconde o mini-menu de bloco
+            // (fica por baixo, sobreposto); ao sair, volta a aparecer. toolbarHovered lido
+            // por forcePopAbove (senão o MutationObserver do aux desfazia o hide sozinho —
+            // a própria mutação de visibility disparava forcePopAbove, que a repunha 'visible').
+            // Retry: .tox-editor-header pode não existir ainda no exato instante do 'init'
+            // (mesma razão do retry do aux abaixo).
+            const attachHeaderHover = () => {
+                const header = editor.getContainer()?.querySelector('.tox-editor-header') as HTMLElement | null;
+                if (!header) return false;
+                header.addEventListener('mouseenter', () => { toolbarHovered = true; forcePopAbove(); });
+                header.addEventListener('mouseleave', () => {
+                    toolbarHovered = false;
+                    // Bubble de seleção: forcePopAbove nem chega a mexer (isCollapsed()===false
+                    // devolve cedo) — repor visibility diretamente, não confiar só no NodeChange
+                    // (o relaunch do context toolbar do TinyMCE nem sempre redispara com o pop
+                    // ainda presente no DOM, só escondido).
+                    const pop = document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
+                    if (pop) pop.style.visibility = '';
+                    editor.nodeChanged();
+                });
+                return true;
+            };
+            if (!attachHeaderHover()) setTimeout(attachHeaderHover, 0);
             const attach = () => {
                 const aux = document.querySelector('.tox-tinymce-aux');
                 if (aux) { auxObserver.observe(aux, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] }); return true; }

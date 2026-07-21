@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Edit2, GripVertical } from 'lucide-react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { PanelLeftClose, PanelLeftOpen, Edit2, GripVertical, Trash2, Check, X } from 'lucide-react';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
+import { subtreeRange } from '../../../utils/toc';
 
 interface Chapter {
     title: string;
@@ -17,6 +18,7 @@ interface ChapterSidebarProps {
     onSelectChapter: (index: number) => void;
     onEditChapterTitle: (index: number, newTitle: string) => void;
     onReorderChapter: (from: number, to: number) => void;
+    onDeleteChapter: (index: number) => void;
     readOnly?: boolean;
 }
 
@@ -26,8 +28,13 @@ interface ChapterItemProps {
     isActive: boolean;
     isDragging: boolean;
     dropBefore: boolean;
+    confirmingDelete: boolean;
+    childCount: number;
     onSelectChapter: (index: number) => void;
     onRequestEdit: (index: number, currentTitle: string) => void;
+    onRequestDelete: (index: number) => void;
+    onConfirmDelete: (index: number) => void;
+    onCancelDelete: () => void;
     onDragStart: (index: number) => void;
     onDragOverItem: (index: number) => void;
     onDropItem: (index: number) => void;
@@ -41,8 +48,8 @@ const editValue = (c: Chapter) => (c.level === 'break' && c.title.startsWith('Qu
 // Memoized so each item only re-renders when its own active state / title changes,
 // not on every parent re-render (keystroke). Requires stable callback props.
 const ChapterItem = React.memo<ChapterItemProps>(({
-    chapter, index, isActive, isDragging, dropBefore, onSelectChapter, onRequestEdit,
-    onDragStart, onDragOverItem, onDropItem, onDragEnd, readOnly,
+    chapter, index, isActive, isDragging, dropBefore, confirmingDelete, childCount, onSelectChapter, onRequestEdit,
+    onRequestDelete, onConfirmDelete, onCancelDelete, onDragStart, onDragOverItem, onDropItem, onDragEnd, readOnly,
 }) => (
     <div
         className={`relative group/item rounded-xl transition-opacity ${dropBefore ? 'border-t-2 border-slate-500' : 'border-t-2 border-transparent'} ${isDragging ? 'opacity-40' : ''}`}
@@ -60,7 +67,7 @@ const ChapterItem = React.memo<ChapterItemProps>(({
     >
         <button
             onClick={() => onSelectChapter(index)}
-            className={`w-full text-left ${readOnly ? 'pl-4' : 'pl-8'} pr-9 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-start gap-3 ${
+            className={`w-full text-left ${readOnly ? 'pl-4' : 'pl-8'} ${confirmingDelete ? 'pr-24' : 'pr-16'} py-2.5 rounded-xl text-sm font-semibold transition-all flex items-start gap-3 ${
                 isActive
                     ? 'bg-slate-200 text-slate-800 border-l-4 border-transparent'
                     : 'hover:bg-slate-50 text-text-muted border-l-4 border-transparent'
@@ -70,19 +77,47 @@ const ChapterItem = React.memo<ChapterItemProps>(({
                 {chapter.title}
             </span>
         </button>
-        {!readOnly && (
+        {!readOnly && !confirmingDelete && (
             <span className="absolute left-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover/item:opacity-100 text-slate-300 cursor-grab active:cursor-grabbing transition-all" title="Arrastar para reordenar">
                 <GripVertical size={14} />
             </span>
         )}
         {!readOnly && (
-            <button
-                onClick={(e) => { e.stopPropagation(); onRequestEdit(index, editValue(chapter)); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/item:opacity-100 p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-all"
-                title="Editar título"
-            >
-                <Edit2 size={14} />
-            </button>
+            confirmingDelete ? (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 animate-in fade-in duration-150">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onConfirmDelete(index); }}
+                        className="p-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors"
+                        title="Confirmar eliminação"
+                    >
+                        <Check size={14} />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onCancelDelete(); }}
+                        className="p-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-600 transition-colors"
+                        title="Cancelar"
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+            ) : (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onRequestEdit(index, editValue(chapter)); }}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-all"
+                        title="Editar título"
+                    >
+                        <Edit2 size={14} />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onRequestDelete(index); }}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-rose-600 transition-all"
+                        title={childCount > 0 ? `Eliminar capítulo (+${childCount} sub-capítulo${childCount > 1 ? 's' : ''})` : 'Eliminar capítulo'}
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                </div>
+            )
         )}
     </div>
 ));
@@ -141,15 +176,22 @@ const EditTitleModal: React.FC<EditTitleModalProps> = ({ initialValue, onConfirm
 
 const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
     chapters, activeChapterIndex, isFocusMode, isSidebarOpen,
-    onToggleSidebar, onSelectChapter, onEditChapterTitle, onReorderChapter, readOnly,
+    onToggleSidebar, onSelectChapter, onEditChapterTitle, onReorderChapter, onDeleteChapter, readOnly,
 }) => {
     const [editing, setEditing] = useState<{ index: number; value: string } | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
     const [dragIndex, setDragIndex] = useState<number | null>(null);
     const [overIndex, setOverIndex] = useState<number | null>(null);
     // Callbacks estáveis → ChapterItem memoizado não re-renderiza por keystroke
     const handleRequestEdit = useCallback((index: number, currentTitle: string) => {
         setEditing({ index, value: currentTitle });
     }, []);
+    const handleRequestDelete = useCallback((index: number) => setConfirmDelete(index), []);
+    const handleCancelDelete = useCallback(() => setConfirmDelete(null), []);
+    const handleConfirmDelete = useCallback((index: number) => {
+        onDeleteChapter(index);
+        setConfirmDelete(null);
+    }, [onDeleteChapter]);
     const handleDragStart = useCallback((index: number) => setDragIndex(index), []);
     const handleDragOverItem = useCallback((index: number) => setOverIndex(index), []);
     const handleDragEnd = useCallback(() => { setDragIndex(null); setOverIndex(null); }, []);
@@ -159,6 +201,15 @@ const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
         setDragIndex(null);
         setOverIndex(null);
     }, [dragIndex, onReorderChapter]);
+    // childCount só serve ao botão de eliminar (escondido em readOnly) — não vale a pena calcular lá.
+    const childCounts = useMemo(() => {
+        if (readOnly) return [];
+        const levels = chapters.map(c => c.level);
+        return chapters.map((_, index) => {
+            const [s, e] = subtreeRange(levels, index);
+            return e - s - 1;
+        });
+    }, [chapters, readOnly]);
 
     return (
     <>
@@ -190,23 +241,30 @@ const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
                     <div className="h-px bg-border w-full" />
                 </div>
 
-                {chapters.map((chapter, index) => (
-                    <ChapterItem
-                        key={index}
-                        chapter={chapter}
-                        index={index}
-                        isActive={activeChapterIndex === index}
-                        isDragging={dragIndex === index}
-                        dropBefore={dragIndex !== null && overIndex === index && dragIndex !== index}
-                        onSelectChapter={onSelectChapter}
-                        onRequestEdit={handleRequestEdit}
-                        onDragStart={handleDragStart}
-                        onDragOverItem={handleDragOverItem}
-                        onDropItem={handleDropItem}
-                        onDragEnd={handleDragEnd}
-                        readOnly={readOnly}
-                    />
-                ))}
+                {chapters.map((chapter, index) => {
+                    return (
+                        <ChapterItem
+                            key={index}
+                            chapter={chapter}
+                            index={index}
+                            isActive={activeChapterIndex === index}
+                            isDragging={dragIndex === index}
+                            dropBefore={dragIndex !== null && overIndex === index && dragIndex !== index}
+                            confirmingDelete={confirmDelete === index}
+                            childCount={childCounts[index] ?? 0}
+                            onSelectChapter={onSelectChapter}
+                            onRequestEdit={handleRequestEdit}
+                            onRequestDelete={handleRequestDelete}
+                            onConfirmDelete={handleConfirmDelete}
+                            onCancelDelete={handleCancelDelete}
+                            onDragStart={handleDragStart}
+                            onDragOverItem={handleDragOverItem}
+                            onDropItem={handleDropItem}
+                            onDragEnd={handleDragEnd}
+                            readOnly={readOnly}
+                        />
+                    );
+                })}
                 {!readOnly && chapters.length > 0 && (
                     <div
                         onDragOver={(e) => { e.preventDefault(); setOverIndex(chapters.length); }}

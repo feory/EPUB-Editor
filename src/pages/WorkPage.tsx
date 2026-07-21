@@ -383,6 +383,7 @@ export function WorkPage() {
               onSelectChapter={work.setActiveChapterIndex}
               onEditChapterTitle={work.handleEditChapterTitle}
               onReorderChapter={work.handleReorderChapter}
+              onDeleteChapter={work.handleDeleteChapter}
               readOnly={work.readOnly}
             />
 

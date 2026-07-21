@@ -8,7 +8,7 @@ import { useContentWorker } from '../../hooks/useContentWorker';
 import { compressHtml, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml, applyDropCapToFirstParagraph } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
-import { moveChapters, renameChapterPart } from '../../utils/toc';
+import { moveChapters, renameChapterPart, deleteChapterPart } from '../../utils/toc';
 import type { DocxStyleMapping } from '../../services/document-importer';
 
 import { contentReducer, initialContentState } from './hooks/contentReducer';
@@ -159,19 +159,34 @@ export function useEbookWork(isbn: string | undefined) {
         if (isbn) saveMutation.mutate({ content: updatedHtml });
     }, [chapterSync, isbn, saveMutation, showNotification, contentState.activeChapterIndex]);
 
+    // Setup partilhado por operações estruturais (reorder/delete): capítulos + parts do split + níveis.
+    const getChaptersAndParts = useCallback(() => {
+        const chapters = chapterSync.chapters;
+        const parts = chapterSync.splitHtmlIntoParts(chapterSync.getSyncedHtmlContent());
+        const levels = chapters.map(c => c.level);
+        return { chapters, parts, levels };
+    }, [chapterSync]);
+
     // --- Reorder chapters (subárvore h1+filhos; folhas isoladas) ---
     const handleReorderChapter = useCallback((from: number, to: number) => {
-        const chapters = chapterSync.chapters;
+        const { chapters, parts, levels } = getChaptersAndParts();
         if (!chapters[from] || from === to) return;
-        const syncedHtml = chapterSync.getSyncedHtmlContent();
-        const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
-        const levels = chapters.map(c => c.level);
         const updatedHtml = moveChapters(parts, levels, from, to);
         if (updatedHtml === parts.join('')) return; // no-op (soltar dentro da própria subárvore)
         dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
-        showNotification('success', 'Capítulo movido!');
+        showNotification('success', `Capítulo ${chapters[from].title} movido!`);
         if (isbn) saveMutation.mutate({ content: updatedHtml });
-    }, [chapterSync, isbn, saveMutation, showNotification]);
+    }, [getChaptersAndParts, isbn, saveMutation, showNotification]);
+
+    // --- Eliminar capítulo (subárvore h1+filhos; folhas isoladas) ---
+    const handleDeleteChapter = useCallback((index: number) => {
+        const { chapters, parts, levels } = getChaptersAndParts();
+        if (!chapters[index]) return;
+        const updatedHtml = deleteChapterPart(parts, levels, index);
+        dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
+        showNotification('success', `Capítulo ${chapters[index].title} eliminado!`);
+        if (isbn) saveMutation.mutate({ content: updatedHtml });
+    }, [getChaptersAndParts, isbn, saveMutation, showNotification]);
 
     // --- Aplicar capitular ao 1º parágrafo real de cada capítulo (livro inteiro) ---
     const handleApplyDropCaps = useCallback(() => {
@@ -270,6 +285,7 @@ export function useEbookWork(isbn: string | undefined) {
 
         handleEditChapterTitle,
         handleReorderChapter,
+        handleDeleteChapter,
         handleApplyDropCaps,
 
         handleImportPdf: useCallback(

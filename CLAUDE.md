@@ -78,7 +78,12 @@ bun run build
 bun run lint
 ```
 
-## Versão atual: 0.9.4.4
+## Versão atual: 0.9.4.4.1
+
+### 0.9.4.4.1 | Painel de Estrutura (eliminar capítulo), toasts com nome, toolbar sticky oculta
+- Painel "Estrutura": eliminar capítulo (subárvore h1+filhos), botão com confirmação inline.
+- Toasts de mover/eliminar capítulo, mover/restaurar/concluir/reabrir ebook passam a incluir o título.
+- Editor: toolbar do TinyMCE em `toolbar_sticky`, colada à navbar (sem folga), oculta por omissão — só aparece com o rato por cima; ao passar o rato pela toolbar, o mini-menu/bubble de formatação escondem-se (e voltam ao sair).
 
 ### 0.9.4.4 | Capitulares automáticas, Reciclagem em massa, Capítulo sem Título
 - **Ferramenta "Aplicar Capitulares"** (Ferramentas → Auxílio): percorre o livro inteiro e aplica capitular ao 1º parágrafo real de cada capítulo, saltando footnote/alinea/epígrafe(`p-quote`,`p-center`)/Ficha Técnica/vazios; idempotente (salta capítulos que já têm). `applyDropCapToFirstParagraph` (`src/utils/html-cleaner.ts`, `DOMParser`, mesmo padrão de `prependFichaTecnica`) + `handleApplyDropCaps` (`useEbookWork.ts`, reusa o padrão `getSyncedHtmlContent→splitHtmlIntoParts→LOAD_CONTENT` de `handleEditChapterTitle`). Toast com contagem ("N capitulares aplicadas, M já tinham").

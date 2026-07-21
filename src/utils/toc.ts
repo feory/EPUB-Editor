@@ -33,6 +33,15 @@ export function moveChapters(parts: string[], levels: Level[], from: number, to:
 }
 
 /**
+ * Elimina a subárvore de `index` (h1 → o próprio + h2/breaks filhos; h2/break → só o próprio).
+ * Devolve o novo fullHtml (partes juntas).
+ */
+export function deleteChapterPart(parts: string[], levels: Level[], index: number): string {
+    const [s, e] = subtreeRange(levels, index);
+    return [...parts.slice(0, s), ...parts.slice(e)].join('');
+}
+
+/**
  * Renomeia uma parte de capítulo: atualiza o `data-title` do marcador e, se existir, o texto
  * do heading (h1/h2) seguinte. Título vazio (break sem título) só limpa o data-title.
  */
