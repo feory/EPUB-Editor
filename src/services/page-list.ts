@@ -36,6 +36,12 @@ function normalize(s: string): string {
 const ANCHOR_LEN = 30;   // chars normalizados usados como âncora
 const MIN_ANCHOR = 15;   // mínimo para a âncora ser fiável
 
+// Âncoras de capítulo (extractChapterAnchors) precisam de mais chars que as de página: aberturas
+// de capítulo do mesmo livro por vezes começam com a mesma fórmula ("Sun Tzu disse: 1. Na
+// guerra...") — só divergem bem depois dos 30 chars usados para folios.
+const CHAPTER_ANCHOR_LEN = 60;
+const CHAPTER_MIN_ANCHOR = 30;
+
 // Item só-dígitos mais próximo da margem (rodapé: menor y; cabeçalho: maior y — coords do PDF
 // são bottom-up). Devolve o folio dessa página nessa zona, ou null se não houver nenhum.
 function folioInZone(items: { str: string; transform: number[] }[], vpH: number, zone: 'bottom' | 'top'): number | null {
@@ -109,6 +115,94 @@ export async function extractPdfPageAnchors(data: ArrayBuffer): Promise<PageAnch
         }
     }
     return anchors;
+}
+
+export interface ChapterAnchor { title: string; anchor: string }
+
+/**
+ * Livros cujo corpo é uma story IDML CONTÍNUA sem CAPITULAR a marcar aberturas de capítulo
+ * (única fronteira real = uma página de título dedicada, sem correspondência recuperável no
+ * XML — ex. "A Arte da Guerra"): localiza cada título (já extraído do IDML) na sua página de
+ * abertura do PDF de impressão e devolve o início da página SEGUINTE como âncora de onde o
+ * capítulo começa no corpo corrido. Descarta páginas que contenham OUTRO título da lista
+ * (índice/TOC lista todos juntos — não é a página de abertura).
+ */
+export async function extractChapterAnchors(data: ArrayBuffer, titles: string[]): Promise<ChapterAnchor[]> {
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const pageTexts: string[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const items = (await page.getTextContent()).items as { str: string }[];
+        pageTexts.push(normalize(items.map(it => it.str).join(' ')));
+    }
+    const normTitles = titles.map(normalize);
+    const anchors: ChapterAnchor[] = [];
+    for (let ti = 0; ti < titles.length; ti++) {
+        const nt = normTitles[ti];
+        if (nt.length < 3) continue;
+        let pageIdx = -1;
+        for (let p = 0; p < pageTexts.length; p++) {
+            if (!pageTexts[p].includes(nt)) continue;
+            const hasOther = normTitles.some((other, oi) => oi !== ti && other.length >= 3 && pageTexts[p].includes(other));
+            if (hasOther) continue; // página de índice/TOC (lista vários títulos) — não é a abertura
+            pageIdx = p;
+            break;
+        }
+        if (pageIdx === -1) continue;
+        // Saltar página(s) em branco a seguir à abertura (comum: capítulo começa em página
+        // direita, verso fica vazio) até à 1ª página com texto real.
+        let next = pageIdx + 1;
+        while (next < pageTexts.length && pageTexts[next].length === 0) next++;
+        if (next >= pageTexts.length) continue;
+        const anchor = pageTexts[next].slice(0, CHAPTER_ANCHOR_LEN);
+        if (anchor.length < CHAPTER_MIN_ANCHOR) continue;
+        anchors.push({ title: titles[ti], anchor });
+    }
+    return anchors;
+}
+
+/**
+ * Insere cada heading (HTML já pronto, ex. "<h1>II<br>A guerra</h1>") no corpo corrido, no
+ * bloco (`<p>`) onde a âncora (início da página seguinte à abertura, ver extractChapterAnchors)
+ * foi encontrada — antes desse bloco, nunca a meio (precisão ao nível do parágrafo chega:
+ * uma abertura de capítulo começa sempre um parágrafo novo).
+ */
+export function insertChapterHeadings(html: string, anchors: { anchor: string; headingHtml: string }[]): { html: string; inserted: number; total: number } {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const nodes: Text[] = [];
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
+
+    let flat = '';
+    const map: { node: Text; offset: number }[] = [];
+    for (const node of nodes) {
+        const raw = node.textContent ?? '';
+        for (let k = 0; k < raw.length; k++) {
+            const nc = normalize(raw[k]);
+            if (!nc) continue;
+            flat += nc;
+            map.push({ node, offset: k });
+        }
+    }
+
+    const hits: { pos: number; headingHtml: string }[] = [];
+    for (const { anchor, headingHtml } of anchors) {
+        const pos = flat.indexOf(anchor);
+        if (pos >= 0) hits.push({ pos, headingHtml });
+    }
+    const keep = longestIncreasing(hits.map(h => h.pos)).map(i => hits[i]);
+    const points = keep.map(h => ({ ...map[h.pos], headingHtml: h.headingHtml }));
+    for (let i = points.length - 1; i >= 0; i--) {
+        let el: Node | null = points[i].node.parentNode;
+        while (el && el.nodeType === 1 && !/^(P|H[1-6]|DIV|LI|BLOCKQUOTE|TABLE)$/i.test((el as Element).tagName)) {
+            el = el.parentNode;
+        }
+        if (!el || !el.parentNode) continue;
+        const frag = doc.createElement('div');
+        frag.innerHTML = points[i].headingHtml;
+        while (frag.firstChild) el.parentNode.insertBefore(frag.firstChild, el);
+    }
+    return { html: doc.body.innerHTML, inserted: points.length, total: anchors.length };
 }
 
 // Índices da maior subsequência estritamente crescente de `arr` (LIS, O(n log n)).

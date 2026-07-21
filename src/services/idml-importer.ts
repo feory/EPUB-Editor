@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../utils/format';
-import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg } from './page-list';
+import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings } from './page-list';
 import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures } from './idml-figures';
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from './document-importer';
 
@@ -587,8 +587,22 @@ function convertBulletParagraphs(html: string): string {
 // Casa-se o N-ésimo título (por nº) com a N-ésima abertura, por ordem (1:1).
 // Ceiling: assume 1 CAPITULAR por artigo e títulos numerados sequenciais.
 
-// A 1ª linha não-vazia é só um número inteiro? (linha = segmento; um PSR pode agrupar
-// número/título/autores separados por <Br/> — daí usar renderPsr, não psr.textContent.)
+// Numeral romano ("II", "XIII") → inteiro; usado por livros que numeram capítulos assim
+// (ex. "A Arte da Guerra") em vez de nº arábico.
+function romanToInt(s: string): number | null {
+    const VALUES: Record<string, number> = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+    let total = 0;
+    for (let i = 0; i < s.length; i++) {
+        const v = VALUES[s[i]];
+        if (!v) return null;
+        const next = VALUES[s[i + 1]];
+        total += next && v < next ? -v : v;
+    }
+    return total || null;
+}
+
+// A 1ª linha não-vazia é só um número (arábico ou romano)? (linha = segmento; um PSR pode
+// agrupar número/título/autores separados por <Br/> — daí usar renderPsr, não psr.textContent.)
 function titleBlockNum(xml: string): number | null {
     const story = new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('Story')[0];
     if (!story) return null;
@@ -598,10 +612,31 @@ function titleBlockNum(xml: string): number | null {
         for (const seg of renderPsr(psr, throwaway)) {
             const t = seg.text.replace(/<[^>]+>/g, '').trim();
             if (!t) continue;
-            return /^\d+$/.test(t) ? parseInt(t) : null; // 1ª linha com texto decide
+            if (/^\d+$/.test(t)) return parseInt(t); // 1ª linha com texto decide
+            if (/^[IVXLCDM]+$/i.test(t)) return romanToInt(t.toUpperCase());
+            return null;
         }
     }
     return null;
+}
+
+// nº (linha 1) + título (linha 2) juntos — chave de pesquisa no PDF (livros sem CAPITULAR,
+// ver extractChapterAnchors): o título sozinho pode ser uma frase comum que ocorre à-toa no
+// corpo (ex. "A guerra" num livro sobre guerra); "II A guerra" junto só ocorre na página de
+// abertura (e no Índice, filtrado à parte por conter também os OUTROS títulos).
+function titleBlockSearchKey(xml: string): string {
+    const story = new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('Story')[0];
+    if (!story) return '';
+    const throwaway: NoteCounter = { n: 0, star: 0, defs: [] };
+    const lines: string[] = [];
+    for (const psr of Array.from(story.children)) {
+        if (psr.tagName !== 'ParagraphStyleRange') continue;
+        for (const seg of renderPsr(psr, throwaway)) {
+            const t = seg.text.replace(/<[^>]+>/g, '').trim();
+            if (t) lines.push(t);
+        }
+    }
+    return lines.slice(0, 2).join(' ');
 }
 
 // Renderiza o bloco de título: nº + título → <h1> simples (modelo 0.9.3.4+: o marcador
@@ -713,7 +748,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     DETECT_SPACING = options.detectParagraphSpacing ?? false;
     const counter: NoteCounter = { n: 0, star: 0, defs: [] }; // numeração de notas contínua entre IDMLs
     const parts: string[] = [];
-    const titleBlocks: { num: number; html: string }[] = []; // títulos de artigo (coletânea)
+    const titleBlocks: { num: number; html: string; searchKey: string }[] = []; // títulos de artigo (coletânea)
     let fichaDone = false;
 
     // Livros divididos em vários docs InDesign → processar cada .idml por ordem e concatenar.
@@ -753,7 +788,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
                 }
                 // Bloco de título de coletânea (story 1-frame, 1º parágrafo = nº)? Recupera-o.
                 const num = titleBlockNum(xml);
-                if (num !== null) { const h = renderTitleBlock(xml, counter); if (h) titleBlocks.push({ num, html: h }); }
+                if (num !== null) { const h = renderTitleBlock(xml, counter); if (h) titleBlocks.push({ num, html: h, searchKey: titleBlockSearchKey(xml) }); }
                 continue;
             }
             const html = renderStory(xml, counter, mapping);
@@ -769,7 +804,22 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     // Bullets literais "•" → lista <ul><li> real.
     html = convertBulletParagraphs(html);
     // Coletânea: inserir cada título de artigo antes da sua abertura (p.drop-cap), por ordem.
-    html = insertTitleBlocks(html, titleBlocks).html;
+    const titleBlockRes = insertTitleBlocks(html, titleBlocks);
+    html = titleBlockRes.html;
+    // Sem CAPITULAR no livro (não é coletânea — titleBlockRes.placed === 0, não há p.drop-cap
+    // para casar): a única forma de saber onde cada capítulo começa no corpo corrido é localizar
+    // o título no PDF de impressão (página de abertura dedicada) e usar a página seguinte como
+    // âncora — requer PDF (upload opcional); sem PDF os títulos ficam por inserir (não há outra
+    // fronteira recuperável do IDML).
+    if (titleBlockRes.placed === 0 && titleBlocks.length > 0 && pdf) {
+        // pdfjs neutraliza o ArrayBuffer que lhe é passado (getDocument) — cópia própria, o
+        // extractPdfPageAnchors mais abaixo também precisa do `pdf` original intacto.
+        const chapterAnchors = await extractChapterAnchors(pdf.slice(0), titleBlocks.map(t => t.searchKey));
+        const withHtml = chapterAnchors
+            .map(a => ({ anchor: a.anchor, headingHtml: titleBlocks.find(t => t.searchKey === a.title)?.html }))
+            .filter((a): a is { anchor: string; headingHtml: string } => !!a.headingHtml);
+        html = insertChapterHeadings(html, withHtml).html;
+    }
     let pageBreaks: { inserted: number; total: number } | undefined;
     // Page-list: alinhar as páginas do PDF de impressão ao texto e inserir marcadores.
     if (pdf) {
