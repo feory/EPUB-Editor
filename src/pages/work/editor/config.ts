@@ -31,6 +31,7 @@ export const STYLE_FORMATS = [
         { title: 'Itálico', format: 'p-italic' },
         { title: 'Negrito + Itálico', format: 'p-bold-italic' },
         { title: 'Citação', format: 'p-quote' },
+        { title: 'Separador (*)', format: 'p-asterisk' },
     ]},
     { title: 'Bordas', items: [
         { title: 'Borda Superior', format: 'p-border-top' },

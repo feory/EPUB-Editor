@@ -63,6 +63,7 @@ export const DEFAULT_CSS = `
     .p-bold       { font-weight: bold !important; }
     .p-italic     { font-style: italic !important; }
     .p-bold-italic { font-weight: bold !important; font-style: italic !important; }
+    .p-asterisk   { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }
 
     /* === CAPITULAR === */
     span.drop-cap { float: left; font-size: 2.5em; line-height: 0.75; margin: 0.05em 0.08em 0 0; font-weight: bold; }

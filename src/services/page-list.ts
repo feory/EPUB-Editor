@@ -251,7 +251,11 @@ export async function verifyBlankSpacing(html: string, data?: ArrayBuffer): Prom
         if (key.length < 15) continue; // demasiado curto para ser fiável — sem p-top
         for (const lines of pages) {
             const idx = lines.findIndex(l => l.text.startsWith(key));
-            if (idx <= 0) continue; // não encontrado nesta página, ou é a 1ª linha (sem anterior p/ comparar)
+            // idx 0 (não encontrado/1ª linha, sem anterior p/ comparar) OU 1 (1ª linha de CORPO
+            // da página — a linha 0 é o cabeçalho corrente, mesma convenção de
+            // extractPdfPageAnchors) → gap mediria cabeçalho→corpo (margem de topo, sempre maior
+            // que a entrelinha normal), não espaçamento real; sem confirmação possível aqui.
+            if (idx <= 1) continue;
             const gap = lines[idx - 1].y - lines[idx].y;
             const gaps: number[] = [];
             for (let k = 1; k < lines.length; k++) gaps.push(lines[k - 1].y - lines[k].y);

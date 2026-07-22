@@ -47,7 +47,12 @@ export function createEditorSetup(deps: SetupDeps) {
                     const block = editor.dom.getParent(node, 'p,h1,h2,h3,h4,h5,h6') as HTMLElement | null;
                     // Marcador + parágrafo vazio a seguir, pronto para o conteúdo do capítulo.
                     const html = `<p class="chapter-break" data-title="${safeTitle}"></p><p><br data-mce-bogus="1"></p>`;
-                    if (block && (block.textContent || '').trim() === '') {
+                    // Bloco vazio SUBSTITUÍDO (em vez de inserir a seguir) só quando é um <p> comum
+                    // — um marcador de capítulo (ex. Ficha Técnica, também vazio, título só via
+                    // CSS attr(data-title)) nunca deve ser substituído: cursor lá dentro (ex. no
+                    // topo do documento) apagava o capítulo existente em vez de criar um novo antes dele.
+                    const isMarker = !!block && /\bchapter-break/.test(block.className);
+                    if (block && !isMarker && (block.textContent || '').trim() === '') {
                         editor.dom.setOuterHTML(block, html);
                     } else {
                         editor.insertContent(html);
@@ -170,6 +175,7 @@ export function createEditorSetup(deps: SetupDeps) {
             editor.formatter.register('p-italic', { selector: 'p,li', classes: 'p-italic' });
             editor.formatter.register('p-bold-italic', { selector: 'p,li', classes: 'p-bold-italic' });
             editor.formatter.register('p-quote', { selector: 'p,li', classes: 'p-quote' });
+            editor.formatter.register('p-asterisk', { selector: 'p,li', classes: 'p-asterisk' });
             editor.formatter.register('p-border-top', { selector: 'p,li', classes: 'p-border-top' });
             editor.formatter.register('p-border-bottom', { selector: 'p,li', classes: 'p-border-bottom' });
             editor.formatter.register('p-border-sides', { selector: 'p,li', classes: 'p-border-sides' });

@@ -1,10 +1,11 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../utils/format';
 import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings, verifyBlankSpacing } from './page-list';
-import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures } from './idml-figures';
+import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures, toRasterName } from './idml-figures';
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from './document-importer';
 
 const RASTER_RE = /\.(jpe?g|png|gif|tiff?|webp)$/i;
+const CONVERTIBLE_RE = /\.(pdf|eps|psd)$/i;
 const MIME: Record<string, string> = {
     jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
     gif: 'image/gif', tif: 'image/tiff', tiff: 'image/tiff', webp: 'image/webp',
@@ -587,8 +588,14 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
             // da página); sem PDF, o candidato fica sem p-top (mais seguro que assumir).
             const blankCandidate = DETECT_SPACING && blankBefore && tag === 'p';
             blankBefore = false;
-            const attr = (baseClasses.length ? ` class="${baseClasses.join(' ')}"` : '')
-                + styleAttr + (blankCandidate ? ' data-blank-top="1"' : '');
+            // Separador de cena: uma LINHA (não o parágrafo todo — o InDesign junta-a a outras
+            // linhas via <Br/> dentro do mesmo psr, ex. epígrafe + "*" + poema seguinte) cujo
+            // texto é só "*" → classe dedicada (centrado, itálico), independente do resto do
+            // parágrafo/estilo mapeado.
+            const isAsterisk = tag === 'p' && seg.text.replace(/<[^>]+>/g, '').trim() === '*';
+            const classes = isAsterisk ? ['p-asterisk'] : baseClasses;
+            const attr = (classes.length ? ` class="${classes.join(' ')}"` : '')
+                + (isAsterisk ? '' : styleAttr) + (blankCandidate ? ' data-blank-top="1"' : '');
             out.push(`<${tag}${attr}>${seg.text}</${tag}>`);
             // definições de nota logo a seguir ao parágrafo que as referencia (mesmo capítulo)
             for (const def of seg.notes) out.push(def);
@@ -644,6 +651,17 @@ function renderFicha(xml: string, counter: NoteCounter): string {
             blankBefore = false;
         }
     }
+    return out.join('\n');
+}
+
+// Frontespício: capa/rosto solto nas primeiras páginas, antes da Ficha Técnica — imagens sem
+// TextFrame (readingOrder recolhe-as) + texto solto heurístico (ver ramo !fichaDone no loop
+// principal). Bloco próprio (chapter-break), sem heading real (não é capítulo de conteúdo).
+function renderFrontMatter(imageIds: string[], texts: string[]): string {
+    if (imageIds.length === 0 && texts.length === 0) return '';
+    const out = ['<p class="chapter-break" data-title="Frontespício"></p>'];
+    for (const id of imageIds) out.push(`<p class="p-center"><img data-image-id="${id}" src="placeholder" alt="" /></p>`);
+    out.push(...texts);
     return out.join('\n');
 }
 
@@ -831,23 +849,38 @@ function isBlockQuoteStory(xml: string): boolean {
  * Ordem de leitura: designmap lista os Spreads por ordem do livro; cada Spread tem
  * TextFrames com ParentStory na ordem do documento. Recolhemos as stories pela 1ª
  * aparição (dedupe) e contamos os frames por story.
+ *
+ * `frontImageNames`: nomes de imagem (LinkResourceURI) das spreads ANTES da 1ª com
+ * qualquer TextFrame — capa/rosto soltos (Rectangle sem texto, ex. PDF de página inteira),
+ * hoje invisíveis ao corpo. Janela fecha assim que aparece o 1º TextFrame do livro.
  */
-async function readingOrder(zip: JSZip): Promise<{ ordered: string[]; frameCount: Map<string, number> }> {
+async function readingOrder(zip: JSZip): Promise<{ ordered: string[]; frameCount: Map<string, number>; frontImageNames: string[] }> {
     const designmap = await zip.file('designmap.xml')?.async('string') ?? '';
     const spreadFiles = [...designmap.matchAll(/<idPkg:Spread src="([^"]+)"/g)].map(m => m[1]);
     const ordered: string[] = [];
     const seen = new Set<string>();
     const frameCount = new Map<string, number>();
+    const frontImageNames: string[] = [];
+    let contentStarted = false;
     for (const sf of spreadFiles) {
         const xml = await zip.file(sf)?.async('string');
         if (!xml) continue;
-        for (const m of xml.matchAll(/<TextFrame\b[^>]*ParentStory="([^"]+)"/g)) {
+        const frames = [...xml.matchAll(/<TextFrame\b[^>]*ParentStory="([^"]+)"/g)];
+        if (!contentStarted && frames.length === 0) {
+            for (const m of xml.matchAll(/LinkResourceURI="([^"]*)"/g)) {
+                const name = decodeURIComponent(m[1].split('/').pop() || '');
+                if (RASTER_RE.test(name) || CONVERTIBLE_RE.test(name)) frontImageNames.push(name);
+            }
+            continue;
+        }
+        contentStarted = true;
+        for (const m of frames) {
             const id = m[1];
             frameCount.set(id, (frameCount.get(id) || 0) + 1);
             if (!seen.has(id)) { seen.add(id); ordered.push(id); }
         }
     }
-    return { ordered, frameCount };
+    return { ordered, frameCount, frontImageNames };
 }
 
 export async function extractIdml(file: File, options: { styleMapping?: DocxStyleMapping; pdf?: ArrayBuffer; detectParagraphSpacing?: boolean } = {}): Promise<ExtractedDocument> {
@@ -858,6 +891,8 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     const counter: NoteCounter = { n: 0, star: 0, defs: [] }; // numeração de notas contínua entre IDMLs
     const parts: string[] = [];
     const titleBlocks: { num: number; html: string; searchKey: string }[] = []; // títulos de artigo (coletânea)
+    const frontImageIds: string[] = []; // frontespício: imagens (capa/rosto) antes da Ficha Técnica
+    const frontTexts: string[] = []; // frontespício: texto solto heurístico (título vivo, caso raro)
     let fichaDone = false;
 
     // Livros divididos em vários docs InDesign → processar cada .idml por ordem e concatenar.
@@ -865,12 +900,23 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
         CHAR_STYLES = await scanCharStyles(idmlZip); // negrito/itálico/versaletes por estilo de carácter
         PARA_INDENTS = await scanParaIndents(idmlZip); // recuo de bloco (LeftIndent) por estilo de parágrafo
         COLORS = await scanColors(idmlZip); // cores de preenchimento das células de tabela
-        const { ordered, frameCount } = await readingOrder(idmlZip);
+        const { ordered, frameCount, frontImageNames } = await readingOrder(idmlZip);
+        // só interessa antes da 1ª Ficha Técnica encontrada (normalmente tudo no 1º .idml).
+        if (!fichaDone) frontImageIds.push(...frontImageNames.map(name => sanitizeImageFilename(toRasterName(name)).imageId));
         for (const storyId of ordered) {
             const xml = await idmlZip.file(`Stories/Story_${storyId}.xml`)?.async('string');
             if (!xml) continue;
             // Ficha Técnica (colofão): capítulo próprio, uma só vez (pode repetir-se entre IDMLs).
-            if (isFichaTecnica(xml)) { if (!fichaDone) { parts.push(renderFicha(xml, counter)); fichaDone = true; } continue; }
+            // Frontespício (capa/rosto/logo) vai logo antes, no 1º momento em que a Ficha surge.
+            if (isFichaTecnica(xml)) {
+                if (!fichaDone) {
+                    const front = renderFrontMatter(frontImageIds, frontTexts);
+                    if (front) parts.push(front);
+                    parts.push(renderFicha(xml, counter));
+                    fichaDone = true;
+                }
+                continue;
+            }
             // Incluir só fluxos narrativos: threaded (vários frames) OU com estilo estrutural.
             const threaded = (frameCount.get(storyId) || 0) > 1;
             // Índice: o InDesign separa a coluna de números de página numa story própria.
@@ -899,6 +945,16 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
                 // Bloco de título de coletânea (story 1-frame, 1º parágrafo = nº)? Recupera-o.
                 const num = titleBlockNum(xml);
                 if (num !== null) { const h = renderTitleBlock(xml, counter); if (h) titleBlocks.push({ num, html: h, searchKey: titleBlockSearchKey(xml) }); }
+                else if (!fichaDone) {
+                    // Frontespício: texto solto ANTES da Ficha Técnica (título/subtítulo vivo,
+                    // caso raro — normalmente já vem embutido nas imagens de rosto). Mesma
+                    // heurística de isHeuristicTitle (centrado/curto/fonte grande).
+                    const story = new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('Story')[0];
+                    for (const psr of Array.from(story?.children ?? [])) {
+                        if (psr.tagName !== 'ParagraphStyleRange' || !isHeuristicTitle(psr)) continue;
+                        for (const seg of renderPsr(psr, counter)) if (seg.text) frontTexts.push(`<p class="p-center">${seg.text}</p>`);
+                    }
+                }
                 continue;
             }
             const html = renderStory(xml, counter, mapping);

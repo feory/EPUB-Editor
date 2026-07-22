@@ -106,6 +106,7 @@ export const EPUB_CSS = `
     .p-bold        { font-weight: bold !important; }
     .p-italic      { font-style: italic !important; }
     .p-bold-italic { font-weight: bold !important; font-style: italic !important; }
+    .p-asterisk    { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }
 
     /* === BORDAS === */
     .p-border-top    { border-top: 2px solid #555; padding-top: 0.6em; margin-top: 0.6em; text-indent: 0 !important; }
@@ -154,6 +155,9 @@ const exportCss = (css: string): string => {
     }
     if (!out.includes('.p-italic')) {
         out += '\n.p-bold { font-weight: bold !important; }\n.p-italic { font-style: italic !important; }\n.p-bold-italic { font-weight: bold !important; font-style: italic !important; }';
+    }
+    if (!out.includes('.p-asterisk')) {
+        out += '\n.p-asterisk { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }';
     }
     // Notas: marcador (sup a) e backlink (.footnote a) herdam a cor do texto.
     // SEMPRE anexado no fim (vence a cascata) — livros antigos podem ter

@@ -132,7 +132,7 @@ const RASTER = /\.(jpe?g|png|gif|tiff?|webp)$/i;
 // aqui, para o imageId calculado bater com a chave real da galeria (sanitizeImageFilename não
 // reconhece .pdf/.eps/.psd).
 const CONVERTIBLE = /\.(pdf|eps|psd)$/i;
-const toRasterName = (n: string) => n.replace(/\.pdf$/i, '.jpg').replace(/\.eps$/i, '.png').replace(/\.psd$/i, '.png');
+export const toRasterName = (n: string) => n.replace(/\.pdf$/i, '.jpg').replace(/\.eps$/i, '.png').replace(/\.psd$/i, '.png');
 
 export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promise<Figure[]> {
     const storyCache = new Map<string, string>();

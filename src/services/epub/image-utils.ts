@@ -29,7 +29,15 @@ export const replaceImageUrlsInContent = (content: string, images: Map<string, B
         const clsMatch = tag.match(/class=["']([^"']*)["']/i);
         const aligns = (clsMatch?.[1] || '').split(/\s+/).filter((c) => /^img-(left|right|center)$/.test(c));
         const classAttr = aligns.length ? ` class="${aligns.join(' ')}"` : '';
-        return `<img src="${filename}"${classAttr} alt="Imagem ${id}" />`;
+        // Tamanho definido pelo resize do TinyMCE (setSizeProp: width como atributo HTML,
+        // height como style inline) — preservar, senão o resize não sobrevive ao preview/export.
+        const styleMatch = tag.match(/\sstyle=["']([^"']*)["']/i);
+        const widthMatch = tag.match(/\swidth=["']([^"']*)["']/i);
+        const heightMatch = tag.match(/\sheight=["']([^"']*)["']/i);
+        const sizeAttrs = (widthMatch ? ` width="${widthMatch[1]}"` : '')
+            + (heightMatch ? ` height="${heightMatch[1]}"` : '')
+            + (styleMatch ? ` style="${styleMatch[1]}"` : '');
+        return `<img src="${filename}"${classAttr}${sizeAttrs} alt="Imagem ${id}" />`;
     });
 
     processed = processed.replace(/src=["']\/api\/ebooks\/[^/]+\/images\/([^"'?/]+)[^"']*["']/gi, (m, id) => {

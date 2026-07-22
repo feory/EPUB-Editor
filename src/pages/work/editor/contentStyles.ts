@@ -15,5 +15,13 @@ export function buildContentStyle(currentCss: string): string {
 [data-mce-htmledit] { visibility: hidden !important; }
 hr { border: none; box-sizing: content-box; height: 1px; background: #cbd5e1; background-clip: content-box; padding: 8px 0; width: 40%; margin: 1em auto; }
 hr.divider-full { width: 100%; }
+/* content_css:false tira o CSS default do TinyMCE — sem isto as pegas de resize de
+   imagem/tabela existem no DOM (editor.plugins.core) mas ficam invisíveis/inertes
+   (sem position:absolute nem dimensão), tal como o helper de dimensões e o clone
+   fantasma durante o arrasto. Regras replicadas do skin oxide (content.inline.css). */
+.mce-resizehandle { background-color: #4099ff; border: 1px solid #4099ff; box-sizing: border-box; height: 10px; width: 10px; position: absolute; z-index: 1298; }
+.mce-resizehandle:hover { background-color: #2b7de9; }
+.mce-clonedresizable { cursor: default; opacity: .5; outline: 1px dashed #000; position: absolute; z-index: 10001; }
+.mce-resize-helper { background: rgba(0,0,0,.75); border: 1px; border-radius: 3px; color: #fff; display: none; font-family: sans-serif; font-size: 12px; line-height: 14px; margin: 5px 10px; padding: 5px; position: absolute; white-space: nowrap; z-index: 10002; }
 `;
 }
