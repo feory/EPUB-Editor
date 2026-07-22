@@ -38,7 +38,7 @@ export function createEditorSetup(deps: SetupDeps) {
                     { type: 'cancel', text: 'Cancelar' },
                     { type: 'submit', text: 'Inserir', primary: true },
                 ],
-                onSubmit: (api: any) => {
+                onSubmit: (api: { getData: () => { title: string }; close: () => void }) => {
                     const data = api.getData() as { title: string };
                     const safeTitle = (data.title.trim() || 'Capítulo').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                     api.close();
@@ -72,9 +72,9 @@ export function createEditorSetup(deps: SetupDeps) {
         // Arrastar imagem: criar o blob COM o file.name original (o drop
         // default do TinyMCE gera um nome tipo "imagetools…", perdendo-o).
         // Espelha o file_picker_callback; o images_upload_handler envia depois.
-        editor.on('drop', (e: any) => {
+        editor.on('drop', (e: DragEvent) => {
             const files = e.dataTransfer?.files
-                ? Array.from(e.dataTransfer.files).filter((f: any) => f.type.startsWith('image/'))
+                ? Array.from(e.dataTransfer.files).filter((f: File) => f.type.startsWith('image/'))
                 : [];
             if (files.length === 0) return; // texto / mover interno → TinyMCE trata
             e.preventDefault();
@@ -94,14 +94,14 @@ export function createEditorSetup(deps: SetupDeps) {
             });
         });
 
-        editor.on('SetContent', (_e: any) => {
+        editor.on('SetContent', () => {
             if (isCleaningRef.current) return;
             const body = editor.getBody();
             const beforeHtml = body.innerHTML;
             cleanEditorDOM(body);
             // Backfill data-image-id before capturing afterHtml so the attribute is
             // included in the state update and present when prepareEpubAssets runs.
-            body.querySelectorAll('img:not([data-image-id])').forEach((img: any) => {
+            body.querySelectorAll<HTMLImageElement>('img:not([data-image-id])').forEach((img) => {
                 const src = img.getAttribute('src');
                 if (src && src.includes('/api/ebooks/') && src.includes('/images/')) {
                     const match = src.match(/\/images\/([^/?]+)/);
@@ -155,21 +155,28 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', () => { editor.formatter.apply('p-top'); editor.dispatch('Change'); editor.nodeChanged(); });
 
         editor.on('init', () => {
-            editor.formatter.register('p-indent', { block: 'p', classes: 'p-indent' });
-            editor.formatter.register('p-top', { block: 'p', classes: 'p-top' });
-            editor.formatter.register('p-space', { block: 'p', classes: 'p-space' });
-            editor.formatter.register('footnote', { block: 'p', classes: 'footnote' });
-            editor.formatter.register('drop-cap', { block: 'p', classes: 'drop-cap' });
-            editor.formatter.register('p-small', { block: 'p', classes: 'p-small' });
-            editor.formatter.register('p-legendas', { block: 'p', classes: 'p-legendas' });
-            editor.formatter.register('p-bold', { block: 'p', classes: 'p-bold' });
-            editor.formatter.register('p-italic', { block: 'p', classes: 'p-italic' });
-            editor.formatter.register('p-bold-italic', { block: 'p', classes: 'p-bold-italic' });
-            editor.formatter.register('p-quote', { block: 'p', classes: 'p-quote' });
-            editor.formatter.register('p-border-top', { block: 'p', classes: 'p-border-top' });
-            editor.formatter.register('p-border-bottom', { block: 'p', classes: 'p-border-bottom' });
-            editor.formatter.register('p-border-sides', { block: 'p', classes: 'p-border-sides' });
+            // selector (não block): aplica a classe ao bloco existente sem lhe trocar a tag —
+            // block:'p' não fazia nada dentro de um <li> (o TinyMCE não troca a tag de um item
+            // de lista por um <p>, quebraria a lista), impossibilitando estilo de parágrafo em
+            // bullets. selector:'p,li' cobre ambos.
+            editor.formatter.register('p-indent', { selector: 'p,li', classes: 'p-indent' });
+            editor.formatter.register('p-top', { selector: 'p,li', classes: 'p-top' });
+            editor.formatter.register('p-space', { selector: 'p,li', classes: 'p-space' });
+            editor.formatter.register('footnote', { selector: 'p,li', classes: 'footnote' });
+            editor.formatter.register('drop-cap', { selector: 'p,li', classes: 'drop-cap' });
+            editor.formatter.register('p-small', { selector: 'p,li', classes: 'p-small' });
+            editor.formatter.register('p-legendas', { selector: 'p,li', classes: 'p-legendas' });
+            editor.formatter.register('p-bold', { selector: 'p,li', classes: 'p-bold' });
+            editor.formatter.register('p-italic', { selector: 'p,li', classes: 'p-italic' });
+            editor.formatter.register('p-bold-italic', { selector: 'p,li', classes: 'p-bold-italic' });
+            editor.formatter.register('p-quote', { selector: 'p,li', classes: 'p-quote' });
+            editor.formatter.register('p-border-top', { selector: 'p,li', classes: 'p-border-top' });
+            editor.formatter.register('p-border-bottom', { selector: 'p,li', classes: 'p-border-bottom' });
+            editor.formatter.register('p-border-sides', { selector: 'p,li', classes: 'p-border-sides' });
             editor.formatter.register('small-text', { inline: 'small' });
+            // Override do formato nativo (senão sai <span style="text-decoration:underline">) —
+            // <u> é o que o import de EPUB já produz (reverseUnderline), consistente e sem CSS.
+            editor.formatter.register('underline', { inline: 'u' });
             editor.formatter.register('small-caps', { inline: 'span', classes: 'small-caps' });
             editor.formatter.register('box', { block: 'div', classes: 'box', wrapper: true });
             editor.formatter.register('noBreak', { block: 'div', classes: 'noBreak', wrapper: true });
@@ -464,9 +471,12 @@ export function createEditorSetup(deps: SetupDeps) {
         // Em parágrafo: "Mais estilos" (⋮) no canto esquerdo, alinhamento logo à direita, depois estilos inline.
         editor.ui.registry.addContextToolbar('parastyles', {
             // Só com o cursor colapsado — em seleção de texto mostra-se o bubble, não o mini-menu.
+            // Também em <li> (blockOf não inclui 'li' — usado pelo sistema de pega/+ que não se
+            // estende a listas; aqui só precisamos do mini-menu de estilos, por isso getParent
+            // próprio em vez de alargar blockOf), para dar acesso a p-top/p-quote/etc. em bullets.
             predicate: (node: Node) => {
-                const block = blockOf(node);
-                return !!block && block.nodeName === 'P' && block !== hiddenBlock && editor.selection.isCollapsed();
+                const block = blockOf(node) || editor.dom.getParent(node, 'li');
+                return !!block && (block.nodeName === 'P' || block.nodeName === 'LI') && block !== hiddenBlock && editor.selection.isCollapsed();
             },
             position: 'node',
             scope: 'node',

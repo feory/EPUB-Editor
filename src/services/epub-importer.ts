@@ -174,6 +174,17 @@ function reversePagebreaks(body: HTMLElement) {
     });
 }
 
+// <span class="underline">texto</span> → <u>texto</u>: o editor não tem classe/CSS para
+// "underline" (nem estilo dedicado nem botão de toolbar) — como <u> nativo, o browser e os
+// leitores EPUB tratam do sublinhado sozinhos, sem precisar de CSS nenhum.
+function reverseUnderline(body: HTMLElement) {
+    body.querySelectorAll('span.underline').forEach(span => {
+        const u = document.createElement('u');
+        u.innerHTML = span.innerHTML;
+        span.replaceWith(u);
+    });
+}
+
 const MAX_IMAGE_BYTES = 2_000_000; // = limite do servidor (server/routes/images.js); maior → saltar
 
 // <img src="Images/{id}.ext"> → <img data-image-id="{id}" src="placeholder">; recolhe o blob.
@@ -209,7 +220,7 @@ const NEW_CLASSES = new Set([
     'p-indent', 'p-non-indent', 'p-top', 'p-space', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic',
     'p-center', 'p-quote', 'p-legendas', 'footnote', 'footnote-ref', 'drop-cap', 'alinea',
     'chapter-break', 'small-caps', 'pagebreak', 'p-border-top', 'p-border-bottom', 'p-border-sides',
-    'img-left', 'img-center', 'img-right',
+    'img-left', 'img-center', 'img-right', 'underline',
 ]);
 // Classe antiga → classe(s) nova(s). Vazio/ausente = dropar (ruído estrutural).
 const LEGACY_CLASS_MAP: Record<string, string> = {
@@ -441,6 +452,7 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
             reverseFootnotes(body);
         }
         reversePagebreaks(body);
+        reverseUnderline(body);
         await reverseImages(body, zip, docDir, images, skipIds);
 
         let content = body.innerHTML.trim();

@@ -48,6 +48,7 @@ export interface ExtractOptions {
     convertListsToDialogue?: boolean;
     styleMapping?: DocxStyleMapping;
     detectParagraphSpacing?: boolean; // IDML: SpaceBefore/SpaceAfter → p-top/p-bottom
+    epubClassMapping?: Record<string, string>; // EPUB antigo: mapeamento de classes legacy (scanEpubClasses)
 }
 
 export async function extractDocument(file: File, options: ExtractOptions = {}): Promise<ExtractedDocument> {
@@ -57,7 +58,7 @@ export async function extractDocument(file: File, options: ExtractOptions = {}):
     } else if (file.name.endsWith('.idml') || file.name.endsWith('.zip')) {
         extracted = await extractIdml(file, { styleMapping: options.styleMapping, detectParagraphSpacing: options.detectParagraphSpacing });
     } else if (file.name.endsWith('.epub')) {
-        extracted = await extractEpub(file);
+        extracted = await extractEpub(file, options.epubClassMapping);
     } else if (file.name.endsWith('.html') || file.name.endsWith('.htm')) {
         extracted = await extractHtmlFromHtml(file);
     } else {

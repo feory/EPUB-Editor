@@ -5,6 +5,9 @@ import { Loader2 } from 'lucide-react';
 import { MarginPreview } from '../components/MarginPreview';
 import { ImportOptionsModal } from './work/modals/ImportOptionsModal';
 import { ConversionsModal } from './work/modals/ConversionsModal';
+import { EpubMappingModal } from './EpubMappingModal';
+import { scanEpubClasses } from '../services/epub-importer';
+import type { EpubClassInfo } from '../services/epub-importer';
 import type { ImportOptions } from '../utils/html-cleaner';
 import type { DocxStyleMapping } from '../services/document-importer';
 import { useEbookWork } from './work/useEbookWork';
@@ -75,6 +78,7 @@ export function WorkPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [importOptions, setImportOptions] = useState<ImportOptions | null>(null);
+  const [epubMapping, setEpubMapping] = useState<{ file: File; classes: EpubClassInfo[] } | null>(null);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showStats, setShowStats] = useState(false);
@@ -176,14 +180,26 @@ export function WorkPage() {
   }, [diff.showDiffSidebar, work.versionDiff.open, closeAllPanels]);
 
   // File handling
+  // EPUB antigo (mesma plataforma legacy que a HomePage já trata) → modal de mapeamento de
+  // classes primeiro; EPUB da própria app → segue direto para as Opções de Importação, como
+  // os outros formatos. scanEpubClasses só faz algo em EPUBs de plataforma antiga.
   const processFile = useCallback((file: File) => {
     const isPdf = file.type === 'application/pdf';
     const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx');
     const isHtml = file.type === 'text/html' || file.name.endsWith('.html') || file.name.endsWith('.htm');
     const isIdml = file.name.endsWith('.idml') || file.name.endsWith('.zip');
     const isEpub = file.name.endsWith('.epub');
-    if (isPdf || isDocx || isHtml || isIdml || isEpub) { setPendingImportFile(file); return; }
-    showNotification('error', 'Formato não suportado. Use PDF, DOCX, IDML/ZIP, EPUB ou HTML.');
+    if (!(isPdf || isDocx || isHtml || isIdml || isEpub)) {
+      showNotification('error', 'Formato não suportado. Use PDF, DOCX, IDML/ZIP, EPUB ou HTML.');
+      return;
+    }
+    if (!isEpub) { setPendingImportFile(file); return; }
+    scanEpubClasses(file)
+      .then(({ legacy, classes }) => {
+        if (legacy && classes.length) setEpubMapping({ file, classes });
+        else setPendingImportFile(file);
+      })
+      .catch(() => setPendingImportFile(file)); // scan falhou → best-effort direto
   }, [showNotification]);
 
   const handleImportConfirm = (options: ImportOptions, styleMapping?: DocxStyleMapping) => {
@@ -201,6 +217,7 @@ export function WorkPage() {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ''; // sem isto, escolher o MESMO ficheiro outra vez não dispara onChange
     if (file) processFile(file);
   };
 
@@ -560,6 +577,23 @@ export function WorkPage() {
           onReorderChapter={work.handleReorderChapter}
           onEditChapterTitle={work.handleEditChapterTitle}
           onClose={() => setShowToc(false)}
+        />
+      )}
+
+      {epubMapping && (
+        <EpubMappingModal
+          fileName={epubMapping.file.name}
+          classes={epubMapping.classes}
+          onConfirm={(mapping) => {
+            // Mapeamento já definido → nada mais a decidir (EPUB não tem conversões próprias,
+            // ver isEpub em ImportOptionsModal); importa direto, sem mostrar esse modal a seguir.
+            work.handleImportDocument(epubMapping.file, {
+              indentAllParagraphs: false, topOnBoldParagraphs: false, noIndentAfterBold: false,
+              wrapBoldWithNext: false, convertListsToDialogue: false, detectParagraphSpacing: false,
+            }, undefined, mapping);
+            setEpubMapping(null);
+          }}
+          onClose={() => setEpubMapping(null)}
         />
       )}
 

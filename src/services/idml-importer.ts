@@ -543,12 +543,13 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
             // Juntar os segmentos com <br> (o split de capítulos troca <br> por espaço no TOC).
             let body = segs.map(s => s.text).filter(Boolean).join('<br>');
             if (!body && segs.every(s => s.notes.length === 0)) continue;
-            // Nº de capítulo/parte SOZINHO (ex. "1", "23") mapeado pelo utilizador para heading
-            // — estilo próprio do livro (ex. "CAP_#"), não coberto pelo 'merge' hardcoded do
-            // STYLE_MAP (esse só conhece os nomes fixos "CAPÍTULOS_#"/"PARTES_#"). Funciona como
-            // rótulo à espera do título seguinte, tal como o 'merge' — nunca funde por TAG (isso
-            // fundiria também duas heading NÃO relacionadas, ex. divisória de Parte + 1º capítulo).
-            if (/^\d{1,3}\.?$/.test(body) && segs.every(s => s.notes.length === 0)) {
+            // Nº de capítulo/parte SOZINHO (ex. "1", "23", "Capítulo 1.", "Parte 2") mapeado pelo
+            // utilizador para heading — estilo próprio do livro (ex. "CAP_#", ou grupo IDML tipo
+            // "CAPÍTULOS/NÚMEROS"), não coberto pelo 'merge' hardcoded do STYLE_MAP (esse só
+            // conhece os nomes fixos "CAPÍTULOS_#"/"PARTES_#"). Funciona como rótulo à espera do
+            // título seguinte, tal como o 'merge' — nunca funde por TAG (isso fundiria também
+            // duas heading NÃO relacionadas, ex. divisória de Parte + 1º capítulo).
+            if (/^(cap[íi]tulo|parte)?\s*\d{1,3}\.?$/i.test(body) && segs.every(s => s.notes.length === 0)) {
                 pendingLabel = body;
                 continue;
             }
@@ -570,7 +571,10 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
             continue;
         }
 
-        lastHeadingStyle = null; // corpo normal a seguir → quebra a sequência de headings
+        // Corpo normal a seguir → quebra a sequência de headings, EXCETO se for só uma linha em
+        // branco (espaçamento visual entre nº e título, ex. "Capítulo 1." <linha vazia> "Título"
+        // — layout comum, não é conteúdo real); a sequência mantém-se para ainda fundir o título.
+        if (!segs.every(s => !s.text && !s.raw && s.notes.length === 0)) lastHeadingStyle = null;
         for (const seg of segs) {
             if (seg.raw) { out.push(seg.raw); continue; } // tabela — já é HTML de bloco, não envolver em <tag>
             if (!seg.text && seg.notes.length === 0) { blankBefore = true; continue; } // linha em branco

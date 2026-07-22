@@ -294,8 +294,8 @@ export function useEbookWork(isbn: string | undefined) {
             [importPdfMutation]
         ),
         handleImportDocument: useCallback(
-            (file: File, options: ImportOptions, styleMapping?: DocxStyleMapping) =>
-                importDocumentMutation.mutate({ file, options, styleMapping }),
+            (file: File, options: ImportOptions, styleMapping?: DocxStyleMapping, epubClassMapping?: Record<string, string>) =>
+                importDocumentMutation.mutate({ file, options, styleMapping, epubClassMapping }),
             [importDocumentMutation]
         ),
 

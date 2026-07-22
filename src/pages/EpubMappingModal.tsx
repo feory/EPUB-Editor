@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileUp } from 'lucide-react';
+import { FileUp, Info } from 'lucide-react';
 import type { EpubClassInfo } from '../services/epub-importer';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../components/ModalCloseButton';
@@ -28,6 +28,7 @@ const TARGET_OPTIONS: { value: string; label: string }[] = [
     { value: 'p-bold-italic', label: 'Negrito + Itálico' },
     { value: 'p-legendas', label: 'Legenda' },
     { value: 'footnote', label: 'Nota de rodapé' },
+    { value: 'underline', label: 'Sublinhado' },
     { value: '__drop__', label: 'Remover' },
 ];
 
@@ -47,13 +48,19 @@ const EpubMappingModalComponent: React.FC<EpubMappingModalProps> = ({ fileName, 
                     <h2 className="text-xl font-bold text-slate-700 flex items-center gap-2">
                         <FileUp size={20} />
                         Mapeamento de Estilos
+                        <span className="group relative inline-flex cursor-help">
+                            <Info size={15} className="text-slate-400" />
+                            <span className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 w-64 rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-normal normal-case tracking-normal text-slate-700 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">
+                                Escolha para que estilo do editor mapear cada classe do EPUB antigo.
+                            </span>
+                        </span>
                     </h2>
                     <ModalCloseButton onClick={onClose} />
                 </div>
 
                 <div className="p-6 flex flex-col gap-4">
                     <p className="text-sm text-text-muted">
-                        Importar <span className="font-bold text-text-main">{fileName}</span>. Escolha para que estilo do editor mapear cada classe do EPUB antigo.
+                        Importar <span className="font-bold text-text-main">{fileName}</span>.
                     </p>
 
                     <div className="flex flex-col gap-2 max-h-96 overflow-y-auto pr-1">

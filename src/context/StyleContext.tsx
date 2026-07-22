@@ -72,7 +72,7 @@ export const DEFAULT_CSS = `
     .alinea { margin-left: 80px; text-indent: 0 !important; }
 
     /* Listas (bullets) — espaçamento entre itens à imagem do corpo */
-    ul, ol { margin: 0.5em 0; padding-left: 2em; }
+    ul, ol { margin: 0.5em 0; padding-left: 3em; }
     li { line-height: 2.0em; margin-bottom: 0.5em; text-align: justify; }
 
     /* === BORDAS === */

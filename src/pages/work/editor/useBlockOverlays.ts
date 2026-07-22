@@ -433,8 +433,14 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             if (toolbarHovered) { pop.style.visibility = 'hidden'; return; } // rato na toolbar → esconde bubble e mini-menu por igual
             if (!editor.selection.isCollapsed()) return; // seleção de texto → é o bubble, não mexer
             if (plusMenuOpenRef.current) { pop.style.visibility = 'hidden'; return; } // menu de inserção aberto
-            const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
-            if (!block || !/^(P|H[1-6])$/.test(block.nodeName)) return;
+            // blockOf não inclui 'li' (grip/+ não se estendem a listas, ver parastyles em
+            // setup.ts) — fallback próprio, senão o mini-menu de estilos num bullet nunca
+            // passava daqui: ficava com a visibility que o TinyMCE lhe deu por defeito (às
+            // vezes hidden), só revelada indiretamente ao passar o rato pela toolbar (que
+            // repõe visibility='' sem depender deste gate).
+            const selNode = editor.selection.getNode();
+            const block = (blockOf(selNode) || editor.dom.getParent(selNode, 'li')) as HTMLElement | null;
+            if (!block || !/^(P|H[1-6]|LI)$/.test(block.nodeName)) return;
             const iframe = iframeOf(editor);
             if (!iframe) return;
             const ir = iframe.getBoundingClientRect();
