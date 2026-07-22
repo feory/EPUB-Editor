@@ -266,7 +266,7 @@ export const generateEpubBlob = async (htmlContent: string, metadata: BookMetada
     oebps.file('nav.xhtml', generateNavXhtml(sections, pageEntries));
     if (pageEntries.length > 0) oebps.file('pagelist.xhtml', generatePageListXhtml(pageEntries));
     oebps.file('content.opf', generateContentOpf(sections, metadata, uniqueId, imageManifestItems, '', cover, pageEntries.length > 0));
-    oebps.file('toc.ncx', generateTocNcx(sections, uniqueId, metadata.title, pageEntries.length > 0));
+    oebps.file('toc.ncx', generateTocNcx(sections, uniqueId, metadata.title));
 
     return await zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
 };

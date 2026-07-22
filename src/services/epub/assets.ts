@@ -10,13 +10,6 @@ export interface CoverAssets {
 }
 
 export const generateNavXhtml = (sections: Section[], pageEntries: { section: number; page: number }[] = []): string => {
-    const pageListNav = pageEntries.length === 0 ? '' : `
-  <nav epub:type="page-list" id="page-list" role="doc-pagelist">
-    <h1>Lista de Páginas</h1>
-    <ol>
-      ${pageEntries.map(e => `<li><a href="section${e.section}.xhtml#page-${e.page}">${e.page}</a></li>`).join('\n      ')}
-    </ol>
-  </nav>`;
     const navItems = sections
         .map((sec, i) => {
             if (sec.parentIdx !== -1) return null;
@@ -37,6 +30,18 @@ export const generateNavXhtml = (sections: Section[], pageEntries: { section: nu
         .filter(Boolean)
         .join('\n      ');
 
+    // "page-list" tem de ser um nav PRÓPRIO, separado do "toc" — a regra de reading-order do
+    // ACE/epubcheck (NAV-011: "toc nav must be in reading order") só se aplica ao nav epub:type
+    // "toc"; ancorar página a página de volta a secções anteriores (section3#page-6 depois de já
+    // ter passado o capítulo de section10) violava essa regra quando estava aninhado no Índice.
+    const pageListNav = pageEntries.length === 0 ? '' : `
+  <nav epub:type="page-list" id="page-list" role="doc-pagelist">
+    <h1>Lista de Páginas</h1>
+    <ol>
+      ${pageEntries.map(e => `<li><a href="section${e.section}.xhtml#page-${e.page}">${e.page}</a></li>`).join('\n      ')}
+    </ol>
+  </nav>`;
+
     return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="pt" xml:lang="pt">
@@ -52,7 +57,7 @@ export const generateNavXhtml = (sections: Section[], pageEntries: { section: nu
   <nav epub:type="toc" id="toc" role="doc-toc">
     <h1>Índice</h1>
     <ol>
-      ${navItems}${pageEntries.length > 0 ? '\n      <li><a href="pagelist.xhtml">Lista de Páginas</a></li>' : ''}
+      ${navItems}
     </ol>
   </nav>${pageListNav}
 </body>
@@ -146,7 +151,7 @@ export const generateContentOpf = (
 </package>`;
 };
 
-export const generateTocNcx = (sections: Section[], uniqueId: string, title: string, hasPageList = false): string => {
+export const generateTocNcx = (sections: Section[], uniqueId: string, title: string): string => {
     let playOrder = 1;
     const navPointsList: string[] = [];
 
@@ -172,14 +177,6 @@ export const generateTocNcx = (sections: Section[], uniqueId: string, title: str
         html += `\n    </navPoint>`;
         navPointsList.push(html);
     });
-
-    if (hasPageList) {
-        navPointsList.push(`
-    <navPoint id="navPoint-${playOrder}" playOrder="${playOrder}">
-      <navLabel><text>Lista de Páginas</text></navLabel>
-      <content src="pagelist.xhtml"/>
-    </navPoint>`);
-    }
 
     return `<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">

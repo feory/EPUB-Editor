@@ -88,8 +88,13 @@ export const stmt = {
   grammarSessionDelete: db.prepare('DELETE FROM grammar_sessions WHERE isbn = ?'),
   updateMetadata:       db.prepare(`
     UPDATE ebooks SET title = ?, author = ?, description = ?, publisher = ?,
-    language = ?, subjects = ?, pub_date = ?, physical_isbn = ? WHERE ebook_isbn = ?
+    language = ?, subjects = ?, pub_date = ?, physical_isbn = ?, ebook_isbn = ? WHERE ebook_isbn = ?
   `),
+  // Rename de ISBN (ebook_isbn é PK, referenciada por ebook_shares/grammar_cache/grammar_sessions
+  // por valor, sem FK enforcement ligado — ver renameEbookIsbn em routes/ebooks.js).
+  renameEbookShares:    db.prepare('UPDATE ebook_shares SET ebook_isbn = ? WHERE ebook_isbn = ?'),
+  renameGrammarCache:   db.prepare('UPDATE grammar_cache SET isbn = ? WHERE isbn = ?'),
+  renameGrammarSession: db.prepare('UPDATE grammar_sessions SET isbn = ? WHERE isbn = ?'),
   // users
   createUser:           db.prepare('INSERT INTO users (email, password, role) VALUES (?, ?, ?)'),
   getUserByEmail:       db.prepare('SELECT * FROM users WHERE email = ?'),

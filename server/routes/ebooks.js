@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, renameSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { stmt } from '../database.js';
+import { db, stmt } from '../database.js';
 import { corsHeaders, jsonResponse, safeSegment } from '../response.js';
 import { DATA_DIR } from '../config.js';
 import { debugLog } from '../log.js';
@@ -42,13 +42,89 @@ export async function updateStatus(req, isbn) {
   return Response.json({ message: 'Status updated', status }, { headers: corsHeaders });
 }
 
+// O conteúdo gravado (parágrafos de imagem) referencia a capa/galeria por URL absoluto
+// "/api/ebooks/<isbn>/images/..." (não por data-image-id só — precisa de um src real para o
+// TinyMCE mostrar) — fica preso ao ISBN antigo em cada versão do histórico. Reescreve todas
+// (não só a mais recente: restaurar uma versão antiga tem de continuar a funcionar).
+// Formato do ficheiro (ver src/utils/compression.ts): "UNCOMPRESSED:<html>" em texto, ou
+// base64 de gzip sem prefixo — Bun.gunzipSync lê qualquer gzip standard, independente da lib
+// que o gerou (fflate no browser).
+function rewriteIsbnInHistory(ebookDir, oldIsbn, newIsbn) {
+  const historyDir = join(ebookDir, 'history');
+  if (!existsSync(historyDir)) return;
+  const oldPath = `/api/ebooks/${oldIsbn}/`;
+  const newPath = `/api/ebooks/${newIsbn}/`;
+  for (const file of readdirSync(historyDir)) {
+    if (!file.startsWith('content_') || !(file.endsWith('.html') || file.endsWith('.html.gz'))) continue;
+    const filePath = join(historyDir, file);
+    const raw = readFileSync(filePath, 'utf8');
+    let html, compressed;
+    if (raw.startsWith('UNCOMPRESSED:')) {
+      html = raw.slice('UNCOMPRESSED:'.length);
+      compressed = false;
+    } else {
+      try {
+        html = Buffer.from(Bun.gunzipSync(Buffer.from(raw, 'base64'))).toString('utf8');
+        compressed = true;
+      } catch (err) {
+        console.error(`Skip rewrite (not valid gzip): ${file}`, err.message);
+        continue;
+      }
+    }
+    if (!html.includes(oldPath)) continue;
+    const rewritten = html.split(oldPath).join(newPath);
+    const out = compressed
+      ? Buffer.from(Bun.gzipSync(Buffer.from(rewritten, 'utf8'))).toString('base64')
+      : `UNCOMPRESSED:${rewritten}`;
+    writeFileSync(filePath, out);
+  }
+}
+
+// A última exportação EPUB é gravada como "<isbn>.epub" (ver saveEpub em epub.js) — o NOME do
+// ficheiro fica preso ao ISBN antigo mesmo depois de mover a pasta toda. Versões do histórico
+// (`ebook_<timestamp>.epub`) não têm isbn no nome — não precisam de fix.
+function renameLatestEpubFile(ebookDir, oldIsbn, newIsbn) {
+  const epubDir = join(ebookDir, 'Epub');
+  const oldPath = join(epubDir, `${oldIsbn}.epub`);
+  if (existsSync(oldPath)) renameSync(oldPath, join(epubDir, `${newIsbn}.epub`));
+}
+
 export async function updateMetadata(req, isbn) {
   try {
     const body = await req.json();
     debugLog('Updating metadata for ISBN:', isbn, body);
-    const { title, author, description, publisher, language, subjects, pub_date, physical_isbn } = body;
-    stmt.updateMetadata.run(title, author, description, publisher, language, subjects, pub_date, physical_isbn, isbn);
-    return Response.json({ message: 'Metadata updated' }, { headers: corsHeaders });
+    const { title, author, description, publisher, language, subjects, pub_date, physical_isbn, ebook_isbn } = body;
+    const newIsbn = ebook_isbn && ebook_isbn !== isbn ? ebook_isbn : isbn;
+
+    if (newIsbn !== isbn) {
+      if (!safeSegment(newIsbn)) return Response.json({ error: 'ISBN inválido' }, { status: 400, headers: corsHeaders });
+      if (stmt.getEbook.get(newIsbn)) return Response.json({ error: 'ISBN já existe' }, { status: 409, headers: corsHeaders });
+      // Pasta física do ebook (DATA_DIR/<isbn>) primeiro — se falhar, aborta antes de tocar na BD.
+      const oldDir = join(DATA_DIR, isbn);
+      if (existsSync(oldDir)) renameSync(oldDir, join(DATA_DIR, newIsbn));
+    }
+
+    try {
+      db.transaction(() => {
+        stmt.updateMetadata.run(title, author, description, publisher, language, subjects, pub_date, physical_isbn, newIsbn, isbn);
+        if (newIsbn !== isbn) {
+          stmt.renameEbookShares.run(newIsbn, isbn);
+          stmt.renameGrammarCache.run(newIsbn, isbn);
+          stmt.renameGrammarSession.run(newIsbn, isbn);
+        }
+      })();
+    } catch (dbErr) {
+      // Rollback da pasta se a transação falhar depois do rename em disco.
+      if (newIsbn !== isbn && existsSync(join(DATA_DIR, newIsbn))) renameSync(join(DATA_DIR, newIsbn), join(DATA_DIR, isbn));
+      throw dbErr;
+    }
+
+    if (newIsbn !== isbn) {
+      rewriteIsbnInHistory(join(DATA_DIR, newIsbn), isbn, newIsbn);
+      renameLatestEpubFile(join(DATA_DIR, newIsbn), isbn, newIsbn);
+    }
+
+    return Response.json({ message: 'Metadata updated', ebook_isbn: newIsbn }, { headers: corsHeaders });
   } catch (dbErr) {
     console.error('Database Error during metadata update:', dbErr);
     return Response.json({ error: 'Internal server error' }, { status: 500, headers: corsHeaders });

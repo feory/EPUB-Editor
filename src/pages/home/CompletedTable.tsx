@@ -44,7 +44,7 @@ export const CompletedTable: React.FC<CompletedTableProps> = ({
                         <tr key={ebook.ebook_isbn} className="hover:bg-slate-50/80 transition-colors group">
                             <td className="px-6 py-4">
                                 <div className="mini-cover">
-                                    <img src={`/api/ebooks/${ebook.ebook_isbn}/cover?t=${coverVersions?.[ebook.ebook_isbn] ?? ebook.created_at}`} alt="" loading="lazy" onLoad={(e) => { const s = e.currentTarget.nextElementSibling as HTMLElement | null; if (s) s.style.display = 'none'; }} onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                    <img src={`/api/ebooks/${ebook.ebook_isbn}/cover?t=${coverVersions?.[ebook.ebook_isbn] ?? ebook.created_at}`} alt="" loading="lazy" onLoad={(e) => { e.currentTarget.style.display = ''; const s = e.currentTarget.nextElementSibling as HTMLElement | null; if (s) s.style.display = 'none'; }} onError={(e) => (e.currentTarget.style.display = 'none')} />
                                     <ImageIcon size={16} className="placeholder-icon" />
                                 </div>
                             </td>

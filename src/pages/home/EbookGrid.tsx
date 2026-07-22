@@ -48,7 +48,7 @@ export const EbookGrid: React.FC<EbookGridProps> = ({
                                 alt=""
                                 loading="lazy"
                                 className="w-full h-full object-contain"
-                                onLoad={(e) => { const s = e.currentTarget.nextElementSibling as HTMLElement | null; if (s) s.style.display = 'none'; }}
+                                onLoad={(e) => { e.currentTarget.style.display = ''; const s = e.currentTarget.nextElementSibling as HTMLElement | null; if (s) s.style.display = 'none'; }}
                                 onError={(e) => (e.currentTarget.style.display = 'none')}
                             />
                             <ImageIcon size={24} className="absolute text-slate-300 pointer-events-none" />
