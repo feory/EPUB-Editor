@@ -303,7 +303,8 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
     }, [isbn, loadImage, showNotification]);
 
     // Corte de imagem: ver useImageCrop — atualiza o cache local (url/blob) para forçar reload
-    // da thumbnail depois de gravar (mesmo pós-processamento de handleReplaceImage).
+    // da thumbnail depois de gravar (mesmo pós-processamento de handleReplaceImage), e refresca
+    // também o <img> já inserido no corpo do editor (mesmo imageId/src — não se re-carrega sozinho).
     const { cropImage, handleOpenCrop, handleCropSave, handleCropCancel } = useImageCrop(isbn, useCallback((imageId: string) => {
         setImages(prev => {
             const m = new Map(prev);
@@ -312,7 +313,8 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
             return m;
         });
         loadImage(imageId, true);
-    }, [loadImage]));
+        editorRef.current?.refreshImage(imageId);
+    }, [loadImage, editorRef]));
 
     const exportImagesToZip = useCallback(async (imagesToExport: ImageData[], zipName: string) => {
         if (imagesToExport.length === 0) { showNotification('error', 'Nenhuma imagem para exportar'); return; }

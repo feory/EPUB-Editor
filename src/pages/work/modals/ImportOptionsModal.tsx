@@ -160,7 +160,7 @@ const ImportOptionsModalComponent: React.FC<ImportOptionsModalProps> = ({ file, 
                                                 </div>
                                                 {s.sample && <p className="text-xs text-text-muted truncate">{s.sample}</p>}
                                             </div>
-                                            {!['auto', 'p-center'].includes(mapping[s.styleId]?.target ?? 'auto') && (
+                                            {mapping[s.styleId]?.target !== 'p-center' && (
                                                 <label className="shrink-0 flex items-center gap-1.5 text-xs text-text-muted cursor-pointer" title="Centrar o parágrafo/título">
                                                     <input
                                                         type="checkbox"

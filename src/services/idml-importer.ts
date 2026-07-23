@@ -122,7 +122,12 @@ function targetToTag(target: DocxStyleTarget, centered?: boolean): { tag: string
 function resolveStyle(name: string, mapping: DocxStyleMapping): { tag: string; cls?: string } | 'merge' {
     const entry = mapping[name];
     if (entry && entry.target !== 'auto') return targetToTag(entry.target, entry.centered);
-    return STYLE_MAP[name] ?? { tag: 'p' };
+    const base = STYLE_MAP[name] ?? { tag: 'p' };
+    // 'auto' com "Centrado" marcado: mantém a classificação por omissão, força p-center nela.
+    if (entry?.centered && base !== 'merge') {
+        return { tag: base.tag, cls: [base.cls, 'p-center'].filter(Boolean).join(' ') };
+    }
+    return base;
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -234,14 +239,17 @@ async function scanParaIndents(zip: JSZip): Promise<Map<string, { left: number; 
     return map;
 }
 
-// Recuo inline a partir do estilo/override do parágrafo (só quando há LeftIndent de bloco).
+// Recuo inline a partir do estilo/override do parágrafo — bloco (LeftIndent) e/ou só 1ª linha
+// (FirstLineIndent, ex. estilo base do corpo com recuo tipográfico normal). Override PRÓPRIO do
+// parágrafo (ex. FirstLineIndent="0" numa fala/rótulo) vence o default do estilo.
 function indentStyle(psr: Element, fullPS: string): string {
     const def = PARA_INDENTS.get(fullPS);
     const left = parseFloat(psr.getAttribute('LeftIndent') || '') || def?.left || 0;
-    if (left <= 0) return ''; // sem recuo de bloco → não tocar (corpo com só 1ª linha fica intacto)
     const firstAttr = psr.getAttribute('FirstLineIndent');
     const first = firstAttr !== null ? parseFloat(firstAttr) || 0 : def?.first || 0;
+    if (left <= 0 && first <= 0) return ''; // sem recuo algum → não tocar
     const em = (pt: number) => `${(pt / 12).toFixed(2)}em`;
+    if (left <= 0) return ` style="text-indent:${em(first)}"`; // só 1ª linha, sem bloco
     let s = `margin-left:${em(left)}`;
     if (first) s += `;text-indent:${em(first)}`; // negativo = hanging (1ª linha sai)
     return ` style="${s}"`;
@@ -590,9 +598,9 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
             blankBefore = false;
             // Separador de cena: uma LINHA (não o parágrafo todo — o InDesign junta-a a outras
             // linhas via <Br/> dentro do mesmo psr, ex. epígrafe + "*" + poema seguinte) cujo
-            // texto é só "*" → classe dedicada (centrado, itálico), independente do resto do
-            // parágrafo/estilo mapeado.
-            const isAsterisk = tag === 'p' && seg.text.replace(/<[^>]+>/g, '').trim() === '*';
+            // texto é só "*", "* *" ou "* * *" (com ou sem espaços) → classe dedicada (centrado,
+            // itálico), independente do resto do parágrafo/estilo mapeado.
+            const isAsterisk = tag === 'p' && /^\*{1,3}$/.test(seg.text.replace(/<[^>]+>/g, '').replace(/\s+/g, ''));
             const classes = isAsterisk ? ['p-asterisk'] : baseClasses;
             const attr = (classes.length ? ` class="${classes.join(' ')}"` : '')
                 + (isAsterisk ? '' : styleAttr) + (blankCandidate ? ' data-blank-top="1"' : '');
@@ -607,9 +615,14 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
 
 // A Ficha Técnica (colofão) é uma story sem estilo nomeado (NormalParagraphStyle), por isso
 // o filtro narrativo dropa-a. Deteta-se pelo boilerplate de copyright da Almedina/ISBN —
-// frases que só aparecem no colofão (baixo risco de falso positivo).
+// frases que só aparecem no colofão. Falso positivo real: em livros onde o corpo INTEIRO é
+// uma única story threaded (comum em InDesign), uma citação bibliográfica na REFERÊNCIAS
+// ("...o título original é...") casa a frase a meio de 900KB de texto — a story inteira
+// (Índice+capítulos) era então descartada como "ficha duplicada" (fichaDone já true).
+// !STRUCTURAL_STYLES exclui isso: o colofão nunca usa estilos de título/nota — se a story
+// tem qualquer CAPÍTULOS/PARTES/SUBTÍTULOS/NOTAS/RECOLHIDOS, não é o colofão.
 function isFichaTecnica(xml: string): boolean {
-    return /Direitos reservados|Dep[óo]sito Legal|T[íi]tulo original/i.test(xml);
+    return !STRUCTURAL_STYLES.test(xml) && /Direitos reservados|Dep[óo]sito Legal|T[íi]tulo original/i.test(xml);
 }
 
 // Índice de Figuras/Tabelas: página real do miolo que repete o texto de cada legenda

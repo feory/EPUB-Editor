@@ -92,11 +92,28 @@ export interface WorkEditorRef {
     insertContent: (content: string) => void;
     setContent: (content: string) => void;
     removeImagesById: (imageIds: string[]) => string;
+    refreshImage: (imageId: string) => void;
     triggerGrammarCheck: () => void;
     cleanIndexSelection: () => void;
     applyConversions: (options: ImportOptions) => void;
     fixLinkSpacing: () => number;
     getLinkReport: () => LinkReport;
+}
+
+// Corte/substituição gravam os bytes SOBRE o mesmo imageId (mesmo src) — o <img> já montado no
+// iframe não volta a pedir a imagem ao servidor sozinho (só troca de src dispara fetch). Cache-bust
+// força o reload visual sem tocar no imageId/referências no HTML.
+function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
+    if (!editor) return;
+    const bust = `?v=${Date.now()}`;
+    editor.getBody().querySelectorAll('img').forEach((img: HTMLImageElement) => {
+        const id = img.getAttribute('data-image-id');
+        const src = img.getAttribute('src') || '';
+        if (id === imageId || src.includes(`/images/${imageId}`)) {
+            img.setAttribute('src', src.split('?')[0] + bust);
+        }
+    });
+    editor.dispatch('change');
 }
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
@@ -116,7 +133,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     onImageUploadedRef.current = onImageUploaded;
     const { getCurrentCss } = useStyles();
     const currentCss = getCurrentCss();
-    const imageCrop = useImageCrop(isbn ?? '');
+    const imageCrop = useImageCrop(isbn ?? '', (imageId) => refreshImageInEditor(editorRef.current, imageId));
 
 
     // Modo leitura (2º utilizador no mesmo projeto) — alterna o editor em runtime
@@ -656,6 +673,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             editor.dispatch('change');
             return editor.getContent();
         },
+
+        refreshImage: (imageId: string) => refreshImageInEditor(editorRef.current, imageId),
     }));
 
     return (

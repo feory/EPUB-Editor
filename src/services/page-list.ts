@@ -248,9 +248,12 @@ export async function verifyBlankSpacing(html: string, data?: ArrayBuffer): Prom
     for (const el of candidates) {
         el.removeAttribute('data-blank-top');
         const key = normalize(el.textContent || '').slice(0, 40);
-        if (key.length < 15) continue; // demasiado curto para ser fiável — sem p-top
+        if (!key) continue;
+        // Curto (< 15, ex. nome de personagem "Hamlet") — startsWith seria ambíguo demais;
+        // linha isolada de nome ocupa a linha TODA no PDF, exact match é fiável mesmo curto.
+        const short = key.length < 15;
         for (const lines of pages) {
-            const idx = lines.findIndex(l => l.text.startsWith(key));
+            const idx = lines.findIndex(l => short ? l.text === key : l.text.startsWith(key));
             // idx 0 (não encontrado/1ª linha, sem anterior p/ comparar) OU 1 (1ª linha de CORPO
             // da página — a linha 0 é o cabeçalho corrente, mesma convenção de
             // extractPdfPageAnchors) → gap mediria cabeçalho→corpo (margem de topo, sempre maior

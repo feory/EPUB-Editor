@@ -319,7 +319,8 @@ function tagBodyStructure(
     bodySize: string | null,
     skipIds: Set<string>,
     defaultId: string | null,
-    baselineLeft: number | null
+    baselineLeft: number | null,
+    forcedCenteredIds: Set<string>
 ): { xml: string; styleClasses: Map<string, string[]> } {
     const styleClasses = new Map<string, string[]>();
     const comboIds = new Map<string, string>();
@@ -343,7 +344,7 @@ function tagBodyStructure(
         const fl = ppr.match(/<w:ind [^>]*w:firstLine="(\d+)"/);
         const hasFirstLineIndent = fl !== null && parseInt(fl[1]) >= 150;
         if (hasFirstLineIndent) classes.push('p-indent');
-        if (/<w:jc w:val="center"\/>/.test(ppr)) classes.push('p-center');
+        if (/<w:jc w:val="center"\/>/.test(ppr) || (sid && forcedCenteredIds.has(sid))) classes.push('p-center');
         if (bodySize !== null && dom !== null && parseInt(dom) < parseInt(bodySize)) classes.push('p-small');
         // Citação em destaque: recuo esquerdo bem maior que a margem-base do corpo
         // E com recolho de 1ª linha — o recolho distingue-a de TOC/índice/listas de
@@ -502,9 +503,15 @@ async function normalizeDocxSuperscripts(
         const mappedNames = new Set<string>();
         const newStyleIds: string[] = [];
         const extraStyleMap: string[] = [];
+        // Estilo 'auto' com "Centrado" marcado: mantém a classificação automática
+        // (indentação/citação/etc.) mas força p-center nela — não passa por skipIds.
+        const forcedCenteredIds = new Set<string>();
         for (const [styleId, entry] of Object.entries(styleMapping)) {
             const target = entry.target;
-            if (target === 'auto') continue;
+            if (target === 'auto') {
+                if (entry.centered) forcedCenteredIds.add(styleId);
+                continue;
+            }
             const name = styleNames.get(styleId) ?? styleId;
             const isHeading = /^h[1-6]$/.test(target);
             let rhs;
@@ -538,7 +545,7 @@ async function normalizeDocxSuperscripts(
             extraStyleMap.push("p[style-name='PageCont'] => p.page-cont:fresh");
         }
 
-        const structRes = tagBodyStructure(documentXml, noteSize, bodySize, skipIds, defaultId, baselineLeft);
+        const structRes = tagBodyStructure(documentXml, noteSize, bodySize, skipIds, defaultId, baselineLeft, forcedCenteredIds);
         documentXml = structRes.xml;
         for (const [id, classes] of structRes.styleClasses) {
             newStyleIds.push(id);
