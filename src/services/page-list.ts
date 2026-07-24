@@ -8,6 +8,14 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 export interface PageAnchor { page: number; anchor: string }
 
+// Nº de páginas de um PDF — usado para distinguir o PDF de impressão (miolo, ~centenas de
+// páginas) de uma figura em PDF vetorial (1-2 páginas) quando ambos vivem em Links/, sem
+// depender do nome do ficheiro.
+export async function getPdfPageCount(data: ArrayBuffer): Promise<number> {
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    return pdf.numPages;
+}
+
 /**
  * Renderiza a 1ª página de um PDF para JPEG (Links/ do InDesign por vezes traz as figuras
  * em PDF vetorial). `scale` controla a resolução; fundo branco (PDFs podem ser transparentes).

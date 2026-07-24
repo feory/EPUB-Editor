@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../utils/format';
-import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings, verifyBlankSpacing } from './page-list';
+import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings, verifyBlankSpacing, getPdfPageCount } from './page-list';
 import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures, toRasterName } from './idml-figures';
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from './document-importer';
 
@@ -60,7 +60,20 @@ async function loadIdmlPackage(file: File): Promise<{ idmlZips: JSZip[]; links: 
     // PDF de impressão (miolo) — fora de Links/; preferir o que tem "miolo" no nome.
     const pdfEntries = Object.values(outer.files).filter(f =>
         !f.dir && /\.pdf$/i.test(f.name) && !/\/Links\//.test(f.name) && !f.name.includes('__MACOSX'));
-    const pdfEntry = pdfEntries.find(f => /miolo/i.test(f.name)) ?? pdfEntries[0];
+    let pdfEntry = pdfEntries.find(f => /miolo/i.test(f.name)) ?? pdfEntries[0];
+    // Alguns pacotes trazem o miolo DENTRO de Links/ (sem "miolo" no nome, ao lado das figuras
+    // reais) — sem isto ficava sem PDF nenhum e page-list/espaçamento/âncoras de capítulo nunca
+    // aplicavam. Só nº de páginas distingue o miolo (~centenas) de uma figura em PDF (1-2
+    // páginas); >5 é margem de segurança para não apanhar uma figura multi-página à toa.
+    if (!pdfEntry) {
+        const linksPdfs = Object.values(outer.files).filter(f =>
+            !f.dir && /\.pdf$/i.test(f.name) && /\/Links\//.test(f.name) && !f.name.includes('__MACOSX'));
+        let bestPages = 5;
+        for (const f of linksPdfs) {
+            const pages = await getPdfPageCount(await f.async('arraybuffer')).catch(() => 0);
+            if (pages > bestPages) { bestPages = pages; pdfEntry = f; }
+        }
+    }
     const pdf = pdfEntry ? await pdfEntry.async('arraybuffer') : undefined;
 
     return { idmlZips, links, pdf };
@@ -433,7 +446,15 @@ function renderPsr(psr: Element, counter: NoteCounter): Segment[] {
             processChildren(child, paraFS, '', '', '');
         }
     }
-    flush();
+    // Cada <Br/> já chama flush() a si próprio (linha em branco real = <Br/> duplo, sem nada
+    // entre eles). Um <ParagraphStyleRange> comum TERMINA em <Br/> (terminador de parágrafo do
+    // IDML) — nesse ponto `cur`/`curNotes` já estão vazios do último flush(), e chamar flush()
+    // aqui incondicionalmente empurrava um segmento vazio FANTASMA a seguir a QUALQUER parágrafo
+    // normal (não só linhas em branco reais). Isso marcava blankBefore=true para o parágrafo
+    // seguinte SEMPRE, em 100% das transições — afogava o sinal real (SpaceBefore/SpaceAfter e
+    // linhas em branco genuínas) em falsos positivos universais, e a app parecia nunca aplicar
+    // espaçamento nenhum. Só fecha aqui se sobrar conteúdo por gravar (ex. sem <Br/> final).
+    if (cur.trim() || curNotes.length) flush();
     return segs; // inclui segmentos vazios (linha em branco = <Br/> duplo); o caller decide
 }
 
