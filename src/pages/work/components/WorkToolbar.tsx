@@ -63,22 +63,20 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
   }, [activeMenu]);
 
   return (
-    <nav className="sticky top-0 z-50 bg-surface border-b border-border px-6 py-2.5 shadow-sm">
-      <div className="max-w-[1600px] mx-auto flex justify-between items-center gap-4">
-        
-        {/* Left: Logo & Back */}
+    <nav className="sticky top-0 z-50 bg-surface border-b border-border px-6 py-2.5 shadow-sm relative">
+
+        {/* Left: Back — preso ao canto esquerdo real do nav, fora do bloco centrado */}
         <div
-          className="flex items-center justify-end font-bold text-primary cursor-pointer select-none min-w-[60px] hover:text-primary-hover transition-colors"
+          className="absolute left-48 top-1/2 -translate-y-1/2 flex items-center font-bold text-primary cursor-pointer select-none hover:text-primary-hover transition-colors"
           onClick={() => navigate('/')}
         >
           <ArrowLeft size={18} />
         </div>
 
-        {/* Spacer */}
-        <div className="flex-1" />
+      <div className="max-w-[1600px] mx-auto flex justify-start items-center gap-4">
 
         {/* Center: Action Groups */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-96">
 
           {/* Group 1: Save */}
           <button
@@ -303,9 +301,6 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
           </div>
 
         </div>
-
-        {/* Right spacer to keep action groups centered */}
-        <div className="flex-1" />
       </div>
     </nav>
   );
