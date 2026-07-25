@@ -9,6 +9,7 @@ import { EpubMappingModal } from './EpubMappingModal';
 import { scanEpubClasses } from '../services/epub-importer';
 import type { EpubClassInfo } from '../services/epub-importer';
 import type { ImportOptions } from '../utils/html-cleaner';
+import { CHAPTER_SPLIT_PATTERN } from '../utils/html-cleaner';
 import type { DocxStyleMapping } from '../services/document-importer';
 import { useEbookWork } from './work/useEbookWork';
 import { WorkToolbar } from './work/components/WorkToolbar';
@@ -21,6 +22,7 @@ import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { ValidationSidebar } from './work/components/ValidationSidebar';
 import { ImageGallerySidebar } from './work/components/ImageGallerySidebar';
 import { DiffSidebar } from './work/components/DiffSidebar';
+import { PrintPdfSidebar } from './work/components/PrintPdfSidebar';
 import { useDiffComparison } from './work/hooks/useDiffComparison';
 import { useWorkPageSidebars } from './work/hooks/useWorkPageSidebars';
 import { useNotification } from '../context/NotificationContext';
@@ -70,6 +72,7 @@ export function WorkPage() {
 
   const editorRef = useRef<WorkEditorRef>(null);
   const suppressHighlightRef = useRef(false);
+  const pendingPageScrollRef = useRef<number | null>(null);
 
   const [isDragOver, setIsDragOver] = useState(false);
   const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
@@ -80,6 +83,7 @@ export function WorkPage() {
   const [importOptions, setImportOptions] = useState<ImportOptions | null>(null);
   const [epubMapping, setEpubMapping] = useState<{ file: File; classes: EpubClassInfo[] } | null>(null);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [editorVisiblePage, setEditorVisiblePage] = useState<number | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showStyleEditor, setShowStyleEditor] = useState(false);
@@ -167,11 +171,11 @@ export function WorkPage() {
   const closeDiffSidebar = diff.closeDiffSidebar;
   const closeVersionDiff = work.versionDiff.close;
   useEffect(() => {
-    if (sidebars.showGrammarSidebar || sidebars.showValidationSidebar || sidebars.showImageGallerySidebar) {
+    if (sidebars.showGrammarSidebar || sidebars.showValidationSidebar || sidebars.showImageGallerySidebar || sidebars.showPrintPdfSidebar) {
       closeDiffSidebar();
       closeVersionDiff();
     }
-  }, [sidebars.showGrammarSidebar, sidebars.showValidationSidebar, sidebars.showImageGallerySidebar, closeDiffSidebar, closeVersionDiff]);
+  }, [sidebars.showGrammarSidebar, sidebars.showValidationSidebar, sidebars.showImageGallerySidebar, sidebars.showPrintPdfSidebar, closeDiffSidebar, closeVersionDiff]);
 
   // Inverso: abrir a comparação (diff de ficheiro ou de versões) fecha os painéis laterais.
   const closeAllPanels = sidebars.closeAllPanels;
@@ -249,6 +253,31 @@ export function WorkPage() {
     editorRef.current?.scrollToContent(context, paragraphIndex);
   };
 
+  // Clique numa página do painel de PDF → salta para o marcador de page-list correspondente.
+  // O marcador só existe no DOM do capítulo ATIVO (editor carrega capítulos um a um) — se não
+  // estiver no capítulo aberto, localiza-se o capítulo dono via fullHtmlContent e muda-se para
+  // lá primeiro; o scroll real corre depois, no useEffect de activeChapterIndex abaixo.
+  const handleGoToPdfPage = useCallback((folio: number) => {
+    if (editorRef.current?.scrollToPage(folio)) return;
+    const marker = `data-page="${folio}"`;
+    const parts = work.fullHtmlContent.split(CHAPTER_SPLIT_PATTERN).filter(p => p.trim().length > 0);
+    const chapterIndex = parts.findIndex(p => p.includes(marker));
+    if (chapterIndex === -1) return;
+    pendingPageScrollRef.current = folio;
+    work.setActiveChapterIndex(chapterIndex);
+  }, [work]);
+
+  // ponytail: timeout fixo (depois do reset de scroll/cursor do próprio WorkEditor, que já usa
+  // 100ms) em vez de um sinal de "capítulo montado" — se um capítulo muito grande demorar mais
+  // que isto a renderizar no TinyMCE, o scroll falha silenciosamente (scrollToPage devolve false).
+  useEffect(() => {
+    const pending = pendingPageScrollRef.current;
+    if (pending == null) return;
+    pendingPageScrollRef.current = null;
+    const t = setTimeout(() => { editorRef.current?.scrollToPage(pending); }, 250);
+    return () => clearTimeout(t);
+  }, [work.activeChapterIndex]);
+
   const handleFixLinks = () => {
     const n = editorRef.current?.fixLinkSpacing() ?? 0;
     showNotification(
@@ -312,7 +341,7 @@ export function WorkPage() {
     } catch { return ts; }
   };
 
-  const anySidebarOpen = sidebars.showGrammarSidebar || sidebars.showValidationSidebar || sidebars.showImageGallerySidebar || diff.showDiffSidebar || work.versionDiff.open;
+  const anySidebarOpen = sidebars.showGrammarSidebar || sidebars.showValidationSidebar || sidebars.showImageGallerySidebar || sidebars.showPrintPdfSidebar || diff.showDiffSidebar || work.versionDiff.open;
 
   const presence = work.presence;
   const presenceBanner = work.readOnly
@@ -378,7 +407,9 @@ export function WorkPage() {
       <main className={`flex-1 w-full transition-all duration-500 ease-in-out ${isFocusMode
           ? 'py-16 max-w-[1200px] mx-auto px-8'
           : anySidebarOpen
-            ? 'py-8 max-w-none px-12 pr-[520px] ml-0'
+            ? sidebars.showPrintPdfSidebar
+              ? 'py-8 max-w-none px-12 pr-[620px] ml-0'
+              : 'py-8 max-w-none px-12 pr-[520px] ml-0'
             : (sidebars.isSidebarOpen ? 'py-8 max-w-[1400px] mx-auto px-6' : 'py-8 max-w-7xl mx-auto px-6')
         }`}>
         {showPreview && currentFile ? (
@@ -417,6 +448,9 @@ export function WorkPage() {
                 title={work.title}
                 onToggleFocusMode={handleToggleFocusMode}
                 isFocusMode={isFocusMode}
+                onTogglePrintPdf={() => sidebars.togglePanel('printPdf')}
+                showPrintPdfPanel={sidebars.showPrintPdfSidebar}
+                onVisiblePageChange={setEditorVisiblePage}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
                 activeChapterIndex={work.activeChapterIndex}
@@ -536,6 +570,15 @@ export function WorkPage() {
           editorRef={editorRef}
           onContentUpdate={work.setHtmlContent}
           refreshKey={galleryRefreshKey}
+        />
+      )}
+
+      {sidebars.showPrintPdfSidebar && (
+        <PrintPdfSidebar
+          isbn={isbn!}
+          onClose={() => sidebars.setShowPrintPdfSidebar(false)}
+          syncFolio={editorVisiblePage}
+          onPageClick={handleGoToPdfPage}
         />
       )}
 

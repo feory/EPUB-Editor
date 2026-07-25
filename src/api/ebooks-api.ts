@@ -93,8 +93,15 @@ export const ebooksApi = {
     saveContent: (isbn: string, content: string) =>
         apiClient.post(`/ebooks/${isbn}/content`, { content }),
 
+    // Print PDF (viewer lado a lado no editor)
+    getPrintPdf: (isbn: string) =>
+        apiClient.get(`/ebooks/${isbn}/print-pdf`, { responseType: 'arraybuffer', validateStatus: s => s === 200 || s === 404 }),
+
+    uploadPrintPdf: (isbn: string, data: ArrayBuffer | Blob) =>
+        apiClient.post(`/ebooks/${isbn}/print-pdf`, data, { headers: { 'Content-Type': 'application/pdf' } }),
+
     // Images management
-    uploadImage: (isbn: string, imageId: string, formData: FormData) => 
+    uploadImage: (isbn: string, imageId: string, formData: FormData) =>
         apiClient.post(`/ebooks/${isbn}/images/${imageId}`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         }),

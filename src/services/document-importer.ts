@@ -12,6 +12,7 @@ export interface ExtractedDocument {
     pageBreaks?: { inserted: number; total: number }; // page-list do PDF (IDML+miolo)
     figuresPlaced?: number; // figuras imagem+legenda colocadas por referência (IDML)
     metadata?: EpubMetadata; // Dublin Core do OPF (só no import de EPUB)
+    printPdf?: ArrayBuffer; // PDF de impressão do zip IDML (viewer lado a lado no editor)
 }
 
 // Strip scripts/event handlers/SVG from imported HTML before it reaches the editor.

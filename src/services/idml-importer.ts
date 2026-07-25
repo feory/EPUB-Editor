@@ -1028,7 +1028,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     let pageBreaks: { inserted: number; total: number } | undefined;
     // Page-list: alinhar as páginas do PDF de impressão ao texto e inserir marcadores.
     if (pdf) {
-        const anchors = await extractPdfPageAnchors(pdf);
+        const anchors = await extractPdfPageAnchors(pdf.slice(0)); // pdfjs neutraliza o ArrayBuffer — pdf original tem de sobreviver p/ printPdf
         const res = insertPageBreaks(html, anchors);
         html = res.html;
         pageBreaks = { inserted: res.inserted, total: res.total };
@@ -1048,7 +1048,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     const numberedRes = placeNumberedFigures(html, [...images.keys()].filter(id => !usedIds.has(id)));
     html = numberedRes.html;
 
-    return { html, images, pageBreaks, figuresPlaced: figRes.placed + inlineRes.placed + numberedRes.placed };
+    return { html, images, pageBreaks, figuresPlaced: figRes.placed + inlineRes.placed + numberedRes.placed, printPdf: pdf };
 }
 
 // Sugestão de destino por nome de estilo IDML (espelha o STYLE_MAP); 'auto' = usar o

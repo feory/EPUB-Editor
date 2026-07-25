@@ -1,6 +1,6 @@
 import React, { useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
-import { Maximize2 } from 'lucide-react';
+import { Maximize2, FileText } from 'lucide-react';
 import { useStyles } from '../../../context/StyleContext';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { applyImportOptions, convertListsToDialogue } from '../../../utils/html-cleaner';
@@ -69,6 +69,9 @@ interface WorkEditorProps {
     onImageUploaded?: () => void;
     onToggleFocusMode?: () => void;
     isFocusMode?: boolean;
+    onTogglePrintPdf?: () => void;
+    showPrintPdfPanel?: boolean;
+    onVisiblePageChange?: (page: number) => void;
     readOnly?: boolean;
     editorFont?: string;
     editorFontSize?: string;
@@ -80,6 +83,7 @@ export interface WorkEditorRef {
     clearDiffHighlights: () => void;
     scrollToContent: (text: string, paragraphIndex?: number) => void;
     scrollToImage: (imageId: string) => boolean;
+    scrollToPage: (folio: number) => boolean;
     highlightGrammarErrors: (matches: any[]) => void;
     clearGrammarErrors: () => void;
     filterGrammarHighlights: (filter: 'all' | 'spelling' | 'grammar') => void;
@@ -118,7 +122,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, onGrammarCheck, onGrammarClick, onSave, onExport, onUndo, onRedo, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, onGrammarCheck, onGrammarClick, onSave, onExport, onUndo, onRedo, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -131,6 +135,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     onGrammarCheckRef.current = onGrammarCheck;
     const onImageUploadedRef = useRef(onImageUploaded);
     onImageUploadedRef.current = onImageUploaded;
+    const onVisiblePageChangeRef = useRef(onVisiblePageChange);
+    onVisiblePageChangeRef.current = onVisiblePageChange;
     const { getCurrentCss } = useStyles();
     const currentCss = getCurrentCss();
     const imageCrop = useImageCrop(isbn ?? '', (imageId) => refreshImageInEditor(editorRef.current, imageId));
@@ -636,6 +642,23 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             return true;
         },
 
+        scrollToPage: (folio: number) => {
+            const editor = editorRef.current;
+            if (!editor) return false;
+            // só procura no capítulo aberto — o chamador (WorkPage) trata de mudar de
+            // capítulo primeiro quando o marcador não está no capítulo ativo.
+            const marker = editor.getBody()?.querySelector(`span.pagebreak[data-page="${folio}"]`) as HTMLElement | null;
+            if (!marker) return false;
+            // 'start' (não 'center'): detectVisiblePage (scroll editor→PDF) considera "página
+            // atual" o último marcador com top<=0 — se o salto PDF→editor pousasse a meio do ecrã
+            // (center), o próximo scroll no editor resolvia para uma página diferente da que se
+            // acabou de abrir, criando conflito entre os dois sentidos de sincronização.
+            marker.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            marker.classList.add('highlight-pulse');
+            setTimeout(() => marker.classList.remove('highlight-pulse'), 3000);
+            return true;
+        },
+
         insertContent: (content: string) => {
             const editor = editorRef.current;
             if (!editor) return;
@@ -690,6 +713,13 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         {isbn}{title ? ` - ${title}` : ''}
                     </span>
                     <button
+                        onClick={() => onTogglePrintPdf?.()}
+                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors shrink-0 ${showPrintPdfPanel ? 'text-slate-800' : 'text-slate-500 hover:text-slate-800'}`}
+                        title="Ver PDF"
+                    >
+                        <FileText size={16} />
+                    </button>
+                    <button
                         onClick={() => onToggleFocusMode?.()}
                         className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-slate-800 transition-colors shrink-0"
                         title="Modo Foco"
@@ -716,6 +746,28 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             ro.observe(container);
                             editor.on('remove', () => ro.disconnect());
                         }
+
+                        // Página visível: marcador de page-list (span.pagebreak, ver page-list.ts)
+                        // mais recente já ultrapassado pelo topo do viewport — debounce no scroll.
+                        let pageScrollTimer: ReturnType<typeof setTimeout> | undefined;
+                        const detectVisiblePage = () => {
+                            let current: number | null = null;
+                            editor.getBody().querySelectorAll('span.pagebreak[data-page]').forEach((el) => {
+                                if ((el as HTMLElement).getBoundingClientRect().top <= 0) {
+                                    current = Number((el as HTMLElement).getAttribute('data-page'));
+                                }
+                            });
+                            if (current !== null) onVisiblePageChangeRef.current?.(current);
+                        };
+                        const onEditorScroll = () => {
+                            clearTimeout(pageScrollTimer);
+                            pageScrollTimer = setTimeout(detectVisiblePage, 150);
+                        };
+                        editor.getWin().addEventListener('scroll', onEditorScroll, { passive: true });
+                        editor.on('remove', () => {
+                            clearTimeout(pageScrollTimer);
+                            editor.getWin().removeEventListener('scroll', onEditorScroll);
+                        });
                     }}
                     value={htmlContent}
                     onEditorChange={(content) => { if (!isDiffHighlightingRef.current) setHtmlContent(content); }}

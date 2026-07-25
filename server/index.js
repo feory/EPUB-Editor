@@ -11,6 +11,7 @@ import * as content from './routes/content.js';
 import * as grammar from './routes/grammar.js';
 import * as epub from './routes/epub.js';
 import * as images from './routes/images.js';
+import * as printPdf from './routes/print-pdf.js';
 import * as trash from './routes/trash.js';
 import * as maintenance from './routes/maintenance.js';
 import * as validation from './routes/validation.js';
@@ -181,6 +182,11 @@ export const server = Bun.serve({
 
         if (parts.length === 6 && parts[4] === 'share' && method === "DELETE") {
           return ebooks.unshareEbook(isbn, parts[5], user);
+        }
+
+        if (parts.length === 5 && parts[4] === 'print-pdf') {
+          if (method === "GET")  return printPdf.getPrintPdf(isbn);
+          if (method === "POST") return printPdf.savePrintPdf(req, isbn);
         }
 
         if (parts.length >= 5 && parts[4] === 'images') {

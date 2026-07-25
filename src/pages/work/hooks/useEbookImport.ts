@@ -62,6 +62,9 @@ export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImp
             const result = await extractDocument(file, { convertListsToDialogue: options.convertListsToDialogue, styleMapping, detectParagraphSpacing: options.detectParagraphSpacing, epubClassMapping });
             let finalHtml = result.html;
 
+            // Fire-and-forget: PDF de impressão do zip IDML, para o viewer lado a lado no editor.
+            if (result.printPdf) ebooksApi.uploadPrintPdf(isbn!, result.printPdf).catch(() => {});
+
             if (result.images.size > 0) {
                 const formData = new FormData();
                 for (const [id, blob] of result.images.entries()) {

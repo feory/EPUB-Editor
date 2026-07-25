@@ -6,7 +6,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
     import.meta.url,
 ).toString();
 
-export interface PageAnchor { page: number; anchor: string }
+// `page` = folio impresso (nº que aparece na página, usado para casar com o editor);
+// `pdfPageIndex` = posição física no PDF (1-based, pode divergir do folio por causa de
+// front-matter sem numeração) — usado para saltar o viewer para a página certa do ficheiro.
+export interface PageAnchor { page: number; pdfPageIndex: number; anchor: string }
 
 // Nº de páginas de um PDF — usado para distinguir o PDF de impressão (miolo, ~centenas de
 // páginas) de uma figura em PDF vetorial (1-2 páginas) quando ambos vivem em Links/, sem
@@ -118,7 +121,7 @@ export async function extractPdfPageAnchors(data: ArrayBuffer): Promise<PageAnch
         for (const line of ordered.slice(1)) {
             const anchor = normalize(line).slice(0, ANCHOR_LEN);
             if (anchor.length < MIN_ANCHOR) continue;
-            anchors.push({ page: folio, anchor });
+            anchors.push({ page: folio, pdfPageIndex: idx + 1, anchor });
             break;
         }
     }
