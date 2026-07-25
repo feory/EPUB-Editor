@@ -579,6 +579,7 @@ export function WorkPage() {
           onClose={() => sidebars.setShowPrintPdfSidebar(false)}
           syncFolio={editorVisiblePage}
           onPageClick={handleGoToPdfPage}
+          onPdfUploaded={work.handleGeneratePageList}
         />
       )}
 

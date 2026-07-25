@@ -10,6 +10,8 @@ import { cleanEditorHtml, applyDropCapToFirstParagraph } from '../../utils/html-
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { moveChapters, renameChapterPart, deleteChapterPart } from '../../utils/toc';
 import type { DocxStyleMapping } from '../../services/document-importer';
+import { insertPageBreaks } from '../../services/page-list';
+import type { PageAnchor } from '../../services/page-list';
 
 import { contentReducer, initialContentState } from './hooks/contentReducer';
 import { useChapterSync } from './hooks/useChapterSync';
@@ -139,6 +141,18 @@ export function useEbookWork(isbn: string | undefined) {
     // --- Grammar ---
     const grammar = useEbookGrammar({ isbn });
 
+    // Grava conteúdo NOVO do livro inteiro no reducer + mantém o capítulo ativo (LOAD_CONTENT
+    // põe activeChapterIndex a -1; restaurar a entrada onde estava) + autosave. Partilhado pelas
+    // transformações de livro inteiro que substituem o fullHtml de uma vez (título de capítulo,
+    // capitulares, page-list) — reorder/delete de capítulo NÃO usam isto: index deixa de ser
+    // válido depois de mover/eliminar, restaurar seria a posição errada.
+    const commitHtml = useCallback((html: string) => {
+        const prevIndex = contentState.activeChapterIndex;
+        dispatch({ type: 'LOAD_CONTENT', payload: html });
+        if (prevIndex !== -1) dispatch({ type: 'CHANGE_CHAPTER', index: prevIndex });
+        if (isbn) saveMutation.mutate({ content: html });
+    }, [isbn, saveMutation, contentState.activeChapterIndex]);
+
     // --- Edit chapter title (break, h1 e h2) ---
     const handleEditChapterTitle = useCallback((chapterIndex: number, newTitle: string) => {
         const chapter = chapterSync.chapters[chapterIndex];
@@ -152,12 +166,9 @@ export function useEbookWork(isbn: string | undefined) {
         if (updatedPart === parts[chapterIndex]) return; // sem alteração (marcador não encontrado)
         parts[chapterIndex] = updatedPart;
         const updatedHtml = parts.join('');
-        const prevIndex = contentState.activeChapterIndex; // LOAD_CONTENT põe a -1; restaurar a entrada onde estava
-        dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
-        if (prevIndex !== -1) dispatch({ type: 'CHANGE_CHAPTER', index: prevIndex });
+        commitHtml(updatedHtml);
         showNotification('success', 'Título do capítulo atualizado!');
-        if (isbn) saveMutation.mutate({ content: updatedHtml });
-    }, [chapterSync, isbn, saveMutation, showNotification, contentState.activeChapterIndex]);
+    }, [chapterSync, commitHtml, showNotification]);
 
     // Setup partilhado por operações estruturais (reorder/delete): capítulos + parts do split + níveis.
     const getChaptersAndParts = useCallback(() => {
@@ -206,12 +217,24 @@ export function useEbookWork(isbn: string | undefined) {
                 : 'Nenhum capítulo elegível para capitular.');
             return;
         }
-        const prevIndex = contentState.activeChapterIndex;
-        dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
-        if (prevIndex !== -1) dispatch({ type: 'CHANGE_CHAPTER', index: prevIndex });
+        commitHtml(updatedHtml);
         showNotification('success', `${applied} ${applied === 1 ? 'capitular aplicada' : 'capitulares aplicadas'}${already > 0 ? `, ${already} já ${already === 1 ? 'tinha' : 'tinham'}` : ''}.`);
-        if (isbn) saveMutation.mutate({ content: updatedHtml });
-    }, [chapterSync, isbn, saveMutation, showNotification, contentState.activeChapterIndex]);
+    }, [chapterSync, commitHtml, showNotification]);
+
+    // PDF carregado DEPOIS do import (o zip IDML não tinha PDF, ou o import é antigo) — gera a
+    // page-list agora, sobre o livro já importado. anchors já vêm calculados de PrintPdfSidebar
+    // (que já corre extractPdfPageAnchors para o mapa de sync scroll↔PDF — evita fazer o parsing
+    // do PDF duas vezes). insertPageBreaks remove marcadores antigos antes de inserir.
+    const handleGeneratePageList = useCallback((anchors: PageAnchor[]) => {
+        const syncedHtml = chapterSync.getSyncedHtmlContent();
+        const { html: updatedHtml, inserted, total } = insertPageBreaks(syncedHtml, anchors);
+        if (inserted === 0) {
+            showNotification('info', 'Nenhuma página do PDF foi encontrada no texto do livro.');
+            return;
+        }
+        commitHtml(updatedHtml);
+        showNotification('success', `Page-list: ${inserted} de ${total} páginas marcadas.`);
+    }, [chapterSync, commitHtml, showNotification]);
 
     // --- Return public API (identical shape to original) ---
     return {
@@ -287,6 +310,7 @@ export function useEbookWork(isbn: string | undefined) {
         handleReorderChapter,
         handleDeleteChapter,
         handleApplyDropCaps,
+        handleGeneratePageList,
 
         handleImportPdf: useCallback(
             (file: File, h: number, f: number, settings: ImageSettings, options: ImportOptions) =>

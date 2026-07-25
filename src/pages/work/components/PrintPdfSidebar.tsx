@@ -3,12 +3,14 @@ import { X, FileText, ChevronLeft, ChevronRight, Loader2, Upload, ZoomIn, ZoomOu
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { extractPdfPageAnchors } from '../../../services/page-list';
+import type { PageAnchor } from '../../../services/page-list';
 
 interface PrintPdfSidebarProps {
     isbn: string;
     onClose: () => void;
     syncFolio?: number | null; // folio (nº impresso) visível no editor — salta o viewer para lá
     onPageClick?: (folio: number) => void; // clique na página → editor salta para o marcador
+    onPdfUploaded?: (anchors: PageAnchor[]) => void; // PDF acabado de carregar → gerar page-list
 }
 
 type Status = 'loading' | 'missing' | 'ready' | 'error';
@@ -17,7 +19,7 @@ const MIN_SCALE = 0.6;
 const MAX_SCALE = 3;
 const SCALE_STEP = 0.2;
 
-export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, onPageClick }) => {
+export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, onPageClick, onPdfUploaded }) => {
     const [status, setStatus] = useState<Status>('loading');
     const [page, setPage] = useState(1);
     const [pageCount, setPageCount] = useState(0);
@@ -30,6 +32,9 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     // front-matter sem numeração (ver PageAnchor.pdfPageIndex em page-list.ts).
     const folioMapRef = useRef<Map<number, number>>(new Map());
     const indexToFolioRef = useRef<Map<number, number>>(new Map()); // sentido inverso, p/ clique na página
+    // últimas âncoras calculadas (extractPdfPageAnchors é um parse O(páginas) do PDF inteiro) —
+    // partilhadas com quem carregou o PDF (handleUpload → onPdfUploaded), em vez de o refazer.
+    const anchorsRef = useRef<PageAnchor[]>([]);
 
     const loadPdf = useCallback(async () => {
         setStatus('loading');
@@ -47,6 +52,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
             setPage(1);
             setStatus('ready');
             const anchors = await extractPdfPageAnchors(buf.slice(0));
+            anchorsRef.current = anchors;
             folioMapRef.current = new Map(anchors.map(a => [a.page, a.pdfPageIndex]));
             indexToFolioRef.current = new Map(anchors.map(a => [a.pdfPageIndex, a.page]));
         } catch {
@@ -100,7 +106,8 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
         setUploading(true);
         try {
             await ebooksApi.uploadPrintPdf(isbn, file);
-            await loadPdf();
+            await loadPdf(); // já corre extractPdfPageAnchors — reaproveitado abaixo, sem reparse
+            onPdfUploaded?.(anchorsRef.current);
         } finally {
             setUploading(false);
         }
@@ -151,7 +158,12 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
                         ref={canvasRef}
                         onClick={() => goToPage(page)}
                         title="Ir para esta página no editor"
-                        className="shadow-md cursor-pointer"
+                        // m-auto (não a centragem do container, items-center/justify-center):
+                        // quando a página renderizada é maior que o painel, justify/items-center
+                        // do pai deslocava-a para um scroll negativo inalcançável — parecia
+                        // cortada mesmo havendo overflow-auto. Margens auto no próprio item
+                        // anulam a centragem do pai só quando não há espaço, ficando alcançável.
+                        className="shadow-md cursor-pointer m-auto shrink-0"
                     />
                 )}
 

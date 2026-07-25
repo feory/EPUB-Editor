@@ -296,6 +296,13 @@ function longestIncreasing(arr: number[]): number[] {
     return seq.reverse();
 }
 
+// Remove marcadores de page-list já existentes (mesmo padrão tolerante a ordem/extra de
+// atributos usado por convertPageBreaks). Único dono da forma HTML do marcador — usado por
+// insertPageBreaks (idempotência) e por quem precisar de o descartar sem reinserir.
+export function stripPageBreaks(html: string): string {
+    return html.replace(/<span\b[^>]*\bclass="[^"]*\bpagebreak\b[^"]*"[^>]*><\/span>/g, '');
+}
+
 /**
  * Insere marcadores de quebra de página no HTML, alinhando cada âncora do PDF ao texto do
  * editor. Cada âncora é localizada de forma INDEPENDENTE (1ª ocorrência); depois mantém-se só
@@ -303,8 +310,11 @@ function longestIncreasing(arr: number[]): number[] {
  * front-matter cujo texto aparece noutro sítio) que de outra forma envenenariam um cursor
  * monotónico simples. Marcador = <span class="pagebreak" data-page="N"></span> (convertido para
  * epub:type="pagebreak" no export). Páginas sem match (ou fora da sequência) são saltadas.
+ * Idempotente: remove marcadores pré-existentes antes de inserir (reexecutar sobre um livro já
+ * marcado, ex. page-list gerada de novo a partir de um PDF carregado mais tarde, não duplica).
  */
 export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: string; inserted: number; total: number } {
+    html = stripPageBreaks(html);
     const doc = new DOMParser().parseFromString(html, 'text/html');
     // achatar text nodes do corpo: string normalizada concatenada + mapa posição→{node, offset}
     const nodes: Text[] = [];
