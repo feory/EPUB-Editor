@@ -161,7 +161,7 @@ const StyleEditorModalComponent: React.FC<StyleEditorModalProps> = ({ isbn, onCl
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleCancel} />
-      <div className={`relative bg-surface rounded-2xl shadow-2xl w-full h-[95vh] flex flex-col animate-in fade-in zoom-in duration-200 transition-all ${showPreview ? 'max-w-7xl' : 'max-w-3xl'}`} onClick={e => e.stopPropagation()}>
+      <div className={`relative bg-surface rounded-2xl shadow-2xl w-full h-[95vh] flex flex-col animate-in fade-in zoom-in duration-200 transition-all ${showPreview ? 'max-w-[1600px]' : 'max-w-3xl'}`} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">

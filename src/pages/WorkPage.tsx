@@ -84,6 +84,27 @@ export function WorkPage() {
   const [epubMapping, setEpubMapping] = useState<{ file: File; classes: EpubClassInfo[] } | null>(null);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [editorVisiblePage, setEditorVisiblePage] = useState<number | null>(null);
+  // Largura partilhada por todos os painéis fixos à direita (PDF, Galeria, Validações,
+  // Diff, Gramática) — arrastar um redimensiona todos da mesma forma; gravada p'ra persistir.
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('wp-panel-width'));
+    return saved > 0 ? saved : 760;
+  });
+  // Reserva o espaço do painel à direita mesmo oculto — só quando o ecrã tem largura de
+  // sobra p'ra isso (base 1600 + painel + respiro) sem espremer o editor abaixo do que
+  // teria sem reserva nenhuma (tentativa anterior reservava sempre, ficava estreito demais
+  // em monitores "normais").
+  const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const reservePanelSpace = windowWidth >= 1600 + panelWidth + 20 + 96;
+  const handlePanelResize = useCallback((w: number) => {
+    setPanelWidth(w);
+    localStorage.setItem('wp-panel-width', String(w));
+  }, []);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showStyleEditor, setShowStyleEditor] = useState(false);
@@ -404,14 +425,15 @@ export function WorkPage() {
         />
       )}
 
-      <main className={`flex-1 w-full transition-all duration-500 ease-in-out ${isFocusMode
-          ? 'py-16 max-w-[1200px] mx-auto px-8'
-          : anySidebarOpen
-            ? sidebars.showPrintPdfSidebar
-              ? 'py-8 max-w-none px-12 pr-[620px] ml-0'
-              : 'py-8 max-w-none px-12 pr-[520px] ml-0'
-            : (sidebars.isSidebarOpen ? 'py-8 max-w-[1400px] mx-auto px-6' : 'py-8 max-w-7xl mx-auto px-6')
-        }`}>
+      <main
+        className={`flex-1 w-full transition-[max-width,padding-left,padding-top,padding-bottom] duration-500 ease-in-out ${isFocusMode
+          ? 'py-16 max-w-[1400px] mx-auto px-8'
+          : (anySidebarOpen || reservePanelSpace)
+            ? 'py-8 max-w-none px-12 ml-0'
+            : (sidebars.isSidebarOpen ? 'py-8 max-w-[1800px] mx-auto px-6' : 'py-8 max-w-[1600px] mx-auto px-6')
+        }`}
+        style={!isFocusMode && (anySidebarOpen || reservePanelSpace) ? { paddingRight: panelWidth + 20 } : undefined}
+      >
         {showPreview && currentFile ? (
           <MarginPreview
             file={currentFile}
@@ -489,6 +511,8 @@ export function WorkPage() {
           filter={grammarFilter}
           onFilterChange={setGrammarFilter}
           selectedErrorIndex={selectedGrammarIndex}
+          width={panelWidth}
+          onResize={handlePanelResize}
         />
       )}
 
@@ -502,6 +526,8 @@ export function WorkPage() {
           onGoToItem={(editorIndex) => editorRef.current?.scrollToContent('', editorIndex)}
           labelInsert="Atual"
           labelDelete="Histórico"
+          width={panelWidth}
+          onResize={handlePanelResize}
         />
       ) : diff.showDiffSidebar && (
         <DiffSidebar
@@ -511,6 +537,8 @@ export function WorkPage() {
           isUpdating={diff.isDiffUpdating}
           onClose={diff.closeDiffSidebar}
           onGoToItem={(editorIndex) => editorRef.current?.scrollToContent('', editorIndex)}
+          width={panelWidth}
+          onResize={handlePanelResize}
         />
       )}
 
@@ -559,6 +587,8 @@ export function WorkPage() {
           onClose={() => { sidebars.setShowValidationSidebar(false); work.setValidationResults(null); work.setFootnoteValidation(null); work.setLinkValidation(null); }}
           onGoToIssue={handleGoToIssue}
           onFixLinks={handleFixLinks}
+          width={panelWidth}
+          onResize={handlePanelResize}
         />
       )}
 
@@ -570,6 +600,8 @@ export function WorkPage() {
           editorRef={editorRef}
           onContentUpdate={work.setHtmlContent}
           refreshKey={galleryRefreshKey}
+          width={panelWidth}
+          onResize={handlePanelResize}
         />
       )}
 
@@ -580,6 +612,8 @@ export function WorkPage() {
           syncFolio={editorVisiblePage}
           onPageClick={handleGoToPdfPage}
           onPdfUploaded={work.handleGeneratePageList}
+          width={panelWidth}
+          onResize={handlePanelResize}
         />
       )}
 

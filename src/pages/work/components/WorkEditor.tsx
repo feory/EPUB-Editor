@@ -126,6 +126,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
+    const syncEditorHeightRef = useRef<() => void>(() => {});
     const overlays = useBlockOverlays(editorRef);
     const isCleaningRef = useRef(false);
     const isDiffHighlightingRef = useRef(false);
@@ -148,6 +149,12 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     useEffect(() => {
         editorRef.current?.mode?.set(readOnly ? 'readonly' : 'design');
     }, [readOnly]);
+
+    // Modo Foco esconde a barra do cabeçalho (64px) acima do editor — o topo do
+    // contentor desloca-se, recalcula a altura disponível.
+    useEffect(() => {
+        requestAnimationFrame(() => syncEditorHeightRef.current());
+    }, [isFocusMode]);
 
     // Injeta o CSS do livro no <head> do iframe. Chamada tanto pela useEffect abaixo (updates
     // ao vivo enquanto o editor já está montado — currentCss muda ao editar no Editor CSS)
@@ -742,9 +749,37 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         // sintético (o sinal que o TinyMCE já escuta) força a reavaliação.
                         const container = editor.getContainer();
                         if (container) {
-                            const ro = new ResizeObserver(() => window.dispatchEvent(new Event('resize')));
+                            const HEIGHT_KEY = 'wp-editor-height';
+                            let lastAutoHeight = 0;
+
+                            // Altura fixa (700) deixava vazio por baixo em ecrãs grandes — por omissão
+                            // passa a ocupar até ao mesmo respiro de fundo das sidebars (bottom-8 =
+                            // 32px). Se o utilizador já arrastou o canto (resize:true) para um
+                            // tamanho próprio, esse tamanho gravado vence e o preenchimento pára.
+                            const syncHeight = () => {
+                                if (localStorage.getItem(HEIGHT_KEY)) return;
+                                const top = container.getBoundingClientRect().top;
+                                lastAutoHeight = Math.max(window.innerHeight - top - 32, 400);
+                                container.style.height = `${lastAutoHeight}px`;
+                            };
+                            syncEditorHeightRef.current = syncHeight;
+
+                            const saved = Number(localStorage.getItem(HEIGHT_KEY));
+                            if (saved > 0) container.style.height = `${saved}px`;
+                            else syncHeight();
+
+                            const ro = new ResizeObserver(() => {
+                                window.dispatchEvent(new Event('resize'));
+                                const h = Math.round(container.getBoundingClientRect().height);
+                                // Altura diferente da que o preenchimento automático tinha posto →
+                                // foi o utilizador a arrastar o canto — grava para persistir.
+                                if (Math.abs(h - lastAutoHeight) > 2) localStorage.setItem(HEIGHT_KEY, String(h));
+                            });
                             ro.observe(container);
                             editor.on('remove', () => ro.disconnect());
+
+                            window.addEventListener('resize', syncHeight);
+                            editor.on('remove', () => window.removeEventListener('resize', syncHeight));
                         }
 
                         // Página visível: marcador de page-list (span.pagebreak, ver page-list.ts)

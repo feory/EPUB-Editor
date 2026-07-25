@@ -3,6 +3,7 @@ import { X, GitCompare, Plus, Minus, Equal, ChevronDown, ChevronUp, Loader2, Arr
 import { Virtuoso } from 'react-virtuoso';
 import type { DiffItem } from '../../../workers/diff.worker';
 import { CharDiff } from './DiffCharView';
+import { PanelResizeHandle } from './PanelResizeHandle';
 
 interface DiffSidebarProps {
   items: DiffItem[];
@@ -13,6 +14,8 @@ interface DiffSidebarProps {
   onGoToItem: (editorIndex: number) => void;
   labelInsert?: string; // rótulo do lado "adicionado" (default: Editor)
   labelDelete?: string; // rótulo do lado "removido" (default: Ficheiro)
+  width: number;
+  onResize: (width: number) => void;
 }
 
 type DiffGroup = { type: DiffItem['type']; items: DiffItem[] };
@@ -32,7 +35,7 @@ function groupItems(items: DiffItem[]): DiffGroup[] {
 }
 
 
-export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoading, isUpdating, onClose, onGoToItem, labelInsert = 'Editor', labelDelete = 'Ficheiro' }) => {
+export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoading, isUpdating, onClose, onGoToItem, labelInsert = 'Editor', labelDelete = 'Ficheiro', width, onResize }) => {
   const [showEqual, setShowEqual] = useState(false);
 
   const { insertCount, deleteCount, modifyCount, equalCount } = items.reduce(
@@ -132,7 +135,8 @@ export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoa
   };
 
   return (
-    <aside className="fixed right-4 top-[89px] bottom-8 w-[500px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
+    <aside style={{ width }} className="fixed right-4 top-[89px] bottom-8 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
+      <PanelResizeHandle width={width} onResize={onResize} />
 
       {/* Header */}
       <div className="px-5 pt-4 pb-3 border-b border-border bg-white">

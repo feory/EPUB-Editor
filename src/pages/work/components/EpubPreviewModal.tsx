@@ -187,7 +187,7 @@ const EpubPreviewModalComponent: React.FC<EpubPreviewModalProps> = ({ epubBlob, 
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
       
-      <div className="relative bg-surface w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+      <div className="relative bg-surface w-full max-w-[1600px] h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-white z-10">
           <div className="flex items-center gap-4">

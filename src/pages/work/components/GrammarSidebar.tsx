@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { X, Eraser, Check } from 'lucide-react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { PanelResizeHandle } from './PanelResizeHandle';
 
 type FilterType = 'all' | 'spelling' | 'grammar';
 
@@ -19,11 +20,13 @@ interface GrammarSidebarProps {
   filter: FilterType;
   onFilterChange: (filter: FilterType) => void;
   selectedErrorIndex?: number | null;
+  width: number;
+  onResize: (width: number) => void;
 }
 
 const GrammarSidebarComponent: React.FC<GrammarSidebarProps> = ({
     issues, onClose, onGoToIssue, onClearHighlights, onResolveIssue, onApplySuggestion,
-    onResolveMultiple, filter, onFilterChange, selectedErrorIndex
+    onResolveMultiple, filter, onFilterChange, selectedErrorIndex, width, onResize
 }) => {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
@@ -63,7 +66,8 @@ const GrammarSidebarComponent: React.FC<GrammarSidebarProps> = ({
   }, [selectedErrorIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <aside className="fixed right-0 top-20 bottom-0 w-[500px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border-l border-border flex flex-col z-40 animate-in slide-in-from-right duration-300">
+    <aside style={{ width }} className="fixed right-0 top-20 bottom-0 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border-l border-border flex flex-col z-40 animate-in slide-in-from-right duration-300">
+      <PanelResizeHandle width={width} onResize={onResize} />
       <div className="p-5 border-b border-border flex items-center justify-between bg-white">
         <div className="flex items-center gap-3">
             <div>

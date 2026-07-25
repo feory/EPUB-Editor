@@ -4,6 +4,7 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { extractPdfPageAnchors } from '../../../services/page-list';
 import type { PageAnchor } from '../../../services/page-list';
+import { PanelResizeHandle } from './PanelResizeHandle';
 
 interface PrintPdfSidebarProps {
     isbn: string;
@@ -11,6 +12,8 @@ interface PrintPdfSidebarProps {
     syncFolio?: number | null; // folio (nº impresso) visível no editor — salta o viewer para lá
     onPageClick?: (folio: number) => void; // clique na página → editor salta para o marcador
     onPdfUploaded?: (anchors: PageAnchor[]) => void; // PDF acabado de carregar → gerar page-list
+    width: number;
+    onResize: (width: number) => void;
 }
 
 type Status = 'loading' | 'missing' | 'ready' | 'error';
@@ -19,7 +22,7 @@ const MIN_SCALE = 0.6;
 const MAX_SCALE = 3;
 const SCALE_STEP = 0.2;
 
-export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, onPageClick, onPdfUploaded }) => {
+export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, onPageClick, onPdfUploaded, width, onResize }) => {
     const [status, setStatus] = useState<Status>('loading');
     const [page, setPage] = useState(1);
     const [pageCount, setPageCount] = useState(0);
@@ -114,7 +117,8 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     };
 
     return (
-        <aside className="fixed right-4 top-[89px] bottom-8 w-[600px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
+        <aside style={{ width }} className="fixed right-4 top-[89px] bottom-8 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
+            <PanelResizeHandle width={width} onResize={onResize} />
             {/* Oculto por omissão, só aparece com o rato na faixa do topo (mesmo truque da
                 paginação em baixo) — liberta a altura toda para o PDF. */}
             <div className="absolute top-0 left-0 right-0 z-10 px-5 pt-4 pb-6 bg-gradient-to-b from-white via-white/95 to-transparent flex items-center justify-between opacity-0 hover:opacity-100 transition-opacity duration-300">

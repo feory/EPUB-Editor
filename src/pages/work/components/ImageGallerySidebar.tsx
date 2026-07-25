@@ -8,6 +8,7 @@ import { ImageToolbar } from './images/ImageToolbar';
 import { ImageCard } from './images/ImageCard';
 import { ImageLightbox } from './images/ImageLightbox';
 import { ImageCropModal } from './images/ImageCropModal';
+import { PanelResizeHandle } from './PanelResizeHandle';
 
 interface ImageGallerySidebarProps {
     isbn: string;
@@ -16,10 +17,12 @@ interface ImageGallerySidebarProps {
     editorRef: React.RefObject<WorkEditorRef | null>;
     onContentUpdate: (newHtml: string) => void;
     refreshKey?: number;
+    width: number;
+    onResize: (width: number) => void;
 }
 
 const ImageGallerySidebarComponent: React.FC<ImageGallerySidebarProps> = ({
-    isbn, htmlContent, onClose, editorRef, onContentUpdate, refreshKey,
+    isbn, htmlContent, onClose, editorRef, onContentUpdate, refreshKey, width, onResize,
 }) => {
     const gallery = useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate, refreshKey });
 
@@ -44,12 +47,14 @@ const ImageGallerySidebarComponent: React.FC<ImageGallerySidebarProps> = ({
     return (
         <>
             <aside
-                className="fixed right-4 top-[89px] h-[765px] max-h-[calc(100vh-105px)] w-[500px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300"
+                style={{ width }}
+                className="fixed right-4 top-[89px] bottom-8 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300"
                 onDragEnter={handleDragEnter}
                 onDragOver={gallery.handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
             >
+                <PanelResizeHandle width={width} onResize={onResize} />
                 <div className="px-6 py-4 min-h-[64px] border-b border-border flex items-center justify-between bg-slate-50/50">
                     <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Galeria</h3>                    <button
                         onClick={onClose}
