@@ -66,7 +66,7 @@ const GrammarSidebarComponent: React.FC<GrammarSidebarProps> = ({
   }, [selectedErrorIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <aside style={{ width }} className="fixed right-0 top-20 bottom-0 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border-l border-border flex flex-col z-40 animate-in slide-in-from-right duration-300">
+    <aside style={{ width }} className="fixed right-0 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-0 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border-l border-border flex flex-col z-40 animate-in slide-in-from-right duration-300">
       <PanelResizeHandle width={width} onResize={onResize} />
       <div className="p-5 border-b border-border flex items-center justify-between bg-white">
         <div className="flex items-center gap-3">

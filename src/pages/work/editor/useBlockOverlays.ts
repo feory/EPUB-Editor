@@ -348,18 +348,21 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         // Zona à esquerda da aresta do bloco onde a pega aparece.
         const GRIP_BAND = 36;
         const evalAddBtn = () => {
-            if (!editor.hasFocus()) { hideAddBtn(); return; } // sem bloco ativo (sem borda)
-            const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
-            if (!isPlusBlock(block)) { hideAddBtn(); return; }
-            if (block === getHiddenBlock()) { hideAddBtn(); return; } // 2º clique desativou (sem borda)
+            // Não depende de foco/seleção — o "+" segue o rato, aparece no bloco sobre cuja
+            // borda inferior o rato está, mesmo sem nenhum parágrafo alguma vez clicado/ativo.
             const iframe = iframeOf(editor);
             if (!iframe) { hideAddBtn(); return; }
             const ir = iframe.getBoundingClientRect();
+            const blocks = Array.from(editor.getBody().children) as HTMLElement[];
+            const block = blocks.find((b) => {
+                if (!isPlusBlock(b) || b === getHiddenBlock()) return false;
+                const bottom = b.getBoundingClientRect().bottom;
+                return lastMouseY >= bottom - 2 && lastMouseY <= bottom + PLUS_BAND;
+            }) ?? null;
+            if (!block) { hideAddBtn(); return; }
             const br = block.getBoundingClientRect();
             // Fora da área visível do editor → esconder (o "+" fixo sobreporia toolbar/navbar).
             if (br.bottom < 0 || br.bottom > ir.height) { hideAddBtn(); return; }
-            // Só mostrar se o rato está ABAIXO da linha da borda inferior (com zona p/ chegar ao botão).
-            if (lastMouseY < br.bottom - 2 || lastMouseY > br.bottom + PLUS_BAND) { hideAddBtn(); return; }
             placeAddBtn(block, br, ir);
         };
         editor.on('mousemove', (e: MouseEvent) => { lastMouseX = e.clientX; lastMouseY = e.clientY; evalAddBtn(); evalGrip(); });

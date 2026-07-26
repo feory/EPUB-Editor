@@ -63,7 +63,7 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
   }, [activeMenu]);
 
   return (
-    <nav className="sticky top-0 z-50 bg-surface border-b border-border px-6 py-2.5 shadow-sm relative">
+    <nav className="bg-surface border-b border-border px-6 py-2.5 shadow-sm relative">
 
         {/* Left: Back — preso ao canto esquerdo real do nav, fora do bloco centrado */}
         <div

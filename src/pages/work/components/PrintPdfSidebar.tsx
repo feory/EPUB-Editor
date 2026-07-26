@@ -117,7 +117,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     };
 
     return (
-        <aside style={{ width }} className="fixed right-4 top-[89px] bottom-8 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
+        <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
             <PanelResizeHandle width={width} onResize={onResize} />
             {/* Oculto por omissão, só aparece com o rato na faixa do topo (mesmo truque da
                 paginação em baixo) — liberta a altura toda para o PDF. */}
@@ -131,7 +131,11 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
                 </button>
             </div>
 
-            <div className="flex-1 overflow-auto bg-slate-50/40 flex flex-col items-center justify-center p-3 pb-0">
+            {/* justify-start (não center): com a página mais alta que o painel, justify-center
+                no eixo principal do flex-col criava overflow negativo inalcançável — o topo da
+                página (cabeçalho/folio) ficava sempre cortado, mesmo com scroll no topo.
+                items-center/m-auto (eixo cruzado) continuam a centrar horizontalmente quando cabe. */}
+            <div className="flex-1 overflow-auto bg-slate-50/40 flex flex-col items-center justify-start p-3 pb-0">
                 {status === 'loading' && (
                     <div className="flex flex-col items-center gap-3 text-slate-400">
                         <Loader2 size={24} className="animate-spin" />

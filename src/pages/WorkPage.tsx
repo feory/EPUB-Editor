@@ -74,6 +74,23 @@ export function WorkPage() {
   const suppressHighlightRef = useRef(false);
   const pendingPageScrollRef = useRef<number | null>(null);
 
+  // Altura real do cabeçalho (banner de presença + navbar, quando ambos visíveis) — os
+  // painéis fixos à direita (PDF/Galeria/Validações/Diff/Gramática) usavam top-[89px] a fixo,
+  // que assumia navbar sozinha; com o banner "Modo leitura"/"também está a ver" por cima
+  // ficavam desalinhados do editor (banner empurra o <main> para baixo, mas não os
+  // `position:fixed`). Medido no wrapper sticky (banner+navbar juntos, ver abaixo) — muda
+  // quando o banner aparece/desaparece.
+  const headerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      document.documentElement.style.setProperty('--wp-header-h', `${el.getBoundingClientRect().height}px`);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const [isDragOver, setIsDragOver] = useState(false);
   const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
   const refreshGallery = useCallback(() => setGalleryRefreshKey(k => k + 1), []);
@@ -375,6 +392,9 @@ export function WorkPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-bg-color">
+      {/* banner+navbar juntos num único sticky — ver headerRef acima: os painéis fixos à
+          direita alinham com o fundo REAL deste bloco, banner incluído quando visível. */}
+      <div ref={headerRef} className={isFocusMode ? undefined : 'sticky top-0 z-50'}>
       {presenceBanner && (
         <div className={`w-full px-6 py-2 text-sm font-semibold text-center ${presenceBanner.tone === 'amber'
             ? 'bg-amber-100 text-amber-800 border-b border-amber-200'
@@ -413,6 +433,7 @@ export function WorkPage() {
           readOnly={work.readOnly}
         />
       )}
+      </div>
 
       {isFocusMode && (
         <FocusModeBar

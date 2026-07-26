@@ -43,20 +43,13 @@ export function createEditorSetup(deps: SetupDeps) {
                     const safeTitle = (data.title.trim() || 'Capítulo').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                     api.close();
                     editor.selection.moveToBookmark(bookmark);
-                    const node = editor.selection.getNode();
-                    const block = editor.dom.getParent(node, 'p,h1,h2,h3,h4,h5,h6') as HTMLElement | null;
                     // Marcador + parágrafo vazio a seguir, pronto para o conteúdo do capítulo.
                     const html = `<p class="chapter-break" data-title="${safeTitle}"></p><p><br data-mce-bogus="1"></p>`;
-                    // Bloco vazio SUBSTITUÍDO (em vez de inserir a seguir) só quando é um <p> comum
-                    // — um marcador de capítulo (ex. Ficha Técnica, também vazio, título só via
-                    // CSS attr(data-title)) nunca deve ser substituído: cursor lá dentro (ex. no
-                    // topo do documento) apagava o capítulo existente em vez de criar um novo antes dele.
-                    const isMarker = !!block && /\bchapter-break/.test(block.className);
-                    if (block && !isMarker && (block.textContent || '').trim() === '') {
-                        editor.dom.setOuterHTML(block, html);
-                    } else {
-                        editor.insertContent(html);
-                    }
+                    // Sempre INSERIDO no cursor (nunca substitui um bloco existente): um bloco
+                    // vazio "por perto" do cursor podia na verdade ser o 1º parágrafo do capítulo
+                    // SEGUINTE (ex. Ficha Técnica começa com uma linha em branco antes do texto) —
+                    // substituí-lo "roubava" o conteúdo desse capítulo para o novo marcador.
+                    editor.insertContent(html);
                     editor.dispatch('Change');
                     const markers = editor.dom.select('p.chapter-break');
                     const inserted = markers[markers.length - 1];

@@ -31,7 +31,7 @@ const ValidationSidebarComponent: React.FC<ValidationSidebarProps> = ({
   const totalIssues = (results?.errors.length || 0) + (results?.warnings.length || 0) + (footnoteResults?.issues.length || 0) + (linkResults?.issues.length || 0);
 
   return (
-    <aside style={{ width }} className="fixed right-4 top-[89px] bottom-8 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
+    <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
       <PanelResizeHandle width={width} onResize={onResize} />
       {/* Header */}
       <div className="p-5 border-b border-border flex items-center justify-between bg-white">

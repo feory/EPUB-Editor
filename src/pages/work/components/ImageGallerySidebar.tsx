@@ -48,7 +48,7 @@ const ImageGallerySidebarComponent: React.FC<ImageGallerySidebarProps> = ({
         <>
             <aside
                 style={{ width }}
-                className="fixed right-4 top-[89px] bottom-8 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300"
+                className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300"
                 onDragEnter={handleDragEnter}
                 onDragOver={gallery.handleDragOver}
                 onDragLeave={handleDragLeave}
