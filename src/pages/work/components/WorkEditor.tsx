@@ -64,8 +64,6 @@ interface WorkEditorProps {
     onGrammarClick?: (index: number) => void;
     onSave?: () => void;
     onExport?: () => void;
-    onUndo?: () => void;
-    onRedo?: () => void;
     onImageUploaded?: () => void;
     onToggleFocusMode?: () => void;
     isFocusMode?: boolean;
@@ -122,7 +120,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, onGrammarCheck, onGrammarClick, onSave, onExport, onUndo, onRedo, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -828,7 +826,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         // table spellchecker configurepermanentpen) — só acrescenta, não troca nada.
                         contextmenu: 'imagecrop link linkchecker image editimage table spellchecker configurepermanentpen',
                         setup: createEditorSetup({
-                            setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, onUndo, onRedo,
+                            setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
                             openStyleMenu: overlays.openStyleMenu,
                             wireOverlays: overlays.wireEditor,

@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useMemo, useCallback, useReducer } from 'react';
+import { useState, useRef, useEffect, useCallback, useReducer } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ebooksApi } from '../../api/ebooks-api';
+import { getAccessToken, clientId } from '../../api/client';
 import { useNotification } from '../../context/NotificationContext';
 import { useStyles } from '../../context/StyleContext';
 import type { ImageSettings } from '../../components/MarginPreview';
@@ -71,11 +72,16 @@ export function useEbookWork(isbn: string | undefined) {
 
     // --- Save ---
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
+    // Conteúdo que o servidor já tem, NA FORMA que o save envia (cleanHeadings do fullHtml).
+    // Comparar com o texto cru guardado dava sempre diferente (o load normaliza), e cada save
+    // escreve uma versão nova no histórico — abrir e sair sem editar poluía o histórico.
+    const savedContentRef = useRef<string | null>(null);
 
     const saveMutation = useMutation({
         mutationFn: ({ content, showNotif }: { content: string; showNotif?: boolean }) =>
             ebooksApi.saveContent(isbn!, compressHtml(content)),
         onSuccess: (_, variables) => {
+            savedContentRef.current = variables.content;
             queryClient.setQueryData(['ebook-content', isbn], { content: variables.content, source: 'saved' });
             setLastSaved(new Date());
             queryClient.invalidateQueries({ queryKey: ['ebook-history', isbn] });
@@ -88,8 +94,10 @@ export function useEbookWork(isbn: string | undefined) {
     });
 
     // Autosave every 5 minutes via stable refs
-    const getSyncedRef = useRef(chapterSync.getSyncedHtmlContent);
-    getSyncedRef.current = chapterSync.getSyncedHtmlContent;
+    // Gravar usa SEMPRE o getter "latest" (inclui a edição ainda presa no debounce) — não o
+    // getSyncedHtmlContent, que só vê o que já passou pelo reducer.
+    const getSyncedRef = useRef(chapterSync.getLatestHtmlContent);
+    getSyncedRef.current = chapterSync.getLatestHtmlContent;
     const saveMutRef = useRef(saveMutation);
     saveMutRef.current = saveMutation;
 
@@ -104,6 +112,71 @@ export function useEbookWork(isbn: string | undefined) {
         }, 5 * 60 * 1000);
         return () => clearInterval(interval);
     }, [isbn, readOnly]);
+
+    // Linha de base do "por gravar": primeira forma sincronizada logo após o LOAD_CONTENT
+    // (é exatamente o que um save enviaria nesse instante → abrir e sair sem editar não grava).
+    useEffect(() => {
+        if (savedContentRef.current === null && contentState.fullHtml) {
+            savedContentRef.current = getSyncedRef.current();
+        }
+    }, [contentState.fullHtml]);
+
+    // Sair do editor não gravava: a seta de voltar faz navigate('/') e o autosave é de 5 em 5
+    // minutos — perdia-se tudo o que fosse escrito depois do último save (ou a sessão inteira,
+    // se durasse menos de 5 min).
+    const readOnlyRef = useRef(readOnly);
+    readOnlyRef.current = readOnly;
+
+    const pendingContent = useCallback(() => {
+        if (readOnlyRef.current || !isbn) return null;
+        const content = getSyncedRef.current();
+        if (!content || content === savedContentRef.current) return null;
+        return content;
+    }, [isbn]);
+
+    // Saída dentro da app (voltar, ebook concluído, troca de rota).
+    useEffect(() => () => {
+        const content = pendingContent();
+        if (!content || !isbn) return;
+        // Chamada direta à API, não a mutation: no unmount o observer do react-query já
+        // não corre os callbacks, mas o pedido axios segue à mesma. Como o onSuccess da
+        // mutation não corre, o cache de ['ebook-content'] (staleTime: Infinity) tem de ser
+        // reposto aqui — senão reentrar no editor dentro do gcTime recarregava o texto ANTIGO,
+        // apesar de o servidor já ter o novo.
+        ebooksApi.saveContent(isbn, compressHtml(content))
+            .then(() => {
+                queryClient.setQueryData(['ebook-content', isbn], { content, source: 'saved' });
+                queryClient.invalidateQueries({ queryKey: ['ebook-history', isbn] });
+            })
+            .catch(() => {
+                // Falhou: não deixar o cache a afirmar o que não está gravado — força releitura.
+                queryClient.invalidateQueries({ queryKey: ['ebook-content', isbn] });
+            });
+    }, [pendingContent, isbn, queryClient]);
+
+    // Fechar/recarregar o separador: keepalive porque o pedido tem de sobreviver à página.
+    // sendBeacon não serve — não deixa pôr o cabeçalho Authorization.
+    useEffect(() => {
+        const onBeforeUnload = (e: BeforeUnloadEvent) => {
+            const content = pendingContent();
+            if (!content || !isbn) return;
+            const token = getAccessToken();
+            fetch(`/api/ebooks/${isbn}/content`, {
+                method: 'POST',
+                keepalive: true,
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Client-Id': clientId,
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ content: compressHtml(content) }),
+            }).catch(() => { /* a página está a fechar */ });
+            e.preventDefault(); // browser avisa que há alterações por gravar
+        };
+        window.addEventListener('beforeunload', onBeforeUnload);
+        return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    }, [pendingContent, isbn]);
 
     // --- Import ---
     const onImport = useCallback((html: string) => {
@@ -243,11 +316,6 @@ export function useEbookWork(isbn: string | undefined) {
         setHtmlContent: chapterSync.handleEditorChange,
         fullHtmlContent: contentState.fullHtml,
 
-        undo: chapterSync.handleUndo,
-        redo: chapterSync.handleRedo,
-        canUndo: contentState.past.length > 0,
-        canRedo: contentState.future.length > 0,
-
         title: ebook?.title || '',
         author: ebook?.author || '',
         description: ebook?.description || '',
@@ -272,9 +340,9 @@ export function useEbookWork(isbn: string | undefined) {
         saveContent: useCallback(
             () => {
                 if (readOnly) return; // modo leitura: nunca grava
-                saveMutation.mutate({ content: chapterSync.getSyncedHtmlContent(), showNotif: true });
+                saveMutation.mutate({ content: chapterSync.getLatestHtmlContent(), showNotif: true });
             },
-            [saveMutation, chapterSync.getSyncedHtmlContent, readOnly]
+            [saveMutation, chapterSync.getLatestHtmlContent, readOnly]
         ),
 
         showHistory: history.isHistoryOpen,
@@ -332,7 +400,10 @@ export function useEbookWork(isbn: string | undefined) {
         activeChapterIndex: contentState.activeChapterIndex,
         setActiveChapterIndex: chapterSync.changeActiveChapter,
 
-        stats: useMemo(() => {
+        // Função, não useMemo: só o modal de Estatísticas lê isto, mas o memo recalculava a
+        // cada flush do debounce (strip de tags + contagem sobre o livro inteiro, ~6ms a 1,2MB)
+        // mesmo com o modal fechado.
+        getStats: useCallback(() => {
             const text = contentState.fullHtml.replace(/<[^>]*>/g, ' ');
             const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
             const estimatedPages = Math.ceil(words / 250);

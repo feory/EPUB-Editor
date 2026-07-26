@@ -506,8 +506,6 @@ export function WorkPage() {
                 onGrammarClick={(index) => setSelectedGrammarIndex(index)}
                 onSave={work.saveContent}
                 onExport={work.handleExportEpub}
-                onUndo={work.undo}
-                onRedo={work.redo}
                 grammarCache={work.grammarCache}
                 onImageUploaded={refreshGallery}
                 readOnly={work.readOnly}
@@ -596,7 +594,7 @@ export function WorkPage() {
 
       {showStats && (
         <ErrorBoundary><Suspense fallback={<ModalLoadingFallback />}>
-          <StatisticsModal stats={work.stats} onClose={() => setShowStats(false)} />
+          <StatisticsModal stats={work.getStats()} onClose={() => setShowStats(false)} />
         </Suspense></ErrorBoundary>
       )}
 

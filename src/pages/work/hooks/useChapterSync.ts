@@ -6,6 +6,7 @@ import {
     CHAPTER_MARKER_COUNT_PATTERN,
     classifyChapterPart,
 } from '../../../utils/html-cleaner';
+import { replaceChapterContent } from './contentReducer';
 import type { ContentState, ContentAction } from './contentReducer';
 
 type ChapterPart = { title: string; content: string; level: 'h1' | 'h2' | 'break'; hrTag?: string; _size?: number };
@@ -66,6 +67,16 @@ export function useChapterSync(
     const localContentRef = useRef('');
     const syncedContentRef = useRef('');
 
+    // Livro completo INCLUINDO a edição que ainda está presa no debounce (800/1500ms).
+    // getSyncedHtmlContent deriva só do fullHtml, logo devolvia conteúdo antigo a quem grava:
+    // escrever e carregar em Guardar (ou sair) dentro da janela do debounce não gravava nada.
+    const getLatestHtmlContent = useCallback(() => {
+        const pending = localContentRef.current;
+        if (skipSyncRef.current || pending === syncedContentRef.current) return cleanHtmlCached(fullHtml);
+        if (!pending && activeChapterIndex === -1) return cleanHtmlCached(fullHtml); // vazio transitório
+        return replaceChapterContent(fullHtml, pending, activeChapterIndex) ?? cleanHtmlCached(fullHtml);
+    }, [fullHtml, activeChapterIndex, cleanHtmlCached, skipSyncRef]);
+
     const changeActiveChapter = useCallback((index: number) => {
         if (index === activeChapterIndex) return;
         // Flush edits still inside the debounce window to THIS chapter before
@@ -91,36 +102,15 @@ export function useChapterSync(
         setLocalEditorContent(newContent);
     }, []);
 
-    const handleUndo = useCallback(() => {
-        if (contentState.past.length === 0) return;
-        dispatch({ type: 'UNDO' });
-    }, [contentState.past.length, dispatch]);
-
-    const handleRedo = useCallback(() => {
-        if (contentState.future.length === 0) return;
-        dispatch({ type: 'REDO' });
-    }, [contentState.future.length, dispatch]);
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-                e.preventDefault();
-                handleUndo();
-            }
-            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-                e.preventDefault();
-                handleRedo();
-            }
-        };
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [handleUndo, handleRedo]);
-
     // Debounced sync: local editor content → reducer.
     // Larger documents use a longer debounce to reduce regex frequency / jank.
     useEffect(() => {
-        if (!localEditorContent) return;
         if (skipSyncRef.current) return;
+        // Vazio só é aceite dentro de um capítulo (apagar o texto todo de um capítulo é
+        // legítimo e antes nunca chegava ao reducer). Em "Documento Completo" continua
+        // bloqueado: aí um vazio é sempre transitório (editor ainda sem conteúdo) e
+        // aplicá-lo apagaria o livro inteiro.
+        if (!localEditorContent && activeChapterIndex === -1) return;
 
         const debounceMs = localEditorContent.length > 500_000 ? 1500 : 800;
         const timer = setTimeout(() => {
@@ -156,9 +146,8 @@ export function useChapterSync(
         handleEditorChange,
         isLargeBook,
         getSyncedHtmlContent,
+        getLatestHtmlContent,
         changeActiveChapter,
         splitHtmlIntoParts,
-        handleUndo,
-        handleRedo,
     };
 }

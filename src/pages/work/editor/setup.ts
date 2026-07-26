@@ -10,8 +10,6 @@ interface SetupDeps {
     onGrammarClick?: (index: number) => void;
     onSave?: () => void;
     onExport?: () => void;
-    onUndo?: () => void;
-    onRedo?: () => void;
     startHtmlEdit: (top: HTMLElement) => void;
     openStyleMenu: (kind: 'para' | 'head') => void;
     onCropImage: (imageId: string) => void;
@@ -23,7 +21,7 @@ interface SetupDeps {
 
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
-    const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, onUndo, onRedo, startHtmlEdit, openStyleMenu, wireOverlays, onCropImage } = deps;
+    const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu, wireOverlays, onCropImage } = deps;
 
     return (editor: Editor) => {
         editor.addCommand('mceChapterBreak', () => {
@@ -147,12 +145,9 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.addShortcut('meta+s,ctrl+s', 'Guardar Trabalho', () => onSave?.());
         editor.addShortcut('meta+e,ctrl+e', 'Exportar EPUB', () => onExport?.());
 
-        if (onUndo) {
-            editor.addShortcut('meta+z,ctrl+z', 'Desfazer', () => { onUndo(); return false; });
-        }
-        if (onRedo) {
-            editor.addShortcut('meta+shift+z,ctrl+shift+z,meta+y,ctrl+y', 'Refazer', () => { onRedo(); return false; });
-        }
+        // ⌘Z/⌘⇧Z sem override: trata deles o undoManager do TinyMCE, o mesmo dos botões da
+        // toolbar. Estavam ligados a uma 2ª pilha de histórico na app, com outro âmbito e outra
+        // granularidade — botão e atalho desfaziam coisas diferentes (ver contentReducer.ts).
 
         editor.addShortcut('meta+1,ctrl+1', 'Título 1', () => editor.execCommand('FormatBlock', false, 'h1'));
         editor.addShortcut('meta+2,ctrl+2', 'Título 2', () => editor.execCommand('FormatBlock', false, 'h2'));
