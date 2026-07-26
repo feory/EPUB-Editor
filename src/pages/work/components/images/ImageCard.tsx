@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Maximize2, Trash2, Edit2, Check, X, Loader2, AlertCircle, Square, RefreshCw, Crosshair, Crop } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, Loader2, AlertCircle, Square, RefreshCw, Crosshair, Crop } from 'lucide-react';
 import { formatFileSize } from '../../../../utils/format';
 import type { ImageData } from './useImageGallery';
 
@@ -188,13 +188,6 @@ const ImageCardComponent: React.FC<ImageCardProps> = ({
                         title="Localizar no editor"
                     >
                         <Crosshair size={14} />
-                    </button>
-                    <button
-                        onClick={() => onView(image)}
-                        className="flex-1 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors"
-                        title="Ver imagem completa"
-                    >
-                        <Maximize2 size={14} />
                     </button>
                     <button
                         onClick={() => onRequestDelete(image.id)}

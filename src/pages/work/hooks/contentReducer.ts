@@ -1,11 +1,13 @@
 import { cleanHeadings, CHAPTER_SPLIT_PATTERN } from '../../../utils/html-cleaner';
 
+type HistorySnapshot = { fullHtml: string; activeChapterIndex: number };
+
 export type ContentState = {
     fullHtml: string;
     activeChapterIndex: number;
     isLoadingChapter: boolean;
-    past: string[];
-    future: string[];
+    past: HistorySnapshot[];
+    future: HistorySnapshot[];
 };
 
 export type ContentAction =
@@ -55,21 +57,26 @@ export function contentReducer(state: ContentState, action: ContentAction): Cont
                 return {
                     ...state,
                     fullHtml: newFullHtml,
-                    past: [...state.past.slice(-MAX_HISTORY_SIZE + 1), state.fullHtml],
+                    past: [...state.past.slice(-MAX_HISTORY_SIZE + 1), { fullHtml: state.fullHtml, activeChapterIndex: state.activeChapterIndex }],
                     future: [],
                 };
             }
             return { ...state, fullHtml: newFullHtml };
         }
 
+        // Snapshot carries fullHtml + activeChapterIndex together: a chapter split/merge
+        // mid-edit (useChapterSync's markerCount>1 branch) moves activeChapterIndex outside
+        // the history stack, so restoring fullHtml alone left the index pointing at the wrong
+        // (shifted) chapter — edits then landed on a neighboring chapter (duplicated content).
         case 'UNDO': {
             if (state.past.length === 0) return state;
             const previous = state.past[state.past.length - 1];
             return {
                 ...state,
-                fullHtml: previous,
+                fullHtml: previous.fullHtml,
+                activeChapterIndex: previous.activeChapterIndex,
                 past: state.past.slice(0, -1),
-                future: [state.fullHtml, ...state.future.slice(0, MAX_HISTORY_SIZE - 1)],
+                future: [{ fullHtml: state.fullHtml, activeChapterIndex: state.activeChapterIndex }, ...state.future.slice(0, MAX_HISTORY_SIZE - 1)],
             };
         }
 
@@ -78,8 +85,9 @@ export function contentReducer(state: ContentState, action: ContentAction): Cont
             const next = state.future[0];
             return {
                 ...state,
-                fullHtml: next,
-                past: [...state.past.slice(-MAX_HISTORY_SIZE + 1), state.fullHtml],
+                fullHtml: next.fullHtml,
+                activeChapterIndex: next.activeChapterIndex,
+                past: [...state.past.slice(-MAX_HISTORY_SIZE + 1), { fullHtml: state.fullHtml, activeChapterIndex: state.activeChapterIndex }],
                 future: state.future.slice(1),
             };
         }

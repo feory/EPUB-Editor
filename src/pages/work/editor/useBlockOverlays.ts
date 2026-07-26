@@ -352,13 +352,17 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             // borda inferior o rato está, mesmo sem nenhum parágrafo alguma vez clicado/ativo.
             const iframe = iframeOf(editor);
             if (!iframe) { hideAddBtn(); return; }
+            if (lastMouseY < 0) { hideAddBtn(); return; } // rato nunca visto neste iframe
             const ir = iframe.getBoundingClientRect();
-            const blocks = Array.from(editor.getBody().children) as HTMLElement[];
-            const block = blocks.find((b) => {
-                if (!isPlusBlock(b) || b === getHiddenBlock()) return false;
+            // Os blocos estão em ordem de documento → a borda inferior cresce monotonicamente.
+            // Parar assim que passa a zona do rato evita varrer o livro inteiro (milhares de
+            // getBoundingClientRect por evento em "Documento Completo").
+            let block: HTMLElement | null = null;
+            for (let b = editor.getBody().firstElementChild as HTMLElement | null; b; b = b.nextElementSibling as HTMLElement | null) {
                 const bottom = b.getBoundingClientRect().bottom;
-                return lastMouseY >= bottom - 2 && lastMouseY <= bottom + PLUS_BAND;
-            }) ?? null;
+                if (bottom > lastMouseY + PLUS_BAND) break;
+                if (bottom >= lastMouseY - PLUS_BAND && lastMouseY >= bottom - 2 && isPlusBlock(b) && b !== getHiddenBlock()) { block = b; break; }
+            }
             if (!block) { hideAddBtn(); return; }
             const br = block.getBoundingClientRect();
             // Fora da área visível do editor → esconder (o "+" fixo sobreporia toolbar/navbar).
@@ -379,8 +383,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                 setHrCtl({ top: ir.top + r.top + r.height / 2, left: ir.left + r.left + r.width / 2 });
             } else if (hrRef.current) { hrRef.current = null; setHrCtl(null); }
         });
-        editor.on('NodeChange', evalAddBtn);
-        editor.on('input', evalAddBtn);
+        // Só mousemove: o "+" segue o RATO (não a seleção), logo reavaliar a cada tecla
+        // ('input'/'NodeChange') repetia a mesma conta com o rato parado — era o custo
+        // dominante a escrever em documentos grandes.
         editor.on('blur', hideAddBtn);
 
         // Pega de arrastar no gutter esquerdo — visível quando o rato está no limite esquerdo do bloco ATIVO.
