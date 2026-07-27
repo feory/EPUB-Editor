@@ -524,7 +524,14 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
     if (!story) return '';
     const out: string[] = [];
     let pendingLabel = ''; // nº de capítulo/parte à espera do título seguinte
-    let inIndexChapter = false; // dentro de um capítulo "Índice"/"Índice remissivo" (título heurístico)
+    // Dentro de um capítulo "Índice"/"Índice remissivo": abre por título heurístico (abaixo) OU,
+    // aqui, quando o 1º parágrafo não-vazio da story É literalmente "índice"/"índice remissivo" —
+    // cobre o caso (este livro) em que esse título não tem Justification/PointSize inline
+    // (herda tudo da DEFINIÇÃO do estilo de parágrafo) e por isso não passa em isHeuristicTitle.
+    const firstText = (Array.from(story.children).find(c =>
+        c.tagName === 'ParagraphStyleRange' && (c.textContent || '').replace(/\s+/g, ' ').trim()
+    )?.textContent || '').replace(/\s+/g, ' ').trim();
+    let inIndexChapter = /^índice(\s+remissivo)?$/i.test(firstText);
     // Estilo do último heading emitido, para fundir headings CONSECUTIVOS do mesmo estilo
     // (nº de capítulo + subtítulo(s) em parágrafos próprios, todos com o mesmo estilo de
     // título) num só <hN> — o InDesign separa-os, mas visualmente formam um título único.
@@ -550,19 +557,25 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
         // Vence a classe de corpo: mesmo que o estilo (ex. TEXTO) tenha sido mapeado para um
         // estilo de parágrafo com classe (p-center, p-indent…), este parágrafo específico é
         // visualmente um título → h1. Só NÃO se aplica se já for heading (h1-6 mapeado à mão).
-        const heurTitle = rawMap.tag === 'p' && isHeuristicTitle(psr);
+        const heurTitle = !inIndexChapter && rawMap.tag === 'p' && isHeuristicTitle(psr);
 
-        // Fronteira do capítulo "Índice": abre no título heurístico; fecha em qualquer heading OU
-        // numa abertura de capítulo (drop-cap) — senão o flag da TOC "Índice" no início do livro
-        // sangrava para o corpo seguinte e despia a classe drop-cap (partindo o insertTitleBlocks).
+        // Entradas do índice reaproveitam muitas vezes o MESMO estilo nomeado do título real
+        // (nome do capítulo colado no índice, ex. estilo "1." usado tanto no capítulo como na
+        // sua entrada na lista) — mapeado pelo utilizador para h1-6, isso promovia cada entrada
+        // a capítulo próprio. Dentro do índice, só a abertura de capítulo real (drop-cap) escapa.
+        const suppressHeading = inIndexChapter && /^h[1-6]$/.test(rawMap.tag) && rawMap.cls !== 'drop-cap';
+
+        // Fronteira do capítulo "Índice": abre no título heurístico; fecha só na abertura de
+        // capítulo real (drop-cap) — headings genéricos dentro do índice já são suprimidos
+        // acima, não fecham (senão a 1ª entrada da lista reabria a suspensão para as seguintes).
         if (heurTitle) inIndexChapter = true;
-        else if (/^h[1-6]$/.test(rawMap.tag) || rawMap.cls === 'drop-cap') inIndexChapter = false;
+        else if (rawMap.cls === 'drop-cap') inIndexChapter = false;
 
         // Corpo DENTRO do índice não herda o estilo de import mapeado → auto (corpo simples + LeftIndent).
         const indexBody = inIndexChapter && !heurTitle && rawMap.tag === 'p';
-        const map = indexBody ? { tag: 'p' as const } : rawMap;
+        const map = (indexBody || suppressHeading) ? { tag: 'p' as const } : rawMap;
         // Honrar o LeftIndent do IDML só em <p> PLANO e NÃO mapeado (estilo escolhido vence; índice = auto).
-        const mapped = !indexBody && !!(mapping[sn] && mapping[sn].target !== 'auto');
+        const mapped = !indexBody && !suppressHeading && !!(mapping[sn] && mapping[sn].target !== 'auto');
         const { tag, cls } = heurTitle ? { tag: 'h1' as const, cls: '' } : map;
         const spacing = tag === 'p' ? spacingClasses(psr, fullPS) : '';
         const baseClasses = [cls, spacing].filter(Boolean);
