@@ -53,6 +53,13 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const editor = editorRef.current;
         if (!editor) return;
         editor.focus();
+        // Estilos de parágrafo (p-bold, p-indent, ...) são formatos de SELECTOR ('p,li') — não
+        // casam num bloco ainda h1/h2/h3, por isso o toggle não fazia nada (só "Padrão" convertia
+        // a tag). Ao vir de um título, converte primeiro para <p> antes de aplicar a classe.
+        if (!/^(h1|h2|h3|p)$/.test(format)) {
+            const block = editor.selection.getNode()?.closest?.('h1,h2,h3');
+            if (block) editor.execCommand('FormatBlock', false, 'p');
+        }
         editor.formatter.toggle(format); // h1-3 sincroniza o marcador de capítulo via FormatApply/FormatRemove
         editor.dispatch('Change');
         editor.nodeChanged();
@@ -348,20 +355,29 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         // Zona à esquerda da aresta do bloco onde a pega aparece.
         const GRIP_BAND = 36;
         const evalAddBtn = () => {
-            // Não depende de foco/seleção — o "+" segue o rato, aparece no bloco sobre cuja
-            // borda inferior o rato está, mesmo sem nenhum parágrafo alguma vez clicado/ativo.
+            // Segue o rato dentro do bloco ATIVO (foco + data-mce-psactive); com um bloco ativo,
+            // o "+" nunca salta para outro parágrafo só por o rato passar por cima dele.
             const iframe = iframeOf(editor);
             if (!iframe) { hideAddBtn(); return; }
             if (lastMouseY < 0) { hideAddBtn(); return; } // rato nunca visto neste iframe
             const ir = iframe.getBoundingClientRect();
-            // Os blocos estão em ordem de documento → a borda inferior cresce monotonicamente.
-            // Parar assim que passa a zona do rato evita varrer o livro inteiro (milhares de
-            // getBoundingClientRect por evento em "Documento Completo").
+            const activeBlock = blockOf(editor.selection.getNode()) as HTMLElement | null;
             let block: HTMLElement | null = null;
-            for (let b = editor.getBody().firstElementChild as HTMLElement | null; b; b = b.nextElementSibling as HTMLElement | null) {
-                const bottom = b.getBoundingClientRect().bottom;
-                if (bottom > lastMouseY + PLUS_BAND) break;
-                if (bottom >= lastMouseY - PLUS_BAND && lastMouseY >= bottom - 2 && isPlusBlock(b) && b !== getHiddenBlock()) { block = b; break; }
+            if (activeBlock && isPlusBlock(activeBlock) && activeBlock !== getHiddenBlock()) {
+                const bottom = activeBlock.getBoundingClientRect().bottom;
+                if (bottom >= lastMouseY - PLUS_BAND && lastMouseY >= bottom - 2) block = activeBlock;
+            } else {
+                // Sem bloco ativo (ainda nenhum clicado nesta sessão): segue o rato como antes.
+                // Os blocos estão em ordem de documento → a borda inferior cresce monotonicamente.
+                // Parar assim que passa a zona do rato evita varrer o livro inteiro (milhares de
+                // getBoundingClientRect por evento em "Documento Completo").
+                for (let b = editor.getBody().firstElementChild as HTMLElement | null; b; b = b.nextElementSibling as HTMLElement | null) {
+                    const bottom = b.getBoundingClientRect().bottom;
+                    if (bottom > lastMouseY + PLUS_BAND) break;
+                    // Não sai no 1º match: com blocos curtos/próximos vários podem servir a mesma
+                    // zona do rato — fica sempre com o mais próximo (bottom maior, ainda ≤ mouseY).
+                    if (bottom >= lastMouseY - PLUS_BAND && lastMouseY >= bottom - 2 && isPlusBlock(b) && b !== getHiddenBlock()) block = b;
+                }
             }
             if (!block) { hideAddBtn(); return; }
             const br = block.getBoundingClientRect();

@@ -63,7 +63,7 @@ const HEADING_STYLES = [['h1', 'Título 1'], ['h2', 'Título 2'], ['h3', 'Títul
 const PARAGRAPH_STYLES = [
     ['p', 'Padrão'], ['p-indent', 'Com Indentação'], ['p-top', 'Topo'],
     ['p-space', 'Espaço Extra'], ['p-quote', 'Citação'],
-    ['p-italic', 'Itálico'], ['p-bold-italic', 'Negrito + Itálico'], ['p-legendas', 'Legenda'],
+    ['p-bold', 'Negrito'], ['p-italic', 'Itálico'], ['p-bold-italic', 'Negrito + Itálico'], ['p-legendas', 'Legenda'],
 ] as const;
 const OTHER_STYLES = [
     ['p-border-top', 'Borda Superior'], ['p-border-bottom', 'Borda Inferior'],
