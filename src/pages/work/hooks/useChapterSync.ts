@@ -9,7 +9,7 @@ import {
 import { replaceChapterContent } from './contentReducer';
 import type { ContentState, ContentAction } from './contentReducer';
 
-type ChapterPart = { title: string; content: string; level: 'h1' | 'h2' | 'break'; hrTag?: string; _size?: number };
+type ChapterPart = { title: string; content: string; level: 'h1' | 'h2' | 'h3' | 'break'; hrTag?: string; _size?: number };
 
 export function useChapterSync(
     contentState: ContentState,

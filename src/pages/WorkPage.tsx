@@ -673,6 +673,9 @@ export function WorkPage() {
           chapters={work.chapters}
           onReorderChapter={work.handleReorderChapter}
           onEditChapterTitle={work.handleEditChapterTitle}
+          onChangeChapterLevel={work.handleChangeChapterLevel}
+          onAddChapter={work.handleAddChapter}
+          onDeleteChapter={work.handleDeleteChapter}
           onClose={() => setShowToc(false)}
         />
       )}

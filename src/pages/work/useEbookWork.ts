@@ -9,7 +9,7 @@ import { useContentWorker } from '../../hooks/useContentWorker';
 import { compressHtml, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml, applyDropCapToFirstParagraph } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
-import { moveChapters, renameChapterPart, deleteChapterPart } from '../../utils/toc';
+import { moveChapters, renameChapterPart, deleteChapterPart, changeChapterLevel } from '../../utils/toc';
 import type { DocxStyleMapping } from '../../services/document-importer';
 import { insertPageBreaks } from '../../services/page-list';
 import type { PageAnchor } from '../../services/page-list';
@@ -262,6 +262,18 @@ export function useEbookWork(isbn: string | undefined) {
         if (isbn) saveMutation.mutate({ content: updatedHtml });
     }, [getChaptersAndParts, isbn, saveMutation, showNotification]);
 
+    // --- Mudar nível de um capítulo (h1/h2/h3/break) ---
+    const handleChangeChapterLevel = useCallback((index: number, level: 'h1' | 'h2' | 'h3' | 'break') => {
+        const { chapters, parts } = getChaptersAndParts();
+        if (!chapters[index] || chapters[index].level === level) return;
+        const updatedPart = changeChapterLevel(parts[index], level);
+        if (updatedPart === parts[index]) return;
+        parts[index] = updatedPart;
+        const updatedHtml = parts.join('');
+        commitHtml(updatedHtml);
+        showNotification('success', 'Nível do capítulo atualizado!');
+    }, [getChaptersAndParts, commitHtml, showNotification]);
+
     // --- Eliminar capítulo (subárvore h1+filhos; folhas isoladas) ---
     const handleDeleteChapter = useCallback((index: number) => {
         const { chapters, parts, levels } = getChaptersAndParts();
@@ -269,6 +281,16 @@ export function useEbookWork(isbn: string | undefined) {
         const updatedHtml = deleteChapterPart(parts, levels, index);
         dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
         showNotification('success', `Capítulo ${chapters[index].title} eliminado!`);
+        if (isbn) saveMutation.mutate({ content: updatedHtml });
+    }, [getChaptersAndParts, isbn, saveMutation, showNotification]);
+
+    // --- Criar capítulo novo (sempre como primeiro) ---
+    const handleAddChapter = useCallback(() => {
+        const { parts } = getChaptersAndParts();
+        const newPart = `${changeChapterLevel('<p class="chapter-break" data-title="Novo Capítulo"></p>', 'h1')}<p></p>`;
+        const updatedHtml = [newPart, ...parts].join('');
+        dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
+        showNotification('success', 'Capítulo criado!');
         if (isbn) saveMutation.mutate({ content: updatedHtml });
     }, [getChaptersAndParts, isbn, saveMutation, showNotification]);
 
@@ -377,6 +399,8 @@ export function useEbookWork(isbn: string | undefined) {
         handleEditChapterTitle,
         handleReorderChapter,
         handleDeleteChapter,
+        handleAddChapter,
+        handleChangeChapterLevel,
         handleApplyDropCaps,
         handleGeneratePageList,
 

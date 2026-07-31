@@ -159,7 +159,7 @@ export const DEFAULT_CSS = `
         font-weight: bold;
         color: #2563eb;
     }
-    p.chapter-break, p.chapter-break-h1, p.chapter-break-h2 {
+    p.chapter-break, p.chapter-break-h1, p.chapter-break-h2, p.chapter-break-h3 {
         border: 0;
         border-top: 2px dashed #374151;
         margin: 3em 0 0;
@@ -167,7 +167,7 @@ export const DEFAULT_CSS = `
         height: 0;
         position: relative;
     }
-    p.chapter-break::after, p.chapter-break-h1::after, p.chapter-break-h2::after {
+    p.chapter-break::after, p.chapter-break-h1::after, p.chapter-break-h2::after, p.chapter-break-h3::after {
         content: attr(data-title);
         position: absolute;
         top: -10px;

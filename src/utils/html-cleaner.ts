@@ -16,8 +16,6 @@ import { decodeEntities } from './entities';
 export const CHAPTER_SPLIT_PATTERN = /(?=<p[^>]*class=["'][^"']*chapter-break[^"']*["']|<hr[^>]*class=["']chapter-break["'])/i;
 // Counts chapter-start markers (detect a split appearing mid-edit).
 export const CHAPTER_MARKER_COUNT_PATTERN = /<p[^>]*class=["'][^"']*chapter-break[^"']*["']/gi;
-// Matches a marker at the START of a split part; group 1 = 1|2 (heading level) or undefined (titleless break).
-export const CHAPTER_MARKER_PATTERN = /^<p[^>]*class=["'][^"']*chapter-break(?:-h([12]))?[^"']*["'][^>]*>/i;
 export const HR_BREAK_PATTERN = /^<hr[^>]*class=["']chapter-break["'][^>]*>/i;
 export const HR_DATA_TITLE_PATTERN = /data-title=["']([^"']+)["']/i;
 
@@ -28,23 +26,39 @@ export function flattenHeadingText(inner: string): string {
 const escapeAttr = (s: string) => s.replace(/"/g, '&quot;');
 
 /**
+ * Matches a chapter-break <p> marker as a WHOLE element (open tag through </p>) at the
+ * start of `content` — non-greedy, since the marker doesn't always serialize empty
+ * (TinyMCE can fill it with &nbsp;/<br> to keep the block focusable). Shared by
+ * classifyChapterPart below and toc.ts's changeChapterLevel — the one place that knows
+ * what a marker element looks like. `title` is the RAW (still HTML-escaped) attribute
+ * value — callers that display it must decodeEntities(); callers that reinsert it into
+ * new markup (changeChapterLevel) must NOT, or they'll break the attribute's escaping.
+ */
+export function matchChapterMarkerElement(content: string): { raw: string; level: 'h1' | 'h2' | 'h3' | null; title: string } | null {
+    const m = content.match(/^<p[^>]*class=["'][^"']*chapter-break(?:-h([123]))?[^"']*["'][^>]*>[\s\S]*?<\/p>/i);
+    if (!m) return null;
+    const level = m[1] === '1' ? 'h1' : m[1] === '2' ? 'h2' : m[1] === '3' ? 'h3' : null;
+    const dt = m[0].match(HR_DATA_TITLE_PATTERN);
+    return { raw: m[0], level, title: dt ? dt[1] : '' };
+}
+
+/**
  * Classify one split part (a chapter) into { title, level }.
  * Shared by the sidebar (useChapterSync) and the worker (content.worker).
  */
-export function classifyChapterPart(content: string, index: number): { title: string; level: 'h1' | 'h2' | 'break'; hrTag?: string } {
+export function classifyChapterPart(content: string, index: number): { title: string; level: 'h1' | 'h2' | 'h3' | 'break'; hrTag?: string } {
     const hrMatch = content.match(HR_BREAK_PATTERN);
     if (hrMatch) {
         const titleMatch = hrMatch[0].match(HR_DATA_TITLE_PATTERN);
         const title = decodeEntities(titleMatch ? titleMatch[1] : `Quebra ${index + 1}`);
         return { title, level: 'break', hrTag: hrMatch[0] };
     }
-    const markerMatch = content.match(CHAPTER_MARKER_PATTERN);
-    if (markerMatch) {
-        const level: 'h1' | 'h2' | 'break' = markerMatch[1] === '1' ? 'h1' : markerMatch[1] === '2' ? 'h2' : 'break';
-        const dtMatch = markerMatch[0].match(HR_DATA_TITLE_PATTERN);
-        let title = dtMatch ? decodeEntities(dtMatch[1]) : '';
+    const marker = matchChapterMarkerElement(content);
+    if (marker) {
+        const level = marker.level ?? 'break';
+        let title = marker.title ? decodeEntities(marker.title) : '';
         if (!title) {
-            const hMatch = content.slice(markerMatch[0].length).match(/^\s*<(h[12])[^>]*>([\s\S]*?)<\/\1>/i);
+            const hMatch = content.slice(marker.raw.length).match(/^\s*<(h[123])[^>]*>([\s\S]*?)<\/\1>/i);
             if (hMatch) title = decodeEntities(flattenHeadingText(hMatch[2]));
         }
         if (!title) title = level === 'break' ? `Quebra ${index + 1}` : `Sem Título ${index + 1}`;
@@ -60,6 +74,9 @@ export function classifyChapterPart(content: string, index: number): { title: st
  * demoted to an in-body subheading) is not re-added on reload.
  */
 export function insertChapterMarkers(html: string): string {
+    // Só h1/h2 continuam a auto-promover a capítulo no import — h3 fica disponível como nível
+    // (via Editor de TOC), mas não se torna quebra sozinho só por aparecer no documento
+    // (continua a poder ser um subtítulo normal dentro do corpo).
     if (/class=["'][^"']*chapter-break-h[12][^"']*["']/i.test(html)) return html;
     // Legacy titleless break headings → titleless break markers.
     let out = html.replace(/<(h[12])[^>]*class=["'][^"']*chapter-break[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi,
@@ -99,7 +116,7 @@ export function cleanHeadings(html: string): string {
 function refreshChapterMarkers(html: string): string {
     let out = html.replace(/<(h[12])[^>]*class=["'][^"']*chapter-break[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi,
         (_m, _tag, inner) => `<p class="chapter-break" data-title="${escapeAttr(flattenHeadingText(inner))}"></p>`);
-    out = out.replace(/(<p[^>]*class=["'][^"']*chapter-break-h[12][^"']*["'][^>]*data-title=["'])[^"']*(["'][^>]*>\s*<\/p>\s*<(h[12])[^>]*>)([\s\S]*?)(<\/\3>)/gi,
+    out = out.replace(/(<p[^>]*class=["'][^"']*chapter-break-h[123][^"']*["'][^>]*data-title=["'])[^"']*(["'][^>]*>\s*<\/p>\s*<(h[123])[^>]*>)([\s\S]*?)(<\/\3>)/gi,
         (_m, pre, mid, _tag, inner, close) => `${pre}${escapeAttr(flattenHeadingText(inner))}${mid}${inner}${close}`);
     return out;
 }

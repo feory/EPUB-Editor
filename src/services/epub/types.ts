@@ -16,7 +16,7 @@ export interface BookMetadata {
 export interface Section {
     title: string;
     content: string;
-    level: 'h1' | 'h2' | 'break';
+    level: 'h1' | 'h2' | 'h3' | 'break';
     parentIdx: number;
     childIndices: number[];
     hiddenFromToc?: boolean;

@@ -1,27 +1,33 @@
 import React, { useState, useCallback } from 'react';
-import { ListTree, GripVertical, Check, Info } from 'lucide-react';
+import { ListTree, GripVertical, Check, Info, Plus, Edit2, Trash2, X } from 'lucide-react';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 
 interface Chapter {
     title: string;
-    level: 'h1' | 'h2' | 'break';
+    level: 'h1' | 'h2' | 'h3' | 'break';
 }
 
 interface TocModalProps {
     chapters: Chapter[];
     onReorderChapter: (from: number, to: number) => void;
     onEditChapterTitle: (index: number, newTitle: string) => void;
+    onChangeChapterLevel: (index: number, level: Chapter['level']) => void;
+    onAddChapter: () => void;
+    onDeleteChapter: (index: number) => void;
     onClose: () => void;
 }
 
-const LEVEL_LABEL: Record<Chapter['level'], string> = { h1: 'Título 1', h2: 'Título 2', break: 'Quebra' };
+const LEVEL_LABEL: Record<Chapter['level'], string> = { h1: 'Título 1', h2: 'Título 2', h3: 'Título 3', break: 'Quebra' };
+const LEVEL_INDENT: Record<Chapter['level'], string> = { h1: '', h2: 'ml-6', h3: 'ml-10', break: '' };
+const LEVEL_OPTIONS = Object.keys(LEVEL_LABEL) as Chapter['level'][];
 
-const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter, onEditChapterTitle, onClose }) => {
+const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter, onEditChapterTitle, onChangeChapterLevel, onAddChapter, onDeleteChapter, onClose }) => {
     useBodyScrollLock();
     const [dragIndex, setDragIndex] = useState<number | null>(null);
     const [overIndex, setOverIndex] = useState<number | null>(null);
     const [editing, setEditing] = useState<{ index: number; value: string } | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
     // Ler do closure (não dentro do updater de setState: o StrictMode corre-o 2× → toast duplo).
     const drop = useCallback((index: number) => {
@@ -35,10 +41,14 @@ const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter
         setEditing(null);
     }, [editing, onEditChapterTitle]);
 
+    const startEdit = useCallback((index: number, title: string) => {
+        setEditing({ index, value: title.startsWith('Quebra') ? '' : title });
+    }, []);
+
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-6 border-b border-border bg-slate-50/50">
                     <h2 className="text-xl font-bold text-slate-700 flex items-center gap-2">
                         <ListTree size={18} className="text-slate-500" />
@@ -50,14 +60,23 @@ const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter
                             </span>
                         </span>
                     </h2>
-                    <ModalCloseButton onClick={onClose} />
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={onAddChapter}
+                            title="Novo capítulo"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all"
+                        >
+                            <Plus size={18} />
+                        </button>
+                        <ModalCloseButton onClick={onClose} />
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 space-y-1">
                     {chapters.map((chapter, index) => (
                         <div
                             key={index}
-                            draggable={editing?.index !== index}
+                            draggable={editing?.index !== index && confirmDelete !== index}
                             onDragStart={(e) => {
                                 // Fundo sólido de card no ghost de arraste (o snapshot nativo preencheria a branco).
                                 e.currentTarget.style.background = '#e2e8f0';
@@ -70,10 +89,17 @@ const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter
                             onDragEnd={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.boxShadow = ''; setDragIndex(null); setOverIndex(null); }}
                             className={`flex items-center gap-2 rounded-xl px-2 py-2 transition-opacity ${
                                 dragIndex !== null && overIndex === index && dragIndex !== index ? 'border-t-2 border-slate-500' : 'border-t-2 border-transparent'
-                            } ${chapter.level === 'h2' ? 'ml-6' : ''} ${dragIndex === index ? 'opacity-40' : 'hover:bg-slate-50'}`}
+                            } ${LEVEL_INDENT[chapter.level]} ${dragIndex === index ? 'opacity-40' : 'hover:bg-slate-50'}`}
                         >
                             <GripVertical size={15} className="shrink-0 text-slate-300 cursor-grab active:cursor-grabbing" />
-                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400 w-16">{LEVEL_LABEL[chapter.level]}</span>
+                            <select
+                                value={chapter.level}
+                                onChange={e => onChangeChapterLevel(index, e.target.value as Chapter['level'])}
+                                title="Nível"
+                                className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400 bg-transparent border border-transparent hover:border-slate-200 rounded-lg px-1 h-6 w-[72px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300"
+                            >
+                                {LEVEL_OPTIONS.map(l => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}
+                            </select>
                             {editing?.index === index ? (
                                 <input
                                     autoFocus
@@ -85,17 +111,51 @@ const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter
                                 />
                             ) : (
                                 <button
-                                    onClick={() => setEditing({ index, value: chapter.title.startsWith('Quebra') ? '' : chapter.title })}
+                                    onClick={() => startEdit(index, chapter.title)}
                                     className={`flex-1 text-left truncate text-sm ${chapter.level === 'h1' ? 'font-bold text-slate-700' : 'font-medium italic text-slate-600'}`}
                                     title="Renomear"
                                 >
                                     {chapter.title}
                                 </button>
                             )}
-                            {editing?.index === index && (
+                            {editing?.index === index ? (
                                 <button onMouseDown={(e) => e.preventDefault()} onClick={commitEdit} className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-800 text-white">
                                     <Check size={14} />
                                 </button>
+                            ) : confirmDelete === index ? (
+                                <>
+                                    <button
+                                        onClick={() => { onDeleteChapter(index); setConfirmDelete(null); }}
+                                        title="Confirmar eliminação"
+                                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors"
+                                    >
+                                        <Check size={13} />
+                                    </button>
+                                    <button
+                                        onClick={() => setConfirmDelete(null)}
+                                        title="Cancelar"
+                                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-600 transition-colors"
+                                    >
+                                        <X size={13} />
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={() => startEdit(index, chapter.title)}
+                                        title="Editar título"
+                                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-200 hover:text-slate-700 transition-all"
+                                    >
+                                        <Edit2 size={13} />
+                                    </button>
+                                    <button
+                                        onClick={() => setConfirmDelete(index)}
+                                        title="Eliminar capítulo"
+                                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-200 hover:text-rose-600 transition-all"
+                                    >
+                                        <Trash2 size={13} />
+                                    </button>
+                                </>
                             )}
                         </div>
                     ))}

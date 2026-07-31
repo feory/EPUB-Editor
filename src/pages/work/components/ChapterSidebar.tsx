@@ -6,7 +6,7 @@ import { subtreeRange } from '../../../utils/toc';
 
 interface Chapter {
     title: string;
-    level: 'h1' | 'h2' | 'break';
+    level: 'h1' | 'h2' | 'h3' | 'break';
 }
 
 interface ChapterSidebarProps {
@@ -71,7 +71,7 @@ const ChapterItem = React.memo<ChapterItemProps>(({
                 isActive
                     ? 'bg-slate-200 text-slate-800 border-l-4 border-transparent'
                     : 'hover:bg-slate-50 text-text-muted border-l-4 border-transparent'
-            } ${chapter.level === 'h2' ? 'ml-4 scale-90' : ''}`}
+            } ${chapter.level === 'h2' ? 'ml-4 scale-90' : chapter.level === 'h3' ? 'ml-8 scale-90' : ''}`}
         >
             <span className={`flex-1 truncate ${chapter.level === 'h1' ? 'font-bold' : 'font-medium italic'}`}>
                 {chapter.title}

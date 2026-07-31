@@ -53,26 +53,27 @@ export function buildSections(processedContent: string): Section[] {
             return;
         }
 
-        const markerMatch = content.match(/^<p[^>]*class=["'][^"']*chapter-break(?:-h([12]))?[^"']*["'][^>]*>[\s\S]*?<\/p>/i);
+        const markerMatch = content.match(/^<p[^>]*class=["'][^"']*chapter-break(?:-h([123]))?[^"']*["'][^>]*>[\s\S]*?<\/p>/i);
         if (markerMatch) {
             const dt = markerMatch[0].match(/data-title=["']([^"']*)["']/i);
             const dtTitle = decodeHtmlEntities(dt ? dt[1] : '');
             content = content.slice(markerMatch[0].length).trim(); // strip the editor-only marker
-            const level = markerMatch[1]; // '1' | '2' | undefined (titleless break)
+            const level = markerMatch[1]; // '1' | '2' | '3' | undefined (titleless break)
             if (!level) {
                 const isHidden = /\[hidden\]/i.test(dtTitle);
                 const title = dtTitle.replace(/\[hidden\]/gi, '').trim();
                 pushBreakSection(title, `Capítulo ${thisSectionIdx + 1}`, content, thisSectionIdx, isHidden);
                 return;
             }
-            const hMatch = content.match(/^<(h[12])[^>]*>([\s\S]*?)<\/\1>/i);
+            const hMatch = content.match(/^<(h[123])[^>]*>([\s\S]*?)<\/\1>/i);
             const headTitle = hMatch ? decodeHtmlEntities(hMatch[2].replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()) : '';
             const title = dtTitle || headTitle;
             if (level === '1') {
                 sections.push({ title: title || `Capítulo ${thisSectionIdx + 1}`, content: relocateFootnotes(content), level: 'h1', parentIdx: -1, childIndices: [] });
                 currentH1Idx = thisSectionIdx;
             } else {
-                sections.push({ title: title || `Secção ${thisSectionIdx + 1}`, content: relocateFootnotes(content), level: 'h2', parentIdx: currentH1Idx, childIndices: [] });
+                const sectionLevel = level === '3' ? 'h3' : 'h2';
+                sections.push({ title: title || `Secção ${thisSectionIdx + 1}`, content: relocateFootnotes(content), level: sectionLevel, parentIdx: currentH1Idx, childIndices: [] });
                 if (currentH1Idx >= 0) sections[currentH1Idx].childIndices.push(thisSectionIdx);
             }
             return;
