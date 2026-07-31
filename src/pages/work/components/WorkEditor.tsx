@@ -811,8 +811,10 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         base_url: '/tinymce',
                         skin: false,
                         content_css: false,
-                        // preservar o marcador de quebra de página (span vazio com classe/dados)
-                        extended_valid_elements: 'span[class|data-page|id|style]',
+                        // preservar o marcador de quebra de página e o de link do Índice (span vazio
+                        // com classe/dados) — em TinyMCE isto SUBSTITUI, não estende, os atributos
+                        // permitidos no span; sem data-target aqui, o marcador idx-link perde o alvo
+                        extended_valid_elements: 'span[class|data-page|data-target|id|style]',
                         plugins: EDITOR_PLUGINS,
                         // Bubble de formatação na seleção de texto (só selection; sem barras de inserção/imagem).
                         quickbars_insert_toolbar: false,

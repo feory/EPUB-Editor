@@ -5,10 +5,11 @@ import { ebooksApi } from '../api/ebooks-api';
 import { linkFootnotes } from './pdf/post-processor';
 import { cleanHtmlForXhtml } from './epub/html-utils';
 import { removeInaccessibleColors, removeInaccessibleCssColors } from './epub/color-utils';
-import { replaceImageUrlsInContent, addImagesToArchive } from './epub/image-utils';
+import { replaceImageUrlsInContent, stripPlaceholderImages, addImagesToArchive } from './epub/image-utils';
 import { buildSections } from './epub/chapters';
 import { generateNavXhtml, generatePageListXhtml, generateContentOpf, generateTocNcx, type CoverAssets } from './epub/assets';
 import { convertPageBreaks } from './page-list';
+import { buildIdToSectionMap, convertIndexLinks } from './epub/index-links';
 import { prepareTextForXml } from './epub/html-utils';
 
 export type { BookMetadata } from './epub/types';
@@ -186,8 +187,10 @@ export const generateEpubBlob = async (htmlContent: string, metadata: BookMetada
     if (metadata.images && metadata.images.size > 0) {
         processedContent = replaceImageUrlsInContent(processedContent, metadata.images);
     }
+    processedContent = stripPlaceholderImages(processedContent);
 
     const sections = buildSections(processedContent);
+    const idToSection = buildIdToSectionMap(sections);
 
     zip.folder('META-INF')?.file('container.xml', `<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -241,10 +244,10 @@ export const generateEpubBlob = async (htmlContent: string, metadata: BookMetada
         const sectionLinked = linkFootnotes(section.content, `s${i + 1}-`);
 
         const asideBlocks: string[] = [];
-        const mainContent = convertPageBreaks(sectionLinked.replace(
+        const mainContent = convertIndexLinks(convertPageBreaks(sectionLinked.replace(
             /<div class="footnotes-section">([\s\S]*?)<\/div>/g,
             (_, inner) => { asideBlocks.push(inner.trim()); return ''; },
-        ).trim(), i + 1, pageEntries);
+        ).trim(), i + 1, pageEntries), idToSection, i + 1);
         const hasFootnotes = asideBlocks.length > 0 && asideBlocks.some(b => b.trim().length > 0);
 
         oebps.file(`section${i + 1}.xhtml`, `<?xml version="1.0" encoding="UTF-8"?>

@@ -441,6 +441,7 @@ export function WorkPage() {
           onCleanIndex={() => editorRef.current?.cleanIndexSelection()}
           onConversions={() => setShowConversions(true)}
           onUpdatePageList={() => setShowPagelistUpdate(true)}
+          onLinkIndiceEntries={work.handleLinkIndiceEntries}
           onEditToc={() => setShowToc(true)}
           readOnly={work.readOnly}
         />

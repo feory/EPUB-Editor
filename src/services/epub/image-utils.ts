@@ -17,6 +17,14 @@ const createImageFilename = (id: string, blob: Blob, includeFolder = true): stri
     return includeFolder ? `Images/${id}.${ext}` : `${id}.${ext}`;
 };
 
+// Parágrafo cujo único conteúdo é uma imagem nunca resolvida (data-image-id sem blob
+// correspondente — ficheiro apagado/nunca carregado): src fica literalmente "placeholder" mesmo
+// depois de replaceImageUrlsInContent. Só sai no export/preview (o editor mantém-na visível,
+// para o autor saber que há uma imagem por resolver).
+const PLACEHOLDER_IMAGE_P = /<p\b[^>]*>\s*<img\b[^>]*\bsrc=["']placeholder["'][^>]*\/?>\s*<\/p>/gi;
+
+export const stripPlaceholderImages = (content: string): string => content.replace(PLACEHOLDER_IMAGE_P, '');
+
 export const replaceImageUrlsInContent = (content: string, images: Map<string, Blob>): string => {
     if (images.size === 0) return content;
     // Pre-compute filenames once; then two passes total (not 2 new RegExp per image)

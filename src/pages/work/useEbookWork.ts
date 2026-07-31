@@ -10,6 +10,7 @@ import { compressHtml, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml, applyDropCapToFirstParagraph } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { moveChapters, renameChapterPart, deleteChapterPart, changeChapterLevel } from '../../utils/toc';
+import { linkIndiceEntries } from '../../utils/indice-links';
 import type { DocxStyleMapping } from '../../services/document-importer';
 import { insertPageBreaks } from '../../services/page-list';
 import type { PageAnchor } from '../../services/page-list';
@@ -316,6 +317,20 @@ export function useEbookWork(isbn: string | undefined) {
         showNotification('success', `${applied} ${applied === 1 ? 'capitular aplicada' : 'capitulares aplicadas'}${already > 0 ? `, ${already} já ${already === 1 ? 'tinha' : 'tinham'}` : ''}.`);
     }, [chapterSync, commitHtml, showNotification]);
 
+    // --- Ligar entradas do Índice do livro aos capítulos correspondentes (livro inteiro) ---
+    const handleLinkIndiceEntries = useCallback(() => {
+        const syncedHtml = chapterSync.getSyncedHtmlContent();
+        const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
+        const { parts: updatedParts, linked, anchored } = linkIndiceEntries(parts);
+        const updatedHtml = updatedParts.join('');
+        if (updatedHtml === syncedHtml) {
+            showNotification('info', 'Nenhum Índice encontrado, ou nenhuma entrada correspondeu a um capítulo.');
+            return;
+        }
+        commitHtml(updatedHtml);
+        showNotification('success', `${linked} ${linked === 1 ? 'entrada ligada' : 'entradas ligadas'} a ${anchored} ${anchored === 1 ? 'capítulo' : 'capítulos'}.`);
+    }, [chapterSync, commitHtml, showNotification]);
+
     // PDF carregado DEPOIS do import (o zip IDML não tinha PDF, ou o import é antigo) — gera a
     // page-list agora, sobre o livro já importado. anchors já vêm calculados de PrintPdfSidebar
     // (que já corre extractPdfPageAnchors para o mapa de sync scroll↔PDF — evita fazer o parsing
@@ -402,6 +417,7 @@ export function useEbookWork(isbn: string | undefined) {
         handleAddChapter,
         handleChangeChapterLevel,
         handleApplyDropCaps,
+        handleLinkIndiceEntries,
         handleGeneratePageList,
 
         handleImportPdf: useCallback(
