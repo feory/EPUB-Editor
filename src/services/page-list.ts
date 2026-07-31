@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import { fillFolioGaps } from './page-list-folio';
 
 // Worker partilhado com o pdf-service (já configurado lá); reconfigurar é idempotente.
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -83,9 +84,14 @@ function monotonicScore(folios: (number | null)[]): number {
 
 /**
  * Extrai, por página do PDF de impressão, o número impresso (folio) e um texto-âncora
- * (início do corpo). Cada página = cabeçalho corrente (linha de topo, saltada) + folio
- * colado ao 1º texto do corpo (ex. "41na própria…"). Páginas sem folio numérico
- * (front-matter romano, aberturas de capítulo) são saltadas.
+ * (início do corpo). Cada página COM folio impresso = cabeçalho corrente (linha de topo,
+ * saltada) + folio colado ao 1º texto do corpo (ex. "41na própria…"). Páginas de front-matter
+ * romano (antes de a numeração começar) continuam sem folio — não há como saber o número.
+ * Aberturas de capítulo e outras páginas de título tipicamente OMITEM o folio impresso por
+ * convenção tipográfica mas contam na numeração — `fillFolioGaps` interpola esse nº quando o
+ * salto até à próxima página COM folio bate certo; para essas páginas não se salta a 1ª linha
+ * (não há cabeçalho corrente para saltar — a própria convenção que omite o folio também omite
+ * o cabeçalho), a âncora é a 1ª linha com texto suficiente, começando já na 1ª.
  *
  * O folio pode estar no RODAPÉ (comum) ou fundido na linha de CABEÇALHO no topo da página
  * (alguns livros) — a zona é auto-detetada por livro (não por página) comparando quantos
@@ -103,12 +109,14 @@ export async function extractPdfPageAnchors(data: ArrayBuffer): Promise<PageAnch
     }
     const bottomFolios = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'bottom'));
     const topFolios = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'top'));
-    const folios = monotonicScore(topFolios) > monotonicScore(bottomFolios) ? topFolios : bottomFolios;
+    const rawFolios = monotonicScore(topFolios) > monotonicScore(bottomFolios) ? topFolios : bottomFolios;
+    const folios = fillFolioGaps(rawFolios);
 
     const anchors: PageAnchor[] = [];
     for (let idx = 0; idx < pages.length; idx++) {
         const folio = folios[idx];
-        if (folio === null) continue; // sem folio (front-matter, abertura de capítulo) → saltar
+        if (folio === null) continue; // sem folio, nem interpolável (front-matter) → saltar
+        const hasPrintedFolio = rawFolios[idx] !== null;
         const lines = new Map<number, { x: number; str: string }[]>();
         for (const it of pages[idx].items) {
             if (!('str' in it) || !it.str) continue;
@@ -118,7 +126,7 @@ export async function extractPdfPageAnchors(data: ArrayBuffer): Promise<PageAnch
         // âncora = 1ª linha de corpo APÓS o cabeçalho corrente (linha de topo); ordenar topo→baixo
         const ordered = [...lines.entries()].sort((a, b) => b[0] - a[0])
             .map(([, parts]) => parts.sort((a, b) => a.x - b.x).map(p => p.str).join(''));
-        for (const line of ordered.slice(1)) {
+        for (const line of hasPrintedFolio ? ordered.slice(1) : ordered) {
             const anchor = normalize(line).slice(0, ANCHOR_LEN);
             if (anchor.length < MIN_ANCHOR) continue;
             anchors.push({ page: folio, pdfPageIndex: idx + 1, anchor });
@@ -305,11 +313,18 @@ export function stripPageBreaks(html: string): string {
 
 /**
  * Insere marcadores de quebra de página no HTML, alinhando cada âncora do PDF ao texto do
- * editor. Cada âncora é localizada de forma INDEPENDENTE (1ª ocorrência); depois mantém-se só
- * a maior subsequência de posições CRESCENTES (LIS) — descarta outliers (ex. páginas de
- * front-matter cujo texto aparece noutro sítio) que de outra forma envenenariam um cursor
- * monotónico simples. Marcador = <span class="pagebreak" data-page="N"></span> (convertido para
- * epub:type="pagebreak" no export). Páginas sem match (ou fora da sequência) são saltadas.
+ * editor. Cada âncora é localizada a partir de um CURSOR que só avança (âncoras chegam em ordem
+ * de página do PDF, logo em ordem esperada no corpo) — não da 1ª ocorrência no documento
+ * inteiro: um título de capítulo/secção usado como âncora aparece tipicamente TAMBÉM no Índice
+ * do próprio livro, bem antes da abertura real; procurar sempre desde o início encontrava
+ * sistematicamente essa ocorrência do Índice em vez da real, e o LIS (ver abaixo) descartava-a
+ * por ficar fora de ordem com as âncoras vizinhas — perdendo a página toda mesmo com a âncora
+ * a existir corretamente no corpo, só que mais à frente. Sem match a partir do cursor, cai para
+ * uma procura desde o início (ex. capítulo fora de ordem por uma edição) — o LIS a seguir
+ * continua a servir de rede de segurança, mantendo só a maior subsequência de posições
+ * CRESCENTES, para não deixar esse fallback (ou outro outlier genuíno) envenenar a sequência.
+ * Marcador = <span class="pagebreak" data-page="N"></span> (convertido para epub:type="pagebreak"
+ * no export). Páginas sem match (ou fora da sequência) são saltadas.
  * Idempotente: remove marcadores pré-existentes antes de inserir (reexecutar sobre um livro já
  * marcado, ex. page-list gerada de novo a partir de um PDF carregado mais tarde, não duplica).
  */
@@ -333,11 +348,16 @@ export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: s
         }
     }
 
-    // posição independente de cada âncora (1ª ocorrência); depois LIS para manter só as crescentes
+    // cursor só avança: acha a ocorrência a partir de onde a âncora anterior ficou, não a 1ª do
+    // documento (evita colidir com o Índice); sem match à frente, cai para a 1ª ocorrência global.
+    let cursor = 0;
     const hits: { pos: number; page: number }[] = [];
     for (const { page, anchor } of anchors) {
-        const pos = flat.indexOf(anchor);
-        if (pos >= 0) hits.push({ pos, page });
+        let pos = flat.indexOf(anchor, cursor);
+        if (pos < 0) pos = flat.indexOf(anchor);
+        if (pos < 0) continue;
+        hits.push({ pos, page });
+        cursor = Math.max(cursor, pos);
     }
     const keep = longestIncreasing(hits.map(h => h.pos)).map(i => hits[i]);
     const inserted = keep.length;

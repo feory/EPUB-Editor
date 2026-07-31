@@ -110,15 +110,13 @@ export function cleanHeadings(html: string): string {
 
 // Keep chapter markers in sync WITHOUT creating split boundaries (that is
 // insertChapterMarkers' job, run only at import/migration). Runs on every sync:
-//  - a stray titleless break heading (h*.chapter-break, e.g. from the old toolbar) → break marker;
-//  - refresh each existing -h1/-h2 marker's data-title from the heading right after it,
-//    so editing a heading in the body updates the sidebar title.
+//  - a stray titleless break heading (h*.chapter-break, e.g. from the old toolbar) → break marker.
+// Does NOT refresh -h1/-h2/-h3 markers' data-title from the heading text: editing a heading
+// in the body must never change the Estrutura/TOC entry — that's only editable via the
+// panel's own rename action (renameChapterPart).
 function refreshChapterMarkers(html: string): string {
-    let out = html.replace(/<(h[12])[^>]*class=["'][^"']*chapter-break[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi,
+    return html.replace(/<(h[12])[^>]*class=["'][^"']*chapter-break[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi,
         (_m, _tag, inner) => `<p class="chapter-break" data-title="${escapeAttr(flattenHeadingText(inner))}"></p>`);
-    out = out.replace(/(<p[^>]*class=["'][^"']*chapter-break-h[123][^"']*["'][^>]*data-title=["'])[^"']*(["'][^>]*>\s*<\/p>\s*<(h[123])[^>]*>)([\s\S]*?)(<\/\3>)/gi,
-        (_m, pre, mid, _tag, inner, close) => `${pre}${escapeAttr(flattenHeadingText(inner))}${mid}${inner}${close}`);
-    return out;
 }
 
 // Pre-compiled regex patterns (compiled once, reused many times)

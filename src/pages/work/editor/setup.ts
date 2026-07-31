@@ -348,11 +348,12 @@ export function createEditorSetup(deps: SetupDeps) {
             const prevIsMarker = !!prev && prev.nodeName === 'P' && /\bchapter-break-h[12]\b/.test(prev.className);
             if (/^H[12]$/.test(block.nodeName)) {
                 const level = block.nodeName.toLowerCase();
-                const title = (block.textContent || '').replace(/\s+/g, ' ').trim();
                 if (prevIsMarker) {
+                    // Só sincroniza o nível (classe) — o título é só editável pelo botão
+                    // de edição da Estrutura/TOC, nunca ao escrever no heading do editor.
                     editor.dom.setAttrib(prev, 'class', `chapter-break-${level}`);
-                    editor.dom.setAttrib(prev, 'data-title', title);
                 } else {
+                    const title = (block.textContent || '').replace(/\s+/g, ' ').trim();
                     const marker = editor.dom.create('p', { class: `chapter-break-${level}`, 'data-title': title });
                     block.parentNode!.insertBefore(marker, block);
                 }
@@ -406,17 +407,6 @@ export function createEditorSetup(deps: SetupDeps) {
                 else editor.formatter.apply(value); // p-quote, p-small, footnote
                 editor.focus();
             },
-        });
-        // Editar o texto de um h1/h2 atualiza ao vivo o data-title do marcador
-        // que o antecede (o rótulo "QUEBRA DE CAPÍTULO — …"). Só ATUALIZA um
-        // marcador existente — nunca insere/remove — logo sem clobber.
-        editor.on('input', () => {
-            const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
-            if (!block || !/^H[12]$/.test(block.nodeName)) return;
-            const prev = block.previousElementSibling as HTMLElement | null;
-            if (prev && prev.nodeName === 'P' && /\bchapter-break-h[12]\b/.test(prev.className)) {
-                prev.setAttribute('data-title', (block.textContent || '').replace(/\s+/g, ' ').trim());
-            }
         });
 
         // Barra de estado: mostrar o CSS do bloco selecionado (seletor de classes

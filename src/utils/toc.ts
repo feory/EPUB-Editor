@@ -44,18 +44,17 @@ export function deleteChapterPart(parts: string[], levels: Level[], index: numbe
 }
 
 /**
- * Renomeia uma parte de capítulo: atualiza o `data-title` do marcador e, se existir, o texto
- * do heading (h1/h2) seguinte. Título vazio (break sem título) só limpa o data-title.
+ * Renomeia uma parte de capítulo: só atualiza o `data-title` do marcador (a entrada da
+ * Estrutura/TOC). Nunca toca no heading (h1/h2/h3) do corpo — o botão de editar muda o
+ * capítulo, não o título escrito no editor; o inverso (editar o heading) também não
+ * mexe no data-title, ver refreshChapterMarkers em html-cleaner.ts.
  */
 export function renameChapterPart(part: string, newTitle: string): string {
     const safe = escapeHtml(newTitle.trim());
-    let out = part.replace(
+    return part.replace(
         /(class=["'][^"']*chapter-break[^"']*["'][^>]*data-title=["'])[^"']*(["'])/i,
         `$1${safe}$2`,
     );
-    // Texto do heading a seguir ao marcador (mantém a tag/atributos, substitui o interior).
-    out = out.replace(/(<(h[1-6])[^>]*>)[\s\S]*?(<\/\2>)/i, `$1${safe}$3`);
-    return out;
 }
 
 /**

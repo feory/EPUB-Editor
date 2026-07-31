@@ -5,6 +5,8 @@ import { Loader2 } from 'lucide-react';
 import { MarginPreview } from '../components/MarginPreview';
 import { ImportOptionsModal } from './work/modals/ImportOptionsModal';
 import { ConversionsModal } from './work/modals/ConversionsModal';
+import { PagelistUpdateModal } from './work/modals/PagelistUpdateModal';
+import type { PageAnchor } from '../services/page-list';
 import { EpubMappingModal } from './EpubMappingModal';
 import { scanEpubClasses } from '../services/epub-importer';
 import type { EpubClassInfo } from '../services/epub-importer';
@@ -129,6 +131,8 @@ export function WorkPage() {
   const [editorFont, setEditorFont] = useState<string>(getStoredFont);
   const [editorFontSize, setEditorFontSize] = useState<string>(getStoredFontSize);
   const [showConversions, setShowConversions] = useState(false);
+  const [showPagelistUpdate, setShowPagelistUpdate] = useState(false);
+  const [pdfVersion, setPdfVersion] = useState(0);
   const [showToc, setShowToc] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [grammarFilter, setGrammarFilter] = useState<'all' | 'spelling' | 'grammar'>('all');
@@ -305,6 +309,13 @@ export function WorkPage() {
     work.setActiveChapterIndex(chapterIndex);
   }, [work]);
 
+  // Ferramenta "Atualização Pagelist": PDF trocado com o painel PDF de Impressão eventualmente
+  // aberto — o painel só relê o ficheiro no mount; bump de pdfVersion força-o a remontar.
+  const handlePagelistUpdated = useCallback((anchors: PageAnchor[]) => {
+    work.handleGeneratePageList(anchors);
+    setPdfVersion(v => v + 1);
+  }, [work]);
+
   // ponytail: timeout fixo (depois do reset de scroll/cursor do próprio WorkEditor, que já usa
   // 100ms) em vez de um sinal de "capítulo montado" — se um capítulo muito grande demorar mais
   // que isto a renderizar no TinyMCE, o scroll falha silenciosamente (scrollToPage devolve false).
@@ -429,6 +440,7 @@ export function WorkPage() {
           onShowFonts={() => setShowFonts(true)}
           onCleanIndex={() => editorRef.current?.cleanIndexSelection()}
           onConversions={() => setShowConversions(true)}
+          onUpdatePageList={() => setShowPagelistUpdate(true)}
           onEditToc={() => setShowToc(true)}
           readOnly={work.readOnly}
         />
@@ -626,6 +638,7 @@ export function WorkPage() {
 
       {sidebars.showPrintPdfSidebar && (
         <PrintPdfSidebar
+          key={pdfVersion}
           isbn={isbn!}
           onClose={() => sidebars.setShowPrintPdfSidebar(false)}
           syncFolio={editorVisiblePage}
@@ -665,6 +678,14 @@ export function WorkPage() {
           onApply={(options) => editorRef.current?.applyConversions(options)}
           onApplyDropCaps={work.handleApplyDropCaps}
           onClose={() => setShowConversions(false)}
+        />
+      )}
+
+      {showPagelistUpdate && (
+        <PagelistUpdateModal
+          isbn={isbn!}
+          onGenerate={handlePagelistUpdated}
+          onClose={() => setShowPagelistUpdate(false)}
         />
       )}
 

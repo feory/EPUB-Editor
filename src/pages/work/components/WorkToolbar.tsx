@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, FileUp, Save, History, Download, Loader2, Eye, AlertTriangle, Keyboard, Hash, ChevronDown, ChevronRight, Palette, Shield, Accessibility, GitCompare, ListX, Wand2, Link2, Wrench, Type, ListTree
+  ArrowLeft, FileUp, Save, History, Download, Loader2, Eye, AlertTriangle, Keyboard, Hash, ChevronDown, ChevronRight, Palette, Shield, Accessibility, GitCompare, ListX, Wand2, Link2, Wrench, Type, ListTree, RefreshCw
 } from 'lucide-react';
 
 interface WorkToolbarProps {
@@ -27,12 +27,13 @@ interface WorkToolbarProps {
   onCleanIndex: () => void;
   onConversions: () => void;
   onEditToc: () => void;
+  onUpdatePageList: () => void;
   readOnly?: boolean;
 }
 
 const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
   isLoading, htmlContent, lastSaved,
-  onSave, onFetchHistory, onValidate, onValidateEpub, onValidateAccessibility, onValidateLinks, onPreview, onExport, onFileSelect, onToggleGrammar, onToggleImageGallery, onOpenCompare, onShowShortcuts, onShowStats, onShowStyleEditor, onShowFonts, onCleanIndex, onConversions, onEditToc,
+  onSave, onFetchHistory, onValidate, onValidateEpub, onValidateAccessibility, onValidateLinks, onPreview, onExport, onFileSelect, onToggleGrammar, onToggleImageGallery, onOpenCompare, onShowShortcuts, onShowStats, onShowStyleEditor, onShowFonts, onCleanIndex, onConversions, onEditToc, onUpdatePageList,
   readOnly
 }) => {
   const navigate = useNavigate();
@@ -172,6 +173,13 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
                     >
                       <Hash size={16} className="text-slate-400" />
                       <span>Estatísticas</span>
+                    </button>
+                    <button
+                      onClick={() => { onUpdatePageList(); setActiveMenu(null); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
+                    >
+                      <RefreshCw size={16} className="text-slate-400" />
+                      <span>Atualização Pagelist</span>
                     </button>
                   </div>
                 </div>

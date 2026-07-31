@@ -24,9 +24,9 @@ test('moveChapters: mover folha (h2) sozinha', () => {
     expect(moveChapters(P, L, 2, 0)).toBe('b1ABb2C');
 });
 
-test('renameChapterPart: h1 atualiza marcador + heading', () => {
+test('renameChapterPart: h1 só atualiza o marcador, nunca o heading do editor', () => {
     expect(renameChapterPart('<p class="chapter-break-h1" data-title="Old"></p><h1>Old <em>x</em></h1>', 'Novo'))
-        .toBe('<p class="chapter-break-h1" data-title="Novo"></p><h1>Novo</h1>');
+        .toBe('<p class="chapter-break-h1" data-title="Novo"></p><h1>Old <em>x</em></h1>');
 });
 
 test('renameChapterPart: break sem heading só mexe no data-title', () => {
