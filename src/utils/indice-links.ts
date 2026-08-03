@@ -23,6 +23,14 @@ function normalizeText(s: string): string {
 
 const MIN_TITLE = 3; // mesma guarda de extractChapterAnchors (page-list.ts)
 
+// Linha do Índice impresso ("4. A Lua 35") tem o nº de página colado ao fim, sem separador —
+// sobrevive ao normalizeText (mantém dígitos) e quebra o match de substring contra o título do
+// capítulo; sem uso depois de ligado, por isso sai também do texto visível. Tira só o último
+// grupo de dígitos precedido de espaço (fim de string, sem tags a seguir).
+function stripTrailingPageNum(s: string): string {
+    return s.replace(/\s+\d+\s*$/, '');
+}
+
 // Casa nos dois sentidos: uma entrada do Índice pode ser mais longa que o título (prefixo
 // "Capítulo N." + pontos de preenchimento + nº de página) OU mais curta (livros que partem um
 // título composto em duas linhas do Índice, ex. "PARTE III" / "ECOLOGIAS DE SABERES JURÍDICOS"
@@ -103,7 +111,8 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
     let currentChapter: (typeof targets)[number] | null = null;
 
     const newBody = body.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, (m, attrs, inner) => {
-        const lineNorm = normalizeText(flattenHeadingText(inner));
+        const strippedInner = stripTrailingPageNum(inner); // nº de página impresso, não faz falta no Índice ligado
+        const lineNorm = normalizeText(flattenHeadingText(strippedInner));
         if (lineNorm.length < MIN_TITLE) return m;
 
         // 1. entrada de topo (capítulo/parte) — muda o "capítulo corrente" para as sub-entradas seguintes
@@ -112,7 +121,7 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
             currentChapter = topTarget;
             anchoredChapters.add(topTarget.i);
             linked++;
-            return `<p${attrs}><span class="idx-link" data-target="idx-anchor-${topTarget.i}">${inner}</span></p>`;
+            return `<p${attrs}><span class="idx-link" data-target="idx-anchor-${topTarget.i}">${strippedInner}</span></p>`;
         }
 
         // 2. sub-entrada — só procura DENTRO do capítulo corrente (mesmo texto repete-se entre capítulos)
@@ -128,7 +137,7 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
                 list.push({ pos: match.end, id });
                 subAnchorsByChapter.set(currentChapter.i, list);
                 linked++;
-                return `<p${attrs}><span class="idx-link" data-target="${id}">${inner}</span></p>`;
+                return `<p${attrs}><span class="idx-link" data-target="${id}">${strippedInner}</span></p>`;
             }
         }
         return m;
