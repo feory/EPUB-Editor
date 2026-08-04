@@ -27,6 +27,36 @@ export interface ShareUser {
     email: string;
 }
 
+export interface DiskUsageBook {
+    isbn: string;
+    title: string | null;
+    author: string | null;
+    status: 'active' | 'trashed' | 'orphaned';
+    deletedAt: string | null;
+    epub: number;
+    history: number;
+    images: number;
+    thumbnails: number;
+    aceReports: number;
+    misc: number;
+    total: number;
+}
+
+export interface DiskUsageBucket {
+    count: number;
+    totalBytes: number;
+    categoryTotals?: Record<'epub' | 'history' | 'images' | 'thumbnails' | 'aceReports' | 'misc', number>;
+    books: DiskUsageBook[];
+}
+
+export interface DiskUsageResponse {
+    generatedAt: string;
+    active: DiskUsageBucket;
+    trash: DiskUsageBucket;
+    orphaned: DiskUsageBucket;
+    grandTotalBytes: number;
+}
+
 export interface HistoryFile {
     filename: string;
     timestamp: string;
@@ -178,6 +208,7 @@ export const ebooksApi = {
 
     // Maintenance
     cleanupHistory: () => apiClient.post<{ deletedCount: number, sizeSavedMB: string }>('/maintenance/cleanup-history'),
+    getDiskUsage: () => apiClient.get<DiskUsageResponse>('/maintenance/disk-usage'),
 
     // Presence / edit-lock
     heartbeat: (isbn: string) => apiClient.post<PresenceStatus>(`/ebooks/${isbn}/presence`),

@@ -184,12 +184,6 @@ export function HomePage() {
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', 'Reciclagem esvaziada.', 3000); },
         onError: () => { showNotification('error', 'Erro ao esvaziar a reciclagem.'); },
     });
-    const cleanupMutation = useMutation({
-        mutationFn: () => ebooksApi.cleanupHistory(),
-        onSuccess: (res) => { showNotification('success', `Limpeza concluída! Removidos ${res.data.deletedCount} ficheiros (${res.data.sizeSavedMB} MB).`); },
-        onError: () => { showNotification('error', 'Erro ao realizar a limpeza do histórico.'); },
-    });
-
     const toggleStatus = (e: React.MouseEvent, ebook: Ebook) => {
         e.stopPropagation();
         const newStatus = ebook.status === 'in_progress' ? 'completed' : 'in_progress';
@@ -341,9 +335,8 @@ export function HomePage() {
                                 viewMode={viewMode}
                                 onViewModeChange={setViewMode}
                                 onLogout={handleLogout}
-                                onCleanupHistory={() => cleanupMutation.mutate()}
-                                cleanupPending={cleanupMutation.isPending}
                                 onNavigateAdmin={() => navigate('/admin')}
+                                onNavigatePanel={() => navigate('/painel')}
                             />
                         )}
                     </div>

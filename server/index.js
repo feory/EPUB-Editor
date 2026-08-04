@@ -120,6 +120,7 @@ export const server = Bun.serve({
       // Maintenance
       if (path === "/api/maintenance/cleanup-history" && method === "POST") return maintenance.cleanupHistory(user);
       if (path === "/api/maintenance/migrate-epubs"   && method === "POST") return maintenance.migrateEpubs(user);
+      if (path === "/api/maintenance/disk-usage"      && method === "GET")  return maintenance.diskUsage(user);
       if (path === "/api/languagetool/check"          && method === "POST") return maintenance.languageTool(req);
 
       // Per-ebook routes
