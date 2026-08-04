@@ -515,6 +515,8 @@ function isHeuristicTitle(psr: Element): boolean {
     return false;
 }
 
+const INDEX_TITLE_RE = /^índice(\s+remissivo)?$/i;
+
 function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMapping): string {
     const doc = new DOMParser().parseFromString(xml, 'application/xml');
     // Atenção: o root é <idPkg:Story> (localName também "Story"); querySelector('Story')
@@ -531,7 +533,7 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
     const firstText = (Array.from(story.children).find(c =>
         c.tagName === 'ParagraphStyleRange' && (c.textContent || '').replace(/\s+/g, ' ').trim()
     )?.textContent || '').replace(/\s+/g, ' ').trim();
-    let inIndexChapter = /^índice(\s+remissivo)?$/i.test(firstText);
+    let inIndexChapter = INDEX_TITLE_RE.test(firstText);
     // Estilo do último heading emitido, para fundir headings CONSECUTIVOS do mesmo estilo
     // (nº de capítulo + subtítulo(s) em parágrafos próprios, todos com o mesmo estilo de
     // título) num só <hN> — o InDesign separa-os, mas visualmente formam um título único.
@@ -565,10 +567,14 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
         // a capítulo próprio. Dentro do índice, só a abertura de capítulo real (drop-cap) escapa.
         const suppressHeading = inIndexChapter && /^h[1-6]$/.test(rawMap.tag) && rawMap.cls !== 'drop-cap';
 
-        // Fronteira do capítulo "Índice": abre no título heurístico; fecha só na abertura de
+        // Fronteira do capítulo "Índice": abre no título heurístico, mas só quando o texto é
+        // mesmo "Índice"/"Índice remissivo" — heurTitle sozinho apanha QUALQUER título
+        // disfarçado (ex. "Nota do Editor", título de capítulo sem estilo h1 mapeado); sem este
+        // filtro, um livro sem CAPITULAR (nunca fecha a suspensão) perdia a classe mapeada do
+        // corpo INTEIRO a partir do 1º título heurístico de cada story. Fecha só na abertura de
         // capítulo real (drop-cap) — headings genéricos dentro do índice já são suprimidos
         // acima, não fecham (senão a 1ª entrada da lista reabria a suspensão para as seguintes).
-        if (heurTitle) inIndexChapter = true;
+        if (heurTitle && INDEX_TITLE_RE.test((segs.map(s => s.text).join(' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()))) inIndexChapter = true;
         else if (rawMap.cls === 'drop-cap') inIndexChapter = false;
 
         // Corpo DENTRO do índice não herda o estilo de import mapeado → auto (corpo simples + LeftIndent).
@@ -578,7 +584,11 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
         const mapped = !indexBody && !suppressHeading && !!(mapping[sn] && mapping[sn].target !== 'auto');
         const { tag, cls } = heurTitle ? { tag: 'h1' as const, cls: '' } : map;
         const spacing = tag === 'p' ? spacingClasses(psr, fullPS) : '';
-        const baseClasses = [cls, spacing].filter(Boolean);
+        // Alinhamento centrado é um OVERRIDE inline do parágrafo (desvio do default do estilo,
+        // ex. nomes de personagem em peças de teatro, mesmo estilo "TXT" do corpo) — sinal
+        // fiável independente do estilo nomeado/mapeamento do utilizador.
+        const inlineCenter = tag === 'p' && !(cls || '').includes('p-center') && psr.getAttribute('Justification') === 'CenterAlign';
+        const baseClasses = [cls, spacing, inlineCenter ? 'p-center' : ''].filter(Boolean);
         const styleAttr = (!cls && tag === 'p' && !mapped) ? indentStyle(psr, fullPS) : '';
 
         if (/^h[1-6]$/.test(tag)) {
