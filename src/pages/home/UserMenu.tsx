@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LogOut, Shield, Table2, LayoutGrid, LayoutDashboard } from 'lucide-react';
+import { LogOut, Shield, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2 } from 'lucide-react';
 import type { AuthUser } from '../../api/auth-api';
 
 type ViewMode = 'table' | 'grid';
@@ -11,6 +11,8 @@ interface UserMenuProps {
     onLogout: () => void;
     onNavigateAdmin: () => void;
     onNavigatePanel: () => void;
+    onImportEpub: () => void;
+    importPending: boolean;
 }
 
 function getInitials(email: string): string {
@@ -26,7 +28,7 @@ const VIEW_MODES: { mode: ViewMode; icon: React.ReactNode; label: string }[] = [
 ];
 
 export const UserMenu: React.FC<UserMenuProps> = ({
-    user, viewMode, onViewModeChange, onLogout, onNavigateAdmin, onNavigatePanel,
+    user, viewMode, onViewModeChange, onLogout, onNavigateAdmin, onNavigatePanel, onImportEpub, importPending,
 }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -102,6 +104,14 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                             >
                                 <LayoutDashboard size={15} />
                                 <span>Painel</span>
+                            </button>
+                            <button
+                                onClick={() => { setOpen(false); onImportEpub(); }}
+                                disabled={importPending}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:bg-slate-50 hover:text-text-main transition-colors disabled:opacity-50"
+                            >
+                                {importPending ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                                <span>{importPending ? 'A importar…' : 'Importação EPUB 2.0'}</span>
                             </button>
                         </div>
                     )}

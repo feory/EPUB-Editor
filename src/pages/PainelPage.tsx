@@ -5,6 +5,7 @@ import { ChevronLeft, Trash2, Loader2, AlertTriangle, Search } from 'lucide-reac
 import { ebooksApi, type DiskUsageBook } from '../api/ebooks-api';
 import { useNotification } from '../context/NotificationContext';
 import { Pagination } from '../components/Pagination';
+import { formatFileSize } from '../utils/format';
 
 const PAGE_SIZE = 10;
 
@@ -16,13 +17,6 @@ const CATEGORY_COLORS: Record<string, string> = {
     epub: 'bg-slate-500', history: 'bg-amber-500', images: 'bg-sky-500',
     thumbnails: 'bg-teal-500', aceReports: 'bg-rose-500', misc: 'bg-slate-300',
 };
-
-function formatBytes(bytes: number): string {
-    if (bytes <= 0) return '0 MB';
-    const mb = bytes / 1024 / 1024;
-    if (mb < 1024) return `${mb.toFixed(1)} MB`;
-    return `${(mb / 1024).toFixed(2)} GB`;
-}
 
 function StatTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
     return (
@@ -44,7 +38,7 @@ function CategoryBreakdown({ totals }: { totals: Record<string, number> }) {
                     <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
                         <div className={`h-full ${CATEGORY_COLORS[key] ?? 'bg-slate-400'}`} style={{ width: `${(bytes / grand) * 100}%` }} />
                     </div>
-                    <span className="w-16 shrink-0 text-xs text-text-muted text-right">{formatBytes(bytes)}</span>
+                    <span className="w-16 shrink-0 text-xs text-text-muted text-right">{formatFileSize(bytes)}</span>
                 </div>
             ))}
         </div>
@@ -67,7 +61,7 @@ function BookTable({ books, emptyLabel }: { books: DiskUsageBook[]; emptyLabel: 
                             <p className="text-sm font-medium text-text-color truncate">{b.title ?? b.isbn}</p>
                             <p className="text-xs text-text-muted">{b.isbn}{b.author && ` · ${b.author}`}</p>
                         </div>
-                        <span className="shrink-0 text-sm font-semibold text-slate-700">{formatBytes(b.total)}</span>
+                        <span className="shrink-0 text-sm font-semibold text-slate-700">{formatFileSize(b.total)}</span>
                     </div>
                 ))}
             </div>
@@ -153,10 +147,10 @@ export function PainelPage() {
                         {/* Stat tiles */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <StatTile label="Livros ativos" value={String(data.active.count)} />
-                            <StatTile label="Espaço total (ativos)" value={formatBytes(data.active.totalBytes)} />
-                            <StatTile label="Espaço na Reciclagem" value={formatBytes(data.trash.totalBytes)} accent="text-rose-600" />
+                            <StatTile label="Espaço total (ativos)" value={formatFileSize(data.active.totalBytes)} />
+                            <StatTile label="Espaço na Reciclagem" value={formatFileSize(data.trash.totalBytes)} accent="text-rose-600" />
                             <StatTile label="Relatórios de acessibilidade"
-                                value={formatBytes((data.active.categoryTotals?.aceReports ?? 0) + (data.trash.categoryTotals?.aceReports ?? 0))}
+                                value={formatFileSize((data.active.categoryTotals?.aceReports ?? 0) + (data.trash.categoryTotals?.aceReports ?? 0))}
                                 accent="text-amber-600" />
                         </div>
                         <p className="text-xs text-text-muted -mt-6">
@@ -224,14 +218,14 @@ export function PainelPage() {
                                 <div className="px-6 py-4 border-b border-amber-200 flex items-center gap-2">
                                     <AlertTriangle size={16} className="text-amber-600" />
                                     <h2 className="text-base font-semibold text-amber-800">
-                                        Pastas sem registo ({data.orphaned.count}, {formatBytes(data.orphaned.totalBytes)})
+                                        Pastas sem registo ({data.orphaned.count}, {formatFileSize(data.orphaned.totalBytes)})
                                     </h2>
                                 </div>
                                 <div className="divide-y divide-amber-100">
                                     {data.orphaned.books.map(b => (
                                         <div key={b.isbn} className="px-6 py-3 flex items-center justify-between gap-4 text-sm text-amber-800">
                                             <span>{b.isbn}</span>
-                                            <span className="font-semibold">{formatBytes(b.total)}</span>
+                                            <span className="font-semibold">{formatFileSize(b.total)}</span>
                                         </div>
                                     ))}
                                 </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Loader2, Search, X, Trash2, Upload } from 'lucide-react';
+import { Plus, Loader2, Search, X, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ebooksApi } from '../api/ebooks-api';
 import type { Ebook } from '../api/ebooks-api';
@@ -314,15 +314,6 @@ export function HomePage() {
                     </div>
                     <div className="flex items-center gap-2">
                         <input type="file" accept=".epub" hidden ref={epubInputRef} onChange={handleImportEpub} />
-                        <button
-                            disabled={importEpubMutation.isPending || scanningEpub}
-                            className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                            onClick={() => epubInputRef.current?.click()}
-                            title="Importar EPUB (cria ebook + metadados)"
-                        >
-                            {importEpubMutation.isPending || scanningEpub ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Upload className="w-4.5 h-4.5" />}
-                            <span>{importEpubMutation.isPending || scanningEpub ? 'A importar…' : 'Importação'}</span>
-                        </button>
 
                         <button className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm" onClick={() => setIsModalOpen(true)}>
                             <Plus className="w-4.5 h-4.5" />
@@ -337,6 +328,8 @@ export function HomePage() {
                                 onLogout={handleLogout}
                                 onNavigateAdmin={() => navigate('/admin')}
                                 onNavigatePanel={() => navigate('/painel')}
+                                onImportEpub={() => epubInputRef.current?.click()}
+                                importPending={importEpubMutation.isPending || scanningEpub}
                             />
                         )}
                     </div>

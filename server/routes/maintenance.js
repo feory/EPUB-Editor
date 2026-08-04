@@ -53,12 +53,12 @@ export async function cleanupHistory(user) {
 // idioma do purgeOldExceptNewest acima: guarda existsSync, readdir, stat por entrada).
 async function dirSizeBytes(dir) {
   if (!existsSync(dir)) return 0;
-  let total = 0;
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const sizes = await Promise.all(entries.map(entry => {
     const p = join(dir, entry.name);
-    total += entry.isDirectory() ? await dirSizeBytes(p) : (await stat(p)).size;
-  }
-  return total;
+    return entry.isDirectory() ? dirSizeBytes(p) : stat(p).then(st => st.size);
+  }));
+  return sizes.reduce((a, b) => a + b, 0);
 }
 
 // Divisão por categoria de um livro: Epub (versões exportadas), history (saves), images,
@@ -88,27 +88,31 @@ export async function diskUsage(user) {
   const byIsbn = new Map([...stmt.listEbooks.all(), ...stmt.listTrash.all()].map(e => [e.ebook_isbn, e]));
   const diskIsbns = existsSync(DATA_DIR) ? await readdir(DATA_DIR) : [];
 
-  const results = [];
-  for (const isbn of diskIsbns) {
+  // Pastas independentes entre si — varridas em paralelo (cada isbnUsage já paraleliza as
+  // suas próprias categorias por dentro).
+  const results = (await Promise.all(diskIsbns.map(async (isbn) => {
     const dirStat = await stat(join(DATA_DIR, isbn));
-    if (!dirStat.isDirectory()) continue;
+    if (!dirStat.isDirectory()) return null;
     const ebook = byIsbn.get(isbn);
-    results.push({
+    return {
       isbn, title: ebook?.title ?? null, author: ebook?.author ?? null,
       // pasta em disco sem registo na BD (nem ativo, nem reciclagem) — só reporta, não apaga.
       status: ebook?.deleted_at ? 'trashed' : ebook ? 'active' : 'orphaned',
       deletedAt: ebook?.deleted_at ?? null,
       ...(await isbnUsage(isbn)),
-    });
-  }
+    };
+  }))).filter(Boolean);
 
   const bucket = (status) => results.filter(r => r.status === status).sort((a, b) => b.total - a.total);
   const sum = (list, key) => list.reduce((s, r) => s + r[key], 0);
-  const categoryTotals = (list) => ({
-    epub: sum(list, 'epub'), history: sum(list, 'history'), images: sum(list, 'images'),
-    thumbnails: sum(list, 'thumbnails'), aceReports: sum(list, 'aceReports'), misc: sum(list, 'misc'),
+  const toBucketJson = (list) => ({
+    count: list.length, totalBytes: sum(list, 'total'),
+    categoryTotals: {
+      epub: sum(list, 'epub'), history: sum(list, 'history'), images: sum(list, 'images'),
+      thumbnails: sum(list, 'thumbnails'), aceReports: sum(list, 'aceReports'), misc: sum(list, 'misc'),
+    },
+    books: list,
   });
-  const toBucketJson = (list) => ({ count: list.length, totalBytes: sum(list, 'total'), categoryTotals: categoryTotals(list), books: list });
 
   const active = bucket('active'), trash = bucket('trashed'), orphaned = bucket('orphaned');
   return Response.json({

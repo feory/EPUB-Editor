@@ -574,7 +574,8 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
         // corpo INTEIRO a partir do 1º título heurístico de cada story. Fecha só na abertura de
         // capítulo real (drop-cap) — headings genéricos dentro do índice já são suprimidos
         // acima, não fecham (senão a 1ª entrada da lista reabria a suspensão para as seguintes).
-        if (heurTitle && INDEX_TITLE_RE.test((segs.map(s => s.text).join(' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()))) inIndexChapter = true;
+        const heurText = (psr.textContent || '').replace(/\s+/g, ' ').trim();
+        if (heurTitle && INDEX_TITLE_RE.test(heurText)) inIndexChapter = true;
         else if (rawMap.cls === 'drop-cap') inIndexChapter = false;
 
         // Corpo DENTRO do índice não herda o estilo de import mapeado → auto (corpo simples + LeftIndent).
