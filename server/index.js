@@ -47,6 +47,9 @@ if (adminId) {
 
 export const server = Bun.serve({
   port: PORT,
+  // Default (128M) é curto para o upload em lote de imagens do import IDML — livros com
+  // Links/ de alta resolução podem ultrapassar isso numa só request de /images/batch.
+  maxRequestBodySize: 500 * 1024 * 1024,
   async fetch(req) {
     const url = new URL(req.url);
     const path = url.pathname;

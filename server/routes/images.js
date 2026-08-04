@@ -64,6 +64,18 @@ async function psdToPng(buffer) {
   return null;
 }
 
+// Rasteriza um TIFF (fotografia de alta resolução vinda da Links/ do InDesign, sem suporte
+// nativo em browsers) para JPEG com sharp — já é dependência opcional do projeto, sem binário
+// externo a instalar (ao contrário do EPS/PSD, que precisam de Ghostscript/ImageMagick). JPEG,
+// não PNG: fotografia não comprime bem sem perdas (testado: só 5.6% menor); qualidade 90 mesmo
+// padrão do pdfToJpeg client-side (idml-importer.ts).
+async function tiffToJpeg(buffer) {
+  const sharp = await import('sharp').catch(() => null);
+  if (!sharp) return null;
+  try { return await sharp.default(buffer, { failOn: 'none' }).jpeg({ quality: 90 }).toBuffer(); }
+  catch (err) { debugLog('[TIFF] conversão falhou:', err.message); return null; }
+}
+
 function sanitizeName(name) {
   return name
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -230,7 +242,7 @@ export async function batchImages(req, isbn) {
   const images = formData.getAll('images');
   const saved = [];
 
-  if (images.some(f => f.size > (/\.(eps|psd)$/i.test(f.name) ? MAX_SOURCE_IMAGE_SIZE : MAX_IMAGE_SIZE))) {
+  if (images.some(f => f.size > (/\.(eps|psd|tiff?)$/i.test(f.name) ? MAX_SOURCE_IMAGE_SIZE : MAX_IMAGE_SIZE))) {
     return Response.json({ error: 'Image too large' }, { status: 413, headers: corsHeaders });
   }
 
@@ -249,6 +261,14 @@ export async function batchImages(req, isbn) {
       const png = await psdToPng(await file.arrayBuffer());
       if (png) { await Bun.write(join(imagesDir, `${id}.png`), png); saved.push({ id, filename: `${id}.png` }); }
       else debugLog(`[PSD] conversão falhou (ImageMagick ausente?): ${file.name}`);
+      return;
+    }
+    // TIFF (fotografia de alta resolução) → sem suporte em browsers, rasterizar para JPEG.
+    if (/\.tiff?$/i.test(file.name)) {
+      const id = sanitizeName(file.name.replace(/\.tiff?$/i, '')) || 'image';
+      const jpeg = await tiffToJpeg(await file.arrayBuffer());
+      if (jpeg) { await Bun.write(join(imagesDir, `${id}.jpg`), jpeg); saved.push({ id, filename: `${id}.jpg` }); }
+      else debugLog(`[TIFF] conversão falhou (sharp ausente?): ${file.name}`);
       return;
     }
     let filename = sanitizeName(file.name);
