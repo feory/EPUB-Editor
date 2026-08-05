@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { formatFileSize } from '../../../../utils/format';
 import type { ImageData } from './useImageGallery';
@@ -9,7 +9,14 @@ interface ImageLightboxProps {
     onClose: () => void;
 }
 
-export const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, isbn, onClose }) => (
+export const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, isbn, onClose }) => {
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [onClose]);
+
+    return (
     <div
         className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-8 animate-in fade-in duration-200"
         onClick={onClose}
@@ -24,7 +31,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, isbn, onClo
         <div className="max-w-6xl max-h-full flex flex-col items-center gap-4">
             <img
                 src={`/api/ebooks/${isbn}/images/${image.id}`}
-                alt={image.id}
+                alt=""
                 className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
             />
@@ -54,4 +61,5 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, isbn, onClo
             </div>
         </div>
     </div>
-);
+    );
+};

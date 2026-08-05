@@ -8,7 +8,8 @@ interface ModalCloseButtonProps {
 
 export const ModalCloseButton: React.FC<ModalCloseButtonProps> = ({ onClick, className = '' }) => (
     <button
-        className={`p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-all ${className}`}
+        aria-label="Fechar"
+        className={`p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 transition-all ${className}`}
         onClick={onClick}
     >
         <X size={20} />

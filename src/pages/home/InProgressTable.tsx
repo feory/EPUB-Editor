@@ -42,8 +42,8 @@ export const InProgressTable: React.FC<InProgressTableProps> = ({
                         <th className="px-6 py-4 text-xs font-bold text-text-muted uppercase tracking-wider">E-ISBN</th>
                         <th className="px-6 py-4 text-xs font-bold text-text-muted uppercase tracking-wider">Título</th>
                         <th className="px-6 py-4 text-xs font-bold text-text-muted uppercase tracking-wider">Autor</th>
-                        <th className="px-6 py-4 text-xs font-bold text-text-muted uppercase tracking-wider text-right">
-                            <div className="w-full">{searchSlot}</div>
+                        <th className="px-6 py-4 text-xs font-bold text-text-muted uppercase tracking-wider text-right w-80">
+                            <div className="flex justify-end">{searchSlot}</div>
                         </th>
                     </tr>
                 </thead>
@@ -91,9 +91,9 @@ export const InProgressTable: React.FC<InProgressTableProps> = ({
                                     ))}
                                     {deletingIsbn === ebook.ebook_isbn ? (
                                         <div className="flex items-center gap-1 animate-in fade-in duration-150" onClick={e => e.stopPropagation()}>
-                                            <button className="p-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50"
+                                            <button className="p-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-colors disabled:opacity-50"
                                                 onClick={(e) => { e.stopPropagation(); onDelete(ebook.ebook_isbn); setDeletingIsbn(null); }}
-                                                disabled={isDeleting} title="Confirmar eliminação">
+                                                disabled={isDeleting} title="Enviar para a Reciclagem (recuperável 30 dias)">
                                                 {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                                             </button>
                                             <button className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"

@@ -39,6 +39,9 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
 }) => {
   const navigate = useNavigate();
   const [activeMenu, setActiveMenu] = useState<'tools' | 'export' | 'validation' | null>(null);
+  // Submenus aninhados (Auxílio/Estilos) do dropdown "tools" — clicáveis, não só hover,
+  // para teclado/leitor de ecrã conseguirem lá chegar (ver DESIGN.md).
+  const [subMenu, setSubMenu] = useState<'aux' | 'estilos' | null>(null);
   const toolsMenuRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const validationMenuRef = useRef<HTMLDivElement>(null);
@@ -52,17 +55,24 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
         setActiveMenu(null);
       }
     };
+    // Escape fecha o mais interno primeiro (submenu), só depois o dropdown de topo.
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (subMenu) setSubMenu(null); else setActiveMenu(null);
+    };
     // Clicks inside the TinyMCE editor live in its iframe → don't reach `document`.
     // Listen on the iframe's own document so selecting a paragraph also closes the menu.
     const closeMenu = () => setActiveMenu(null);
     const iframeDoc = document.querySelector<HTMLIFrameElement>('.tox-edit-area__iframe')?.contentDocument;
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
     iframeDoc?.addEventListener('mousedown', closeMenu);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
       iframeDoc?.removeEventListener('mousedown', closeMenu);
     };
-  }, [activeMenu]);
+  }, [activeMenu, subMenu]);
 
   return (
     <nav className="bg-surface border-b border-border px-6 py-2.5 shadow-sm relative">
@@ -106,7 +116,7 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
           {/* Group 3: Tools Dropdown */}
           <div className="relative" ref={toolsMenuRef}>
             <button
-              onClick={() => setActiveMenu(activeMenu === 'tools' ? null : 'tools')}
+              onClick={() => { setActiveMenu(activeMenu === 'tools' ? null : 'tools'); setSubMenu(null); }}
               disabled={readOnly}
               title={readOnly ? 'Modo leitura — outro utilizador está a editar' : undefined}
               className={`inline-flex items-center justify-center gap-2 min-w-[112px] px-4 h-9 rounded-lg font-bold text-sm transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${activeMenu === 'tools' ? 'bg-slate-200 text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
@@ -145,15 +155,19 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
                   <span>Editor de TOC</span>
                 </button>
                 <div className="h-px bg-slate-100 my-1"></div>
-                <div className="relative group/aux">
+                <div className="relative">
                   <button
+                    onClick={() => setSubMenu(subMenu === 'aux' ? null : 'aux')}
+                    aria-haspopup="true"
+                    aria-expanded={subMenu === 'aux'}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
                   >
                     <Wrench size={16} className="text-slate-400" />
                     <span className="flex-1 text-left">Auxílio</span>
-                    <ChevronRight size={14} className="text-slate-400" />
+                    <ChevronRight size={14} className={`text-slate-400 transition-transform duration-200 ${subMenu === 'aux' ? 'rotate-90' : ''}`} />
                   </button>
-                  <div className="hidden group-hover/aux:block absolute left-full top-0 ml-1 w-56 bg-white border border-border rounded-xl shadow-xl py-2 z-[110]">
+                  {subMenu === 'aux' && (
+                  <div className="absolute left-full top-0 ml-1 w-56 bg-white border border-border rounded-xl shadow-xl py-2 z-[110]">
                     <button
                       onClick={() => { onUpdatePageList(); setActiveMenu(null); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
@@ -190,17 +204,22 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
                       <span className="flex-1 text-left">Limpeza de Índice Remissivo</span>
                     </button>
                   </div>
+                  )}
                 </div>
                 <div className="h-px bg-slate-100 my-1"></div>
-                <div className="relative group/estilos">
+                <div className="relative">
                   <button
+                    onClick={() => setSubMenu(subMenu === 'estilos' ? null : 'estilos')}
+                    aria-haspopup="true"
+                    aria-expanded={subMenu === 'estilos'}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
                   >
                     <Palette size={16} className="text-slate-400" />
                     <span className="flex-1 text-left">Estilos</span>
-                    <ChevronRight size={14} className="text-slate-400" />
+                    <ChevronRight size={14} className={`text-slate-400 transition-transform duration-200 ${subMenu === 'estilos' ? 'rotate-90' : ''}`} />
                   </button>
-                  <div className="hidden group-hover/estilos:block absolute left-full top-0 ml-1 w-56 bg-white border border-border rounded-xl shadow-xl py-2 z-[110]">
+                  {subMenu === 'estilos' && (
+                  <div className="absolute left-full top-0 ml-1 w-56 bg-white border border-border rounded-xl shadow-xl py-2 z-[110]">
                     <button
                       onClick={() => { onShowFonts(); setActiveMenu(null); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
@@ -216,6 +235,7 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
                       <span>Editor CSS</span>
                     </button>
                   </div>
+                  )}
                 </div>
                 <div className="h-px bg-slate-100 my-1"></div>
                 <button

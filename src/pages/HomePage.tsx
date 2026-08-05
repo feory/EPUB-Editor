@@ -288,14 +288,14 @@ export function HomePage() {
     const completedEbooks = filteredEbooks.filter(e => e.status === 'completed');
 
     const searchControl = searchOpen ? (
-        <div ref={searchRef} className="relative w-full animate-in fade-in slide-in-from-right-2 duration-200">
+        <div ref={searchRef} className="relative w-64 animate-in fade-in slide-in-from-right-2 duration-200">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input type="text" autoFocus placeholder="ISBN, título ou autor..." value={searchQuery}
+            <input type="text" autoFocus placeholder="ISBN, título ou autor..." aria-label="Pesquisar por ISBN, título ou autor" value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Escape') { setSearchQuery(''); setSearchOpen(false); } }}
                 className="w-full pl-9 pr-8 h-9 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all normal-case font-normal"
             />
-            <button onClick={() => { setSearchQuery(''); setSearchOpen(false); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+            <button onClick={() => { setSearchQuery(''); setSearchOpen(false); }} aria-label="Limpar pesquisa" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600 transition-colors">
                 <X size={14} />
             </button>
         </div>
@@ -309,9 +309,9 @@ export function HomePage() {
         <div className="flex flex-col min-h-screen bg-bg-color">
             <nav className="sticky top-0 z-50 bg-surface border-b border-border px-6 py-3 shadow-sm">
                 <div className="max-w-7xl mx-auto flex justify-between items-center gap-6">
-                    <div className="flex items-center gap-2 font-bold text-xl text-slate-700 cursor-pointer select-none min-w-[200px]" onClick={() => navigate('/')}>
-                        <span>Epub Manager</span>
-                    </div>
+                    <button type="button" className="flex items-center gap-2 font-bold text-xl text-slate-700 select-none min-w-[200px]" onClick={() => navigate('/')}>
+                        <h1>Epub Manager</h1>
+                    </button>
                     <div className="flex items-center gap-2">
                         <input type="file" accept=".epub" hidden ref={epubInputRef} onChange={handleImportEpub} />
 
@@ -366,7 +366,7 @@ export function HomePage() {
                                 className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${activeTab === 'completed' ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text-main'}`}
                             >
                                 Concluído
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-text-muted'}`}>{completedEbooks.length}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === 'completed' ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-text-muted'}`}>{completedEbooks.length}</span>
                             </button>
                         </div>
 

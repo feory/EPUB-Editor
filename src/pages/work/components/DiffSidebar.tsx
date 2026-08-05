@@ -50,7 +50,7 @@ export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoa
     if (group.type === 'equal') {
       return (
         <div className="border-b border-slate-100">
-          <div className="border-l-2 border-slate-200 mx-3 my-1">
+          <div className="mx-3 my-1">
             {group.items.map((item, ii) => (
               <p key={`eq-${gi}-${ii}`} className="px-3 py-1.5 text-[11px] text-slate-400 line-clamp-1">
                 {item.editorText}
@@ -69,12 +69,12 @@ export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoa
               {labelInsert} {group.items.length > 1 ? `· ${group.items.length}` : ''}
             </span>
           </div>
-          <div className="border-l-2 border-emerald-400 mx-3 mb-2">
+          <div className="mx-3 mb-2">
             {group.items.map((item, ii) => (
               <button
                 key={`ins-${gi}-${ii}-${(item.editorText ?? '').slice(0, 30)}`}
                 onClick={() => item.editorIndex !== undefined && onGoToItem(item.editorIndex)}
-                className="w-full text-left px-3 py-1.5 hover:bg-emerald-50 transition-colors group focus:outline-none"
+                className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 <p className="text-[12px] text-slate-700 line-clamp-2 group-hover:text-slate-900">
                   {item.editorText}
@@ -97,9 +97,9 @@ export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoa
               {labelDelete} {group.items.length > 1 ? `· ${group.items.length}` : ''}
             </span>
           </div>
-          <div className="border-l-2 border-rose-400 mx-3 mb-2">
+          <div className="mx-3 mb-2 flex flex-col gap-1">
             {group.items.map((item, ii) => (
-              <div key={`del-${gi}-${ii}-${(item.refText ?? '').slice(0, 30)}`} className="px-3 py-1.5">
+              <div key={`del-${gi}-${ii}-${(item.refText ?? '').slice(0, 30)}`} className="px-3 py-1.5 rounded-lg bg-rose-50/60">
                 <p className="text-[12px] text-slate-500 line-clamp-2">{item.refText}</p>
               </div>
             ))}
@@ -117,7 +117,7 @@ export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoa
           </div>
           <button
             onClick={() => item.editorIndex !== undefined && onGoToItem(item.editorIndex)}
-            className="w-full text-left border-l-2 border-amber-400 mx-3 mb-2 px-3 py-1.5 hover:bg-amber-50 transition-colors group focus:outline-none"
+            className="w-full text-left rounded-lg mx-3 mb-2 px-3 py-1.5 hover:bg-amber-50 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
             style={{ width: 'calc(100% - 1.5rem)' }}
           >
             {item.charDiff && item.charDiff.length > 0

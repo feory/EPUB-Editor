@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
-import { Loader2, UserPlus, Trash2, Shield, User, ChevronLeft, Eye, EyeOff, Pencil, X, Check, Save, Search, Info } from 'lucide-react';
+import { Loader2, UserPlus, Trash2, Shield, User, ChevronLeft, Eye, EyeOff, Pencil, X, Check, Search, Info } from 'lucide-react';
 import { authApi, type AuthUser } from '../api/auth-api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -28,7 +28,7 @@ function PasswordInput({ value, onChange, required = false, placeholder = 'â€¢â€
         className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all"
         placeholder={placeholder}
       />
-      <button type="button" onClick={() => setShow(s => !s)} tabIndex={-1}
+      <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? 'Ocultar palavra-passe' : 'Mostrar palavra-passe'}
         className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-color">
         {show ? <EyeOff size={14} /> : <Eye size={14} />}
       </button>
@@ -43,17 +43,25 @@ function Modal({ title, onClose, onSave, children }: { title: string; onClose: (
       <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="flex items-center justify-between p-6 border-b border-border">
           <h2 className="text-xl font-bold text-slate-700">{title}</h2>
-          <div className="flex items-center gap-1">
-            {onSave && (
-              <button onClick={onSave} title="Guardar"
-                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-all">
-                <Save size={20} />
-              </button>
-            )}
-            <ModalCloseButton onClick={onClose} />
-          </div>
+          <ModalCloseButton onClick={onClose} />
         </div>
         <div className="p-6">{children}</div>
+        {onSave && (
+          <div className="p-6 border-t border-border bg-slate-50/50 flex gap-3 justify-end">
+            <button
+              className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-all shadow-sm active:scale-95"
+              onClick={onClose}
+            >
+              Cancelar
+            </button>
+            <button
+              className="flex-1 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold transition-all shadow-sm active:scale-95"
+              onClick={onSave}
+            >
+              Guardar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

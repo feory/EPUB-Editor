@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-05T00:00:00.000Z",
+  "title": "Design System: EPUB Platform",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Grafite Quase-Preto", "canonical": "#0a0a0a", "tonalRamp": ["#0a0a0a", "#1a1a1a", "#2e2e2e", "#464646", "#6b6b6b", "#949494", "#c4c4c4", "#f0f0f0"] },
+      "primary-hover": { "role": "primary-state", "displayName": "Grafite Hover", "canonical": "#262626", "tonalRamp": ["#0a0a0a", "#262626", "#3d3d3d", "#565656", "#7a7a7a", "#a3a3a3", "#d0d0d0", "#f5f5f5"] },
+      "neutral-bg": { "role": "neutral-bg", "displayName": "Névoa de Fundo", "canonical": "#f8fafc", "tonalRamp": ["#0f172a", "#334155", "#64748b", "#94a3b8", "#cbd5e1", "#e2e8f0", "#f1f5f9", "#f8fafc"] },
+      "neutral-surface": { "role": "neutral-surface", "displayName": "Superfície Branca", "canonical": "#ffffff", "tonalRamp": ["#e2e8f0", "#eef2f6", "#f4f7fa", "#f8fafc", "#fafcfe", "#fcfdfe", "#feffff", "#ffffff"] },
+      "neutral-text": { "role": "text-primary", "displayName": "Texto Principal", "canonical": "#0f172a", "tonalRamp": ["#020617", "#0f172a", "#1e293b", "#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1"] },
+      "neutral-text-muted": { "role": "text-secondary", "displayName": "Texto Discreto", "canonical": "#64748b", "tonalRamp": ["#334155", "#475569", "#64748b", "#7c8ba1", "#94a3b8", "#aab8c9", "#c3ced9", "#dde4ea"] },
+      "neutral-border": { "role": "border", "displayName": "Fronteira", "canonical": "#e2e8f0", "tonalRamp": ["#94a3b8", "#aebbca", "#c3ced9", "#d3dbe3", "#e2e8f0", "#eaeff3", "#f1f5f9", "#f8fafc"] },
+      "success": { "role": "success", "displayName": "Verde de Confirmação", "canonical": "#10b981", "tonalRamp": ["#064e3b", "#065f46", "#047857", "#059669", "#10b981", "#34d399", "#6ee7b7", "#a7f3d0"] },
+      "destructive": { "role": "destructive", "displayName": "Rose de Ação Irreversível", "canonical": "#f43f5e", "tonalRamp": ["#4c0519", "#881337", "#9f1239", "#be123c", "#e11d48", "#f43f5e", "#fb7185", "#fecdd3"] },
+      "destructive-text": { "role": "destructive-text", "displayName": "Rose Legível (texto/badge)", "canonical": "#e11d48", "tonalRamp": ["#4c0519", "#881337", "#9f1239", "#be123c", "#e11d48", "#f43f5e", "#fb7185", "#fecdd3"] },
+      "reversible": { "role": "reversible", "displayName": "Âmbar de Ação Reversível", "canonical": "#d97706", "tonalRamp": ["#451a03", "#78350f", "#92400e", "#b45309", "#d97706", "#f59e0b", "#fbbf24", "#fde68a"] }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title", "purpose": "Título de página, logo, cabeçalho de modal." },
+      "body": { "displayName": "Body", "purpose": "Texto de interface geral: botões, tabelas, formulários." },
+      "label": { "displayName": "Label", "purpose": "Cabeçalhos de coluna e etiquetas de campo, sempre em texto discreto." }
+    },
+    "shadows": [
+      { "name": "sm", "value": "0 1px 2px 0 rgb(0 0 0 / 0.05)", "purpose": "Estado de repouso de cartões e painéis." },
+      { "name": "md", "value": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)", "purpose": "Modais e pré-visualizações de capa." },
+      { "name": "lg", "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)", "purpose": "Botão de ação flutuante (FAB)." },
+      { "name": "xl", "value": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)", "purpose": "Dropdowns e menus com sub-menus." }
+    ],
+    "motion": [
+      { "name": "ease-out-standard", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Transições de hover/entrada de overlays (fade-in, slide-in)." },
+      { "name": "duration-fast", "value": "150ms", "purpose": "Feedback imediato (fade do botão '+', pop de escala)." },
+      { "name": "duration-standard", "value": "200-300ms", "purpose": "Entrada/saída de menus, slide de notificações." }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Botão de Ação (Toolbar)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Botão de ação principal da toolbar (ex: Galeria, Ferramentas) — nunca preenchido a preto, mesmo sendo a ação primária do ecrã.",
+      "html": "<button class=\"ds-btn-primary\">Ferramentas</button>",
+      "css": ".ds-btn-primary { background: #f1f5f9; color: #475569; font-weight: 700; font-size: 0.875rem; padding: 0 20px; height: 36px; border-radius: 8px; border: none; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); transition: background 0.15s ease-out, transform 0.15s ease-out; } .ds-btn-primary:hover { background: #e2e8f0; } .ds-btn-primary:active { transform: scale(0.95); } .ds-btn-primary:focus-visible { outline: 2px solid #0a0a0a; outline-offset: 2px; }"
+    },
+    {
+      "name": "Botão Ícone (linha de tabela)",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Ação secundária por linha de tabela (metadados, download, reabrir) — só ícone, borda visível em repouso.",
+      "html": "<button class=\"ds-btn-icon\" aria-label=\"Metadados\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4M12 8h.01\"/></svg></button>",
+      "css": ".ds-btn-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 8px; border-radius: 8px; border: 1px solid #e2e8f0; background: transparent; color: #64748b; transition: background 0.15s ease-out, color 0.15s ease-out, border-color 0.15s ease-out; } .ds-btn-icon:hover { background: #f1f5f9; color: #334155; border-color: #94a3b8; }"
+    },
+    {
+      "name": "Campo de Pesquisa (tabela)",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "Pesquisa colapsável no cabeçalho de tabela — largura fixa (256px) sempre, para nunca esticar quando vazia nem reflectir as colunas vizinhas.",
+      "html": "<div class=\"ds-search\"><svg class=\"ds-search-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg><input class=\"ds-search-input\" type=\"text\" placeholder=\"ISBN, título ou autor...\"/></div>",
+      "css": ".ds-search { position: relative; width: 256px; } .ds-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none; } .ds-search-input { width: 100%; padding: 0 12px 0 36px; height: 36px; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 0.875rem; color: #0f172a; transition: background 0.15s ease-out, border-color 0.15s ease-out, box-shadow 0.15s ease-out; } .ds-search-input:focus { outline: none; background: #ffffff; border-color: #0a0a0a; box-shadow: 0 0 0 3px rgb(10 10 10 / 0.1); }"
+    },
+    {
+      "name": "Painel/Cartão Principal",
+      "kind": "card",
+      "refersTo": "card-panel",
+      "description": "Contentor de secção principal (tabela, formulário) — borda sempre presente mesmo com sombra.",
+      "html": "<div class=\"ds-panel\">Conteúdo</div>",
+      "css": ".ds-panel { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }"
+    },
+    {
+      "name": "Etiqueta de Coluna (tabela)",
+      "kind": "custom",
+      "refersTo": "label",
+      "description": "Cabeçalho de coluna — maiúsculas discretas, nunca no texto principal.",
+      "html": "<span class=\"ds-label\">E-ISBN</span>",
+      "css": ".ds-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "A Secretária de Edição",
+    "overview": "Um móvel de trabalho neutro: superfície limpa, tudo à mão, nada a competir com o texto que está a ser editado. O sistema existe para desaparecer — cor quase ausente, hierarquia feita por peso e espaçamento, não por decoração. É uma ferramenta de produção usada em sessões longas e repetidas sobre o mesmo livro; qualquer floreado visual é atrito acumulado ao longo de centenas de cliques por dia. Rejeita explicitamente: o SaaS genérico de creme-e-roxo-e-cards-empilhados, gradientes decorativos, glassmorphism como default, qualquer coisa que peça atenção a si própria em vez de à tarefa. Também rejeita o extremo oposto — a grelha cinzenta densa de ferramenta corporativa datada — através de espaçamento generoso e cantos suavizados que mantêm a densidade legível.",
+    "keyCharacteristics": [
+      "Quase monocromático: preto quase puro como único acento, usado com extrema raridade",
+      "Hierarquia por peso tipográfico e cor de texto (main/muted), não por blocos de cor",
+      "Sombras quase imperceptíveis; profundidade por contraste de fundo, não por elevação dramática",
+      "Cantos consistentemente arredondados (8-16px) sem nunca ficar 'fofo'"
+    ],
+    "rules": [
+      { "name": "A Regra do Acento Raro", "body": "O preto quase puro (#0a0a0a) nunca preenche uma superfície inteira. É texto, ícone ou um fundo a 10% de opacidade — nunca um botão sólido de largura total. A cor identifica estado, não decora.", "section": "colors" },
+      { "name": "A Regra do Peso, Não do Tamanho", "body": "A escala de tamanhos é estreita (12/14/20px); hierarquia visual vem do contraste peso (400 vs 700) e cor (texto principal vs discreto), não de saltos grandes de tamanho.", "section": "typography" },
+      { "name": "A Regra do Plano-Por-Omissão", "body": "Superfícies estáticas ficam em sombra sm ou sem sombra nenhuma. Sombra mais pesada (lg/xl) é reservada a elementos que se sobrepõem fisicamente a outro conteúdo (menus, modais) — nunca decoração de repouso.", "section": "elevation" },
+      { "name": "A Regra da Reversibilidade", "body": "Confirmar uma ação recuperável (enviar para a Reciclagem, 30 dias para desfazer) usa amber. Confirmar uma ação irreversível (apagar definitivamente, limpar histórico) usa rose. A cor do botão de confirmação comunica se há ou não volta atrás — nunca a mesma cor para os dois casos.", "section": "colors" }
+    ],
+    "dos": [
+      "Do manter o preto (#0a0a0a) como acento raro — texto, ícone, ou /10 de opacidade, nunca uma superfície sólida grande.",
+      "Do usar slate-100/slate-200 para todos os botões de ação, mesmo os 'principais' da toolbar.",
+      "Do reservar sombra lg/xl a overlays (menus, modais) que se sobrepõem a outro conteúdo.",
+      "Do dar largura fixa a controlos que alternam de tamanho (pesquisa colapsável) para nunca deslocar colunas vizinhas.",
+      "Do ordenar menus longos (Ferramentas → Auxílio) alfabeticamente quando não há agrupamento temático óbvio.",
+      "Do usar amber para confirmar uma ação reversível e rose para confirmar uma irreversível — nunca a mesma cor para as duas."
+    ],
+    "donts": [
+      "Don't usar SaaS genérico — creme/roxo, cards empilhados sem necessidade, gradiente decorativo, glassmorphism default.",
+      "Don't usar border-left/border-right colorido como acento decorativo em cartões ou linhas de lista.",
+      "Don't aplicar gradiente a texto (background-clip: text) para ênfase — usar peso ou cor sólida.",
+      "Don't deixar um controlo colapsável (pesquisa, filtros) esticar para preencher a linha quando vazio — reservar a largura sempre.",
+      "Don't empilhar sombras pesadas em conteúdo estático; o sistema é plano por omissão.",
+      "Don't introduzir uma segunda cor de acento (ex. emerald) num badge/indicador já diferenciado por posição ou texto — reservar cor extra a estados semânticos reais (sucesso, destrutivo), nunca a repetir o que a label já diz."
+    ]
+  }
+}

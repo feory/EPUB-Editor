@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Trash2, Loader2, AlertTriangle, Search } from 'lucide-react';
+import { ChevronLeft, Trash2, Loader2, AlertTriangle, Search, Check, X } from 'lucide-react';
 import { ebooksApi, type DiskUsageBook } from '../api/ebooks-api';
 import { useNotification } from '../context/NotificationContext';
 import { Pagination } from '../components/Pagination';
@@ -83,6 +83,7 @@ export function PainelPage() {
     const cleanupMutation = useMutation({
         mutationFn: () => ebooksApi.cleanupHistory(),
         onSuccess: (res) => {
+            setConfirmCleanup(false);
             showNotification('success', `Limpeza concluída! Removidos ${res.data.deletedCount} ficheiros (${res.data.sizeSavedMB} MB).`);
             queryClient.invalidateQueries({ queryKey: ['disk-usage'] });
         },
@@ -91,6 +92,7 @@ export function PainelPage() {
 
     const [query, setQuery] = useState('');
     const [searchOpen, setSearchOpen] = useState(false);
+    const [confirmCleanup, setConfirmCleanup] = useState(false);
     const searchRef = useRef<HTMLDivElement>(null);
 
     // Clicar fora colapsa a pesquisa (só quando vazia — não destrói um filtro ativo)
@@ -126,16 +128,34 @@ export function PainelPage() {
                         </button>
                         <h1 className="text-xl font-bold text-slate-700">Painel</h1>
                     </div>
-                    <button
-                        onClick={() => {
-                            if (window.confirm('Remover permanentemente todos os rascunhos com mais de 7 dias?')) cleanupMutation.mutate();
-                        }}
-                        disabled={cleanupMutation.isPending}
-                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50"
-                    >
-                        {cleanupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                        Limpar Histórico
-                    </button>
+                    {confirmCleanup ? (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-text-muted">Remove definitivamente todos os rascunhos com +7 dias, de todos os livros. Não pode ser desfeito.</span>
+                            <button
+                                onClick={() => cleanupMutation.mutate()}
+                                disabled={cleanupMutation.isPending}
+                                className="inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 shrink-0"
+                            >
+                                {cleanupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                Confirmar
+                            </button>
+                            <button
+                                onClick={() => setConfirmCleanup(false)}
+                                className="p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors shrink-0"
+                                title="Cancelar"
+                            >
+                                <X size={14} />
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => setConfirmCleanup(true)}
+                            className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm"
+                        >
+                            <Trash2 size={14} />
+                            Limpar Histórico
+                        </button>
+                    )}
                 </div>
 
                 {isLoading || !data ? (
@@ -148,7 +168,7 @@ export function PainelPage() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <StatTile label="Livros ativos" value={String(data.active.count)} />
                             <StatTile label="Espaço total (ativos)" value={formatFileSize(data.active.totalBytes)} />
-                            <StatTile label="Espaço na Reciclagem" value={formatFileSize(data.trash.totalBytes)} accent="text-rose-600" />
+                            <StatTile label="Espaço na Reciclagem" value={formatFileSize(data.trash.totalBytes)} accent="text-amber-600" />
                             <StatTile label="Relatórios de acessibilidade"
                                 value={formatFileSize((data.active.categoryTotals?.aceReports ?? 0) + (data.trash.categoryTotals?.aceReports ?? 0))}
                                 accent="text-amber-600" />
@@ -201,12 +221,12 @@ export function PainelPage() {
 
                         {/* Trash */}
                         {data.trash.count > 0 && (
-                            <div className="bg-card-bg border border-rose-200 rounded-2xl overflow-hidden">
-                                <div className="px-6 py-4 border-b border-rose-100 bg-rose-50/50">
-                                    <h2 className="text-base font-semibold text-rose-700">
-                                        Reciclagem <span className="text-rose-400 font-normal">({data.trash.count})</span>
+                            <div className="bg-card-bg border border-amber-200 rounded-2xl overflow-hidden">
+                                <div className="px-6 py-4 border-b border-amber-100 bg-amber-50/50">
+                                    <h2 className="text-base font-semibold text-amber-700">
+                                        Reciclagem <span className="text-amber-500 font-normal">({data.trash.count})</span>
                                     </h2>
-                                    <p className="text-xs text-rose-500">Ocupam espaço até serem purgados automaticamente (30 dias).</p>
+                                    <p className="text-xs text-amber-600">Ocupam espaço até serem purgados automaticamente (30 dias).</p>
                                 </div>
                                 <BookTable books={data.trash.books} emptyLabel="Reciclagem vazia." />
                             </div>

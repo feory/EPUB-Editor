@@ -54,12 +54,17 @@ const ImageCardComponent: React.FC<ImageCardProps> = ({
                 </div>
             )}
             {image.url && (
-                <img
-                    src={image.url}
-                    alt={image.id}
-                    className="w-full h-full object-contain cursor-pointer hover:scale-105 transition-transform"
+                <button
+                    type="button"
                     onClick={() => onView(image)}
-                />
+                    className="block w-full h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-inset"
+                >
+                    <img
+                        src={image.url}
+                        alt="Ver imagem ampliada"
+                        className="w-full h-full object-contain cursor-pointer hover:scale-105 transition-transform"
+                    />
+                </button>
             )}
 
             <div className="absolute top-2 left-2">

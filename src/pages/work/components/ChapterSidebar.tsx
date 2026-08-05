@@ -69,8 +69,8 @@ const ChapterItem = React.memo<ChapterItemProps>(({
             onClick={() => onSelectChapter(index)}
             className={`w-full text-left ${readOnly ? 'pl-4' : 'pl-8'} ${confirmingDelete ? 'pr-24' : 'pr-16'} py-2.5 rounded-xl text-sm font-semibold transition-all flex items-start gap-3 ${
                 isActive
-                    ? 'bg-slate-200 text-slate-800 border-l-4 border-transparent'
-                    : 'hover:bg-slate-50 text-text-muted border-l-4 border-transparent'
+                    ? 'bg-slate-200 text-slate-800'
+                    : 'hover:bg-slate-50 text-text-muted'
             } ${chapter.level === 'h2' ? 'ml-4 scale-90' : chapter.level === 'h3' ? 'ml-8 scale-90' : ''}`}
         >
             <span className={`flex-1 truncate ${chapter.level === 'h1' ? 'font-bold' : 'font-medium italic'}`}>

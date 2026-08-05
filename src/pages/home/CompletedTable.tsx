@@ -34,8 +34,8 @@ export const CompletedTable: React.FC<CompletedTableProps> = ({
                         <th className="px-6 py-4 text-xs font-bold text-text-muted uppercase tracking-wider">E-ISBN</th>
                         <th className="px-6 py-4 text-xs font-bold text-text-muted uppercase tracking-wider">Título</th>
                         <th className="px-6 py-4 text-xs font-bold text-text-muted uppercase tracking-wider">Autor</th>
-                        <th className="px-6 py-4 text-xs font-bold text-text-muted uppercase tracking-wider text-right">
-                            <div className="w-full">{searchSlot}</div>
+                        <th className="px-6 py-4 text-xs font-bold text-text-muted uppercase tracking-wider text-right w-80">
+                            <div className="flex justify-end">{searchSlot}</div>
                         </th>
                     </tr>
                 </thead>
