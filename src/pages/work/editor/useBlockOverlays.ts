@@ -470,17 +470,34 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const ir = iframe.getBoundingClientRect();
             const br = block.getBoundingClientRect();
             const blockTop = ir.top + br.top;
+            const blockBottom = ir.top + br.bottom;
+            const blockVisible = br.top < ir.height && br.bottom > 0;
+            // Reposiciona para um lado só se ainda não lá está — set incondicional de style.top
+            // faria o auxObserver (attributeFilter 'style') disparar em loop, visto como o
+            // mini-menu a "cair"/tremer em vez de ficar fixo.
+            const placeAt = (desired: number, alreadyThere: boolean, removeClass: string, addClass: string) => {
+                pop.style.visibility = '';
+                if (!alreadyThere) {
+                    pop.style.top = desired + 'px';
+                    pop.classList.remove(removeClass);
+                    pop.classList.add(addClass);
+                }
+            };
+            // Preferência: em cima. Precisa de espaço acima (dentro da área do editor) E o bloco visível.
             const desiredTop = blockTop - pop.offsetHeight - 8;
-            // Só em cima: precisa de espaço acima E o bloco visível no editor.
-            const canShowAbove = desiredTop >= ir.top + 4 && br.top < ir.height && br.bottom > 0;
-            if (!canShowAbove) { pop.style.visibility = 'hidden'; return; } // não cabe em cima → esconder
-            pop.style.visibility = '';
-            // Se o TinyMCE o pôs em baixo, subir (idempotente: já em cima → não mexe).
-            if (pop.getBoundingClientRect().top >= blockTop) {
-                pop.style.top = desiredTop + 'px';
-                pop.classList.remove('tox-pop--top'); // seta a apontar para baixo (pop acima)
-                pop.classList.add('tox-pop--bottom');
+            if (desiredTop >= ir.top + 4 && blockVisible) {
+                placeAt(desiredTop, pop.getBoundingClientRect().top < blockTop, 'tox-pop--top', 'tox-pop--bottom');
+                return;
             }
+            // Sem espaço em cima → tentar em baixo do bloco, sempre dentro da área do editor
+            // (mesma referência — ir — que o ramo de cima, não a janela: o iframe pode não
+            // ocupar o ecrã todo).
+            const desiredBottom = blockBottom + 8;
+            if (desiredBottom + pop.offsetHeight <= ir.top + ir.height - 4 && blockVisible) {
+                placeAt(desiredBottom, pop.getBoundingClientRect().top >= blockBottom, 'tox-pop--bottom', 'tox-pop--top');
+                return;
+            }
+            pop.style.visibility = 'hidden'; // não cabe em lado nenhum → esconder
         };
         const auxObserver = new MutationObserver(forcePopAbove);
 

@@ -155,6 +155,13 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
                   </button>
                   <div className="hidden group-hover/aux:block absolute left-full top-0 ml-1 w-56 bg-white border border-border rounded-xl shadow-xl py-2 z-[110]">
                     <button
+                      onClick={() => { onUpdatePageList(); setActiveMenu(null); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
+                    >
+                      <RefreshCw size={16} className="text-slate-400" />
+                      <span>Atualização Pagelist</span>
+                    </button>
+                    <button
                       onClick={() => { onConversions(); setActiveMenu(null); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
                     >
@@ -162,11 +169,11 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
                       <span>Conversões</span>
                     </button>
                     <button
-                      onClick={() => { onCleanIndex(); setActiveMenu(null); }}
+                      onClick={() => { onLinkIndiceEntries(); setActiveMenu(null); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
                     >
-                      <ListX size={16} className="text-slate-400 shrink-0" />
-                      <span className="flex-1 text-left">Limpeza de Índice Remissivo</span>
+                      <BookMarked size={16} className="text-slate-400" />
+                      <span>Criação Links Índice</span>
                     </button>
                     <button
                       onClick={() => { onShowStats(); setActiveMenu(null); }}
@@ -176,18 +183,11 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
                       <span>Estatísticas</span>
                     </button>
                     <button
-                      onClick={() => { onUpdatePageList(); setActiveMenu(null); }}
+                      onClick={() => { onCleanIndex(); setActiveMenu(null); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
                     >
-                      <RefreshCw size={16} className="text-slate-400" />
-                      <span>Atualização Pagelist</span>
-                    </button>
-                    <button
-                      onClick={() => { onLinkIndiceEntries(); setActiveMenu(null); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
-                    >
-                      <BookMarked size={16} className="text-slate-400" />
-                      <span>Ligar Índice aos Capítulos</span>
+                      <ListX size={16} className="text-slate-400 shrink-0" />
+                      <span className="flex-1 text-left">Limpeza de Índice Remissivo</span>
                     </button>
                   </div>
                 </div>
