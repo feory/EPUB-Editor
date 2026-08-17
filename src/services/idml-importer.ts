@@ -631,7 +631,13 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
         if (!segs.every(s => !s.text && !s.raw && s.notes.length === 0)) lastHeadingStyle = null;
         for (const seg of segs) {
             if (seg.raw) { out.push(seg.raw); continue; } // tabela — já é HTML de bloco, não envolver em <tag>
-            if (!seg.text && seg.notes.length === 0) { blankBefore = true; continue; } // linha em branco
+            if (!seg.text && seg.notes.length === 0) {
+                // Parágrafo vazio com "Regra abaixo" (RuleBelow) do InDesign = divisória visual
+                // (barra fina), não espaço em branco — vira <hr> (pequena; RuleBelowLeftIndent/
+                // RightIndent recolhidos já indicam divisória estreita, não full-width).
+                if (psr.getAttribute('RuleBelow') === 'true') { out.push('<hr>'); blankBefore = false; continue; }
+                blankBefore = true; continue; // linha em branco
+            }
             // Linha em branco antes deste parágrafo é um sinal FRACO de espaçamento (ao contrário
             // de SpaceBefore/SpaceAfter, que é um atributo real do IDML): muitos livros têm linhas
             // em branco no manuscrito que não correspondem a nenhum espaço visível no miolo
