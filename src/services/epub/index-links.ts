@@ -6,12 +6,20 @@
 import type { Section } from './types';
 
 const ID_PATTERN = /\bid="([^"]+)"/g;
+// Marcador de page-list ainda cru (editor): convertPageBreaks só lhe dá id="page-N" dentro do
+// loop de export, DEPOIS deste mapa ser construído — sem isto, um idx-link com
+// data-target="page-N" (Índice Remissivo, ver src/utils/index-cleaner.ts) nunca resolvia.
+// Mesmo padrão tolerante a ordem de atributos usado por convertPageBreaks (page-list.ts):
+// casa o <span> só pela classe, extrai data-page à parte.
+const PAGEBREAK_PATTERN = /<span\b[^>]*\bclass="[^"]*\bpagebreak\b[^"]*"[^>]*><\/span>/g;
 
 /**
  * id → nº de secção (1-based, mesma numeração de section${i+1}.xhtml). Construído a partir de
  * sections[i].content ANTES do loop de export: linkFootnotes/convertPageBreaks só ACRESCENTAM
  * ids novos (fn-/fnref-/page-), nunca renomeiam os existentes — por isso este mapa continua
- * válido dentro do loop por-secção mesmo depois de essas duas transformações correrem.
+ * válido dentro do loop por-secção mesmo depois de essas duas transformações correrem. Os ids
+ * `page-N` são pré-calculados aqui (a partir do `data-page` já presente no editor) porque só
+ * nascem tarde de mais no loop de export para entrar neste mapa da forma normal.
  */
 export function buildIdToSectionMap(sections: Section[]): Map<string, number> {
     const map = new Map<string, number>();
@@ -19,6 +27,11 @@ export function buildIdToSectionMap(sections: Section[]): Map<string, number> {
         ID_PATTERN.lastIndex = 0;
         let m: RegExpExecArray | null;
         while ((m = ID_PATTERN.exec(section.content)) !== null) map.set(m[1], i + 1);
+        PAGEBREAK_PATTERN.lastIndex = 0;
+        while ((m = PAGEBREAK_PATTERN.exec(section.content)) !== null) {
+            const page = m[0].match(/\bdata-page="(\d+)"/)?.[1];
+            if (page) map.set(`page-${page}`, i + 1);
+        }
     });
     return map;
 }

@@ -427,6 +427,7 @@ export function WorkPage() {
           onShowStyleEditor={() => setShowStyleEditor(true)}
           onShowFonts={() => setShowFonts(true)}
           onCleanIndex={() => editorRef.current?.cleanIndexSelection()}
+          onLinkIndexPages={() => editorRef.current?.linkIndexPagesSelection()}
           onConversions={() => setShowConversions(true)}
           onUpdatePageList={() => setShowPagelistUpdate(true)}
           onLinkIndiceEntries={work.handleLinkIndiceEntries}

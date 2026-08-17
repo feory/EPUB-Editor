@@ -16,6 +16,16 @@ test('buildIdToSectionMap: mapeia ids para o nº de secção 1-based', () => {
     expect(map.has('idx-anchor-99')).toBe(false);
 });
 
+test('buildIdToSectionMap: pré-calcula ids page-N a partir do data-page cru do editor (ainda sem convertPageBreaks)', () => {
+    const sections = [
+        section('<h1>Cap</h1><p>Texto<span class="pagebreak" data-page="12"></span> mais texto.</p>'),
+        section('<h1>Cap2</h1><p><span data-page="45" class="pagebreak"></span></p>'), // ordem de atributos trocada
+    ];
+    const map = buildIdToSectionMap(sections);
+    expect(map.get('page-12')).toBe(1);
+    expect(map.get('page-45')).toBe(2);
+});
+
 test('convertIndexLinks: alvo na mesma secção usa #id', () => {
     const idToSection = new Map([['idx-anchor-1', 2]]);
     const html = '<p><span class="idx-link" data-target="idx-anchor-1">Capítulo 1</span></p>';
