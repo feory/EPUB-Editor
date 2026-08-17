@@ -76,8 +76,12 @@ async function tiffToJpeg(buffer) {
   catch (err) { debugLog('[TIFF] conversão falhou:', err.message); return null; }
 }
 
+// Tem de gerar o MESMO nome que sanitizeImageFilename (src/utils/format.ts) — o import IDML
+// prevê o imageId com essa função para casar imagem↔figura na colocação.
 function sanitizeName(name) {
   return name
+    .normalize('NFC') // pastas/ficheiros extraídos no macOS vêm em NFD ("ç" = "c"+cedilha combinável);
+    // sem normalizar, o mesmo nome sanitiza para IDs diferentes consoante a forma Unicode de origem.
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .replace(/_{2,}/g, '_')
     .replace(/^_+|_+$/g, '');

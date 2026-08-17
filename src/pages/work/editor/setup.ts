@@ -1,7 +1,7 @@
 import type { Editor } from 'tinymce';
 import { cleanEditorDOM } from '../../../utils/html-cleaner';
 import { registerEditorIcons } from './icons';
-import { SLASH_ITEMS } from './config';
+import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
 import type { TinyMCEEditor } from './types';
 
 interface SetupDeps {
@@ -57,12 +57,6 @@ export function createEditorSetup(deps: SetupDeps) {
                     editor.nodeChanged();
                 },
             });
-        });
-
-        editor.ui.registry.addButton('chapterbreak', {
-            icon: 'ps-chapterbreak',
-            tooltip: 'Capítulo sem Título',
-            onAction: () => editor.execCommand('mceChapterBreak'),
         });
 
         // Arrastar imagem: criar o blob COM o file.name original (o drop
@@ -453,6 +447,30 @@ export function createEditorSetup(deps: SetupDeps) {
                 startHtmlEdit(top);
             },
         });
+        // Combobox de estilo de parágrafo — mesmos 5 estilos dos botões psdefault/psindent/
+        // pstop/psspace/psquote (redundante de propósito: acesso rápido sem procurar o botão certo).
+        // Texto mostra o estilo ATIVO; onSetup reavalia em cada NodeChange (troca de bloco/estilo).
+        editor.ui.registry.addMenuButton('pscombopara', {
+            text: 'Padrão',
+            fetch: (callback) => callback(PARAGRAPH_QUICK_STYLES.map(([format, label]) => ({
+                type: 'menuitem',
+                text: label,
+                onAction: () => {
+                    editor.formatter.toggle(format);
+                    editor.dispatch('Change');
+                    editor.nodeChanged();
+                },
+            }))),
+            onSetup: (api) => {
+                const update = () => {
+                    const active = PARAGRAPH_QUICK_STYLES.find(([format]) => editor.formatter.match(format));
+                    api.setText(active ? active[1] : 'Padrão');
+                };
+                editor.on('NodeChange', update);
+                update();
+                return () => editor.off('NodeChange', update);
+            },
+        });
         // Alinhamento agrupado num único dropdown (esquerda/centro/direita)
         editor.ui.registry.addMenuButton('blockalignmenu', {
             icon: 'align-left',
@@ -475,7 +493,7 @@ export function createEditorSetup(deps: SetupDeps) {
             },
             position: 'node',
             scope: 'node',
-            items: 'psmorepara blockalignmenu psdefault psindent pstop psspace psquote edithtml',
+            items: 'psmorepara pscombopara blockalignmenu psdefault psindent pstop psspace psquote edithtml',
         });
         // Em título: "Mais estilos" (⋮) no canto esquerdo, alinhamento logo à direita, depois estilos inline.
         editor.ui.registry.addContextToolbar('headingstyles', {
