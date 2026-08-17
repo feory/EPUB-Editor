@@ -197,8 +197,11 @@ async function reverseImages(
         const src = img.getAttribute('src') || '';
         const m = src.match(/([^/]+)\.([A-Za-z0-9]+)$/);
         if (!m) continue;
-        const [, id, ext] = m;
-        if (skipIds.has(id)) { img.remove(); continue; } // capa → fora da galeria
+        const [, rawId, ext] = m;
+        if (skipIds.has(rawId)) { img.remove(); continue; } // capa → fora da galeria
+        // id vira atributo XML "id" (NCName) no OPF: sem ":" e sem começar por dígito (ex.: "001.png")
+        const cleanedId = rawId.replace(/[^A-Za-z0-9_-]/g, '_');
+        const id = /^[A-Za-z_]/.test(cleanedId) ? cleanedId : `img-${cleanedId}`;
         if (!images.has(id)) {
             const entry = zip.file(resolvePath(docDir, src));
             if (entry) {

@@ -12,6 +12,14 @@ const IMAGE_EXT_BY_TYPE: Record<string, string> = {
 
 const getImageExtension = (blob: Blob): string => IMAGE_EXT_BY_TYPE[blob.type] || 'png';
 
+// id do manifesto OPF tem de ser XML NCName: sem ":" etc. e sem começar por dígito (Xerces
+// reporta sempre "without colons" mesmo quando o problema real é o dígito inicial — ids tipo
+// "001" vindos de imagens numeradas de EPUBs antigos disparavam RSC-005 apesar de não terem ":").
+const toNCName = (id: string): string => {
+    const cleaned = id.replace(/[^A-Za-z0-9_-]/g, '_');
+    return /^[A-Za-z_]/.test(cleaned) ? cleaned : `img-${cleaned}`;
+};
+
 const createImageFilename = (id: string, blob: Blob, includeFolder = true): string => {
     const ext = getImageExtension(blob);
     return includeFolder ? `Images/${id}.${ext}` : `${id}.${ext}`;
@@ -66,7 +74,7 @@ export const addImagesToArchive = (
         entries.push({ id, filename: createImageFilename(id, blob, true), mediaType: blob.type });
     });
     const manifestItems = entries
-        .map(({ id, filename, mediaType }) => `<item id="${id}" href="${filename}" media-type="${mediaType}"/>`)
+        .map(({ id, filename, mediaType }) => `<item id="${toNCName(id)}" href="${filename}" media-type="${mediaType}"/>`)
         .join('\n    ');
     return { manifestItems, entries };
 };

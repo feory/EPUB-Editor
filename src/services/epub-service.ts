@@ -138,6 +138,10 @@ export const EPUB_CSS = `
         border-top: 1px solid #ccc;
         width: 40%;
     }
+
+    /* === DIVISÓRIA === */
+    hr { border: none; height: 1px; background: #ccc; width: 40%; margin: 1.5em auto; }
+    hr.divider-full { width: 100%; }
 `;
 
 // O style.css por livro tem uma secção editor-only após este marcador; cortar antes de exportar/pré-visualizar.
@@ -159,6 +163,11 @@ const exportCss = (css: string): string => {
     }
     if (!out.includes('.p-asterisk')) {
         out += '\n.p-asterisk { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }';
+    }
+    if (!out.includes('.divider-full')) {
+        // Livros antigos sem regra de `hr`: UA default do e-reader é ~100% largura,
+        // fazendo a divisória "Pequena" (sem classe) exportar como larga.
+        out += '\nhr { border: none; height: 1px; background: #ccc; width: 40%; margin: 1.5em auto; }\nhr.divider-full { width: 100%; }';
     }
     // Notas: marcador (sup a) e backlink (.footnote a) herdam a cor do texto.
     // SEMPRE anexado no fim (vence a cascata) — livros antigos podem ter
