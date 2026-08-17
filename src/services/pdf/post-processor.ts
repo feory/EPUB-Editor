@@ -5,7 +5,7 @@
 export function linkFootnotes(html: string, idPrefix: string = ''): string {
   let result = html;
 
-  const footnoteDefPattern = /<p(?: id="[^"]*")? class="footnote">(\s*(?:<a[^>]*>)?\s*<sup>(\d+|\*+)<\/sup>(?:<\/a>)?.*?)\s*<\/p>/gs;
+  const footnoteDefPattern = /<p(?: id="[^"]*")? class="[^"]*\bfootnote\b[^"]*">(\s*(?:<a[^>]*>)?\s*\(?\s*<sup>(\d+|\*+)<\/sup>\)?(?:<\/a>)?.*?)\s*<\/p>/gs;
   footnoteDefPattern.lastIndex = 0;
   const matches = Array.from(result.matchAll(footnoteDefPattern));
   if (matches.length === 0) return result;
@@ -35,7 +35,7 @@ export function linkFootnotes(html: string, idPrefix: string = ''): string {
     result = result.replace(refPattern, (match, offset) => {
       if (fnIndex >= fns.length) return match;
       const context = result.substring(Math.max(0, offset - 200), offset);
-      if (context.includes('class="footnote"')) return match;
+      if (/class="[^"]*\bfootnote\b[^"]*"/.test(context)) return match;
       const fn = fns[fnIndex++];
       fn.refFound = true;
       return `<sup id="${fn.refId}"><a epub:type="noteref" role="doc-noteref" href="#${fn.fnId}">${marker}</a></sup>`;
@@ -45,7 +45,7 @@ export function linkFootnotes(html: string, idPrefix: string = ''): string {
   // Convert <p class="footnote"> → <aside>; backlink only when body ref was matched
   footnoteDefs.forEach(fn => {
     const contentWithoutMarker = fn.innerContent
-      .replace(/^\s*(?:<a[^>]*>)?\s*<sup>(?:\d+|\*+)<\/sup>\s*(?:<\/a>)?\s*/, '')
+      .replace(/^\s*(?:<a[^>]*>)?\s*\(?\s*<sup>(?:\d+|\*+)<\/sup>\)?\s*(?:<\/a>)?\s*/, '')
       .trim();
     const backlinkHtml = fn.refFound
       ? `<sup><a href="#${fn.refId}" role="doc-backlink">${fn.marker}</a></sup> `

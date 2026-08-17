@@ -213,7 +213,7 @@ const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
 
     return (
     <>
-        <aside className={`bg-surface rounded-2xl border border-border shadow-sm overflow-hidden sticky top-[var(--wp-header-h,89px)] max-h-[calc(100vh-var(--wp-header-h,89px)-31px)] flex flex-col transition-all duration-300 ${
+        <aside className={`bg-surface rounded-2xl border border-border shadow-sm overflow-hidden sticky top-[calc(var(--wp-header-h,89px)_+_32px)] max-h-[calc(100vh-var(--wp-header-h,89px)-63px)] flex flex-col transition-all duration-300 ${
             isFocusMode ? 'w-0 opacity-0 -ml-8 pointer-events-none' : isSidebarOpen ? 'w-[330px] opacity-100' : 'w-0 opacity-0 -ml-8 pointer-events-none 2xl:w-[330px] 2xl:ml-0'
         }`}>
             <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
