@@ -182,6 +182,7 @@ export const DEFAULT_CSS = `
     span.pagebreak {
         position: absolute;
         right: 4px;
+        transform: translateY(-12px);
         user-select: none;
         pointer-events: none;
     }
