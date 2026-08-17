@@ -23,6 +23,9 @@ interface UseImageGalleryOptions {
     htmlContent: string;
     editorRef: React.RefObject<WorkEditorRef | null>;
     onContentUpdate: (newHtml: string) => void;
+    // localizar imagem usada num capítulo diferente do aberto (muda de capítulo e faz scroll lá);
+    // sem isto, "localizar" só encontra a imagem se já estiver no capítulo certo.
+    onGoToImage?: (imageId: string) => boolean;
     refreshKey?: number;
 }
 
@@ -35,7 +38,7 @@ function countAllImageUsage(html: string): Map<string, number> {
     return counts;
 }
 
-export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate, refreshKey }: UseImageGalleryOptions) {
+export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate, onGoToImage, refreshKey }: UseImageGalleryOptions) {
     const { showNotification } = useNotification();
     const [images, setImages] = useState<Map<string, ImageData>>(new Map());
     const [searchQuery, setSearchQuery] = useState('');
@@ -187,9 +190,11 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
     }, [isbn, editorRef, showNotification]);
 
     const handleLocateImage = useCallback((imageData: ImageData) => {
-        const found = editorRef.current?.scrollToImage(imageData.id);
-        if (!found) showNotification('info', 'Imagem não usada neste capítulo', 2000);
-    }, [editorRef, showNotification]);
+        const found = onGoToImage
+            ? onGoToImage(imageData.id)
+            : editorRef.current?.scrollToImage(imageData.id);
+        if (!found) showNotification('info', 'Imagem não usada no livro', 2000);
+    }, [editorRef, onGoToImage, showNotification]);
 
     const handleRenameImage = useCallback(async (imageId: string, newImageName: string) => {
         if (!newImageName.trim()) { showNotification('error', 'Nome não pode estar vazio'); return; }

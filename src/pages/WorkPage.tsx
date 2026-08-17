@@ -75,6 +75,7 @@ export function WorkPage() {
   const editorRef = useRef<WorkEditorRef>(null);
   const suppressHighlightRef = useRef(false);
   const pendingPageScrollRef = useRef<number | null>(null);
+  const pendingImageScrollRef = useRef<string | null>(null);
 
   // Altura real do cabeçalho (banner de presença + navbar, quando ambos visíveis) — os
   // painéis fixos à direita (PDF/Galeria/Validações/Diff/Gramática) usavam top-[89px] a fixo,
@@ -309,6 +310,20 @@ export function WorkPage() {
     work.setActiveChapterIndex(chapterIndex);
   }, [work]);
 
+  // Clique em "localizar" na Galeria → mesmo padrão do handleGoToPdfPage: a imagem só existe no
+  // DOM do capítulo ATIVO, por isso localiza-se o capítulo dono via fullHtmlContent quando não
+  // está no capítulo aberto, muda-se para lá, e o scroll real corre depois (useEffect abaixo).
+  const handleGoToImage = useCallback((imageId: string): boolean => {
+    if (editorRef.current?.scrollToImage(imageId)) return true;
+    const marker = `data-image-id="${imageId}"`;
+    const parts = work.fullHtmlContent.split(CHAPTER_SPLIT_PATTERN).filter(p => p.trim().length > 0);
+    const chapterIndex = parts.findIndex(p => p.includes(marker));
+    if (chapterIndex === -1) return false;
+    pendingImageScrollRef.current = imageId;
+    work.setActiveChapterIndex(chapterIndex);
+    return true;
+  }, [work]);
+
   // Ferramenta "Atualização Pagelist": PDF trocado com o painel PDF de Impressão eventualmente
   // aberto — o painel só relê o ficheiro no mount; bump de pdfVersion força-o a remontar.
   const handlePagelistUpdated = useCallback((anchors: PageAnchor[]) => {
@@ -324,6 +339,14 @@ export function WorkPage() {
     if (pending == null) return;
     pendingPageScrollRef.current = null;
     const t = setTimeout(() => { editorRef.current?.scrollToPage(pending); }, 250);
+    return () => clearTimeout(t);
+  }, [work.activeChapterIndex]);
+
+  useEffect(() => {
+    const pending = pendingImageScrollRef.current;
+    if (pending == null) return;
+    pendingImageScrollRef.current = null;
+    const t = setTimeout(() => { editorRef.current?.scrollToImage(pending); }, 250);
     return () => clearTimeout(t);
   }, [work.activeChapterIndex]);
 
@@ -631,6 +654,7 @@ export function WorkPage() {
           onClose={() => sidebars.setShowImageGallerySidebar(false)}
           editorRef={editorRef}
           onContentUpdate={work.setHtmlContent}
+          onGoToImage={handleGoToImage}
           refreshKey={galleryRefreshKey}
           width={panelWidth}
           onResize={handlePanelResize}

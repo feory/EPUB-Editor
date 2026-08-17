@@ -635,8 +635,9 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         scrollToImage: (imageId: string) => {
             const editor = editorRef.current;
             if (!editor) return false;
-            // ponytail: só procura no capítulo aberto; localizar noutro capítulo
-            // exigia mapear data-image-id → índice de capítulo no html completo.
+            // Só procura no capítulo aberto — localizar noutro capítulo (mapear
+            // data-image-id → índice via fullHtmlContent + mudar capítulo) é tratado
+            // pelo chamador (WorkPage.handleGoToImage), mesmo padrão do scrollToPage.
             const img = editor.getBody()?.querySelector(`img[data-image-id="${imageId}"]`) as HTMLElement | null;
             if (!img) return false;
             editor.focus();

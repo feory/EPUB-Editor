@@ -16,15 +16,16 @@ interface ImageGallerySidebarProps {
     onClose: () => void;
     editorRef: React.RefObject<WorkEditorRef | null>;
     onContentUpdate: (newHtml: string) => void;
+    onGoToImage?: (imageId: string) => boolean;
     refreshKey?: number;
     width: number;
     onResize: (width: number) => void;
 }
 
 const ImageGallerySidebarComponent: React.FC<ImageGallerySidebarProps> = ({
-    isbn, htmlContent, onClose, editorRef, onContentUpdate, refreshKey, width, onResize,
+    isbn, htmlContent, onClose, editorRef, onContentUpdate, onGoToImage, refreshKey, width, onResize,
 }) => {
-    const gallery = useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate, refreshKey });
+    const gallery = useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate, onGoToImage, refreshKey });
 
     const [isDragging, setIsDragging] = useState(false);
     const dragDepth = useRef(0);
