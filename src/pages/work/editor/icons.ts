@@ -22,6 +22,5 @@ export function registerEditorIcons(editor: TinyMCEEditor) {
         ['ps-union', '<svg width="24" height="24" viewBox="0 0 24 24"><rect x="4" y="4" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>'],
         ['ps-htmledit', '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 8l-4 4 4 4m6-8l4 4-4 4"/></svg>'],
         ['ps-vdots', '<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg>'],
-        ['ps-chapterbreak', '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h16v1.6H4zM4 7.4h11v1.6H4z"/><path fill="currentColor" d="M3 11.4h4v1.6H3zm6 0h4v1.6H9zm6 0h6v1.6h-6z"/><path fill="currentColor" d="M4 15.8h16v1.6H4zM4 19.2h11v1.6H4z"/></svg>'],
     ] as const).forEach(([name, svg]) => editor.ui.registry.addIcon(name, svg));
 }

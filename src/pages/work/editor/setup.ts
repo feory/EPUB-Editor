@@ -315,11 +315,11 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.on('input', refreshEmptyMarker); // ao escrever/apagar, atualizar o placeholder
 
         // Converter parágrafo→título remove os estilos de parágrafo associados.
-        // p-center (alinhamento) mantém-se — é válido num título.
+        // p-center (alinhamento) e p-space (espaçamento) mantêm-se — válidas num título.
         // ponytail: NodeChange é o choke point comum a todas as vias de conversão
         // (botões, menu "...", atalhos, markdown); estas classes nunca são legítimas num heading.
         const PARA_STYLE_CLASSES = [
-            'p-indent', 'p-top', 'p-space', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-quote', 'p-legendas',
+            'p-indent', 'p-top', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-quote', 'p-legendas',
             'p-non-indent', 'footnote', 'drop-cap', 'alinea',
             'p-border-top', 'p-border-bottom', 'p-border-sides',
         ];

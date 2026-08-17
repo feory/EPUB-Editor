@@ -12,7 +12,7 @@ export const QUICKBARS_SELECTION_TOOLBAR = 'bold italic underline superscript sm
 export const EDITOR_TOOLBAR =
     'undo redo | styles removeformat | ' +
     'align outdent indent bullist numlist | ' +
-    'chapterbreak box noBreak | link image charmap code';
+    'box noBreak | link image charmap code';
 
 export const STYLE_FORMATS = [
     { title: 'Títulos', items: [
@@ -72,6 +72,12 @@ const OTHER_STYLES = [
 ] as const;
 export const MORE_STYLES_PARA: ReadonlyArray<readonly [string, string]> = [...HEADING_STYLES, ...OTHER_STYLES];
 export const MORE_STYLES_HEAD: ReadonlyArray<readonly [string, string]> = [...PARAGRAPH_STYLES, ...OTHER_STYLES];
+
+// Combobox "Estilo" do mini-menu de parágrafo (ver mini-menu 'parastyles' em setup.ts).
+export const PARAGRAPH_QUICK_STYLES = [
+    ['p', 'Padrão'], ['p-indent', 'Com Indentação'], ['p-small', 'Texto Pequeno'], ['p-legendas', 'Legenda'],
+    ['p-bold', 'Negrito'], ['p-italic', 'Itálico'], ['p-bold-italic', 'Negrito + Itálico'], ['p-quote', 'Citação'],
+] as const;
 
 // Menu "/" (estilo Notion): escrever "/" abre lista p/ inserir/converter bloco.
 export const SLASH_ITEMS = [

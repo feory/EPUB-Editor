@@ -162,14 +162,16 @@ test('setup + wireEditor registam a superfície esperada sem lançar', () => {
     setup(editor);
 
     // botões / toggles / menus / context toolbars / autocompleter
-    for (const b of ['chapterbreak', 'edithtml']) expect(editor._reg.buttons.has(b)).toBe(true);
+    for (const b of ['edithtml']) expect(editor._reg.buttons.has(b)).toBe(true);
+    // 'chapterbreak' saiu da toolbar (0.9.4+); continua disponível só no menu "+" (mceChapterBreak).
+    expect(editor._reg.buttons.has('chapterbreak')).toBe(false);
     for (const t of ['imgalignleft', 'imgaligncenter', 'imgalignright', 'psdefault', 'psindent', 'pstop', 'psspace', 'psquote', 'psh1', 'psh2', 'psh3', 'smalltext', 'smallcaps', 'box', 'noBreak']) {
         expect(editor._reg.toggle.has(t)).toBe(true);
     }
     // botões mortos removidos
     expect(editor._reg.toggle.has('pssmall')).toBe(false);
     expect(editor._reg.toggle.has('psbold')).toBe(false);
-    for (const m of ['psmorepara', 'psmorehead', 'blockalignmenu']) expect(editor._reg.menu.has(m)).toBe(true);
+    for (const m of ['psmorepara', 'psmorehead', 'pscombopara', 'blockalignmenu']) expect(editor._reg.menu.has(m)).toBe(true);
     for (const c of ['imagealign', 'blockalign', 'parastyles', 'headingstyles']) expect(editor._reg.ctx.has(c)).toBe(true);
     expect(editor._reg.auto.has('slashmenu')).toBe(true);
     // ícones ps-*
