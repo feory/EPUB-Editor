@@ -39,6 +39,7 @@ body {
   min-height: 100vh;
   background-color: var(--color-bg-color);
   color: var(--color-text-main);
+  overscroll-behavior-y: none; /* scroll no fim de um painel interno (ex. lista de capítulos) não deve chainar pro body e sacudir o header/sidebar sticky */
 }
 
 * {
