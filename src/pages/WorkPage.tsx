@@ -11,7 +11,6 @@ import { EpubMappingModal } from './EpubMappingModal';
 import { scanEpubClasses } from '../services/epub-importer';
 import type { EpubClassInfo } from '../services/epub-importer';
 import type { ImportOptions } from '../utils/html-cleaner';
-import { CHAPTER_SPLIT_PATTERN } from '../utils/html-cleaner';
 import type { DocxStyleMapping } from '../services/document-importer';
 import { useEbookWork } from './work/useEbookWork';
 import { WorkToolbar } from './work/components/WorkToolbar';
@@ -27,6 +26,7 @@ import { DiffSidebar } from './work/components/DiffSidebar';
 import { PrintPdfSidebar } from './work/components/PrintPdfSidebar';
 import { useDiffComparison } from './work/hooks/useDiffComparison';
 import { useWorkPageSidebars } from './work/hooks/useWorkPageSidebars';
+import { useGoToChapterMarker } from './work/hooks/useGoToChapterMarker';
 import { useNotification } from '../context/NotificationContext';
 import { useStyles, DEFAULT_CSS, patchLoadedCss } from '../context/StyleContext';
 import { sanitizeImageFilename } from '../utils/format';
@@ -74,8 +74,6 @@ export function WorkPage() {
 
   const editorRef = useRef<WorkEditorRef>(null);
   const suppressHighlightRef = useRef(false);
-  const pendingPageScrollRef = useRef<number | null>(null);
-  const pendingImageScrollRef = useRef<string | null>(null);
 
   // Altura real do cabeçalho (banner de presença + navbar, quando ambos visíveis) — os
   // painéis fixos à direita (PDF/Galeria/Validações/Diff/Gramática) usavam top-[89px] a fixo,
@@ -296,33 +294,19 @@ export function WorkPage() {
     editorRef.current?.scrollToContent(context, paragraphIndex);
   };
 
-  // Clique numa página do painel de PDF → salta para o marcador de page-list correspondente.
-  // O marcador só existe no DOM do capítulo ATIVO (editor carrega capítulos um a um) — se não
-  // estiver no capítulo aberto, localiza-se o capítulo dono via fullHtmlContent e muda-se para
-  // lá primeiro; o scroll real corre depois, no useEffect de activeChapterIndex abaixo.
-  const handleGoToPdfPage = useCallback((folio: number) => {
-    if (editorRef.current?.scrollToPage(folio)) return;
-    const marker = `data-page="${folio}"`;
-    const parts = work.fullHtmlContent.split(CHAPTER_SPLIT_PATTERN).filter(p => p.trim().length > 0);
-    const chapterIndex = parts.findIndex(p => p.includes(marker));
-    if (chapterIndex === -1) return;
-    pendingPageScrollRef.current = folio;
-    work.setActiveChapterIndex(chapterIndex);
-  }, [work]);
-
-  // Clique em "localizar" na Galeria → mesmo padrão do handleGoToPdfPage: a imagem só existe no
-  // DOM do capítulo ATIVO, por isso localiza-se o capítulo dono via fullHtmlContent quando não
-  // está no capítulo aberto, muda-se para lá, e o scroll real corre depois (useEffect abaixo).
-  const handleGoToImage = useCallback((imageId: string): boolean => {
-    if (editorRef.current?.scrollToImage(imageId)) return true;
-    const marker = `data-image-id="${imageId}"`;
-    const parts = work.fullHtmlContent.split(CHAPTER_SPLIT_PATTERN).filter(p => p.trim().length > 0);
-    const chapterIndex = parts.findIndex(p => p.includes(marker));
-    if (chapterIndex === -1) return false;
-    pendingImageScrollRef.current = imageId;
-    work.setActiveChapterIndex(chapterIndex);
-    return true;
-  }, [work]);
+  // Clique numa página do painel de PDF → salta para o marcador de page-list correspondente;
+  // clique em "localizar" na Galeria → idem para uma imagem. Ambos os marcadores só existem no
+  // DOM do capítulo ATIVO (editor carrega capítulos um a um) — ver useGoToChapterMarker.
+  const handleGoToPdfPage = useGoToChapterMarker<number>(
+    editorRef, work.fullHtmlContent, work.activeChapterIndex, work.setActiveChapterIndex,
+    (folio) => `data-page="${folio}"`,
+    (editor, folio) => editor.scrollToPage(folio),
+  );
+  const handleGoToImage = useGoToChapterMarker<string>(
+    editorRef, work.fullHtmlContent, work.activeChapterIndex, work.setActiveChapterIndex,
+    (imageId) => `data-image-id="${imageId}"`,
+    (editor, imageId) => editor.scrollToImage(imageId),
+  );
 
   // Ferramenta "Atualização Pagelist": PDF trocado com o painel PDF de Impressão eventualmente
   // aberto — o painel só relê o ficheiro no mount; bump de pdfVersion força-o a remontar.
@@ -330,25 +314,6 @@ export function WorkPage() {
     work.handleGeneratePageList(anchors);
     setPdfVersion(v => v + 1);
   }, [work]);
-
-  // ponytail: timeout fixo (depois do reset de scroll/cursor do próprio WorkEditor, que já usa
-  // 100ms) em vez de um sinal de "capítulo montado" — se um capítulo muito grande demorar mais
-  // que isto a renderizar no TinyMCE, o scroll falha silenciosamente (scrollToPage devolve false).
-  useEffect(() => {
-    const pending = pendingPageScrollRef.current;
-    if (pending == null) return;
-    pendingPageScrollRef.current = null;
-    const t = setTimeout(() => { editorRef.current?.scrollToPage(pending); }, 250);
-    return () => clearTimeout(t);
-  }, [work.activeChapterIndex]);
-
-  useEffect(() => {
-    const pending = pendingImageScrollRef.current;
-    if (pending == null) return;
-    pendingImageScrollRef.current = null;
-    const t = setTimeout(() => { editorRef.current?.scrollToImage(pending); }, 250);
-    return () => clearTimeout(t);
-  }, [work.activeChapterIndex]);
 
   const handleFixLinks = () => {
     const n = editorRef.current?.fixLinkSpacing() ?? 0;

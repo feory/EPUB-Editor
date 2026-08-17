@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import type { ExtractedDocument } from './document-importer';
+import { toNCName } from './epub/image-utils';
 
 export interface EpubMetadata {
     ebook_isbn: string;
@@ -199,9 +200,7 @@ async function reverseImages(
         if (!m) continue;
         const [, rawId, ext] = m;
         if (skipIds.has(rawId)) { img.remove(); continue; } // capa → fora da galeria
-        // id vira atributo XML "id" (NCName) no OPF: sem ":" e sem começar por dígito (ex.: "001.png")
-        const cleanedId = rawId.replace(/[^A-Za-z0-9_-]/g, '_');
-        const id = /^[A-Za-z_]/.test(cleanedId) ? cleanedId : `img-${cleanedId}`;
+        const id = toNCName(rawId); // id vira atributo XML "id" (NCName) no OPF (ex.: "001.png")
         if (!images.has(id)) {
             const entry = zip.file(resolvePath(docDir, src));
             if (entry) {

@@ -15,7 +15,7 @@ const getImageExtension = (blob: Blob): string => IMAGE_EXT_BY_TYPE[blob.type] |
 // id do manifesto OPF tem de ser XML NCName: sem ":" etc. e sem começar por dígito (Xerces
 // reporta sempre "without colons" mesmo quando o problema real é o dígito inicial — ids tipo
 // "001" vindos de imagens numeradas de EPUBs antigos disparavam RSC-005 apesar de não terem ":").
-const toNCName = (id: string): string => {
+export const toNCName = (id: string): string => {
     const cleaned = id.replace(/[^A-Za-z0-9_-]/g, '_');
     return /^[A-Za-z_]/.test(cleaned) ? cleaned : `img-${cleaned}`;
 };

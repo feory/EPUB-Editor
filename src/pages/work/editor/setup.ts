@@ -447,9 +447,10 @@ export function createEditorSetup(deps: SetupDeps) {
                 startHtmlEdit(top);
             },
         });
-        // Combobox de estilo de parágrafo — mesmos 5 estilos dos botões psdefault/psindent/
-        // pstop/psspace/psquote (redundante de propósito: acesso rápido sem procurar o botão certo).
-        // Texto mostra o estilo ATIVO; onSetup reavalia em cada NodeChange (troca de bloco/estilo).
+        // Combobox de estilo de parágrafo — redundante de propósito com os botões psX (acesso
+        // rápido sem procurar o botão certo). Texto mostra o estilo ATIVO; formatChanged (não
+        // NodeChange cru) só reavalia quando um destes formatos MUDA mesmo, em vez de escanear
+        // os 8 formatos a cada NodeChange (cursor, clique, tecla — dispara constantemente).
         editor.ui.registry.addMenuButton('pscombopara', {
             text: 'Padrão',
             fetch: (callback) => callback(PARAGRAPH_QUICK_STYLES.map(([format, label]) => ({
@@ -462,13 +463,16 @@ export function createEditorSetup(deps: SetupDeps) {
                 },
             }))),
             onSetup: (api) => {
-                const update = () => {
+                const labelFor = () => {
                     const active = PARAGRAPH_QUICK_STYLES.find(([format]) => editor.formatter.match(format));
-                    api.setText(active ? active[1] : 'Padrão');
+                    return active ? active[1] : 'Padrão';
                 };
-                editor.on('NodeChange', update);
-                update();
-                return () => editor.off('NodeChange', update);
+                api.setText(labelFor());
+                const { unbind } = editor.formatter.formatChanged(
+                    PARAGRAPH_QUICK_STYLES.map(([format]) => format).join(','),
+                    () => api.setText(labelFor()),
+                );
+                return unbind;
             },
         });
         // Alinhamento agrupado num único dropdown (esquerda/centro/direita)

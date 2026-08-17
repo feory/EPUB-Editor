@@ -62,7 +62,7 @@ export const TEXT_PATTERNS = [
 const HEADING_STYLES = [['h1', 'Título 1'], ['h2', 'Título 2'], ['h3', 'Título 3']] as const;
 const PARAGRAPH_STYLES = [
     ['p', 'Padrão'], ['p-indent', 'Com Indentação'], ['p-top', 'Topo'],
-    ['p-space', 'Espaço Extra'], ['p-quote', 'Citação'],
+    ['p-space', 'Espaço Extra'], ['p-small', 'Texto Pequeno'], ['p-quote', 'Citação'],
     ['p-bold', 'Negrito'], ['p-italic', 'Itálico'], ['p-bold-italic', 'Negrito + Itálico'], ['p-legendas', 'Legenda'],
 ] as const;
 const OTHER_STYLES = [
@@ -73,11 +73,11 @@ const OTHER_STYLES = [
 export const MORE_STYLES_PARA: ReadonlyArray<readonly [string, string]> = [...HEADING_STYLES, ...OTHER_STYLES];
 export const MORE_STYLES_HEAD: ReadonlyArray<readonly [string, string]> = [...PARAGRAPH_STYLES, ...OTHER_STYLES];
 
-// Combobox "Estilo" do mini-menu de parágrafo (ver mini-menu 'parastyles' em setup.ts).
-export const PARAGRAPH_QUICK_STYLES = [
-    ['p', 'Padrão'], ['p-indent', 'Com Indentação'], ['p-small', 'Texto Pequeno'], ['p-legendas', 'Legenda'],
-    ['p-bold', 'Negrito'], ['p-italic', 'Itálico'], ['p-bold-italic', 'Negrito + Itálico'], ['p-quote', 'Citação'],
-] as const;
+// Combobox "Estilo" do mini-menu de parágrafo (ver mini-menu 'parastyles' em setup.ts) — subconjunto
+// reordenado de PARAGRAPH_STYLES (labels vêm de lá, fonte única).
+const QUICK_STYLE_ORDER = ['p', 'p-indent', 'p-small', 'p-legendas', 'p-bold', 'p-italic', 'p-bold-italic', 'p-quote'] as const;
+export const PARAGRAPH_QUICK_STYLES: ReadonlyArray<readonly [string, string]> =
+    QUICK_STYLE_ORDER.map(format => PARAGRAPH_STYLES.find(([f]) => f === format)!);
 
 // Menu "/" (estilo Notion): escrever "/" abre lista p/ inserir/converter bloco.
 export const SLASH_ITEMS = [
