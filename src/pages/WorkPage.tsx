@@ -315,20 +315,6 @@ export function WorkPage() {
     setPdfVersion(v => v + 1);
   }, [work]);
 
-  const handleFixLinks = () => {
-    const n = editorRef.current?.fixLinkSpacing() ?? 0;
-    showNotification(
-      n > 0 ? 'success' : 'info',
-      n > 0
-        ? `${n} ${n === 1 ? 'link corrigido' : 'links corrigidos'} no capítulo atual.`
-        : 'Nenhum link para corrigir no capítulo atual.'
-    );
-    // Validar de novo, já com o conteúdo corrigido (síncrono, do editor — sem
-    // depender do debounce de sincronização).
-    const report = editorRef.current?.getLinkReport() ?? null;
-    work.setLinkValidation(report && report.issues.length > 0 ? report : null);
-  };
-
   const handleGrammarCheck = (matches: unknown[], cache?: Record<string, unknown>) => {
     work.setGrammarIssues(matches);
     if (cache !== undefined) work.handleSaveGrammar(matches, cache);
@@ -607,7 +593,7 @@ export function WorkPage() {
           linkResults={work.linkValidation}
           onClose={() => { sidebars.setShowValidationSidebar(false); work.setValidationResults(null); work.setFootnoteValidation(null); work.setLinkValidation(null); }}
           onGoToIssue={handleGoToIssue}
-          onFixLinks={handleFixLinks}
+          onFixLinks={work.handleFixLinks}
           width={panelWidth}
           onResize={handlePanelResize}
         />

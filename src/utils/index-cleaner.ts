@@ -5,7 +5,7 @@
 // por heurística de dicionário (corta no termo conhecido mais longo).
 
 // Marcador interno de fronteira de entrada (vinda de quebra de linha do original).
-const SEP = '\u0001';
+const SEP = '';
 
 // Vírgula inicial + lista de páginas/intervalos (inclui "34,110" sem espaço).
 const PAGELIST = /,\s*\d+(?:\s*[–—-]\s*\d+)?(?:\s*,\s*\d+(?:\s*[–—-]\s*\d+)?)*/g;
@@ -61,11 +61,14 @@ function splitRegions(stream: string): { text: string; pages: string }[] {
 }
 
 // Núcleo partilhado por cleanIndexText/linkIndexPages: reconstrói as entradas (dicionário +
-// crossrefs) igual nos dois casos; só difere no que acontece à lista de páginas de cada entrada
-// — `onPages` decide (descartar, ou devolver texto/markup a anexar). Chamado sempre com a
-// última entrada tocada nesta região (mesmo no ramo "sem match" do crossref colado, que não
-// empurra entrada nova — a página, a existir, ainda pertence à entrada anterior).
-function buildEntries(raw: string, onPages: (pages: string) => string): string[] {
+// crossrefs) igual nos dois casos; só difere no que acontece a cada termo/lista de páginas —
+// `onTerm`/`onPages` decidem (identidade+descartar, ou escapar+embrulhar em link). Chamados no
+// momento exato em que cada peça nasce (nunca depois de concatenada), por isso `onTerm` nunca
+// precisa de adivinhar onde acaba o termo e começa a lista de páginas dentro da entrada final.
+// `onPages` é sempre chamado sobre a última entrada tocada nesta região (mesmo no ramo "sem
+// match" do crossref colado, que não empurra entrada nova — a página, a existir, ainda pertence
+// à entrada anterior).
+function buildEntries(raw: string, onTerm: (term: string) => string, onPages: (pages: string) => string): string[] {
     const stream = buildStream(raw);
     if (!stream) return [];
     const regions = splitRegions(stream);
@@ -84,19 +87,19 @@ function buildEntries(raw: string, onPages: (pages: string) => string): string[]
     const entries: string[] = [];
     const appendCrossref = (target: string) => {
         const t = clean(target);
-        if (t && entries.length > 0) entries[entries.length - 1] += `; ver também ${t}`;
+        if (t && entries.length > 0) entries[entries.length - 1] += `; ver também ${onTerm(t)}`;
     };
     for (const region of regions) {
         const cr = region.text.match(CROSSREF);
         if (!cr) {
-            for (const seg of region.text.split(SEP)) { const c = clean(seg); if (c) entries.push(c); }
+            for (const seg of region.text.split(SEP)) { const c = clean(seg); if (c) entries.push(onTerm(c)); }
         } else {
             const rest = cr[1];
             if (rest.includes(SEP)) {
                 // Fronteira dada pela quebra de linha original: alvo | termo(s) novo(s).
                 const parts = rest.split(SEP);
                 appendCrossref(parts[0]);
-                for (const seg of parts.slice(1)) { const c = clean(seg); if (c) entries.push(c); }
+                for (const seg of parts.slice(1)) { const c = clean(seg); if (c) entries.push(onTerm(c)); }
             } else {
                 // Glued na mesma linha: sufixo conhecido mais longo = termo novo.
                 const words = clean(rest).split(/\s+/);
@@ -106,7 +109,7 @@ function buildEntries(raw: string, onPages: (pages: string) => string): string[]
                 }
                 if (cut > 0) {
                     appendCrossref(words.slice(0, words.length - cut).join(' '));
-                    entries.push(clean(words.slice(words.length - cut).join(' ')));
+                    entries.push(onTerm(clean(words.slice(words.length - cut).join(' '))));
                 } else {
                     appendCrossref(rest); // sem correspondência: fica junto à anterior (revisão manual)
                 }
@@ -119,17 +122,26 @@ function buildEntries(raw: string, onPages: (pages: string) => string): string[]
 }
 
 export function cleanIndexText(raw: string): string[] {
-    return buildEntries(raw, () => '');
+    return buildEntries(raw, (term) => term, () => '');
 }
 
-// Como cleanIndexText, mas em vez de descartar a lista de páginas de cada entrada, embrulha
-// cada número num <span class="idx-link" data-target="page-N"> — só vira <a href> real no
-// export do EPUB (ver src/services/epub/index-links.ts), apontando para o marcador de
-// page-list dessa página; sem marcador correspondente no livro, o export desembrulha para
-// texto simples (nunca gera link morto). Entradas devolvidas já em HTML (termo escapado); o
-// chamador só precisa de embrulhar cada uma em <p>.
+// Embrulha cada número de uma lista de páginas (ex. ", 34, 56" ou ", 34–36") num
+// <span class="idx-link" data-target="page-N"> — só vira <a href> real no export do EPUB (ver
+// src/services/epub/index-links.ts), apontando para o marcador de page-list dessa página; sem
+// marcador correspondente no livro, o export desembrulha para texto simples (nunca gera link
+// morto). Reusado por WorkEditor.tsx (linkIndexPagesSelection) — único sítio a saber a forma
+// do idx-link.
+export function wrapPageLinks(pages: string): string {
+    return pages.replace(/\d+/g, (n) => `<span class="idx-link" data-target="page-${n}">${n}</span>`);
+}
+
+// Como cleanIndexText, mas em vez de descartar a lista de páginas de cada entrada, mantém-na —
+// ligada via wrapPageLinks. `onTerm` (esc) escapa cada termo assim que nasce, antes de ganhar
+// vizinhos — nunca corre sobre a entrada já concatenada, por isso um dígito do próprio termo
+// (ex. "Web 2.0, 12") nunca é confundido com a lista de páginas (que já chega HTML-safe de
+// wrapPageLinks, sem precisar de escape). Entradas devolvidas já em HTML; o chamador só precisa
+// de embrulhar cada uma em <p>.
 export function linkIndexPages(raw: string): string[] {
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return buildEntries(raw, (pages) => pages)
-        .map(entry => esc(entry).replace(/\d+/g, (n) => `<span class="idx-link" data-target="page-${n}">${n}</span>`));
+    return buildEntries(raw, esc, wrapPageLinks);
 }

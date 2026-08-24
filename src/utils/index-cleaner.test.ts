@@ -32,6 +32,13 @@ test('linkIndexPages: crossref colado ao número liga a página ao termo, não a
     ]);
 });
 
+test('linkIndexPages: dígito que faz parte do TERMO (não da lista de páginas) não vira link', () => {
+    const raw = 'Web 2.0, 12';
+    expect(linkIndexPages(raw)).toEqual([
+        'Web 2.0, <span class="idx-link" data-target="page-12">12</span>',
+    ]);
+});
+
 test('linkIndexPages: escapa caracteres HTML do termo sem afetar o markup do link', () => {
     const raw = 'A & B, 5';
     expect(linkIndexPages(raw)).toEqual([

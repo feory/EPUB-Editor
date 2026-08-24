@@ -381,32 +381,37 @@ function renderPsr(psr: Element, counter: NoteCounter): Segment[] {
                 if (hasNumberedTail) {
                     counter.star++;
                     const starNum = counter.star;
-                    const starBody = nonEmptySegs[0].replace(/^\s*<sup>\*<\/sup>\s*/, '').trim();
+                    // Strip "()" residual: número da nota no InDesign é campo auto-numerado
+                    // (<?ACE?>, PI ignorado ao processar) entre parênteses literais — sobra
+                    // um par vazio onde o dígito devia aparecer; o <sup> que geramos a seguir
+                    // (contador próprio) é que faz de número visível, por isso entra dentro
+                    // desse par em vez de ficar solto antes dele.
+                    const starBody = nonEmptySegs[0].replace(/^\s*<sup>\*<\/sup>\s*/, '').trim().replace(/^\(\)\s*/, '');
                     // Nota mista: no corpo mantém-se só o número; o asterisco é só um marcador
                     // interno da nota de revisão/tradutor.
                     if (cur.endsWith('<sup>*</sup>')) cur = cur.slice(0, -'<sup>*</sup>'.length);
-                    curNotes.push(`<p class="footnote" id="footnote-star-${starNum}"><sup>*</sup> ${starBody}</p>`);
+                    curNotes.push(`<p class="footnote" id="footnote-star-${starNum}">(<sup>*</sup>) ${starBody}</p>`);
                     counter.n++;
                     const num = counter.n;
-                    const numBody = nonEmptySegs.slice(1).join(' ').trim();
+                    const numBody = nonEmptySegs.slice(1).join(' ').trim().replace(/^\(\)\s*/, '');
                     cur += `<sup><a href="#footnote-${num}" class="footnote-ref">${num}</a></sup>`;
-                    curNotes.push(`<p class="footnote" id="footnote-${num}"><sup>${num}</sup> ${numBody}</p>`);
+                    curNotes.push(`<p class="footnote" id="footnote-${num}">(<sup>${num}</sup>) ${numBody}</p>`);
                 } else if (firstIsStar) {
                     counter.star++;
                     const starNum = counter.star;
-                    const starBody = nonEmptySegs.join(' ').replace(/^\s*<sup>\*<\/sup>\s*/, '').trim();
+                    const starBody = nonEmptySegs.join(' ').replace(/^\s*<sup>\*<\/sup>\s*/, '').trim().replace(/^\(\)\s*/, '');
                     if (cur.endsWith('<sup>*</sup>')) {
                         cur = cur.slice(0, -'<sup>*</sup>'.length) + `<sup><a href="#footnote-star-${starNum}" class="footnote-ref">*</a></sup>`;
                     } else {
                         cur += `<sup><a href="#footnote-star-${starNum}" class="footnote-ref">*</a></sup>`;
                     }
-                    curNotes.push(`<p class="footnote" id="footnote-star-${starNum}"><sup>*</sup> ${starBody}</p>`);
+                    curNotes.push(`<p class="footnote" id="footnote-star-${starNum}">(<sup>*</sup>) ${starBody}</p>`);
                 } else {
                     counter.n++;
                     const num = counter.n;
-                    const numBody = nonEmptySegs.join(' ').trim();
+                    const numBody = nonEmptySegs.join(' ').trim().replace(/^\(\)\s*/, '');
                     cur += `<sup><a href="#footnote-${num}" class="footnote-ref">${num}</a></sup>`;
-                    curNotes.push(`<p class="footnote" id="footnote-${num}"><sup>${num}</sup> ${numBody}</p>`);
+                    curNotes.push(`<p class="footnote" id="footnote-${num}">(<sup>${num}</sup>) ${numBody}</p>`);
                 }
             } else if (el.tagName === 'HyperlinkTextSource' || el.tagName === 'CharacterStyleRange') {
                 // Índice gerado pelo InDesign: o texto das entradas vive dentro de HyperlinkTextSource,

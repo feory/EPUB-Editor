@@ -14,6 +14,7 @@ import { linkIndiceEntries } from '../../utils/indice-links';
 import type { DocxStyleMapping } from '../../services/document-importer';
 import { insertPageBreaks } from '../../services/page-list';
 import type { PageAnchor } from '../../services/page-list';
+import { fixLinks, validateLinks } from '../../services/link-validator';
 
 import { contentReducer, initialContentState } from './hooks/contentReducer';
 import { useChapterSync } from './hooks/useChapterSync';
@@ -331,6 +332,23 @@ export function useEbookWork(isbn: string | undefined) {
         showNotification('success', `${linked} ${linked === 1 ? 'entrada ligada' : 'entradas ligadas'} a ${anchored} ${anchored === 1 ? 'capítulo' : 'capítulos'}.`);
     }, [chapterSync, commitHtml, showNotification]);
 
+    // --- Corrigir espaçamento de links (livro inteiro, independente do capítulo aberto no
+    // editor — a validação já corre sobre o livro todo, ver useEbookValidation, mas o fix
+    // anterior só tocava editor.getContent() = capítulo ativo). ---
+    const handleFixLinks = useCallback(() => {
+        const syncedHtml = chapterSync.getSyncedHtmlContent();
+        const { html: fixedHtml, fixed } = fixLinks(syncedHtml);
+        if (fixed === 0 || fixedHtml === syncedHtml) {
+            showNotification('info', 'Nenhum link para corrigir.');
+            return;
+        }
+        commitHtml(fixedHtml);
+        showNotification('success', `${fixed} ${fixed === 1 ? 'link corrigido' : 'links corrigidos'}.`);
+        // Validar de novo já com o conteúdo corrigido (síncrono — sem depender do debounce de sync).
+        const report = validateLinks(fixedHtml);
+        validation.setLinkValidation(report.issues.length > 0 ? report : null);
+    }, [chapterSync, commitHtml, showNotification, validation]);
+
     // PDF carregado DEPOIS do import (o zip IDML não tinha PDF, ou o import é antigo) — gera a
     // page-list agora, sobre o livro já importado. anchors já vêm calculados de PrintPdfSidebar
     // (que já corre extractPdfPageAnchors para o mapa de sync scroll↔PDF — evita fazer o parsing
@@ -418,6 +436,7 @@ export function useEbookWork(isbn: string | undefined) {
         handleChangeChapterLevel,
         handleApplyDropCaps,
         handleLinkIndiceEntries,
+        handleFixLinks,
         handleGeneratePageList,
 
         handleImportPdf: useCallback(

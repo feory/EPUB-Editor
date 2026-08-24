@@ -5,8 +5,7 @@ import { useStyles } from '../../../context/StyleContext';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { applyImportOptions, convertListsToDialogue } from '../../../utils/html-cleaner';
 import type { ImportOptions } from '../../../utils/html-cleaner';
-import { fixLinks, validateLinks, type LinkReport } from '../../../services/link-validator';
-import { cleanIndexText, linkIndexPages, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
+import { cleanIndexText, linkIndexPages, wrapPageLinks, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
 import { sanitizeImageFilename } from '../../../utils/format';
 import {
     getContentBlocks, unwrapNode, clearMarkers,
@@ -99,8 +98,6 @@ export interface WorkEditorRef {
     cleanIndexSelection: () => void;
     linkIndexPagesSelection: () => void;
     applyConversions: (options: ImportOptions) => void;
-    fixLinkSpacing: () => number;
-    getLinkReport: () => LinkReport;
 }
 
 // Corte/substituição gravam os bytes SOBRE o mesmo imageId (mesmo src) — o <img> já montado no
@@ -413,6 +410,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
 
             const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const doc = new DOMParser().parseFromString(html, 'text/html');
+            const range = doc.createRange(); // reusado por linkPageNumbers (createContextualFragment não precisa de posição)
+            const isBoundary = (block: Element) => /^H[1-6]$/.test(block.tagName) || /\bchapter-break/.test(block.className);
 
             // Envolve, num text node, cada número dentro de uma lista de páginas — preservando a
             // formatação inline (<em>/<strong>/versaletes/notas) e o texto à volta tal e qual.
@@ -423,9 +422,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 for (const t of texts) {
                     const raw = t.textContent || '';
                     if (!INDEX_PAGE_LIST.test(raw)) continue; // .replace() abaixo reseta lastIndex sozinho (regex global)
-                    const linked = esc(raw).replace(INDEX_PAGE_LIST, (m) =>
-                        m.replace(/\d+/g, (n) => `<span class="idx-link" data-target="page-${n}">${n}</span>`));
-                    t.replaceWith(doc.createRange().createContextualFragment(linked));
+                    const linked = esc(raw).replace(INDEX_PAGE_LIST, (m) => wrapPageLinks(m));
+                    t.replaceWith(range.createContextualFragment(linked));
                 }
             };
 
@@ -439,15 +437,14 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 const merged: Element[] = [];
                 for (const block of blocks) {
                     const text = block.textContent ?? '';
-                    const isBoundary = /^H[1-6]$/.test(block.tagName) || /\bchapter-break/.test(block.className);
-                    if (!isBoundary && merged.length > 0 && isPageContinuation(text)) {
+                    if (!isBoundary(block) && merged.length > 0 && isPageContinuation(text)) {
                         merged[merged.length - 1].append(doc.createTextNode(' ' + text.trim()));
                         continue;
                     }
                     merged.push(block);
                 }
                 for (const block of merged) {
-                    if (/^H[1-6]$/.test(block.tagName) || /\bchapter-break/.test(block.className)) { out.push(block.outerHTML); continue; }
+                    if (isBoundary(block)) { out.push(block.outerHTML); continue; }
                     if (!(block.textContent ?? '').trim()) continue;
                     linkPageNumbers(block);
                     out.push(block.outerHTML);
@@ -469,24 +466,6 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             if (result === html) return;
             editor.setContent(result);
             editor.dispatch('Change');
-        },
-
-        fixLinkSpacing: () => {
-            const editor = editorRef.current;
-            if (!editor) return 0;
-            const html = editor.getContent();
-            if (!html.trim()) return 0;
-            const { html: fixedHtml, fixed } = fixLinks(html);
-            if (fixed > 0 && fixedHtml !== html) {
-                editor.setContent(fixedHtml);
-                editor.dispatch('Change');
-            }
-            return fixed;
-        },
-
-        getLinkReport: () => {
-            const editor = editorRef.current;
-            return validateLinks(editor ? editor.getContent() : '');
         },
 
         filterGrammarHighlights: (filter: 'all' | 'spelling' | 'grammar') => {

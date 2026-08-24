@@ -1,5 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { fillFolioGaps } from './page-list-folio';
+import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from './page-list-marker';
 
 // Worker partilhado com o pdf-service (já configurado lá); reconfigurar é idempotente.
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -304,11 +305,10 @@ function longestIncreasing(arr: number[]): number[] {
     return seq.reverse();
 }
 
-// Remove marcadores de page-list já existentes (mesmo padrão tolerante a ordem/extra de
-// atributos usado por convertPageBreaks). Único dono da forma HTML do marcador — usado por
-// insertPageBreaks (idempotência) e por quem precisar de o descartar sem reinserir.
+// Remove marcadores de page-list já existentes — usado por insertPageBreaks (idempotência) e
+// por quem precisar de os descartar sem reinserir.
 export function stripPageBreaks(html: string): string {
-    return html.replace(/<span\b[^>]*\bclass="[^"]*\bpagebreak\b[^"]*"[^>]*><\/span>/g, '');
+    return html.replace(PAGEBREAK_MARKER_RE, '');
 }
 
 /**
@@ -383,9 +383,8 @@ export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: s
  * semântica do EPUB e recolhe (secção, página) para a page-list. Usado no export por secção.
  */
 export function convertPageBreaks(html: string, sectionNum: number, sink: { section: number; page: number }[]): string {
-    // tolerante à ordem/extra de atributos (TinyMCE/DOMPurify podem reordenar)
-    return html.replace(/<span\b[^>]*\bclass="[^"]*\bpagebreak\b[^"]*"[^>]*><\/span>/g, (m) => {
-        const n = m.match(/\bdata-page="(\d+)"/)?.[1];
+    return html.replace(PAGEBREAK_MARKER_RE, (m) => {
+        const n = m.match(DATA_PAGE_RE)?.[1];
         if (!n) return m;
         sink.push({ section: sectionNum, page: parseInt(n) });
         return `<span epub:type="pagebreak" role="doc-pagebreak" id="page-${n}" aria-label="${n}"></span>`;
