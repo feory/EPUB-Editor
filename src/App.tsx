@@ -11,7 +11,6 @@ import { Loader2 } from 'lucide-react';
 const HomePage  = lazy(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })));
 const WorkPage  = lazy(() => import('./pages/WorkPage').then(m => ({ default: m.WorkPage })));
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
-const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
 const PainelPage = lazy(() => import('./pages/PainelPage').then(m => ({ default: m.PainelPage })));
 
 const queryClient = new QueryClient({
@@ -48,9 +47,6 @@ function App() {
                     } />
                     <Route path="/work/:isbn" element={
                       <ProtectedRoute><WorkPage /></ProtectedRoute>
-                    } />
-                    <Route path="/admin" element={
-                      <ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>
                     } />
                     <Route path="/painel" element={
                       <ProtectedRoute adminOnly><PainelPage /></ProtectedRoute>

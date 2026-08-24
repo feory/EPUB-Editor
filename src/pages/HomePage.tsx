@@ -326,7 +326,6 @@ export function HomePage() {
                                 viewMode={viewMode}
                                 onViewModeChange={setViewMode}
                                 onLogout={handleLogout}
-                                onNavigateAdmin={() => navigate('/admin')}
                                 onNavigatePanel={() => navigate('/painel')}
                                 onImportEpub={() => epubInputRef.current?.click()}
                                 importPending={importEpubMutation.isPending || scanningEpub}

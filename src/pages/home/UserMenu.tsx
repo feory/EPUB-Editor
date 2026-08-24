@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LogOut, Shield, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2 } from 'lucide-react';
+import { LogOut, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2 } from 'lucide-react';
 import type { AuthUser } from '../../api/auth-api';
 
 type ViewMode = 'table' | 'grid';
@@ -9,7 +9,6 @@ interface UserMenuProps {
     viewMode: ViewMode;
     onViewModeChange: (mode: ViewMode) => void;
     onLogout: () => void;
-    onNavigateAdmin: () => void;
     onNavigatePanel: () => void;
     onImportEpub: () => void;
     importPending: boolean;
@@ -28,7 +27,7 @@ const VIEW_MODES: { mode: ViewMode; icon: React.ReactNode; label: string }[] = [
 ];
 
 export const UserMenu: React.FC<UserMenuProps> = ({
-    user, viewMode, onViewModeChange, onLogout, onNavigateAdmin, onNavigatePanel, onImportEpub, importPending,
+    user, viewMode, onViewModeChange, onLogout, onNavigatePanel, onImportEpub, importPending,
 }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -91,13 +90,6 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                     {/* Admin section */}
                     {user.role === 'admin' && (
                         <div className="border-b border-border">
-                            <button
-                                onClick={() => { setOpen(false); onNavigateAdmin(); }}
-                                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:bg-slate-50 hover:text-text-main transition-colors"
-                            >
-                                <Shield size={15} />
-                                <span>Gestão de Utilizadores</span>
-                            </button>
                             <button
                                 onClick={() => { setOpen(false); onNavigatePanel(); }}
                                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:bg-slate-50 hover:text-text-main transition-colors"
