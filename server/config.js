@@ -12,3 +12,9 @@ export const JWT_SECRET = Bun.env.JWT_SECRET
 export const ALLOWED_ORIGIN = Bun.env.ALLOWED_ORIGIN ?? 'http://localhost:5173';
 export const ADMIN_EMAIL    = Bun.env.ADMIN_EMAIL;
 export const ADMIN_PASSWORD = Bun.env.ADMIN_PASSWORD;
+
+// Backup para o Backblaze B2 — opcional (sem isto, o botão/cron do Painel só avisa "não
+// configurado", nunca rebenta o arranque do servidor).
+export const B2_KEY_ID          = Bun.env.B2_KEY_ID;
+export const B2_APPLICATION_KEY = Bun.env.B2_APPLICATION_KEY;
+export const B2_BUCKET_NAME     = Bun.env.B2_BUCKET_NAME;

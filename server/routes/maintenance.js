@@ -6,6 +6,7 @@ import { corsHeaders } from '../response.js';
 import { DATA_DIR } from '../config.js';
 import { debugLog } from '../log.js';
 import { stmt } from '../database.js';
+import { b2Configured, b2RcloneRemote } from '../b2-client.js';
 
 // Apaga, dentro de `dir`, os ficheiros que passam `filter` e têm mais de `limit` (mtime) —
 // preservando SEMPRE o mais recente. Devolve { count, bytes } apagados.
@@ -161,6 +162,46 @@ export async function migrateEpubs(user) {
   } catch (err) {
     return Response.json({ success: false, error: err.message, migratedCount, errors }, { status: 500, headers: corsHeaders });
   }
+}
+
+// Mirror de data/ inteira (todos os livros: ativos, Reciclagem, histórico, relatórios ACE)
+// para "<bucket>/data" no B2, via `rclone sync` — só transfere o que mudou desde a última
+// corrida (ao contrário de um tar.gz novo de cada vez). `sync` apaga no B2 o que já não existe
+// localmente (livro purgado, history/ rodado) para ficar espelho fiel; isto é seguro aqui
+// porque o bucket não tem lifecycle rule nenhuma (verificado via b2_list_buckets) — o B2
+// mantém TODAS as versões antigas por omissão, portanto um "delete" do sync não perde nada,
+// só deixa de ser a versão corrente (recuperável por b2_list_file_versions se precisar).
+// Partilhado pelo botão manual (runBackup, exige admin) e pelo cron diário (server/index.js
+// chama isto direto, sem `user` — é o próprio servidor a correr).
+export async function performBackup() {
+  if (!b2Configured()) throw new Error('B2 não configurado (B2_KEY_ID/B2_APPLICATION_KEY/B2_BUCKET_NAME em falta no .env).');
+  const proc = Bun.spawn(
+    ['rclone', 'sync', DATA_DIR, b2RcloneRemote('data'), '--fast-list', '-v', '--stats-one-line'],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  const [exitCode, stderr] = await Promise.all([proc.exited, Bun.readableStreamToText(proc.stderr)]);
+  if (exitCode !== 0) throw new Error(`rclone sync falhou (${exitCode}): ${stderr}`);
+  // --stats-one-line escreve 1 linha de resumo (Transferred/Checks/Deleted/...) em cada tick +
+  // no fim — a última linha não-vazia do stderr é sempre essa.
+  const summary = stderr.trim().split('\n').filter(Boolean).pop() ?? 'sem resumo';
+  return { summary };
+}
+
+// Dispara e não espera: uma sincronização pode levar minutos (testado: ~5min só para 86MB,
+// muitos ficheiros pequenos — overhead da API do B2 por ficheiro, não largura de banda), bem
+// acima do idleTimeout máximo que o Bun aceita (255s) para aguentar synchronamente numa
+// request HTTP. O resultado fica só nos logs do servidor (mesmo padrão do cron diário,
+// server/index.js) — sem isto, o botão do Painel rebentava em timeout na 1ª sincronização.
+export async function runBackup(user) {
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+  if (!b2Configured()) {
+    return Response.json({ error: 'B2 não configurado (B2_KEY_ID/B2_APPLICATION_KEY/B2_BUCKET_NAME em falta no .env).' }, { status: 400, headers: corsHeaders });
+  }
+  performBackup()
+    .then(r => console.log(`💾 [Mirror B2] ${r.summary}`))
+    .catch(err => console.error(`💾 [Mirror B2] falhou:`, err.message));
+  return Response.json({ message: 'Mirror iniciado em background — confere os logs do servidor quando terminar.' }, { headers: corsHeaders });
 }
 
 export async function healthCheck() {

@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     default-jre-headless \
     ca-certificates \
     gnupg \
+    rclone \
     libnss3 \
     libatk-bridge2.0-0 \
     libgtk-3-0 \

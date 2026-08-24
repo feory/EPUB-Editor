@@ -209,6 +209,7 @@ export const ebooksApi = {
     // Maintenance
     cleanupHistory: () => apiClient.post<{ deletedCount: number, sizeSavedMB: string }>('/maintenance/cleanup-history'),
     getDiskUsage: () => apiClient.get<DiskUsageResponse>('/maintenance/disk-usage'),
+    runBackup: () => apiClient.post<{ message: string }>('/maintenance/backup'),
 
     // Presence / edit-lock
     heartbeat: (isbn: string) => apiClient.post<PresenceStatus>(`/ebooks/${isbn}/presence`),

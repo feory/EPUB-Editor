@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Trash2, Loader2, AlertTriangle, Search, Check, X } from 'lucide-react';
+import { ChevronLeft, Trash2, Loader2, AlertTriangle, Search, Check, X, CloudUpload } from 'lucide-react';
 import { ebooksApi, type DiskUsageBook } from '../api/ebooks-api';
 import { useNotification } from '../context/NotificationContext';
 import { Pagination } from '../components/Pagination';
@@ -90,6 +90,14 @@ export function PainelPage() {
         onError: () => showNotification('error', 'Erro ao realizar a limpeza do histórico.'),
     });
 
+    const backupMutation = useMutation({
+        mutationFn: () => ebooksApi.runBackup(),
+        // Mirror pode levar minutos (rclone sync) — o pedido devolve logo "iniciado", o
+        // resultado real só fica nos logs do servidor (ver server/index.js).
+        onSuccess: () => showNotification('success', 'Mirror com o B2 iniciado em background.'),
+        onError: (err: any) => showNotification('error', err?.response?.data?.error ?? 'Erro ao iniciar o mirror.'),
+    });
+
     const [query, setQuery] = useState('');
     const [searchOpen, setSearchOpen] = useState(false);
     const [confirmCleanup, setConfirmCleanup] = useState(false);
@@ -128,6 +136,16 @@ export function PainelPage() {
                         </button>
                         <h1 className="text-xl font-bold text-slate-700">Painel</h1>
                     </div>
+                    <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => backupMutation.mutate()}
+                        disabled={backupMutation.isPending}
+                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50"
+                        title="Sincroniza data/ com o Backblaze B2 (rclone mirror, background)"
+                    >
+                        {backupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <CloudUpload size={14} />}
+                        Sincronizar B2
+                    </button>
                     {confirmCleanup ? (
                         <div className="flex items-center gap-2">
                             <span className="text-xs text-text-muted">Remove definitivamente todos os rascunhos com +7 dias, de todos os livros. Não pode ser desfeito.</span>
@@ -156,6 +174,7 @@ export function PainelPage() {
                             Limpar Histórico
                         </button>
                     )}
+                    </div>
                 </div>
 
                 {isLoading || !data ? (
