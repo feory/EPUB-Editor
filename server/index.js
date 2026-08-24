@@ -16,7 +16,7 @@ import * as trash from './routes/trash.js';
 import * as maintenance from './routes/maintenance.js';
 import * as validation from './routes/validation.js';
 import * as presence from './presence.js';
-import { b2Configured } from './b2-client.js';
+import { startBackupScheduler, stopBackupScheduler } from './backup.js';
 
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR);
 if (!existsSync(TEMP_DIR)) mkdirSync(TEMP_DIR);
@@ -31,16 +31,9 @@ const cleanupInterval = setInterval(() => {
 migrateGrammarToDb();
 purgeOldTrash();
 
-// Mirror diário para o B2 (rclone sync — ver maintenance.js) — corre a cada 24h a partir do
-// arranque do servidor (não a uma hora fixa do relógio; se isso vier a importar, trocar por
-// node-cron). Sem env vars do B2, salta em silêncio (comum em dev) em vez de rebentar o
-// intervalo.
-const backupInterval = setInterval(() => {
-  if (!b2Configured()) return;
-  maintenance.performBackup('cron')
-    .then(r => console.log(`💾 [Mirror B2] ${r.summary}`))
-    .catch(err => console.error('💾 [Mirror B2] falhou:', err.message));
-}, 24 * 3600 * 1000);
+// Mirror para o B2 (rclone sync) segundo o horário guardado (separador Backup do Painel,
+// backup_schedule em settings — default "0 3 * * *" sem valor guardado) — ver server/backup.js.
+startBackupScheduler();
 
 async function seedAdmin() {
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD) return null;
@@ -240,7 +233,7 @@ console.log(`Server running at http://localhost:${server.port}`);
 function shutdown(signal) {
   console.log(`\n${signal} received. Shutting down gracefully...`);
   clearInterval(cleanupInterval);
-  clearInterval(backupInterval);
+  stopBackupScheduler();
   console.log('→ Cleanup interval cleared');
   server.stop();
   console.log('→ Server stopped accepting connections');

@@ -7,16 +7,22 @@ import { useNotification } from '../context/NotificationContext';
 import { Pagination } from '../components/Pagination';
 import { formatFileSize } from '../utils/format';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 12; // par — enche as 2 colunas do BookTable sem sobrar 1 sozinho
 
 const CATEGORY_LABELS: Record<string, string> = {
     epub: 'EPUB', history: 'Histórico', images: 'Imagens',
     thumbnails: 'Miniaturas', aceReports: 'Acessibilidade', misc: 'Outros',
 };
+// Ordem fixa (nunca ciclada) do tema categórico validado do dataviz skill — 6 dos 8 slots,
+// já passa CVD/contraste/legibilidade em conjunto (scripts/validate_palette.js, referências
+// do skill). Usado só pelo donut abaixo — não pelas listas de livros (sem categorias lá).
 const CATEGORY_COLORS: Record<string, string> = {
-    epub: 'bg-slate-500', history: 'bg-amber-500', images: 'bg-sky-500',
-    thumbnails: 'bg-teal-500', aceReports: 'bg-rose-500', misc: 'bg-slate-300',
+    epub: '#2a78d6', history: '#eb6834', images: '#1baf7a',
+    thumbnails: '#eda100', aceReports: '#e87ba4', misc: '#008300',
 };
+// Deriva da ordem de CATEGORY_LABELS — nunca diverge dele (3 arrays paralelos escritos à mão
+// era um risco real de desalinhamento silencioso).
+const CATEGORY_ORDER = Object.keys(CATEGORY_LABELS);
 
 function StatTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
     return (
@@ -27,20 +33,89 @@ function StatTile({ label, value, accent }: { label: string; value: string; acce
     );
 }
 
-function CategoryBreakdown({ totals }: { totals: Record<string, number> }) {
+// Donut SVG simples (sem lib de gráficos, mesma linha do resto da app) — anel via
+// stroke-dasharray por categoria (arco = valor/total da circunferência, com um pequeno gap
+// angular entre segmentos, cap arredondado). Centro é a "tooltip": mostra o total parado, e a
+// categoria em foco/hover ao passar — hover e focus do teclado atualizam o mesmo estado, por
+// isso têm sempre paridade (regra do dataviz skill).
+function CategoryDonut({ totals }: { totals: Record<string, number> }) {
+    const [active, setActive] = useState<string | null>(null);
     const grand = Object.values(totals).reduce((s, v) => s + v, 0);
-    if (grand === 0) return <p className="text-sm text-text-muted px-6 py-4">Sem dados.</p>;
+    if (grand === 0) return <p className="text-sm text-text-muted px-6 py-8 text-center">Sem dados.</p>;
+
+    const entries = CATEGORY_ORDER
+        .map(key => ({ key, bytes: totals[key] ?? 0 }))
+        .filter(e => e.bytes > 0);
+
+    const R = 45, STROKE = 16, C = 2 * Math.PI * R;
+    const GAP = entries.length > 1 ? 3 : 0; // unidades do viewBox — só faz sentido com >1 fatia
+    // reduce imutável (sem mutar variável fora do callback — cada passo devolve um acumulador
+    // novo) para o offset angular acumulado de cada fatia.
+    const arcs = entries.reduce<{ list: { key: string; bytes: number; dash: string; dashoffset: number }[]; offset: number }>(
+        (acc, { key, bytes }) => {
+            const len = (bytes / grand) * C;
+            const dash = `${Math.max(0, len - GAP)} ${C - Math.max(0, len - GAP)}`;
+            return { list: [...acc.list, { key, bytes, dash, dashoffset: -acc.offset }], offset: acc.offset + len };
+        },
+        { list: [], offset: 0 },
+    ).list;
+
+    const activeEntry = entries.find(e => e.key === active);
+    const centerLabel = activeEntry
+        ? { title: CATEGORY_LABELS[activeEntry.key] ?? activeEntry.key, value: formatFileSize(activeEntry.bytes), sub: `${Math.round((activeEntry.bytes / grand) * 100)}%` }
+        : { title: 'Total', value: formatFileSize(grand), sub: `${entries.length} ${entries.length === 1 ? 'categoria' : 'categorias'}` };
+
     return (
-        <div className="px-6 py-4 flex flex-col gap-3">
-            {Object.entries(totals).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([key, bytes]) => (
-                <div key={key} className="flex items-center gap-3">
-                    <span className="w-28 shrink-0 text-xs font-medium text-text-muted">{CATEGORY_LABELS[key] ?? key}</span>
-                    <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div className={`h-full ${CATEGORY_COLORS[key] ?? 'bg-slate-400'}`} style={{ width: `${(bytes / grand) * 100}%` }} />
-                    </div>
-                    <span className="w-16 shrink-0 text-xs text-text-muted text-right">{formatFileSize(bytes)}</span>
+        <div className="px-6 py-6 flex flex-col sm:flex-row items-center gap-8">
+            <div className="relative shrink-0" style={{ width: 200, height: 200 }}>
+                <svg viewBox="0 0 120 120" width={200} height={200} className="-rotate-90">
+                    {arcs.map(({ key, dash, dashoffset }) => (
+                        <circle
+                            key={key}
+                            cx={60} cy={60} r={R} fill="none"
+                            stroke={CATEGORY_COLORS[key] ?? '#94a3b8'}
+                            strokeWidth={active && active !== key ? STROKE - 4 : STROKE}
+                            strokeDasharray={dash}
+                            strokeDashoffset={dashoffset}
+                            strokeLinecap="round"
+                            opacity={active && active !== key ? 0.45 : 1}
+                            tabIndex={0}
+                            role="img"
+                            aria-label={`${CATEGORY_LABELS[key] ?? key}: ${formatFileSize(totals[key] ?? 0)}`}
+                            onMouseEnter={() => setActive(key)}
+                            onMouseLeave={() => setActive(null)}
+                            onFocus={() => setActive(key)}
+                            onBlur={() => setActive(null)}
+                            className="transition-all duration-150 outline-none cursor-default"
+                            style={{ transformOrigin: '60px 60px' }}
+                        />
+                    ))}
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-6">
+                    <p className="text-xs text-text-muted">{centerLabel.title}</p>
+                    <p className="text-lg font-bold text-slate-700">{centerLabel.value}</p>
+                    <p className="text-xs text-text-muted">{centerLabel.sub}</p>
                 </div>
-            ))}
+            </div>
+
+            <div className="flex-1 w-full min-w-0 flex flex-col gap-1.5">
+                {entries.map(({ key, bytes }) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onMouseEnter={() => setActive(key)}
+                        onMouseLeave={() => setActive(null)}
+                        onFocus={() => setActive(key)}
+                        onBlur={() => setActive(null)}
+                        className={`flex items-center gap-3 px-2 py-1.5 rounded-lg text-left transition-colors ${active === key ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                    >
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_COLORS[key] ?? '#94a3b8' }} />
+                        <span className="flex-1 min-w-0 text-sm text-text-color truncate">{CATEGORY_LABELS[key] ?? key}</span>
+                        <span className="shrink-0 text-xs text-text-muted">{Math.round((bytes / grand) * 100)}%</span>
+                        <span className="w-16 shrink-0 text-sm font-semibold text-slate-700 text-right">{formatFileSize(bytes)}</span>
+                    </button>
+                ))}
+            </div>
         </div>
     );
 }
@@ -54,12 +129,14 @@ function BookTable({ books, emptyLabel }: { books: DiskUsageBook[]; emptyLabel: 
 
     return (
         <>
-            <div className="divide-y divide-border">
+            {/* 2 colunas — aproveita melhor a largura do que 1 livro por linha */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-6 py-4">
                 {pageBooks.map(b => (
-                    <div key={b.isbn} className="px-6 py-3 flex items-center justify-between gap-4">
+                    <div key={b.isbn} className="border border-border rounded-lg p-3 flex items-center justify-between gap-3">
                         <div className="min-w-0">
                             <p className="text-sm font-medium text-text-color truncate">{b.title ?? b.isbn}</p>
-                            <p className="text-xs text-text-muted">{b.isbn}{b.author && ` · ${b.author}`}</p>
+                            <p className="text-xs text-text-muted truncate">{b.isbn}{b.author && ` · ${b.author}`}</p>
+                            {b.creator && <p className="text-xs text-text-muted truncate">Criado por {b.creator}</p>}
                         </div>
                         <span className="shrink-0 text-sm font-semibold text-slate-700">{formatFileSize(b.total)}</span>
                     </div>
@@ -133,45 +210,44 @@ function BackupTab() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="bg-card-bg border border-border rounded-2xl p-6 flex items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-base font-semibold text-slate-700">Sincronização manual</h2>
-                    <p className="text-xs text-text-muted mt-1">Espelha data/ inteira (mirror, rclone sync) para o bucket B2 — só transfere o que mudou.</p>
-                </div>
-                <button
-                    onClick={() => backupMutation.mutate()}
-                    disabled={backupMutation.isPending}
-                    className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 shrink-0"
-                >
-                    {backupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <CloudUpload size={14} />}
-                    Sincronizar B2
-                </button>
-            </div>
-
-            <div className="bg-card-bg border border-border rounded-2xl p-6 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-slate-700">Agendamento</h2>
-                    <p className="text-xs text-text-muted mt-1">
-                        Guardado, mas ainda não aplicado — o cron automático corre sempre a cada 24h a partir do arranque do servidor.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                    <input
-                        key={schedule ?? ''}
-                        ref={scheduleInputRef}
-                        type="text"
-                        defaultValue={schedule ?? ''}
-                        placeholder="ex. 0 3 * * * (cron)"
-                        className="w-48 h-10 px-3 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
-                    />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-card-bg border border-border rounded-2xl p-6 flex items-center justify-between gap-4">
+                    <h2 className="text-base font-semibold text-slate-700 cursor-help" title="Espelha data/ inteira (mirror, rclone sync) para o bucket B2 — só transfere o que mudou.">
+                        Sincronização manual
+                    </h2>
                     <button
-                        onClick={() => scheduleMutation.mutate()}
-                        disabled={scheduleMutation.isPending}
-                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50"
+                        onClick={() => backupMutation.mutate()}
+                        disabled={backupMutation.isPending}
+                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 shrink-0"
                     >
-                        {scheduleMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                        Guardar
+                        {backupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <CloudUpload size={14} />}
+                        Sincronizar B2
                     </button>
+                </div>
+
+                <div className="bg-card-bg border border-border rounded-2xl p-6 flex items-center justify-between gap-4">
+                    <h2 className="text-base font-semibold text-slate-700 cursor-help"
+                        title='Expressão cron de 5 campos (minuto hora dia mês dia-semana), ex. "0 3 * * *" = todos os dias às 3h. Aplicado de imediato ao guardar. Vazio = default (3h diariamente).'>
+                        Agendamento
+                    </h2>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <input
+                            key={schedule ?? ''}
+                            ref={scheduleInputRef}
+                            type="text"
+                            defaultValue={schedule ?? ''}
+                            placeholder="ex. 0 3 * * * (cron)"
+                            className="w-40 h-10 px-3 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+                        />
+                        <button
+                            onClick={() => scheduleMutation.mutate()}
+                            disabled={scheduleMutation.isPending}
+                            className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50"
+                        >
+                            {scheduleMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                            Guardar
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -200,16 +276,14 @@ function BackupTab() {
     );
 }
 
-export function PainelPage() {
-    const navigate = useNavigate();
+function StatsTab() {
     const { showNotification } = useNotification();
     const queryClient = useQueryClient();
-    const [tab, setTab] = useState<TabKey>('stats');
-
     const { data, isLoading } = useQuery({
         queryKey: ['disk-usage'],
         queryFn: () => ebooksApi.getDiskUsage().then(r => r.data),
     });
+    const [confirmCleanup, setConfirmCleanup] = useState(false);
 
     const cleanupMutation = useMutation({
         mutationFn: () => ebooksApi.cleanupHistory(),
@@ -221,9 +295,88 @@ export function PainelPage() {
         onError: () => showNotification('error', 'Erro ao realizar a limpeza do histórico.'),
     });
 
+    if (isLoading || !data) {
+        return (
+            <div className="flex items-center justify-center py-24">
+                <Loader2 size={24} className="animate-spin text-slate-500" />
+            </div>
+        );
+    }
+
+    return (
+        <>
+            <div className="flex justify-end">
+                {confirmCleanup ? (
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-text-muted">Remove definitivamente todos os rascunhos com +7 dias, de todos os livros. Não pode ser desfeito.</span>
+                        <button
+                            onClick={() => cleanupMutation.mutate()}
+                            disabled={cleanupMutation.isPending}
+                            className="inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 shrink-0"
+                        >
+                            {cleanupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                            Confirmar
+                        </button>
+                        <button
+                            onClick={() => setConfirmCleanup(false)}
+                            className="p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors shrink-0"
+                            title="Cancelar"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => setConfirmCleanup(true)}
+                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm"
+                    >
+                        <Trash2 size={14} />
+                        Limpar Histórico
+                    </button>
+                )}
+            </div>
+
+            {/* Stat tiles */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatTile label="Livros ativos" value={String(data.active.count)} />
+                <StatTile label="Espaço total (ativos)" value={formatFileSize(data.active.totalBytes)} />
+                <StatTile label="Espaço na Reciclagem" value={formatFileSize(data.trash.totalBytes)} accent="text-amber-600" />
+                <StatTile label="Relatórios de acessibilidade"
+                    value={formatFileSize((data.active.categoryTotals?.aceReports ?? 0) + (data.trash.categoryTotals?.aceReports ?? 0))}
+                    accent="text-amber-600" />
+            </div>
+            <p className="text-xs text-text-muted -mt-4">
+                Relatórios de acessibilidade não são limpos automaticamente.
+            </p>
+
+            {/* Category breakdown — 1 donut por bucket (ativos sempre; Reciclagem só se tiver algo) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
+                    <div className="px-6 py-4 border-b border-border">
+                        <h2 className="text-base font-semibold text-slate-700">Divisão por categoria (livros ativos)</h2>
+                    </div>
+                    <CategoryDonut totals={data.active.categoryTotals ?? {}} />
+                </div>
+                {data.trash.count > 0 && (
+                    <div className="bg-card-bg border border-amber-200 rounded-2xl overflow-hidden">
+                        <div className="px-6 py-4 border-b border-amber-100 bg-amber-50/50">
+                            <h2 className="text-base font-semibold text-amber-700">Divisão por categoria (Reciclagem)</h2>
+                        </div>
+                        <CategoryDonut totals={data.trash.categoryTotals ?? {}} />
+                    </div>
+                )}
+            </div>
+        </>
+    );
+}
+
+function BooksTab() {
+    const { data, isLoading } = useQuery({
+        queryKey: ['disk-usage'],
+        queryFn: () => ebooksApi.getDiskUsage().then(r => r.data),
+    });
     const [query, setQuery] = useState('');
     const [searchOpen, setSearchOpen] = useState(false);
-    const [confirmCleanup, setConfirmCleanup] = useState(false);
     const searchRef = useRef<HTMLDivElement>(null);
 
     // Clicar fora colapsa a pesquisa (só quando vazia — não destrói um filtro ativo)
@@ -245,6 +398,94 @@ export function PainelPage() {
             (b.author ?? '').toLowerCase().includes(q)
         );
     }, [data, query]);
+
+    if (isLoading || !data) {
+        return (
+            <div className="flex items-center justify-center py-24">
+                <Loader2 size={24} className="animate-spin text-slate-500" />
+            </div>
+        );
+    }
+
+    return (
+        <>
+            {/* Active books */}
+            <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
+                    <h2 className="text-base font-semibold text-slate-700">
+                        Livros <span className="text-text-muted font-normal">({filteredActiveBooks.length})</span>
+                    </h2>
+                    {data.active.books.length > 0 && (
+                        searchOpen ? (
+                            <div ref={searchRef} className="relative w-56 animate-in fade-in slide-in-from-right-2 duration-200">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    placeholder="Título, isbn ou autor..."
+                                    value={query}
+                                    onChange={e => setQuery(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Escape') { setQuery(''); setSearchOpen(false); } }}
+                                    className="w-full pl-8 pr-3 h-9 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+                                />
+                            </div>
+                        ) : (
+                            <button onClick={() => setSearchOpen(true)} className="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-slate-200 text-text-muted transition-all shrink-0" title="Pesquisar">
+                                <Search size={16} />
+                            </button>
+                        )
+                    )}
+                </div>
+                {filteredActiveBooks.length === 0 && query ? (
+                    <p className="px-6 py-8 text-center text-sm text-text-muted">Nenhum resultado para "{query}".</p>
+                ) : (
+                    <BookTable key={query} books={filteredActiveBooks} emptyLabel="Nenhum livro." />
+                )}
+            </div>
+
+            {(data.trash.count > 0 || data.orphaned.count > 0) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Trash */}
+                    {data.trash.count > 0 && (
+                        <div className="bg-card-bg border border-amber-200 rounded-2xl overflow-hidden">
+                            <div className="px-6 py-4 border-b border-amber-100 bg-amber-50/50">
+                                <h2 className="text-base font-semibold text-amber-700">
+                                    Reciclagem <span className="text-amber-500 font-normal">({data.trash.count})</span>
+                                </h2>
+                                <p className="text-xs text-amber-600">Ocupam espaço até serem purgados automaticamente (30 dias).</p>
+                            </div>
+                            <BookTable books={data.trash.books} emptyLabel="Reciclagem vazia." />
+                        </div>
+                    )}
+
+                    {/* Orphaned */}
+                    {data.orphaned.count > 0 && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden">
+                            <div className="px-6 py-4 border-b border-amber-200 flex items-center gap-2">
+                                <AlertTriangle size={16} className="text-amber-600" />
+                                <h2 className="text-base font-semibold text-amber-800">
+                                    Pastas sem registo ({data.orphaned.count}, {formatFileSize(data.orphaned.totalBytes)})
+                                </h2>
+                            </div>
+                            <div className="divide-y divide-amber-100">
+                                {data.orphaned.books.map(b => (
+                                    <div key={b.isbn} className="px-6 py-3 flex items-center justify-between gap-4 text-sm text-amber-800">
+                                        <span>{b.isbn}</span>
+                                        <span className="font-semibold">{formatFileSize(b.total)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </>
+    );
+}
+
+export function PainelPage() {
+    const navigate = useNavigate();
+    const [tab, setTab] = useState<TabKey>('stats');
 
     return (
         <div className="min-h-screen bg-bg-color px-4 py-8">
@@ -272,136 +513,9 @@ export function PainelPage() {
                     ))}
                 </div>
 
+                {tab === 'stats' && <StatsTab />}
+                {tab === 'books' && <BooksTab />}
                 {tab === 'backup' && <BackupTab />}
-
-                {tab !== 'backup' && (isLoading || !data ? (
-                    <div className="flex items-center justify-center py-24">
-                        <Loader2 size={24} className="animate-spin text-slate-500" />
-                    </div>
-                ) : tab === 'stats' ? (
-                    <>
-                        <div className="flex justify-end">
-                            {confirmCleanup ? (
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs text-text-muted">Remove definitivamente todos os rascunhos com +7 dias, de todos os livros. Não pode ser desfeito.</span>
-                                    <button
-                                        onClick={() => cleanupMutation.mutate()}
-                                        disabled={cleanupMutation.isPending}
-                                        className="inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 shrink-0"
-                                    >
-                                        {cleanupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                        Confirmar
-                                    </button>
-                                    <button
-                                        onClick={() => setConfirmCleanup(false)}
-                                        className="p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors shrink-0"
-                                        title="Cancelar"
-                                    >
-                                        <X size={14} />
-                                    </button>
-                                </div>
-                            ) : (
-                                <button
-                                    onClick={() => setConfirmCleanup(true)}
-                                    className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm"
-                                >
-                                    <Trash2 size={14} />
-                                    Limpar Histórico
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Stat tiles */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <StatTile label="Livros ativos" value={String(data.active.count)} />
-                            <StatTile label="Espaço total (ativos)" value={formatFileSize(data.active.totalBytes)} />
-                            <StatTile label="Espaço na Reciclagem" value={formatFileSize(data.trash.totalBytes)} accent="text-amber-600" />
-                            <StatTile label="Relatórios de acessibilidade"
-                                value={formatFileSize((data.active.categoryTotals?.aceReports ?? 0) + (data.trash.categoryTotals?.aceReports ?? 0))}
-                                accent="text-amber-600" />
-                        </div>
-                        <p className="text-xs text-text-muted -mt-4">
-                            Relatórios de acessibilidade não são limpos automaticamente.
-                        </p>
-
-                        {/* Category breakdown */}
-                        <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
-                            <div className="px-6 py-4 border-b border-border">
-                                <h2 className="text-base font-semibold text-slate-700">Divisão por categoria (livros ativos)</h2>
-                            </div>
-                            <CategoryBreakdown totals={data.active.categoryTotals ?? {}} />
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        {/* Active books */}
-                        <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
-                            <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
-                                <h2 className="text-base font-semibold text-slate-700">
-                                    Livros <span className="text-text-muted font-normal">({filteredActiveBooks.length})</span>
-                                </h2>
-                                {data.active.books.length > 0 && (
-                                    searchOpen ? (
-                                        <div ref={searchRef} className="relative w-56 animate-in fade-in slide-in-from-right-2 duration-200">
-                                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                                            <input
-                                                type="text"
-                                                autoFocus
-                                                placeholder="Título, isbn ou autor..."
-                                                value={query}
-                                                onChange={e => setQuery(e.target.value)}
-                                                onKeyDown={e => { if (e.key === 'Escape') { setQuery(''); setSearchOpen(false); } }}
-                                                className="w-full pl-8 pr-3 h-9 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <button onClick={() => setSearchOpen(true)} className="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-slate-200 text-text-muted transition-all shrink-0" title="Pesquisar">
-                                            <Search size={16} />
-                                        </button>
-                                    )
-                                )}
-                            </div>
-                            {filteredActiveBooks.length === 0 && query ? (
-                                <p className="px-6 py-8 text-center text-sm text-text-muted">Nenhum resultado para "{query}".</p>
-                            ) : (
-                                <BookTable key={query} books={filteredActiveBooks} emptyLabel="Nenhum livro." />
-                            )}
-                        </div>
-
-                        {/* Trash */}
-                        {data.trash.count > 0 && (
-                            <div className="bg-card-bg border border-amber-200 rounded-2xl overflow-hidden">
-                                <div className="px-6 py-4 border-b border-amber-100 bg-amber-50/50">
-                                    <h2 className="text-base font-semibold text-amber-700">
-                                        Reciclagem <span className="text-amber-500 font-normal">({data.trash.count})</span>
-                                    </h2>
-                                    <p className="text-xs text-amber-600">Ocupam espaço até serem purgados automaticamente (30 dias).</p>
-                                </div>
-                                <BookTable books={data.trash.books} emptyLabel="Reciclagem vazia." />
-                            </div>
-                        )}
-
-                        {/* Orphaned */}
-                        {data.orphaned.count > 0 && (
-                            <div className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden">
-                                <div className="px-6 py-4 border-b border-amber-200 flex items-center gap-2">
-                                    <AlertTriangle size={16} className="text-amber-600" />
-                                    <h2 className="text-base font-semibold text-amber-800">
-                                        Pastas sem registo ({data.orphaned.count}, {formatFileSize(data.orphaned.totalBytes)})
-                                    </h2>
-                                </div>
-                                <div className="divide-y divide-amber-100">
-                                    {data.orphaned.books.map(b => (
-                                        <div key={b.isbn} className="px-6 py-3 flex items-center justify-between gap-4 text-sm text-amber-800">
-                                            <span>{b.isbn}</span>
-                                            <span className="font-semibold">{formatFileSize(b.total)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </>
-                ))}
             </div>
         </div>
     );

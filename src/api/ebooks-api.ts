@@ -31,6 +31,7 @@ export interface DiskUsageBook {
     isbn: string;
     title: string | null;
     author: string | null;
+    creator: string | null;
     status: 'active' | 'trashed' | 'orphaned';
     deletedAt: string | null;
     epub: number;

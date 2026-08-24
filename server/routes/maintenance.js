@@ -6,7 +6,9 @@ import { corsHeaders } from '../response.js';
 import { DATA_DIR } from '../config.js';
 import { debugLog } from '../log.js';
 import { stmt } from '../database.js';
-import { b2Configured, b2RcloneRemote } from '../b2-client.js';
+import { b2Configured } from '../b2-client.js';
+import { runAndLog, rescheduleBackup } from '../backup.js';
+import { parseCron } from '../cron-schedule.js';
 
 // Apaga, dentro de `dir`, os ficheiros que passam `filter` e têm mais de `limit` (mtime) —
 // preservando SEMPRE o mais recente. Devolve { count, bytes } apagados.
@@ -87,6 +89,7 @@ export async function diskUsage(user) {
   if (adminErr) return adminErr;
 
   const byIsbn = new Map([...stmt.listEbooks.all(), ...stmt.listTrash.all()].map(e => [e.ebook_isbn, e]));
+  const emailById = new Map(stmt.listBasicUsers.all().map(u => [u.id, u.email]));
   const diskIsbns = existsSync(DATA_DIR) ? await readdir(DATA_DIR) : [];
 
   // Pastas independentes entre si — varridas em paralelo (cada isbnUsage já paraleliza as
@@ -97,6 +100,7 @@ export async function diskUsage(user) {
     const ebook = byIsbn.get(isbn);
     return {
       isbn, title: ebook?.title ?? null, author: ebook?.author ?? null,
+      creator: emailById.get(ebook?.user_id) ?? null,
       // pasta em disco sem registo na BD (nem ativo, nem reciclagem) — só reporta, não apaga.
       status: ebook?.deleted_at ? 'trashed' : ebook ? 'active' : 'orphaned',
       deletedAt: ebook?.deleted_at ?? null,
@@ -164,46 +168,14 @@ export async function migrateEpubs(user) {
   }
 }
 
-// Mirror de data/ inteira (todos os livros: ativos, Reciclagem, histórico, relatórios ACE)
-// para "<bucket>/data" no B2, via `rclone sync` — só transfere o que mudou desde a última
-// corrida (ao contrário de um tar.gz novo de cada vez). `sync` apaga no B2 o que já não existe
-// localmente (livro purgado, history/ rodado) para ficar espelho fiel; isto é seguro aqui
-// porque o bucket não tem lifecycle rule nenhuma (verificado via b2_list_buckets) — o B2
-// mantém TODAS as versões antigas por omissão, portanto um "delete" do sync não perde nada,
-// só deixa de ser a versão corrente (recuperável por b2_list_file_versions se precisar).
-// Partilhado pelo botão manual (runBackup, exige admin) e pelo cron diário (server/index.js
-// chama isto direto, sem `user` — é o próprio servidor a correr). `source` só identifica a
-// entrada no registo (separador Backup do Painel), não muda o que corre.
-export async function performBackup(source = 'manual') {
-  if (!b2Configured()) throw new Error('B2 não configurado (B2_KEY_ID/B2_APPLICATION_KEY/B2_BUCKET_NAME em falta no .env).');
-  const runId = stmt.startBackupRun.run(source).lastInsertRowid;
-  try {
-    const proc = Bun.spawn(
-      ['rclone', 'sync', DATA_DIR, b2RcloneRemote('data'), '--fast-list', '-v', '--stats-one-line'],
-      { stdout: 'pipe', stderr: 'pipe' },
-    );
-    const [exitCode, stderr] = await Promise.all([proc.exited, Bun.readableStreamToText(proc.stderr)]);
-    if (exitCode !== 0) throw new Error(`rclone sync falhou (${exitCode}): ${stderr}`);
-    // --stats-one-line escreve 1 linha de resumo (Transferred/Checks/Deleted/...) em cada tick +
-    // no fim — a última linha não-vazia do stderr é sempre essa.
-    const summary = stderr.trim().split('\n').filter(Boolean).pop() ?? 'sem resumo';
-    stmt.finishBackupRun.run('success', summary, runId);
-    return { summary };
-  } catch (err) {
-    stmt.finishBackupRun.run('error', err.message, runId);
-    throw err;
-  }
-}
-
 export async function getBackupLog(user) {
   const adminErr = requireAdmin(user);
   if (adminErr) return adminErr;
   return Response.json({ data: stmt.listBackupRuns.all() }, { headers: corsHeaders });
 }
 
-// Horário do cron de backup — só guardado por agora (ver server/index.js: o cron diário corre
-// sempre a cada 24h desde o arranque, este valor ainda não é lido de lá). Campo do separador
-// Backup do Painel, para ligar quando o agendamento configurável for implementado.
+// Horário do cron de backup (separador Backup do Painel) — aplicado de imediato ao
+// agendamento real via rescheduleBackup() (server/backup.js), sem esperar pela corrida atual.
 export async function getBackupSchedule(user) {
   const adminErr = requireAdmin(user);
   if (adminErr) return adminErr;
@@ -216,7 +188,13 @@ export async function setBackupSchedule(req, user) {
   if (adminErr) return adminErr;
   const { schedule } = await req.json();
   if (typeof schedule !== 'string') return Response.json({ error: 'Invalid schedule' }, { status: 400, headers: corsHeaders });
+  if (schedule.trim()) {
+    try { parseCron(schedule); } catch (err) {
+      return Response.json({ error: `Cron inválido: ${err.message}` }, { status: 400, headers: corsHeaders });
+    }
+  }
   stmt.setSetting.run('backup_schedule', schedule);
+  rescheduleBackup();
   return Response.json({ schedule }, { headers: corsHeaders });
 }
 
@@ -231,9 +209,7 @@ export async function runBackup(user) {
   if (!b2Configured()) {
     return Response.json({ error: 'B2 não configurado (B2_KEY_ID/B2_APPLICATION_KEY/B2_BUCKET_NAME em falta no .env).' }, { status: 400, headers: corsHeaders });
   }
-  performBackup('manual')
-    .then(r => console.log(`💾 [Mirror B2] ${r.summary}`))
-    .catch(err => console.error(`💾 [Mirror B2] falhou:`, err.message));
+  runAndLog('manual');
   return Response.json({ message: 'Mirror iniciado em background — confere os logs do servidor quando terminar.' }, { headers: corsHeaders });
 }
 
