@@ -37,7 +37,7 @@ purgeOldTrash();
 // intervalo.
 const backupInterval = setInterval(() => {
   if (!b2Configured()) return;
-  maintenance.performBackup()
+  maintenance.performBackup('cron')
     .then(r => console.log(`💾 [Mirror B2] ${r.summary}`))
     .catch(err => console.error('💾 [Mirror B2] falhou:', err.message));
 }, 24 * 3600 * 1000);
@@ -134,6 +134,11 @@ export const server = Bun.serve({
       if (path === "/api/maintenance/migrate-epubs"   && method === "POST") return maintenance.migrateEpubs(user);
       if (path === "/api/maintenance/disk-usage"      && method === "GET")  return maintenance.diskUsage(user);
       if (path === "/api/maintenance/backup"          && method === "POST") return maintenance.runBackup(user);
+      if (path === "/api/maintenance/backup-log"      && method === "GET")  return maintenance.getBackupLog(user);
+      if (path === "/api/maintenance/backup-schedule") {
+        if (method === "GET") return maintenance.getBackupSchedule(user);
+        if (method === "PUT") return maintenance.setBackupSchedule(req, user);
+      }
       if (path === "/api/languagetool/check"          && method === "POST") return maintenance.languageTool(req);
 
       // Per-ebook routes

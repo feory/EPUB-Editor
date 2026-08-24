@@ -172,19 +172,52 @@ export async function migrateEpubs(user) {
 // mantém TODAS as versões antigas por omissão, portanto um "delete" do sync não perde nada,
 // só deixa de ser a versão corrente (recuperável por b2_list_file_versions se precisar).
 // Partilhado pelo botão manual (runBackup, exige admin) e pelo cron diário (server/index.js
-// chama isto direto, sem `user` — é o próprio servidor a correr).
-export async function performBackup() {
+// chama isto direto, sem `user` — é o próprio servidor a correr). `source` só identifica a
+// entrada no registo (separador Backup do Painel), não muda o que corre.
+export async function performBackup(source = 'manual') {
   if (!b2Configured()) throw new Error('B2 não configurado (B2_KEY_ID/B2_APPLICATION_KEY/B2_BUCKET_NAME em falta no .env).');
-  const proc = Bun.spawn(
-    ['rclone', 'sync', DATA_DIR, b2RcloneRemote('data'), '--fast-list', '-v', '--stats-one-line'],
-    { stdout: 'pipe', stderr: 'pipe' },
-  );
-  const [exitCode, stderr] = await Promise.all([proc.exited, Bun.readableStreamToText(proc.stderr)]);
-  if (exitCode !== 0) throw new Error(`rclone sync falhou (${exitCode}): ${stderr}`);
-  // --stats-one-line escreve 1 linha de resumo (Transferred/Checks/Deleted/...) em cada tick +
-  // no fim — a última linha não-vazia do stderr é sempre essa.
-  const summary = stderr.trim().split('\n').filter(Boolean).pop() ?? 'sem resumo';
-  return { summary };
+  const runId = stmt.startBackupRun.run(source).lastInsertRowid;
+  try {
+    const proc = Bun.spawn(
+      ['rclone', 'sync', DATA_DIR, b2RcloneRemote('data'), '--fast-list', '-v', '--stats-one-line'],
+      { stdout: 'pipe', stderr: 'pipe' },
+    );
+    const [exitCode, stderr] = await Promise.all([proc.exited, Bun.readableStreamToText(proc.stderr)]);
+    if (exitCode !== 0) throw new Error(`rclone sync falhou (${exitCode}): ${stderr}`);
+    // --stats-one-line escreve 1 linha de resumo (Transferred/Checks/Deleted/...) em cada tick +
+    // no fim — a última linha não-vazia do stderr é sempre essa.
+    const summary = stderr.trim().split('\n').filter(Boolean).pop() ?? 'sem resumo';
+    stmt.finishBackupRun.run('success', summary, runId);
+    return { summary };
+  } catch (err) {
+    stmt.finishBackupRun.run('error', err.message, runId);
+    throw err;
+  }
+}
+
+export async function getBackupLog(user) {
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+  return Response.json({ data: stmt.listBackupRuns.all() }, { headers: corsHeaders });
+}
+
+// Horário do cron de backup — só guardado por agora (ver server/index.js: o cron diário corre
+// sempre a cada 24h desde o arranque, este valor ainda não é lido de lá). Campo do separador
+// Backup do Painel, para ligar quando o agendamento configurável for implementado.
+export async function getBackupSchedule(user) {
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+  const row = stmt.getSetting.get('backup_schedule');
+  return Response.json({ schedule: row?.value ?? '' }, { headers: corsHeaders });
+}
+
+export async function setBackupSchedule(req, user) {
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+  const { schedule } = await req.json();
+  if (typeof schedule !== 'string') return Response.json({ error: 'Invalid schedule' }, { status: 400, headers: corsHeaders });
+  stmt.setSetting.run('backup_schedule', schedule);
+  return Response.json({ schedule }, { headers: corsHeaders });
 }
 
 // Dispara e não espera: uma sincronização pode levar minutos (testado: ~5min só para 86MB,
@@ -198,7 +231,7 @@ export async function runBackup(user) {
   if (!b2Configured()) {
     return Response.json({ error: 'B2 não configurado (B2_KEY_ID/B2_APPLICATION_KEY/B2_BUCKET_NAME em falta no .env).' }, { status: 400, headers: corsHeaders });
   }
-  performBackup()
+  performBackup('manual')
     .then(r => console.log(`💾 [Mirror B2] ${r.summary}`))
     .catch(err => console.error(`💾 [Mirror B2] falhou:`, err.message));
   return Response.json({ message: 'Mirror iniciado em background — confere os logs do servidor quando terminar.' }, { headers: corsHeaders });

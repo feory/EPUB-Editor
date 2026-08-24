@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, Trash2, Loader2, AlertTriangle, Search, Check, X, CloudUpload } from 'lucide-react';
-import { ebooksApi, type DiskUsageBook } from '../api/ebooks-api';
+import { ebooksApi, type DiskUsageBook, type BackupRun } from '../api/ebooks-api';
 import { useNotification } from '../context/NotificationContext';
 import { Pagination } from '../components/Pagination';
 import { formatFileSize } from '../utils/format';
@@ -70,10 +70,141 @@ function BookTable({ books, emptyLabel }: { books: DiskUsageBook[]; emptyLabel: 
     );
 }
 
+const TABS = [
+    { key: 'stats', label: 'Estatísticas' },
+    { key: 'books', label: 'Livros' },
+    { key: 'backup', label: 'Backup' },
+] as const;
+type TabKey = typeof TABS[number]['key'];
+
+const BACKUP_STATUS_STYLE: Record<BackupRun['status'], string> = {
+    running: 'bg-sky-100 text-sky-700',
+    success: 'bg-emerald-100 text-emerald-700',
+    error: 'bg-rose-100 text-rose-700',
+};
+const BACKUP_STATUS_LABEL: Record<BackupRun['status'], string> = {
+    running: 'A correr', success: 'Concluído', error: 'Erro',
+};
+
+function formatDateTime(iso: string | null) {
+    if (!iso) return '—';
+    // valores do SQLite (datetime('now')) não têm timezone — tratados como UTC (Z) para
+    // converter certo para a hora local do browser.
+    return new Date(iso.replace(' ', 'T') + 'Z').toLocaleString('pt-PT');
+}
+
+function BackupTab() {
+    const { showNotification } = useNotification();
+    const queryClient = useQueryClient();
+
+    const { data: log } = useQuery({
+        queryKey: ['backup-log'],
+        queryFn: () => ebooksApi.getBackupLog().then(r => r.data.data),
+        // Enquanto houver uma corrida "running", confere a cada 5s — dá para ver o resultado
+        // do mirror sem F5 manual (pode levar minutos, ver performBackup no servidor).
+        refetchInterval: (query) => query.state.data?.some(r => r.status === 'running') ? 5000 : false,
+    });
+
+    const { data: schedule } = useQuery({
+        queryKey: ['backup-schedule'],
+        queryFn: () => ebooksApi.getBackupSchedule().then(r => r.data.schedule),
+    });
+    // Input não controlado (defaultValue) — `key={schedule}` remonta quando a query chega, sem
+    // precisar de useEffect a copiar prop→state (cascading render).
+    const scheduleInputRef = useRef<HTMLInputElement>(null);
+
+    const backupMutation = useMutation({
+        mutationFn: () => ebooksApi.runBackup(),
+        onSuccess: () => {
+            showNotification('success', 'Mirror com o B2 iniciado em background.');
+            queryClient.invalidateQueries({ queryKey: ['backup-log'] });
+        },
+        onError: (err: any) => showNotification('error', err?.response?.data?.error ?? 'Erro ao iniciar o mirror.'),
+    });
+
+    const scheduleMutation = useMutation({
+        mutationFn: () => ebooksApi.setBackupSchedule(scheduleInputRef.current?.value ?? ''),
+        onSuccess: () => {
+            showNotification('success', 'Horário guardado.');
+            queryClient.invalidateQueries({ queryKey: ['backup-schedule'] });
+        },
+        onError: () => showNotification('error', 'Erro ao guardar o horário.'),
+    });
+
+    return (
+        <div className="flex flex-col gap-6">
+            <div className="bg-card-bg border border-border rounded-2xl p-6 flex items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-base font-semibold text-slate-700">Sincronização manual</h2>
+                    <p className="text-xs text-text-muted mt-1">Espelha data/ inteira (mirror, rclone sync) para o bucket B2 — só transfere o que mudou.</p>
+                </div>
+                <button
+                    onClick={() => backupMutation.mutate()}
+                    disabled={backupMutation.isPending}
+                    className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 shrink-0"
+                >
+                    {backupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <CloudUpload size={14} />}
+                    Sincronizar B2
+                </button>
+            </div>
+
+            <div className="bg-card-bg border border-border rounded-2xl p-6 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-slate-700">Agendamento</h2>
+                    <p className="text-xs text-text-muted mt-1">
+                        Guardado, mas ainda não aplicado — o cron automático corre sempre a cada 24h a partir do arranque do servidor.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                    <input
+                        key={schedule ?? ''}
+                        ref={scheduleInputRef}
+                        type="text"
+                        defaultValue={schedule ?? ''}
+                        placeholder="ex. 0 3 * * * (cron)"
+                        className="w-48 h-10 px-3 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+                    />
+                    <button
+                        onClick={() => scheduleMutation.mutate()}
+                        disabled={scheduleMutation.isPending}
+                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50"
+                    >
+                        {scheduleMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        Guardar
+                    </button>
+                </div>
+            </div>
+
+            <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-border">
+                    <h2 className="text-base font-semibold text-slate-700">Registo de sincronizações</h2>
+                </div>
+                {!log || log.length === 0 ? (
+                    <p className="px-6 py-8 text-center text-sm text-text-muted">Ainda sem sincronizações.</p>
+                ) : (
+                    <div className="divide-y divide-border">
+                        {log.map(run => (
+                            <div key={run.id} className="px-6 py-3 flex items-center gap-4">
+                                <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold ${BACKUP_STATUS_STYLE[run.status]}`}>
+                                    {BACKUP_STATUS_LABEL[run.status]}
+                                </span>
+                                <span className="shrink-0 text-xs text-text-muted w-16">{run.source === 'manual' ? 'Manual' : 'Cron'}</span>
+                                <span className="shrink-0 text-xs text-text-muted w-40">{formatDateTime(run.started_at)}</span>
+                                <span className="min-w-0 flex-1 text-xs text-text-muted truncate" title={run.summary ?? ''}>{run.summary ?? '—'}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export function PainelPage() {
     const navigate = useNavigate();
     const { showNotification } = useNotification();
     const queryClient = useQueryClient();
+    const [tab, setTab] = useState<TabKey>('stats');
 
     const { data, isLoading } = useQuery({
         queryKey: ['disk-usage'],
@@ -88,14 +219,6 @@ export function PainelPage() {
             queryClient.invalidateQueries({ queryKey: ['disk-usage'] });
         },
         onError: () => showNotification('error', 'Erro ao realizar a limpeza do histórico.'),
-    });
-
-    const backupMutation = useMutation({
-        mutationFn: () => ebooksApi.runBackup(),
-        // Mirror pode levar minutos (rclone sync) — o pedido devolve logo "iniciado", o
-        // resultado real só fica nos logs do servidor (ver server/index.js).
-        onSuccess: () => showNotification('success', 'Mirror com o B2 iniciado em background.'),
-        onError: (err: any) => showNotification('error', err?.response?.data?.error ?? 'Erro ao iniciar o mirror.'),
     });
 
     const [query, setQuery] = useState('');
@@ -125,64 +248,69 @@ export function PainelPage() {
 
     return (
         <div className="min-h-screen bg-bg-color px-4 py-8">
-            <div className="max-w-6xl mx-auto flex flex-col gap-8">
+            <div className="max-w-6xl mx-auto flex flex-col gap-6">
 
                 {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => navigate('/')}
-                            className="p-2 rounded-lg hover:bg-card-bg border border-transparent hover:border-border transition-colors">
-                            <ChevronLeft size={18} className="text-text-muted" />
-                        </button>
-                        <h1 className="text-xl font-bold text-slate-700">Painel</h1>
-                    </div>
-                    <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => backupMutation.mutate()}
-                        disabled={backupMutation.isPending}
-                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50"
-                        title="Sincroniza data/ com o Backblaze B2 (rclone mirror, background)"
-                    >
-                        {backupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <CloudUpload size={14} />}
-                        Sincronizar B2
+                <div className="flex items-center gap-4">
+                    <button onClick={() => navigate('/')}
+                        className="p-2 rounded-lg hover:bg-card-bg border border-transparent hover:border-border transition-colors">
+                        <ChevronLeft size={18} className="text-text-muted" />
                     </button>
-                    {confirmCleanup ? (
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-text-muted">Remove definitivamente todos os rascunhos com +7 dias, de todos os livros. Não pode ser desfeito.</span>
-                            <button
-                                onClick={() => cleanupMutation.mutate()}
-                                disabled={cleanupMutation.isPending}
-                                className="inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 shrink-0"
-                            >
-                                {cleanupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                Confirmar
-                            </button>
-                            <button
-                                onClick={() => setConfirmCleanup(false)}
-                                className="p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors shrink-0"
-                                title="Cancelar"
-                            >
-                                <X size={14} />
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            onClick={() => setConfirmCleanup(true)}
-                            className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm"
-                        >
-                            <Trash2 size={14} />
-                            Limpar Histórico
-                        </button>
-                    )}
-                    </div>
+                    <h1 className="text-xl font-bold text-slate-700">Painel</h1>
                 </div>
 
-                {isLoading || !data ? (
+                {/* Tabs */}
+                <div className="flex items-center gap-1 border-b border-border">
+                    {TABS.map(t => (
+                        <button
+                            key={t.key}
+                            onClick={() => setTab(t.key)}
+                            className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${tab === t.key ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text-main'}`}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+
+                {tab === 'backup' && <BackupTab />}
+
+                {tab !== 'backup' && (isLoading || !data ? (
                     <div className="flex items-center justify-center py-24">
                         <Loader2 size={24} className="animate-spin text-slate-500" />
                     </div>
-                ) : (
+                ) : tab === 'stats' ? (
                     <>
+                        <div className="flex justify-end">
+                            {confirmCleanup ? (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-text-muted">Remove definitivamente todos os rascunhos com +7 dias, de todos os livros. Não pode ser desfeito.</span>
+                                    <button
+                                        onClick={() => cleanupMutation.mutate()}
+                                        disabled={cleanupMutation.isPending}
+                                        className="inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 shrink-0"
+                                    >
+                                        {cleanupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                        Confirmar
+                                    </button>
+                                    <button
+                                        onClick={() => setConfirmCleanup(false)}
+                                        className="p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors shrink-0"
+                                        title="Cancelar"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setConfirmCleanup(true)}
+                                    className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm"
+                                >
+                                    <Trash2 size={14} />
+                                    Limpar Histórico
+                                </button>
+                            )}
+                        </div>
+
                         {/* Stat tiles */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <StatTile label="Livros ativos" value={String(data.active.count)} />
@@ -192,7 +320,7 @@ export function PainelPage() {
                                 value={formatFileSize((data.active.categoryTotals?.aceReports ?? 0) + (data.trash.categoryTotals?.aceReports ?? 0))}
                                 accent="text-amber-600" />
                         </div>
-                        <p className="text-xs text-text-muted -mt-6">
+                        <p className="text-xs text-text-muted -mt-4">
                             Relatórios de acessibilidade não são limpos automaticamente.
                         </p>
 
@@ -203,7 +331,9 @@ export function PainelPage() {
                             </div>
                             <CategoryBreakdown totals={data.active.categoryTotals ?? {}} />
                         </div>
-
+                    </>
+                ) : (
+                    <>
                         {/* Active books */}
                         <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
                             <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
@@ -271,7 +401,7 @@ export function PainelPage() {
                             </div>
                         )}
                     </>
-                )}
+                ))}
             </div>
         </div>
     );

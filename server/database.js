@@ -65,6 +65,24 @@ db.run(`CREATE TABLE IF NOT EXISTS ebook_shares (
 
 db.run("CREATE INDEX IF NOT EXISTS idx_ebook_shares_user_id ON ebook_shares(user_id)");
 
+// Registo do separador "Backup" do Painel (histórico de sincronizações com o B2, ver
+// server/routes/maintenance.js). `source` distingue botão manual de cron diário.
+db.run(`CREATE TABLE IF NOT EXISTS backup_runs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  started_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  finished_at DATETIME,
+  status      TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running','success','error')),
+  source      TEXT NOT NULL CHECK(source IN ('manual','cron')),
+  summary     TEXT
+)`);
+
+// Configurações simples do Painel, key-value — hoje só o horário do cron de backup (campo
+// guardado, ainda por aplicar ao agendamento real, ver PainelPage.tsx/BackupTab).
+db.run(`CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+)`);
+
 export const stmt = {
   // ebooks
   listEbooks:           db.prepare('SELECT * FROM ebooks WHERE deleted_at IS NULL ORDER BY created_at DESC'),
@@ -117,6 +135,13 @@ export const stmt = {
   `),
   hasShareAccess:       db.prepare('SELECT 1 FROM ebook_shares WHERE ebook_isbn = ? AND user_id = ?'),
   listBasicUsers:       db.prepare('SELECT id, email FROM users ORDER BY email'),
+  // backup runs
+  startBackupRun:       db.prepare('INSERT INTO backup_runs (source) VALUES (?)'),
+  finishBackupRun:      db.prepare("UPDATE backup_runs SET finished_at = datetime('now'), status = ?, summary = ? WHERE id = ?"),
+  listBackupRuns:       db.prepare('SELECT * FROM backup_runs ORDER BY started_at DESC LIMIT 20'),
+  // settings
+  getSetting:           db.prepare('SELECT value FROM settings WHERE key = ?'),
+  setSetting:           db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'),
 };
 
 export function migrateGrammarToDb() {

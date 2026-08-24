@@ -57,6 +57,15 @@ export interface DiskUsageResponse {
     grandTotalBytes: number;
 }
 
+export interface BackupRun {
+    id: number;
+    started_at: string;
+    finished_at: string | null;
+    status: 'running' | 'success' | 'error';
+    source: 'manual' | 'cron';
+    summary: string | null;
+}
+
 export interface HistoryFile {
     filename: string;
     timestamp: string;
@@ -210,6 +219,9 @@ export const ebooksApi = {
     cleanupHistory: () => apiClient.post<{ deletedCount: number, sizeSavedMB: string }>('/maintenance/cleanup-history'),
     getDiskUsage: () => apiClient.get<DiskUsageResponse>('/maintenance/disk-usage'),
     runBackup: () => apiClient.post<{ message: string }>('/maintenance/backup'),
+    getBackupLog: () => apiClient.get<{ data: BackupRun[] }>('/maintenance/backup-log'),
+    getBackupSchedule: () => apiClient.get<{ schedule: string }>('/maintenance/backup-schedule'),
+    setBackupSchedule: (schedule: string) => apiClient.put<{ schedule: string }>('/maintenance/backup-schedule', { schedule }),
 
     // Presence / edit-lock
     heartbeat: (isbn: string) => apiClient.post<PresenceStatus>(`/ebooks/${isbn}/presence`),
