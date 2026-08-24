@@ -30,6 +30,13 @@ export const generateNavXhtml = (sections: Section[], pageEntries: { section: nu
         .filter(Boolean)
         .join('\n      ');
 
+    // Entrada única no Índice para a página de conteúdo "Lista de Páginas" (pagelist.xhtml,
+    // já no spine, em ordem de leitura linear a seguir à última secção) — diferente do nav
+    // "page-list" abaixo (esse tem 1 link POR página, violaria NAV-011 se estivesse aqui
+    // dentro; isto é só 1 link normal, sem esse problema).
+    const pageListTocItem = pageEntries.length === 0 ? '' :
+        `\n      <li><a href="pagelist.xhtml">Lista de Páginas</a></li>`;
+
     // "page-list" tem de ser um nav PRÓPRIO, separado do "toc" — a regra de reading-order do
     // ACE/epubcheck (NAV-011: "toc nav must be in reading order") só se aplica ao nav epub:type
     // "toc"; ancorar página a página de volta a secções anteriores (section3#page-6 depois de já
@@ -57,7 +64,7 @@ export const generateNavXhtml = (sections: Section[], pageEntries: { section: nu
   <nav epub:type="toc" id="toc" role="doc-toc">
     <h1>Índice</h1>
     <ol>
-      ${navItems}
+      ${navItems}${pageListTocItem}
     </ol>
   </nav>${pageListNav}
 </body>
