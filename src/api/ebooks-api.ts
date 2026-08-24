@@ -67,6 +67,21 @@ export interface BackupRun {
     summary: string | null;
 }
 
+export interface ActiveSession {
+    isbn: string;
+    title: string | null;
+    holderEmail: string | null;
+    minutesAgo: number;
+    others: string[];
+}
+
+export interface HealthResponse {
+    status: string;
+    runtime: string;
+    memory: { rss: number; heapTotal: number; heapUsed: number; external: number; arrayBuffers: number };
+    deps: { epubcheck: string };
+}
+
 export interface HistoryFile {
     filename: string;
     timestamp: string;
@@ -219,6 +234,9 @@ export const ebooksApi = {
     // Maintenance
     cleanupHistory: () => apiClient.post<{ deletedCount: number, sizeSavedMB: string }>('/maintenance/cleanup-history'),
     getDiskUsage: () => apiClient.get<DiskUsageResponse>('/maintenance/disk-usage'),
+    purgeOrphan: (isbn: string) => apiClient.delete<{ message: string }>(`/maintenance/orphans/${isbn}`),
+    getActiveSessions: () => apiClient.get<{ data: ActiveSession[] }>('/maintenance/presence'),
+    getHealth: () => apiClient.get<HealthResponse>('/health'),
     runBackup: () => apiClient.post<{ message: string }>('/maintenance/backup'),
     getBackupLog: () => apiClient.get<{ data: BackupRun[] }>('/maintenance/backup-log'),
     getBackupSchedule: () => apiClient.get<{ schedule: string }>('/maintenance/backup-schedule'),

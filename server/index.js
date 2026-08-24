@@ -126,6 +126,10 @@ export const server = Bun.serve({
       if (path === "/api/maintenance/cleanup-history" && method === "POST") return maintenance.cleanupHistory(user);
       if (path === "/api/maintenance/migrate-epubs"   && method === "POST") return maintenance.migrateEpubs(user);
       if (path === "/api/maintenance/disk-usage"      && method === "GET")  return maintenance.diskUsage(user);
+      if (path === "/api/maintenance/presence"        && method === "GET")  return maintenance.getPresence(user);
+      if (path.startsWith("/api/maintenance/orphans/") && method === "DELETE") {
+        return maintenance.purgeOrphan(user, path.split('/')[4]);
+      }
       if (path === "/api/maintenance/backup"          && method === "POST") return maintenance.runBackup(user);
       if (path === "/api/maintenance/backup-log"      && method === "GET")  return maintenance.getBackupLog(user);
       if (path === "/api/maintenance/backup-schedule") {

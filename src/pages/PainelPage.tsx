@@ -158,6 +158,7 @@ const TABS = [
     { key: 'stats', label: 'Estatísticas' },
     { key: 'books', label: 'Livros' },
     { key: 'users', label: 'Utilizadores' },
+    { key: 'system', label: 'Sistema' },
     { key: 'backup', label: 'Backup' },
 ] as const;
 type TabKey = typeof TABS[number]['key'];
@@ -285,22 +286,9 @@ function BackupTab() {
 }
 
 function StatsTab() {
-    const { showNotification } = useNotification();
-    const queryClient = useQueryClient();
     const { data, isLoading } = useQuery({
         queryKey: ['disk-usage'],
         queryFn: () => ebooksApi.getDiskUsage().then(r => r.data),
-    });
-    const [confirmCleanup, setConfirmCleanup] = useState(false);
-
-    const cleanupMutation = useMutation({
-        mutationFn: () => ebooksApi.cleanupHistory(),
-        onSuccess: (res) => {
-            setConfirmCleanup(false);
-            showNotification('success', `Limpeza concluída! Removidos ${res.data.deletedCount} ficheiros (${res.data.sizeSavedMB} MB).`);
-            queryClient.invalidateQueries({ queryKey: ['disk-usage'] });
-        },
-        onError: () => showNotification('error', 'Erro ao realizar a limpeza do histórico.'),
     });
 
     if (isLoading || !data) {
@@ -313,37 +301,6 @@ function StatsTab() {
 
     return (
         <>
-            <div className="flex justify-end">
-                {confirmCleanup ? (
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-text-muted">Remove definitivamente todos os rascunhos com +7 dias, de todos os livros. Não pode ser desfeito.</span>
-                        <button
-                            onClick={() => cleanupMutation.mutate()}
-                            disabled={cleanupMutation.isPending}
-                            className="inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 shrink-0"
-                        >
-                            {cleanupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                            Confirmar
-                        </button>
-                        <button
-                            onClick={() => setConfirmCleanup(false)}
-                            className="p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors shrink-0"
-                            title="Cancelar"
-                        >
-                            <X size={14} />
-                        </button>
-                    </div>
-                ) : (
-                    <button
-                        onClick={() => setConfirmCleanup(true)}
-                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm"
-                    >
-                        <Trash2 size={14} />
-                        Limpar Histórico
-                    </button>
-                )}
-            </div>
-
             {/* Stat tiles */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatTile label="Livros ativos" value={String(data.active.count)} />
@@ -378,14 +335,156 @@ function StatsTab() {
     );
 }
 
+// "Quem está a editar agora" — presença ativa (server/presence.js). Poll a cada 15s (a
+// mesma janela do TTL de heartbeat, ver presence.js) — dados mudam enquanto a equipa trabalha.
+function ActiveSessionsCard() {
+    const { data: sessions } = useQuery({
+        queryKey: ['active-sessions'],
+        queryFn: () => ebooksApi.getActiveSessions().then(r => r.data.data),
+        refetchInterval: 15000,
+    });
+
+    return (
+        <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+                <h2 className="text-base font-semibold text-slate-700">Quem está a editar agora</h2>
+            </div>
+            {!sessions || sessions.length === 0 ? (
+                <p className="px-6 py-8 text-center text-sm text-text-muted">Ninguém a editar neste momento.</p>
+            ) : (
+                <div className="divide-y divide-border">
+                    {sessions.map(s => (
+                        <div key={s.isbn} className="px-6 py-3 flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium text-text-color truncate">{s.title ?? s.isbn}</p>
+                                <p className="text-xs text-text-muted truncate">
+                                    {s.holderEmail}{s.others.length > 0 && ` +${s.others.length}`}
+                                </p>
+                            </div>
+                            <span className="shrink-0 text-xs text-text-muted">
+                                {s.minutesAgo <= 0 ? 'agora' : `há ${s.minutesAgo}min`}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function SystemHealthCard() {
+    const { data: health } = useQuery({
+        queryKey: ['system-health'],
+        queryFn: () => ebooksApi.getHealth().then(r => r.data),
+    });
+
+    return (
+        <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+                <h2 className="text-base font-semibold text-slate-700">Sistema</h2>
+            </div>
+            {!health ? (
+                <div className="flex items-center justify-center py-8">
+                    <Loader2 size={18} className="animate-spin text-slate-500" />
+                </div>
+            ) : (
+                <div className="px-6 py-4 flex flex-col gap-2 text-sm">
+                    <div className="flex items-center justify-between">
+                        <span className="text-text-muted">Runtime</span>
+                        <span className="text-text-color font-medium">{health.runtime}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <span className="text-text-muted">Memória (RSS)</span>
+                        <span className="text-text-color font-medium">{formatFileSize(health.memory.rss)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <span className="text-text-muted">epubcheck</span>
+                        <span className={`font-medium ${health.deps.epubcheck === 'not installed' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {health.deps.epubcheck === 'not installed' ? 'não instalado' : 'instalado'}
+                        </span>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function SystemTab() {
+    const { showNotification } = useNotification();
+    const queryClient = useQueryClient();
+    const [confirmCleanup, setConfirmCleanup] = useState(false);
+
+    const cleanupMutation = useMutation({
+        mutationFn: () => ebooksApi.cleanupHistory(),
+        onSuccess: (res) => {
+            setConfirmCleanup(false);
+            showNotification('success', `Limpeza concluída! Removidos ${res.data.deletedCount} ficheiros (${res.data.sizeSavedMB} MB).`);
+            queryClient.invalidateQueries({ queryKey: ['disk-usage'] });
+        },
+        onError: () => showNotification('error', 'Erro ao realizar a limpeza do histórico.'),
+    });
+
+    return (
+        <>
+            <div className="flex justify-end">
+                {confirmCleanup ? (
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-text-muted">Remove definitivamente todos os rascunhos com +7 dias, de todos os livros. Não pode ser desfeito.</span>
+                        <button
+                            onClick={() => cleanupMutation.mutate()}
+                            disabled={cleanupMutation.isPending}
+                            className="inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50 shrink-0"
+                        >
+                            {cleanupMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                            Confirmar
+                        </button>
+                        <button
+                            onClick={() => setConfirmCleanup(false)}
+                            className="p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors shrink-0"
+                            title="Cancelar"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => setConfirmCleanup(true)}
+                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm"
+                    >
+                        <Trash2 size={14} />
+                        Limpar Histórico
+                    </button>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <SystemHealthCard />
+            </div>
+        </>
+    );
+}
+
 function BooksTab() {
+    const { showNotification } = useNotification();
+    const queryClient = useQueryClient();
     const { data, isLoading } = useQuery({
         queryKey: ['disk-usage'],
         queryFn: () => ebooksApi.getDiskUsage().then(r => r.data),
     });
     const [query, setQuery] = useState('');
     const [searchOpen, setSearchOpen] = useState(false);
+    const [confirmOrphan, setConfirmOrphan] = useState<string | null>(null);
     const searchRef = useRef<HTMLDivElement>(null);
+
+    const purgeOrphanMutation = useMutation({
+        mutationFn: (isbn: string) => ebooksApi.purgeOrphan(isbn),
+        onSuccess: () => {
+            showNotification('success', 'Pasta apagada.');
+            queryClient.invalidateQueries({ queryKey: ['disk-usage'] });
+        },
+        onError: (err: AxiosError<{ error: string }>) => showNotification('error', err?.response?.data?.error ?? 'Erro ao apagar a pasta.'),
+        onSettled: () => setConfirmOrphan(null),
+    });
 
     // Clicar fora colapsa a pesquisa (só quando vazia — não destrói um filtro ativo)
     useEffect(() => {
@@ -479,7 +578,29 @@ function BooksTab() {
                                 {data.orphaned.books.map(b => (
                                     <div key={b.isbn} className="px-6 py-3 flex items-center justify-between gap-4 text-sm text-amber-800">
                                         <span>{b.isbn}</span>
-                                        <span className="font-semibold">{formatFileSize(b.total)}</span>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <span className="font-semibold">{formatFileSize(b.total)}</span>
+                                            {confirmOrphan === b.isbn ? (
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={() => purgeOrphanMutation.mutate(b.isbn)} disabled={purgeOrphanMutation.isPending}
+                                                        className="p-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50"
+                                                        title="Confirmar eliminação">
+                                                        {purgeOrphanMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                                    </button>
+                                                    <button onClick={() => setConfirmOrphan(null)}
+                                                        className="p-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-700 transition-colors"
+                                                        title="Cancelar">
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button onClick={() => setConfirmOrphan(b.isbn)}
+                                                    className="p-1.5 rounded-lg text-amber-700 hover:bg-amber-100 transition-colors"
+                                                    title="Apagar pasta">
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -654,6 +775,8 @@ function UsersTab() {
 
     return (
         <>
+            <ActiveSessionsCard />
+
             <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
                 <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
                     <h2 className="text-base font-semibold text-slate-700">
@@ -852,6 +975,7 @@ export function PainelPage() {
                 {tab === 'stats' && <StatsTab />}
                 {tab === 'books' && <BooksTab />}
                 {tab === 'users' && <UsersTab />}
+                {tab === 'system' && <SystemTab />}
                 {tab === 'backup' && <BackupTab />}
             </div>
         </div>

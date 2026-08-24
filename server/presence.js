@@ -70,3 +70,18 @@ export function holderEmail(isbn) {
   const { holder } = holderOf(clients);
   return holder ? holder.email : null;
 }
+
+// Snapshot de toda a presença ativa — para o Painel ("quem está a editar agora"). Poda cada
+// isbn antes de listar (mesmo critério de TTL usado nos outros getters).
+export function listAll() {
+  const result = [];
+  for (const isbn of [...locks.keys()]) {
+    const clients = prune(isbn);
+    if (!clients) continue;
+    const { holder } = holderOf(clients);
+    const others = [];
+    for (const [, info] of clients) if (info !== holder) others.push(info.email);
+    result.push({ isbn, holderEmail: holder.email, since: holder.since, others });
+  }
+  return result;
+}

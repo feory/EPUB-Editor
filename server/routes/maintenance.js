@@ -1,14 +1,15 @@
 import { existsSync, mkdirSync } from 'fs';
-import { readdir, unlink, stat } from 'fs/promises';
+import { readdir, unlink, stat, rm } from 'fs/promises';
 import { requireAdmin } from '../middleware/auth.js';
 import { join } from 'path';
-import { corsHeaders } from '../response.js';
+import { corsHeaders, safeSegment } from '../response.js';
 import { DATA_DIR } from '../config.js';
 import { debugLog } from '../log.js';
 import { stmt } from '../database.js';
 import { b2Configured } from '../b2-client.js';
 import { runAndLog, rescheduleBackup } from '../backup.js';
 import { parseCron } from '../cron-schedule.js';
+import * as presence from '../presence.js';
 
 // Apaga, dentro de `dir`, os ficheiros que passam `filter` e têm mais de `limit` (mtime) —
 // preservando SEMPRE o mais recente. Devolve { count, bytes } apagados.
@@ -127,6 +128,42 @@ export async function diskUsage(user) {
     orphaned: { count: orphaned.length, totalBytes: sum(orphaned, 'total'), books: orphaned },
     grandTotalBytes: sum(results, 'total'),
   }, { headers: corsHeaders });
+}
+
+// Apaga do disco uma pasta ISBN "órfã" (sem registo na BD, nem ativo nem Reciclagem — ver
+// diskUsage). Confere de novo aqui, no servidor, que não há registo nenhum antes de apagar
+// (nunca confiar só no status que veio do diskUsage do cliente — evita apagar um livro real
+// por uma corrida entre o load da lista e o clique).
+export async function purgeOrphan(user, isbn) {
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+  if (!safeSegment(isbn)) return Response.json({ error: 'Invalid isbn' }, { status: 400, headers: corsHeaders });
+  if (stmt.getEbook.get(isbn)) {
+    return Response.json({ error: 'Este ISBN tem registo na base de dados — não é uma pasta órfã.' }, { status: 400, headers: corsHeaders });
+  }
+  const dir = join(DATA_DIR, isbn);
+  if (!existsSync(dir)) return Response.json({ error: 'Pasta não encontrada.' }, { status: 404, headers: corsHeaders });
+  await rm(dir, { recursive: true, force: true });
+  debugLog(`🗑️ [Órfã] ${isbn} apagada`);
+  return Response.json({ message: 'Pasta apagada.' }, { headers: corsHeaders });
+}
+
+// "Quem está a editar agora" (Painel) — snapshot da presença ativa (server/presence.js) com
+// título por isbn (mesmo mapa da diskUsage) e minutos decorridos calculados aqui, no momento
+// do pedido (evita problemas de relógio entre servidor/cliente).
+export async function getPresence(user) {
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+  const byIsbn = new Map([...stmt.listEbooks.all(), ...stmt.listTrash.all()].map(e => [e.ebook_isbn, e]));
+  const now = Date.now();
+  const data = presence.listAll().map(p => ({
+    isbn: p.isbn,
+    title: byIsbn.get(p.isbn)?.title ?? null,
+    holderEmail: p.holderEmail,
+    minutesAgo: Math.floor((now - p.since) / 60_000),
+    others: p.others,
+  }));
+  return Response.json({ data }, { headers: corsHeaders });
 }
 
 export async function migrateEpubs(user) {
