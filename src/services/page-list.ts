@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { fillFolioGaps } from './page-list-folio';
 import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from './page-list-marker';
+import { CHAPTER_SPLIT_PATTERN } from '../utils/html-cleaner';
 
 // Worker partilhado com o pdf-service (já configurado lá); reconfigurar é idempotente.
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -312,24 +313,23 @@ export function stripPageBreaks(html: string): string {
 }
 
 /**
- * Insere marcadores de quebra de página no HTML, alinhando cada âncora do PDF ao texto do
- * editor. Cada âncora é localizada a partir de um CURSOR que só avança (âncoras chegam em ordem
- * de página do PDF, logo em ordem esperada no corpo) — não da 1ª ocorrência no documento
- * inteiro: um título de capítulo/secção usado como âncora aparece tipicamente TAMBÉM no Índice
- * do próprio livro, bem antes da abertura real; procurar sempre desde o início encontrava
- * sistematicamente essa ocorrência do Índice em vez da real, e o LIS (ver abaixo) descartava-a
- * por ficar fora de ordem com as âncoras vizinhas — perdendo a página toda mesmo com a âncora
- * a existir corretamente no corpo, só que mais à frente. Sem match a partir do cursor, cai para
- * uma procura desde o início (ex. capítulo fora de ordem por uma edição) — o LIS a seguir
- * continua a servir de rede de segurança, mantendo só a maior subsequência de posições
- * CRESCENTES, para não deixar esse fallback (ou outro outlier genuíno) envenenar a sequência.
+ * Insere marcadores de quebra de página num ÚNICO segmento (capítulo) do HTML, alinhando cada
+ * âncora do PDF ao texto desse segmento. Cada âncora é localizada a partir de um CURSOR que só
+ * avança (âncoras chegam em ordem de página do PDF, logo em ordem esperada no corpo) — não da
+ * 1ª ocorrência no documento inteiro: um título de capítulo/secção usado como âncora aparece
+ * tipicamente TAMBÉM no Índice do próprio livro, bem antes da abertura real; procurar sempre
+ * desde o início encontrava sistematicamente essa ocorrência do Índice em vez da real, e o LIS
+ * (ver abaixo) descartava-a por ficar fora de ordem com as âncoras vizinhas — perdendo a página
+ * toda mesmo com a âncora a existir corretamente no corpo, só que mais à frente. Sem match a
+ * partir do cursor, cai para uma procura desde o início (ex. capítulo fora de ordem por uma
+ * edição) — o LIS a seguir continua a servir de rede de segurança, mantendo só a maior
+ * subsequência de posições CRESCENTES, para não deixar esse fallback (ou outro outlier genuíno)
+ * envenenar a sequência. Páginas sem match (ou fora da sequência) são saltadas — inclui, aqui,
+ * todas as que pertencem a OUTRO segmento (ver insertPageBreaks).
  * Marcador = <span class="pagebreak" data-page="N"></span> (convertido para epub:type="pagebreak"
- * no export). Páginas sem match (ou fora da sequência) são saltadas.
- * Idempotente: remove marcadores pré-existentes antes de inserir (reexecutar sobre um livro já
- * marcado, ex. page-list gerada de novo a partir de um PDF carregado mais tarde, não duplica).
+ * no export).
  */
-export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: string; inserted: number; total: number } {
-    html = stripPageBreaks(html);
+function insertPageBreaksInSegment(html: string, anchors: PageAnchor[]): { html: string; inserted: number } {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     // achatar text nodes do corpo: string normalizada concatenada + mapa posição→{node, offset}
     const nodes: Text[] = [];
@@ -375,7 +375,57 @@ export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: s
             after.parentNode!.insertBefore(span, after);
         }
     }
-    return { html: doc.body.innerHTML, inserted, total: anchors.length };
+    return { html: doc.body.innerHTML, inserted };
+}
+
+// data-page="N" já inserido — usado só para saber que páginas cada passo já colocou (não
+// PAGEBREAK_MARKER_RE: esse casa o <span> inteiro, aqui só interessa o número, global).
+const INSERTED_PAGE_RE = /data-page="(\d+)"/g;
+const pagesIn = (html: string): Set<number> =>
+    new Set([...html.matchAll(INSERTED_PAGE_RE)].map(m => parseInt(m[1])));
+
+/**
+ * Insere marcadores de quebra de página no HTML, em 2 passos.
+ *
+ * 1º passo — GLOBAL (insertPageBreaksInSegment sobre o documento inteiro): idêntico ao
+ * comportamento histórico, preserva exatamente o que já funcionava (zero regressão nos livros
+ * normais — testado contra uma peça com falas curtas repetidas por vários capítulos, ex.
+ * "Martinez interrompendo": o cursor único global sabe desambiguar qual ocorrência é a certa
+ * porque vê o livro inteiro; um corte por capítulo aí SÓ PIORA, cada capítulo vê a fala em
+ * isolado e não sabe qual das repetições lhe pertence).
+ *
+ * 2º passo — POR CAPÍTULO, só para as páginas que o 1º passo NÃO encontrou. Livros bilingues
+ * (tradução PT contínua + texto original EN reagrupado à parte, em vez de intercalado página a
+ * página como no PDF impresso) quebram o cursor global: ao encontrar uma página do bloco EN, o
+ * cursor salta lá para a frente, e a página PT seguinte (que no corpo continua logo a seguir à
+ * PT anterior, bem atrás de onde o cursor ficou) passa a parecer "fora de ordem" — o LIS
+ * descarta-a, perdendo metade das páginas em ziguezague. Para essas (só essas — já falharam no
+ * 1º passo, não há nada a perder), tenta-se de novo por capítulo: cada bloco de idioma fica com
+ * o seu próprio cursor, sem um roubar a posição do outro; dentro de CADA capítulo a ordem
+ * PDF↔corpo volta a ser monótona (o capítulo é só um dos dois blocos). Processa os capítulos em
+ * ORDEM, removendo da lista de "faltam" cada página assim que aparece — evita o mesmo capítulo
+ * marcar 2x a mesma página caso o texto se repita também dentro do 2º passo.
+ * Idempotente: remove marcadores pré-existentes antes de inserir (reexecutar sobre um livro já
+ * marcado, ex. page-list gerada de novo a partir de um PDF carregado mais tarde, não duplica).
+ */
+export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: string; inserted: number; total: number } {
+    const stripped = stripPageBreaks(html);
+    const pass1 = insertPageBreaksInSegment(stripped, anchors);
+
+    let remaining = anchors.filter(a => !pagesIn(pass1.html).has(a.page));
+    if (remaining.length === 0) return { html: pass1.html, inserted: pass1.inserted, total: anchors.length };
+
+    let extraInserted = 0;
+    const outSegments = pass1.html.split(CHAPTER_SPLIT_PATTERN).map(seg => {
+        if (remaining.length === 0) return seg;
+        const r = insertPageBreaksInSegment(seg, remaining);
+        if (r.inserted === 0) return seg;
+        const justAdded = [...pagesIn(r.html)].filter(p => !pagesIn(seg).has(p));
+        remaining = remaining.filter(a => !justAdded.includes(a.page));
+        extraInserted += justAdded.length;
+        return r.html;
+    });
+    return { html: outSegments.join(''), inserted: pass1.inserted + extraInserted, total: anchors.length };
 }
 
 /**
