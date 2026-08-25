@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import {
     Plus, GripVertical, ChevronUp, ChevronDown, Pilcrow, Heading1, Heading2, Heading3, Quote, Type,
-    StickyNote, Image as ImageIcon, Copy, Trash2, Minus, X, Save, BookMarked,
+    StickyNote, Image as ImageIcon, Copy, Trash2, Minus, X, Save, BookMarked, Replace,
 } from 'lucide-react';
 import type { BlockOverlaysApi } from '../useBlockOverlays';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
+import { useNotification } from '../../../../context/NotificationContext';
 
 type Props = BlockOverlaysApi & { readOnly?: boolean };
 
@@ -12,8 +14,35 @@ export function BlockOverlays({
     addBtnPos, addBtnFading, plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
     htmlTextareaRef, openPlusMenu, closePlusMenu, plusAction, cancelAddBtnHide, clearAddBtn,
     startBlockDrag, moveBlock, setGripMenu, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
-    styleMenu, styleAction, setStyleMenu, readOnly,
+    styleMenu, styleAction, setStyleMenu, replaceInDocument, readOnly,
 }: Props) {
+    // Substituição em todo o HTML do documento (não só o bloco aberto) — mini find/replace
+    // acionado a partir da caixa de edição de HTML, já que é o único sítio onde se vê/edita
+    // HTML em bruto. Estado local ao BlockOverlays (que NUNCA desmonta — só a caixa condicional
+    // por baixo dele desmonta) — sem o reset abaixo, o painel ficava aberto/preenchido para a
+    // sessão de edição seguinte, mesmo noutro bloco.
+    const { showNotification } = useNotification();
+    const [replaceOpen, setReplaceOpen] = useState(false);
+    const [findText, setFindText] = useState('');
+    const [replaceText, setReplaceText] = useState('');
+    useEffect(() => {
+        if (htmlEdit === null) { setReplaceOpen(false); setFindText(''); setReplaceText(''); }
+    }, [htmlEdit]);
+    const openReplace = () => {
+        if (!replaceOpen) {
+            const ta = htmlTextareaRef.current;
+            if (ta && ta.selectionStart !== ta.selectionEnd) setFindText(ta.value.slice(ta.selectionStart, ta.selectionEnd));
+        }
+        setReplaceOpen(o => !o);
+    };
+    const applyReplace = () => {
+        if (!findText) return;
+        const count = replaceInDocument(findText, replaceText);
+        if (count === 0) { showNotification('error', 'Sem ocorrências encontradas.'); return; }
+        showNotification('success', `${count} substituição${count === 1 ? '' : 'ões'} feita${count === 1 ? '' : 's'}.`, 2500);
+        endHtmlEdit(); // o documento inteiro foi reescrito — a caixa deste bloco já não é fiável
+    };
+
     return (
         <>
             {addBtnPos && !readOnly && (
@@ -174,9 +203,12 @@ export function BlockOverlays({
                                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveHtmlEdit(htmlTextareaRef.current?.value ?? '');
                             }}
                             style={{ height: Math.min(Math.max(htmlEditPos.height + 40, 120), 600) }}
-                            className="w-full font-mono text-sm leading-relaxed p-3 pr-16 rounded-lg border border-slate-300 bg-slate-50 text-slate-700 outline-none shadow-xl resize-y"
+                            className="w-full font-mono text-sm leading-relaxed p-3 pr-24 rounded-lg border border-slate-300 bg-slate-50 text-slate-700 outline-none shadow-xl resize-y"
                         />
                         <div className="absolute top-2 right-2 flex gap-1">
+                            <button title="Substituir" onMouseDown={(e) => e.preventDefault()} onClick={openReplace} className={`flex items-center justify-center w-7 h-7 rounded-md border shadow-sm ${replaceOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'}`}>
+                                <Replace size={15} />
+                            </button>
                             <button title="Cancelar" onMouseDown={(e) => e.preventDefault()} onClick={endHtmlEdit} className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200 shadow-sm">
                                 <X size={15} />
                             </button>
@@ -184,6 +216,38 @@ export function BlockOverlays({
                                 <Save size={15} />
                             </button>
                         </div>
+                        {replaceOpen && (
+                            <div className="absolute top-11 right-2 z-10 w-64 p-2.5 rounded-lg border border-slate-300 bg-white shadow-xl flex flex-col gap-1.5">
+                                <input
+                                    type="text"
+                                    placeholder="Procurar"
+                                    value={findText}
+                                    autoFocus
+                                    onChange={(e) => setFindText(e.target.value)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') applyReplace(); }}
+                                    className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-300 outline-none focus:border-slate-500"
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Substituir por"
+                                    value={replaceText}
+                                    onChange={(e) => setReplaceText(e.target.value)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') applyReplace(); }}
+                                    className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-300 outline-none focus:border-slate-500"
+                                />
+                                <button
+                                    type="button"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={applyReplace}
+                                    disabled={!findText}
+                                    className="mt-0.5 w-full py-1.5 rounded-md bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold disabled:opacity-50"
+                                >
+                                    Substituir tudo
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

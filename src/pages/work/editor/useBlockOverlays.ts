@@ -132,6 +132,24 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         editor.nodeChanged();
     };
 
+    // Substituição literal (todas as ocorrências) sobre o HTML do documento INTEIRO, acionada
+    // a partir do mini find/replace da caixa de edição de HTML (BlockOverlays) — devolve o nº
+    // de ocorrências trocadas. split/join em vez de RegExp: sem escaping de caracteres
+    // especiais para uma substring literal.
+    const replaceInDocument = (find: string, replaceWith: string): number => {
+        const editor = editorRef.current;
+        if (!editor || !find) return 0;
+        const html = editor.getContent();
+        const parts = html.split(find);
+        const count = parts.length - 1;
+        if (count === 0) return 0;
+        editor.setContent(parts.join(replaceWith));
+        editor.focus();
+        editor.dispatch('Change');
+        editor.nodeChanged();
+        return count;
+    };
+
     // Mover o bloco de topo uma posição para cima/baixo (setas na pega).
     const moveBlock = (dir: 'up' | 'down') => {
         const editor = editorRef.current;
@@ -581,7 +599,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         htmlTextareaRef, styleMenu,
         openPlusMenu, closePlusMenu, plusAction, cancelAddBtnHide, clearAddBtn,
         startBlockDrag, moveBlock, setGripMenu, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
-        startHtmlEdit, wireEditor, openStyleMenu, styleAction, setStyleMenu,
+        startHtmlEdit, wireEditor, openStyleMenu, styleAction, setStyleMenu, replaceInDocument,
     };
 }
 
