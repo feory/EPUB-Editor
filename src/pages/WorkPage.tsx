@@ -55,7 +55,8 @@ export function WorkPage() {
   const navigate = useNavigate();
   const { showNotification } = useNotification();
   const { setCustomCss } = useStyles();
-  const work = useEbookWork(isbn);
+  const editorRef = useRef<WorkEditorRef>(null);
+  const work = useEbookWork(isbn, editorRef);
 
   useEffect(() => {
     if (work.status === 'completed') {
@@ -73,7 +74,6 @@ export function WorkPage() {
     return () => { cancelled = true; };
   }, [isbn, setCustomCss]);
 
-  const editorRef = useRef<WorkEditorRef>(null);
   const suppressHighlightRef = useRef(false);
 
   // Altura real do cabeçalho (banner de presença + navbar, quando ambos visíveis) — os

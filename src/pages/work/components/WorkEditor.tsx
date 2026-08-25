@@ -3,7 +3,7 @@ import { Editor } from '@tinymce/tinymce-react';
 import { Maximize2, FileText } from 'lucide-react';
 import { useStyles } from '../../../context/StyleContext';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { applyImportOptions, convertListsToDialogue } from '../../../utils/html-cleaner';
+import { applyImportOptions, convertListsToDialogue, CHAPTER_SPLIT_PATTERN } from '../../../utils/html-cleaner';
 import type { ImportOptions } from '../../../utils/html-cleaner';
 import { cleanIndexText, linkIndexPages, wrapPageLinks, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
 import { sanitizeImageFilename } from '../../../utils/format';
@@ -94,6 +94,10 @@ export interface WorkEditorRef {
     applySpellSuggestion: (index: number, suggestion: string) => void;
     insertContent: (content: string) => void;
     setContent: (content: string) => void;
+    // Sincroniza o editor com um novo fullHtml (transformações de livro inteiro, ex.
+    // useEbookWork.commitHtml) SEM limpar o undo — devolve o fullHtml reconciliado (segmento
+    // reserializado) que o chamador deve persistir. Ver comentário na implementação.
+    syncExternalContent: (newFullHtml: string, chapterIndex: number) => string;
     removeImagesById: (imageIds: string[]) => string;
     refreshImage: (imageId: string) => void;
     triggerGrammarCheck: () => void;
@@ -717,6 +721,40 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const editor = editorRef.current;
             if (!editor) return;
             editor.setContent(content);
+        },
+
+        // dom.setHTML + undoManager.add() em vez de editor.setContent(): setContent() LIMPA a
+        // pilha de undo inteira (mesmo bug documentado em book-find-replace.ts). Chamado por
+        // commitHtml (useEbookWork) ANTES do dispatch que atualiza a prop `value` controlada.
+        // Devolve o fullHtml com o segmento aberto RESERIALIZADO pelo próprio TinyMCE
+        // (editor.getContent(), não a string escrita à mão) — é esse que tem de ir para o
+        // dispatch/fullHtml: o wrapper (@tinymce/tinymce-react) só evita chamar setContent()
+        // de novo no próximo render se `value` bater byte a byte com o que ele guardou de
+        // editor.getContent() após o 'Change'; a string original quase nunca bate certo
+        // (aspas, ordem de atributos, etc. do serializer do TinyMCE), o que voltava a limpar
+        // o undo mesmo depois deste dom.setHTML — confirmado ao vivo (hasUndo:false).
+        syncExternalContent: (newFullHtml: string, chapterIndex: number): string => {
+            const editor = editorRef.current;
+            if (!editor) return newFullHtml;
+            if (chapterIndex === -1) {
+                if (newFullHtml === editor.getContent()) return newFullHtml;
+                editor.dom.setHTML(editor.getBody(), newFullHtml);
+                editor.undoManager.add();
+                editor.dispatch('Change');
+                editor.nodeChanged();
+                return editor.getContent();
+            }
+            const segments = newFullHtml.split(CHAPTER_SPLIT_PATTERN);
+            let nonEmptyIdx = -1;
+            const targetSegIdx = segments.findIndex(s => s.trim().length > 0 && ++nonEmptyIdx === chapterIndex);
+            if (targetSegIdx === -1) return newFullHtml; // índice fora de alcance — nada a sincronizar
+            if (segments[targetSegIdx] === editor.getContent()) return newFullHtml;
+            editor.dom.setHTML(editor.getBody(), segments[targetSegIdx]);
+            editor.undoManager.add();
+            editor.dispatch('Change');
+            editor.nodeChanged();
+            segments[targetSegIdx] = editor.getContent();
+            return segments.join('');
         },
 
         triggerGrammarCheck: () => {

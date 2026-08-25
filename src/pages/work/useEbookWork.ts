@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useReducer } from 'react';
+import type { RefObject } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ebooksApi } from '../../api/ebooks-api';
 import { getAccessToken, clientId } from '../../api/client';
@@ -25,8 +26,9 @@ import { useEbookHistory } from './hooks/useEbookHistory';
 import { useVersionDiff } from './hooks/useVersionDiff';
 import { useEbookGrammar } from './hooks/useEbookGrammar';
 import { usePresence } from './hooks/usePresence';
+import type { WorkEditorRef } from './components/WorkEditor';
 
-export function useEbookWork(isbn: string | undefined) {
+export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<WorkEditorRef | null>) {
     const queryClient = useQueryClient();
     const { showNotification, hideNotification } = useNotification();
     const { customCss } = useStyles();
@@ -223,10 +225,17 @@ export function useEbookWork(isbn: string | undefined) {
     // válido depois de mover/eliminar, restaurar seria a posição errada.
     const commitHtml = useCallback((html: string) => {
         const prevIndex = contentState.activeChapterIndex;
-        dispatch({ type: 'LOAD_CONTENT', payload: html });
+        // Sincroniza o editor DIRETAMENTE (dom.setHTML + undoManager.add(), ver
+        // syncExternalContent em WorkEditor.tsx) antes do dispatch — devolve o fullHtml com o
+        // segmento aberto RESERIALIZADO pelo TinyMCE, para bater certo com o que o wrapper
+        // (@tinymce/tinymce-react) vai comparar no próximo render e não chamar setContent()
+        // por baixo (que LIMPA a pilha de undo inteira). Guardamos SEMPRE esse html
+        // (reconciliado), nunca o `html` cru recebido — é o que fica persistido.
+        const syncedHtml = editorRef?.current?.syncExternalContent(html, prevIndex) ?? html;
+        dispatch({ type: 'LOAD_CONTENT', payload: syncedHtml });
         if (prevIndex !== -1) dispatch({ type: 'CHANGE_CHAPTER', index: prevIndex });
-        if (isbn) saveMutation.mutate({ content: html });
-    }, [isbn, saveMutation, contentState.activeChapterIndex]);
+        if (isbn) saveMutation.mutate({ content: syncedHtml });
+    }, [isbn, saveMutation, contentState.activeChapterIndex, editorRef]);
 
     // --- Edit chapter title (break, h1 e h2) ---
     const handleEditChapterTitle = useCallback((chapterIndex: number, newTitle: string) => {
