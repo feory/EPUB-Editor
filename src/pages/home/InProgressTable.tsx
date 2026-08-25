@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Book, ImageIcon, Settings, Check, X, Loader2, Trash2, Download, Share2 } from 'lucide-react';
+import { ImageIcon, Settings, Check, X, Loader2, Trash2, Download, Share2 } from 'lucide-react';
 import type { Ebook } from '../../api/ebooks-api';
 import { OverflowMenu } from '../../components/OverflowMenu';
 
@@ -58,10 +58,7 @@ export const InProgressTable: React.FC<InProgressTableProps> = ({
                             </td>
                             <td className="px-6 py-4"><code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono">{ebook.ebook_isbn}</code></td>
                             <td className="px-6 py-4">
-                                <div className="flex items-center gap-3">
-                                    <Book size={18} className="text-text-muted group-hover:text-primary transition-colors" />
-                                    <span className="font-semibold text-text-muted group-hover:text-text-main transition-colors">{ebook.title}</span>
-                                </div>
+                                <span className="font-semibold text-text-muted group-hover:text-text-main transition-colors">{ebook.title}</span>
                             </td>
                             <td className="px-6 py-4 text-text-muted">{ebook.author}</td>
                             <td className="px-6 py-4 text-right">

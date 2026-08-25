@@ -145,13 +145,22 @@ function resolveStyle(name: string, mapping: DocxStyleMapping): { tag: string; c
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// Separadores de linha do InDesign (line/paragraph separator) e tabs → espaço.
+// Separadores de linha do InDesign (line/paragraph separator) e tabs → espaço. Hífen mole
+// (U+00AD, ponto de hifenização invisível, só ativo na quebra de linha impressa) sai sempre —
+// nunca serve num ebook reflow.
+export const cleanText = (s: string) => s
+    .replace(/\u00ad/g, "")
+    .replace(/[\u2028\u2029\t]+/g, " ");
+
 // "palavra- -composta": artefacto de hifenação Word→InDesign (hífen de quebra de linha a
 // coincidir com o hífen próprio de uma palavra composta, ex. "ginásio- -sede", "destacou- -se")
-// → um só hífen, sem espaço.
-const cleanText = (s: string) => s
-    .replace(/[\u2028\u2029\t]+/g, " ")
-    .replace(/(\p{L})-\s+-(\p{L})/gu, "$1-$2");
+// → um só hífen, sem espaço. Aplicado ao texto acumulado do PARÁGRAFO inteiro (flush() em
+// renderPsr), não a cada <Content> isolado: a palavra fica muitas vezes partida entre dois
+// <CharacterStyleRange> (mudança de Tracking/PointSize a meio da palavra, ex. "Saint-<quebra>-"
+// + novo run "Aubin-du-Cormier", livro real "Escritos Políticos") — dentro de um único
+// <Content> a regex nunca via a letra do lado de lá da fronteira.
+const HYPHEN_LINEBREAK_RE = /(\p{L})-\s+-((?:<[^>]+>)*)(\p{L})/gu;
+export const collapseHyphenBreaks = (s: string) => s.replace(HYPHEN_LINEBREAK_RE, "$1-$2$3");
 
 function styleName(attr: string | null): string {
     return (attr || '').split('/').pop() || '';
@@ -331,7 +340,7 @@ function renderPsr(psr: Element, counter: NoteCounter): Segment[] {
     const segs: Segment[] = [];
     let cur = '';
     let curNotes: string[] = [];
-    const flush = () => { segs.push({ text: cur.trim(), notes: curNotes }); cur = ''; curNotes = []; };
+    const flush = () => { segs.push({ text: collapseHyphenBreaks(cur.trim()), notes: curNotes }); cur = ''; curNotes = []; };
     // FontStyle do estilo de PARÁGRAFO (fallback de mais baixa prioridade): aplica-se aos runs
     // que não definem FontStyle próprio nem via estilo de carácter (ex. marcador "a)" das alíneas
     // num parágrafo Num2 Bold; o corpo, com FontStyle="Roman" explícito, mantém-se roman).
@@ -735,7 +744,10 @@ function renderFicha(xml: string, counter: NoteCounter): string {
 function renderFrontMatter(imageIds: string[], texts: string[]): string {
     if (imageIds.length === 0 && texts.length === 0) return '';
     const out = ['<p class="chapter-break" data-title="Frontespício"></p>'];
-    for (const id of imageIds) out.push(`<p class="p-center"><img data-image-id="${id}" src="placeholder" alt="" /></p>`);
+    // O mesmo rosto/capa aparece muitas vezes em mais do que 1 spread do InDesign (ex. duas
+    // páginas de layout espelhado) — readingOrder devolve um id por spread, sem deduplicar;
+    // sem isto, a mesma imagem entrava 2x no frontespício.
+    for (const id of new Set(imageIds)) out.push(`<p class="p-center"><img data-image-id="${id}" src="placeholder" alt="" /></p>`);
     out.push(...texts);
     return out.join('\n');
 }
