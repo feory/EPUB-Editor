@@ -83,6 +83,23 @@ db.run(`CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 )`);
 
+// Registo append-only de ações administráveis (login/logout, gestão de utilizadores, gestão
+// de livros) — separador "Logs" do Painel. user_id sem FK enforcement (o projeto nunca liga
+// PRAGMA foreign_keys) de propósito: a linha sobrevive se o utilizador for apagado depois.
+// user_email é snapshot no momento do evento. Sem purga automática — decisão de reter tudo.
+db.run(`CREATE TABLE IF NOT EXISTS activity_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  user_id    INTEGER,
+  user_email TEXT,
+  action     TEXT NOT NULL,
+  target     TEXT,
+  meta       TEXT,
+  ip         TEXT
+)`);
+
+db.run("CREATE INDEX IF NOT EXISTS idx_activity_log_created_at ON activity_log(created_at)");
+
 export const stmt = {
   // ebooks
   listEbooks:           db.prepare('SELECT * FROM ebooks WHERE deleted_at IS NULL ORDER BY created_at DESC'),
@@ -142,6 +159,13 @@ export const stmt = {
   // settings
   getSetting:           db.prepare('SELECT value FROM settings WHERE key = ?'),
   setSetting:           db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'),
+  // activity log
+  insertActivityLog:    db.prepare(`
+    INSERT INTO activity_log (user_id, user_email, action, target, meta, ip) VALUES (?, ?, ?, ?, ?, ?)
+  `),
+  // Teto de 1000 = decisão consciente (payload JSON pequeno mesmo assim; equivalente ao
+  // LIMIT 20 de listBackupRuns, mas maior porque há muito mais eventos/dia).
+  listActivityLog:      db.prepare('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 1000'),
 };
 
 export function migrateGrammarToDb() {

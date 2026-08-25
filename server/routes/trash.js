@@ -3,6 +3,7 @@ import { join } from 'path';
 import { stmt } from '../database.js';
 import { corsHeaders, jsonResponse } from '../response.js';
 import { DATA_DIR } from '../config.js';
+import { logActivity } from '../log-activity.js';
 
 export function listTrash(req, user) {
   const data = user.role === 'admin'
@@ -16,12 +17,15 @@ export function restoreEbook(isbn) {
   return Response.json({ message: 'Ebook restored' }, { headers: corsHeaders });
 }
 
-export function hardDeleteEbook(isbn) {
+export function hardDeleteEbook(req, isbn, user) {
+  const ebook = stmt.getEbook.get(isbn);
   stmt.hardDeleteEbook.run(isbn);
   stmt.grammarDeleteIsbn.run(isbn);
   stmt.grammarSessionDelete.run(isbn);
   stmt.unshareAllForEbook.run(isbn);
   try { rmSync(join(DATA_DIR, isbn), { recursive: true, force: true }); }
   catch (err) { console.error(`[Trash] Falha ao remover ficheiros de ${isbn}:`, err.message); }
+  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'ebook_delete_permanent',
+    { target: isbn, meta: { title: ebook?.title }, req });
   return Response.json({ message: 'Ebook permanently deleted' }, { headers: corsHeaders });
 }

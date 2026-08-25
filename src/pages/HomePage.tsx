@@ -91,7 +91,7 @@ export function HomePage() {
     });
     const createEbookMutation = useMutation({
         mutationFn: (data: any) => ebooksApi.create(data),
-        onSuccess: (_, variables) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); setIsModalOpen(false); navigate(`/work/${variables.ebook_isbn}`); },
+        onSuccess: (_, variables) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); setIsModalOpen(false); navigate(`/work/${variables.ebook_isbn}`); },
         onError: () => { showNotification('error', 'Erro ao criar ebook. Verifique se o ISBN já existe.'); },
     });
 
@@ -151,6 +151,7 @@ export function HomePage() {
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['ebooks'] });
             queryClient.invalidateQueries({ queryKey: ['ebook', variables.isbn] });
+            queryClient.invalidateQueries({ queryKey: ['activity-log'] });
             if (variables.status === 'completed') showNotification('success', `Ebook ${variables.title} concluído!`, 3000);
             else showNotification('success', `Ebook ${variables.title} reaberto.`, 3000);
         },
@@ -166,7 +167,7 @@ export function HomePage() {
     });
     const deleteEbookMutation = useMutation({
         mutationFn: (vars: { isbn: string; title: string }) => ebooksApi.deleteEbook(vars.isbn),
-        onSuccess: (_data, vars) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', `Ebook ${vars.title} movido para a reciclagem.`, 3000); },
+        onSuccess: (_data, vars) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['trash'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); showNotification('success', `Ebook ${vars.title} movido para a reciclagem.`, 3000); },
         onError: () => { showNotification('error', 'Erro ao eliminar o registo.'); },
     });
     const restoreEbookMutation = useMutation({
@@ -176,7 +177,7 @@ export function HomePage() {
     });
     const permanentDeleteMutation = useMutation({
         mutationFn: (isbn: string) => ebooksApi.permanentDelete(isbn),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', 'Ebook eliminado.', 3000); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trash'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); showNotification('success', 'Ebook eliminado.', 3000); },
         onError: () => { showNotification('error', 'Erro ao eliminar permanentemente.'); },
     });
     const permanentDeleteAllMutation = useMutation({

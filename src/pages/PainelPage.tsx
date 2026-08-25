@@ -160,6 +160,7 @@ const TABS = [
     { key: 'users', label: 'Utilizadores' },
     { key: 'system', label: 'Sistema' },
     { key: 'backup', label: 'Backup' },
+    { key: 'logs', label: 'Logs' },
 ] as const;
 type TabKey = typeof TABS[number]['key'];
 
@@ -722,6 +723,7 @@ function UsersTab() {
         mutationFn: () => authApi.createUser(createForm.email, createForm.password, createForm.role),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+            queryClient.invalidateQueries({ queryKey: ['activity-log'] });
             setCreateForm(EMPTY_CREATE_USER);
             setShowCreate(false);
             showNotification('success', 'Utilizador criado com sucesso.');
@@ -741,6 +743,7 @@ function UsersTab() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+            queryClient.invalidateQueries({ queryKey: ['activity-log'] });
             setEditTarget(null);
             showNotification('success', 'Utilizador atualizado.');
         },
@@ -753,6 +756,7 @@ function UsersTab() {
         mutationFn: (id: number) => authApi.deleteUser(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+            queryClient.invalidateQueries({ queryKey: ['activity-log'] });
             showNotification('success', 'Utilizador eliminado.');
         },
         onError: (err: AxiosError<{ error: string }>) => {
@@ -942,6 +946,119 @@ function UsersTab() {
     );
 }
 
+const LOGS_PAGE_SIZE = 15;
+
+const ACTION_LABELS: Record<string, string> = {
+    login_success: 'Login', login_failed: 'Falha de login', logout: 'Logout',
+    user_create: 'Utilizador criado', user_update: 'Utilizador editado', user_delete: 'Utilizador eliminado',
+    ebook_create: 'Livro criado', ebook_status_change: 'Estado alterado',
+    ebook_trash: 'Livro na reciclagem', ebook_delete_permanent: 'Livro eliminado definitivamente',
+};
+
+function formatLogMeta(raw: string | null): string {
+    if (!raw) return '';
+    try {
+        const obj = JSON.parse(raw);
+        return Object.entries(obj)
+            .filter(([, v]) => v !== undefined && v !== null && v !== '')
+            .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+            .join(' · ');
+    } catch { return raw; }
+}
+
+function LogsTab() {
+    const [query, setQuery] = useState('');
+    const [page, setPage] = useState(1);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const searchRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!searchOpen) return;
+        const onDown = (e: MouseEvent) => {
+            if (searchRef.current && !searchRef.current.contains(e.target as Node) && !query) setSearchOpen(false);
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [searchOpen, query]);
+
+    const { data: logsData = [], isLoading } = useQuery({
+        queryKey: ['activity-log'],
+        queryFn: async () => (await ebooksApi.getActivityLog()).data.data,
+    });
+
+    const filteredLogs = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        if (!q) return logsData;
+        return logsData.filter(l =>
+            (l.user_email ?? '').toLowerCase().includes(q) ||
+            (ACTION_LABELS[l.action] ?? l.action).toLowerCase().includes(q) ||
+            (l.target ?? '').toLowerCase().includes(q) ||
+            (l.meta ?? '').toLowerCase().includes(q) // apanha título/autor (só existem em meta, não em target)
+        );
+    }, [logsData, query]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredLogs.length / LOGS_PAGE_SIZE));
+    const safePage = Math.min(page, totalPages);
+    const pageLogs = filteredLogs.slice((safePage - 1) * LOGS_PAGE_SIZE, safePage * LOGS_PAGE_SIZE);
+
+    function handleQueryChange(v: string) { setQuery(v); setPage(1); }
+
+    return (
+        <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
+                <h2 className="text-base font-semibold text-slate-700">
+                    Logs {!isLoading && <span className="text-text-muted font-normal">({filteredLogs.length})</span>}
+                </h2>
+                {logsData.length > 0 && (
+                    searchOpen ? (
+                        <div ref={searchRef} className="relative w-56 animate-in fade-in slide-in-from-right-2 duration-200">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                            <input
+                                type="text"
+                                autoFocus
+                                placeholder="Email, ação ou detalhe..."
+                                value={query}
+                                onChange={e => handleQueryChange(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Escape') { handleQueryChange(''); setSearchOpen(false); } }}
+                                className="w-full pl-8 pr-3 h-9 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+                            />
+                        </div>
+                    ) : (
+                        <button onClick={() => setSearchOpen(true)} className="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-slate-200 text-text-muted transition-all shrink-0" title="Pesquisar">
+                            <Search size={16} />
+                        </button>
+                    )
+                )}
+            </div>
+            {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 size={24} className="animate-spin text-slate-500" />
+                </div>
+            ) : logsData.length === 0 ? (
+                <p className="px-6 py-12 text-center text-sm text-text-muted">Ainda sem atividade registada.</p>
+            ) : filteredLogs.length === 0 ? (
+                <p className="px-6 py-12 text-center text-sm text-text-muted">Nenhum resultado para "{query}".</p>
+            ) : (
+                <div className="divide-y divide-border">
+                    {pageLogs.map(l => (
+                        <div key={l.id} className="px-6 py-3 flex items-center gap-4">
+                            <span className="shrink-0 text-xs text-text-muted w-40">{formatDateTime(l.created_at)}</span>
+                            <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 w-44 text-center truncate">
+                                {ACTION_LABELS[l.action] ?? l.action}
+                            </span>
+                            <span className="shrink-0 text-xs text-text-color w-48 truncate" title={l.user_email ?? ''}>{l.user_email ?? '—'}</span>
+                            <span className="min-w-0 flex-1 text-xs text-text-muted truncate" title={[l.target, formatLogMeta(l.meta)].filter(Boolean).join(' · ')}>
+                                {[l.target, formatLogMeta(l.meta)].filter(Boolean).join(' · ') || '—'}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+            <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
+        </div>
+    );
+}
+
 export function PainelPage() {
     const navigate = useNavigate();
     const [tab, setTab] = useState<TabKey>('stats');
@@ -977,6 +1094,7 @@ export function PainelPage() {
                 {tab === 'users' && <UsersTab />}
                 {tab === 'system' && <SystemTab />}
                 {tab === 'backup' && <BackupTab />}
+                {tab === 'logs' && <LogsTab />}
             </div>
         </div>
     );

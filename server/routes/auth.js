@@ -4,6 +4,7 @@ import { db, stmt } from '../database.js';
 import { corsHeaders } from '../response.js';
 import { loginRateLimit } from '../middleware/rateLimit.js';
 import { SECRET, requireAuth, requireAdmin } from '../middleware/auth.js';
+import { logActivity } from '../log-activity.js';
 
 const COOKIE_SECURE = Bun.env.COOKIE_SECURE === 'true';
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -72,9 +73,12 @@ export async function login(req) {
 
   const user = stmt.getUserByEmail.get(email);
   if (!user || !(await Bun.password.verify(password, user.password))) {
+    logActivity({ userId: null, userEmail: email }, 'login_failed',
+      { meta: { reason: user ? 'wrong_password' : 'unknown_email' }, req });
     return new Response(JSON.stringify({ error: 'Invalid credentials' }), { status: 401, headers: corsHeaders });
   }
 
+  logActivity({ userId: user.id, userEmail: user.email }, 'login_success', { req });
   return authSuccessResponse(user);
 }
 
@@ -103,7 +107,13 @@ export async function refresh(req) {
 export async function logout(req) {
   const rawToken = getRefreshCookie(req);
   if (rawToken) {
-    stmt.deleteRefreshToken.run(sha256Hex(rawToken));
+    const tokenHash = sha256Hex(rawToken);
+    const record = stmt.getRefreshToken.get(tokenHash);
+    stmt.deleteRefreshToken.run(tokenHash);
+    if (record) {
+      const u = stmt.getUserById.get(record.user_id);
+      logActivity({ userId: record.user_id, userEmail: u?.email ?? null }, 'logout', { req });
+    }
   }
   return new Response(null, {
     status: 204,
@@ -159,6 +169,8 @@ export async function createUser(req, user) {
 
   const hash = await Bun.password.hash(password);
   const result = stmt.createUser.run(email, hash, role);
+  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'user_create',
+    { target: email, meta: { role }, req });
   return Response.json(
     { data: { id: result.lastInsertRowid, email, role } },
     { status: 201, headers: corsHeaders }
@@ -190,6 +202,8 @@ export async function deleteUser(req, user, targetId) {
     stmt.deleteUserTokens.run(id);
     stmt.deleteUser.run(id);
   })();
+  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'user_delete',
+    { target: target.email, meta: { deletedUserId: id, role: target.role }, req });
   return new Response(null, { status: 204, headers: corsHeaders });
 }
 
@@ -249,5 +263,15 @@ export async function updateUser(req, user, targetId) {
   if (password) stmt.deleteUserTokens.run(id);
 
   const updated = stmt.getUserById.get(id);
+  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'user_update', {
+    target: updated.email,
+    meta: {
+      targetUserId: id,
+      emailChanged: !!email && email !== target.email,
+      roleChanged: role && role !== target.role ? { from: target.role, to: role } : undefined,
+      passwordChanged: !!password,
+    },
+    req,
+  });
   return Response.json({ data: updated }, { headers: corsHeaders });
 }

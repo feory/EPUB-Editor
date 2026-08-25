@@ -75,6 +75,17 @@ export interface ActiveSession {
     others: string[];
 }
 
+export interface ActivityLogEntry {
+    id: number;
+    created_at: string;
+    user_id: number | null;
+    user_email: string | null;
+    action: string;
+    target: string | null;
+    meta: string | null; // JSON, parse client-side
+    ip: string | null;
+}
+
 export interface HealthResponse {
     status: string;
     runtime: string;
@@ -241,6 +252,7 @@ export const ebooksApi = {
     getBackupLog: () => apiClient.get<{ data: BackupRun[] }>('/maintenance/backup-log'),
     getBackupSchedule: () => apiClient.get<{ schedule: string }>('/maintenance/backup-schedule'),
     setBackupSchedule: (schedule: string) => apiClient.put<{ schedule: string }>('/maintenance/backup-schedule', { schedule }),
+    getActivityLog: () => apiClient.get<{ data: ActivityLogEntry[] }>('/logs'),
 
     // Presence / edit-lock
     heartbeat: (isbn: string) => apiClient.post<PresenceStatus>(`/ebooks/${isbn}/presence`),

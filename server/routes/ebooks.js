@@ -4,6 +4,7 @@ import { db, stmt } from '../database.js';
 import { corsHeaders, jsonResponse, safeSegment } from '../response.js';
 import { DATA_DIR } from '../config.js';
 import { debugLog } from '../log.js';
+import { logActivity } from '../log-activity.js';
 
 export function listEbooks(req, user) {
   const data = user.role === 'admin'
@@ -24,6 +25,8 @@ export async function createEbook(req, user) {
   const ebookDir = join(DATA_DIR, ebook_isbn);
   if (!existsSync(ebookDir)) mkdirSync(ebookDir, { recursive: true });
   stmt.insertEbook.run(ebook_isbn, physical_isbn, title, author, 'in_progress', Number(user.sub));
+  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'ebook_create',
+    { target: ebook_isbn, meta: { title, author }, req });
   return Response.json({ message: 'success', data: body }, { headers: corsHeaders });
 }
 
@@ -31,14 +34,20 @@ export function getEbook(isbn) {
   return Response.json({ data: stmt.getEbook.get(isbn) }, { headers: corsHeaders });
 }
 
-export function deleteEbook(isbn) {
+export function deleteEbook(req, isbn, user) {
+  const ebook = stmt.getEbook.get(isbn);
   stmt.softDeleteEbook.run(isbn);
+  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'ebook_trash',
+    { target: isbn, meta: { title: ebook?.title }, req });
   return Response.json({ message: 'Ebook moved to trash' }, { headers: corsHeaders });
 }
 
-export async function updateStatus(req, isbn) {
+export async function updateStatus(req, isbn, user) {
   const { status } = await req.json();
+  const before = stmt.getEbook.get(isbn);
   stmt.updateStatus.run(status, isbn);
+  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'ebook_status_change',
+    { target: isbn, meta: { title: before?.title, from: before?.status, to: status }, req });
   return Response.json({ message: 'Status updated', status }, { headers: corsHeaders });
 }
 

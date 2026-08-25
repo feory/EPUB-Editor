@@ -15,6 +15,7 @@ import * as printPdf from './routes/print-pdf.js';
 import * as trash from './routes/trash.js';
 import * as maintenance from './routes/maintenance.js';
 import * as validation from './routes/validation.js';
+import * as logs from './routes/logs.js';
 import * as presence from './presence.js';
 import { startBackupScheduler, stopBackupScheduler } from './backup.js';
 
@@ -100,6 +101,9 @@ export const server = Bun.serve({
         return authRoutes.updateUser(req, user, path.split('/')[4]);
       }
 
+      // Activity log (Painel > separador Logs) — admin-only, gate dentro do handler
+      if (path === "/api/logs" && method === "GET") return logs.listActivityLog(req, user);
+
       // Ebooks list/create
       if (path === "/api/ebooks") {
         if (method === "GET")  return ebooks.listEbooks(req, user);
@@ -119,7 +123,7 @@ export const server = Bun.serve({
           return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
         }
         if (parts.length === 5 && parts[4] === 'restore' && method === "POST") return trash.restoreEbook(isbn);
-        if (parts.length === 4 && method === "DELETE") return trash.hardDeleteEbook(isbn);
+        if (parts.length === 4 && method === "DELETE") return trash.hardDeleteEbook(req, isbn, user);
       }
 
       // Maintenance
@@ -170,12 +174,12 @@ export const server = Bun.serve({
 
         if (parts.length === 4) {
           if (method === "GET")    return ebooks.getEbook(isbn);
-          if (method === "DELETE") return ebooks.deleteEbook(isbn);
+          if (method === "DELETE") return ebooks.deleteEbook(req, isbn, user);
         }
 
         if (parts.length === 5) {
           const sub = parts[4];
-          if (sub === 'status'               && method === "PUT")  return ebooks.updateStatus(req, isbn);
+          if (sub === 'status'               && method === "PUT")  return ebooks.updateStatus(req, isbn, user);
           if (sub === 'metadata'             && method === "PUT")  return ebooks.updateMetadata(req, isbn);
           if (sub === 'content'              && method === "POST") return content.saveContent(req, isbn);
           if (sub === 'content'              && method === "GET")  return content.getContent(req, isbn, url);
