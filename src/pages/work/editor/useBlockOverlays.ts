@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TinyMCEEditor } from './types';
-import { CHAPTER_SPLIT_PATTERN } from '../../../utils/html-cleaner';
+import { countInBook, replaceInBook } from './book-find-replace';
+
+const noop0 = () => 0;
 
 type Pos = { top: number; left: number };
 
@@ -22,7 +24,7 @@ export interface BlockOverlaysOptions {
  * Detém todo o estado/refs/handlers; `wireEditor` instala a lógica que reage ao editor.
  */
 export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor | null>, options: BlockOverlaysOptions) {
-    const { activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook } = options;
+    const { activeChapterIndex, onCountInWholeBook = noop0, onReplaceInWholeBook = noop0 } = options;
     // Botão "+" flutuante: posição (viewport) + bloco-âncora do parágrafo/título com foco.
     const [addBtnPos, setAddBtnPos] = useState<Pos | null>(null);
     const [addBtnFading, setAddBtnFading] = useState(false); // fade-out suave do "+"
@@ -142,89 +144,19 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         editor.nodeChanged();
     };
 
-    // Aplica o novo HTML do body + regista undo + volta a mostrar o bloco que estava a ser
-    // editado (índice entre os filhos de topo — sobrevive à troca porque replace de texto não
-    // adiciona/remove blocos de topo). Partilhado pelos 2 ramos de replaceInDocument que
-    // escrevem localmente no editor (scope 'chapter').
-    const commitBodyHtml = (editor: TinyMCEEditor, body: HTMLElement, newBodyHtml: string, anchorBlock: HTMLElement | null) => {
-        const anchorIndex = anchorBlock ? Array.from(body.children).indexOf(anchorBlock) : -1;
-        editor.dom.setHTML(body, newBodyHtml);
-        editor.undoManager.add();
-        editor.focus();
-        editor.dispatch('Change');
-        editor.nodeChanged();
-        if (anchorIndex >= 0) {
-            (body.children[anchorIndex] as HTMLElement | undefined)?.scrollIntoView({ block: 'center' });
-        }
-    };
+    // Contagem/substituição do mini find/replace da caixa de edição de HTML (BlockOverlays) —
+    // lógica de âmbito (documento/capítulo, isolar segmento, delegar p/ livro inteiro fora da
+    // DOM) vive em book-find-replace.ts. useCallback: identidade estável entre renders
+    // (addBtnPos/gripPos mudam a cada mousemove no editor) — sem isto, o useEffect de contagem
+    // debounced em BlockOverlays reiniciava o temporizador a cada movimento do rato com o
+    // painel aberto.
+    const countInDocument = useCallback((find: string, scope: 'chapter' | 'document'): number =>
+        countInBook(editorRef.current, activeChapterIndex, onCountInWholeBook, find, scope),
+        [activeChapterIndex, onCountInWholeBook, editorRef]);
 
-    // Contagem de ocorrências (só leitura) — usada pelo mini find/replace para mostrar "N
-    // ocorrências" ANTES de aplicar (BlockOverlays, debounced). scope 'document' com só um
-    // capítulo carregado no editor: o resto do livro nem está na DOM, conta por fora
-    // (onCountInWholeBook, ver useEbookWork.countInWholeBook).
-    const countInDocument = (find: string, scope: 'chapter' | 'document'): number => {
-        if (!find) return 0;
-        if (scope === 'document' && activeChapterIndex !== -1) {
-            return onCountInWholeBook ? onCountInWholeBook(find) : 0;
-        }
-        const editor = editorRef.current;
-        if (!editor) return 0;
-        return editor.getContent().split(find).length - 1;
-    };
-
-    // Substituição literal (todas as ocorrências), acionada a partir do mini find/replace da
-    // caixa de edição de HTML (BlockOverlays) — devolve o nº de ocorrências trocadas.
-    // split/join em vez de RegExp: sem escaping de caracteres especiais para uma substring
-    // literal. dom.setHTML(getBody()) em vez de editor.setContent(): setContent() LIMPA a
-    // pilha de undo inteira (pensado para carregar conteúdo pela 1ª vez, não para editar) —
-    // testado ao vivo, ficava sempre sem Ctrl+Z possível mesmo com undoManager.add()/
-    // transact() a seguir. dom.setHTML + add() cria 1 nível normal.
-    const replaceInDocument = (find: string, replaceWith: string, scope: 'chapter' | 'document'): number => {
-        const editor = editorRef.current;
-        if (!editor || !find) return 0;
-
-        // 'document' com só um capítulo carregado: o resto do livro nem está na DOM — grava
-        // por fora do editor (onReplaceInWholeBook → useEbookWork.handleReplaceInWholeBook,
-        // mesmo caminho das outras transformações de livro inteiro: commitHtml + autosave). O
-        // editor re-sincroniza sozinho a seguir (prop `value` controlada do TinyMCE); sem
-        // bloco-âncora local para voltar (o texto trocado pode nem estar no capítulo aberto).
-        if (scope === 'document' && activeChapterIndex !== -1) {
-            return onReplaceInWholeBook ? onReplaceInWholeBook(find, replaceWith) : 0;
-        }
-
-        const body = editor.getBody();
-
-        // Documento Completo mas o utilizador quer só o capítulo do bloco aberto: isola o
-        // segmento (CHAPTER_SPLIT_PATTERN, o mesmo regex partilhado pelo resto da app) que
-        // contém esse bloco, troca só ali, e reescreve o body com TODOS os segmentos (os
-        // outros capítulos ficam bit-a-bit iguais) — Documento Completo continua carregado.
-        if (scope === 'chapter' && activeChapterIndex === -1) {
-            const anchorBlock = htmlBlockRef.current;
-            const anchorHtml = anchorBlock ? editor.dom.getOuterHTML(anchorBlock) : null;
-            if (anchorHtml) {
-                const segments = editor.getContent().split(CHAPTER_SPLIT_PATTERN);
-                const segIndex = segments.findIndex(s => s.includes(anchorHtml));
-                if (segIndex !== -1) {
-                    const segParts = segments[segIndex].split(find);
-                    const count = segParts.length - 1;
-                    if (count === 0) return 0;
-                    segments[segIndex] = segParts.join(replaceWith);
-                    commitBodyHtml(editor, body, segments.join(''), anchorBlock);
-                    return count;
-                }
-                // Bloco não caiu em nenhum segmento (ex.: story sem marcador de capítulo) —
-                // cai para o caso simples abaixo (documento inteiro), mais seguro que falhar calado.
-            }
-        }
-
-        // Caso simples: o que está carregado no editor já é exatamente o âmbito pedido
-        // (capítulo único + scope 'chapter', ou Documento Completo + scope 'document').
-        const parts = editor.getContent().split(find);
-        const count = parts.length - 1;
-        if (count === 0) return 0;
-        commitBodyHtml(editor, body, parts.join(replaceWith), htmlBlockRef.current);
-        return count;
-    };
+    const replaceInDocument = useCallback((find: string, replaceWith: string, scope: 'chapter' | 'document'): number =>
+        replaceInBook(editorRef.current, activeChapterIndex, onReplaceInWholeBook, htmlBlockRef.current, find, replaceWith, scope),
+        [activeChapterIndex, onReplaceInWholeBook, editorRef]);
 
     // Mover o bloco de topo uma posição para cima/baixo (setas na pega).
     const moveBlock = (dir: 'up' | 'down') => {
@@ -664,6 +596,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             if (!attach()) setTimeout(attach, 0);
         });
         editor.on('remove', () => {
+            editor.getWin()?.removeEventListener('scroll', onScroll);
             window.removeEventListener('scroll', onScroll, true);
             window.removeEventListener('resize', evalOverlays);
             auxObserver.disconnect();

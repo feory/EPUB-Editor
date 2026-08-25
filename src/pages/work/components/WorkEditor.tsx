@@ -929,7 +929,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         resize: true,
                     }}
                 />
-                <BlockOverlays {...overlays} readOnly={readOnly} scopeLabel={activeChapterIndex === -1 ? 'Documento' : (chapters[activeChapterIndex]?.title || 'Capítulo')} />
+                <BlockOverlays {...overlays} readOnly={readOnly} wholeBookLoaded={activeChapterIndex === -1} chapterLabel={chapters[activeChapterIndex]?.title || 'Capítulo'} />
             </div>
             {imageCrop.cropImage && (
                 <ImageCropModal

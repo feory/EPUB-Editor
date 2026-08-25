@@ -26,9 +26,12 @@ export const initialContentState: ContentState = {
 // Escreve o conteúdo de UM capítulo dentro do livro (índice -1 = o conteúdo já é o livro todo).
 // `null` = o índice já não existe. Partilhado com o `getLatestHtmlContent` do useChapterSync,
 // que precisa de aplicar uma edição ainda presa no debounce sem passar pelo reducer.
-export function replaceChapterContent(fullHtml: string, content: string, chapterIndex: number): string | null {
+// `cleanedFullHtml`: opcional, evita repetir o cleanHeadings(fullHtml) quando o chamador já
+// o tem em cache (useChapterSync.cleanHtmlCached) — sem isto, getLatestHtmlContent recomputava
+// a limpeza do livro inteiro a cada chamada mesmo com o cache disponível.
+export function replaceChapterContent(fullHtml: string, content: string, chapterIndex: number, cleanedFullHtml?: string): string | null {
     if (chapterIndex === -1) return content;
-    const parts = cleanHeadings(fullHtml).split(CHAPTER_SPLIT_PATTERN).filter(p => p.trim().length > 0);
+    const parts = (cleanedFullHtml ?? cleanHeadings(fullHtml)).split(CHAPTER_SPLIT_PATTERN).filter(p => p.trim().length > 0);
     if (parts[chapterIndex] === undefined) return null;
     parts[chapterIndex] = content;
     return cleanHeadings(parts.join(''));

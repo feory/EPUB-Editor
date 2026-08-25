@@ -72,9 +72,10 @@ export function useChapterSync(
     // escrever e carregar em Guardar (ou sair) dentro da janela do debounce não gravava nada.
     const getLatestHtmlContent = useCallback(() => {
         const pending = localContentRef.current;
-        if (skipSyncRef.current || pending === syncedContentRef.current) return cleanHtmlCached(fullHtml);
-        if (!pending && activeChapterIndex === -1) return cleanHtmlCached(fullHtml); // vazio transitório
-        return replaceChapterContent(fullHtml, pending, activeChapterIndex) ?? cleanHtmlCached(fullHtml);
+        const cleanedFullHtml = cleanHtmlCached(fullHtml);
+        if (skipSyncRef.current || pending === syncedContentRef.current) return cleanedFullHtml;
+        if (!pending && activeChapterIndex === -1) return cleanedFullHtml; // vazio transitório
+        return replaceChapterContent(fullHtml, pending, activeChapterIndex, cleanedFullHtml) ?? cleanedFullHtml;
     }, [fullHtml, activeChapterIndex, cleanHtmlCached, skipSyncRef]);
 
     const changeActiveChapter = useCallback((index: number) => {
@@ -140,7 +141,10 @@ export function useChapterSync(
         }
     }, [chapters.length, activeChapterIndex, dispatch]);
 
-    return {
+    // Identidade estável entre renders sem mudança real — sem isto, todo consumidor que
+    // dependa do objeto inteiro (useEffect/useMemo com `chapterSync` nas deps) reexecutava
+    // a cada render deste hook, mesmo sem nenhum dos campos ter mudado.
+    return useMemo(() => ({
         chapters,
         localEditorContent,
         handleEditorChange,
@@ -149,5 +153,5 @@ export function useChapterSync(
         getLatestHtmlContent,
         changeActiveChapter,
         splitHtmlIntoParts,
-    };
+    }), [chapters, localEditorContent, handleEditorChange, isLargeBook, getSyncedHtmlContent, getLatestHtmlContent, changeActiveChapter, splitHtmlIntoParts]);
 }

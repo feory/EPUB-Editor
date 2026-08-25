@@ -7,7 +7,7 @@ import { useStyles } from '../../context/StyleContext';
 import type { ImageSettings } from '../../components/MarginPreview';
 import { useContentWorker } from '../../hooks/useContentWorker';
 import { compressHtml, decompressHtml } from '../../utils/compression';
-import { cleanEditorHtml, applyDropCapToFirstParagraph } from '../../utils/html-cleaner';
+import { cleanEditorHtml, applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { moveChapters, renameChapterPart, deleteChapterPart, changeChapterLevel } from '../../utils/toc';
 import { linkIndiceEntries } from '../../utils/indice-links';
@@ -370,16 +370,13 @@ export function useEbookWork(isbn: string | undefined) {
     // se grava); commitHtml segue o mesmo padrão das outras transformações de livro inteiro
     // acima (mantém o capítulo ativo, dispara autosave — o editor re-sincroniza sozinho a
     // seguir, via a prop controlada `value` do TinyMCE).
-    const countInWholeBook = useCallback((find: string): number => {
-        if (!find) return 0;
-        return chapterSync.getLatestHtmlContent().split(find).length - 1;
-    }, [chapterSync]);
+    const countInWholeBook = useCallback((find: string): number =>
+        countOccurrences(chapterSync.getLatestHtmlContent(), find), [chapterSync]);
     const handleReplaceInWholeBook = useCallback((find: string, replaceWith: string): number => {
         const html = chapterSync.getLatestHtmlContent();
-        const parts = html.split(find);
-        const count = parts.length - 1;
+        const count = countOccurrences(html, find);
         if (count === 0) return 0;
-        commitHtml(parts.join(replaceWith));
+        commitHtml(html.split(find).join(replaceWith));
         return count;
     }, [chapterSync, commitHtml]);
 

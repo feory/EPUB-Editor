@@ -14,6 +14,11 @@ import { decodeEntities } from './entities';
 // is the split boundary. Plain <p class="chapter-break"> = titleless break.
 // Legacy hr.chapter-break kept for old books. Raw h1/h2 no longer split on their own.
 export const CHAPTER_SPLIT_PATTERN = /(?=<p[^>]*class=["'][^"']*chapter-break[^"']*["']|<hr[^>]*class=["']chapter-break["'])/i;
+// Ocorrências de uma substring literal (split/join, não RegExp — sem escaping de caracteres
+// especiais). Partilhado pelas várias contagens/substituições do find/replace do editor
+// (useBlockOverlays.ts, useEbookWork.ts) para não repetir a fórmula em cada sítio.
+export const countOccurrences = (haystack: string, needle: string): number =>
+    needle ? haystack.split(needle).length - 1 : 0;
 // Counts chapter-start markers (detect a split appearing mid-edit).
 export const CHAPTER_MARKER_COUNT_PATTERN = /<p[^>]*class=["'][^"']*chapter-break[^"']*["']/gi;
 export const HR_BREAK_PATTERN = /^<hr[^>]*class=["']chapter-break["'][^>]*>/i;

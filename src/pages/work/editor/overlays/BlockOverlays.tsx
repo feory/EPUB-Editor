@@ -7,14 +7,14 @@ import type { BlockOverlaysApi } from '../useBlockOverlays';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
 import { useNotification } from '../../../../context/NotificationContext';
 
-type Props = BlockOverlaysApi & { readOnly?: boolean; scopeLabel: string };
+type Props = BlockOverlaysApi & { readOnly?: boolean; wholeBookLoaded: boolean; chapterLabel: string };
 
 /** Overlays estilo Notion renderizados FORA do iframe (posição fixed em coords da viewport). */
 export function BlockOverlays({
     addBtnPos, addBtnFading, plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
     htmlTextareaRef, openPlusMenu, closePlusMenu, plusAction, cancelAddBtnHide, clearAddBtn,
     startBlockDrag, moveBlock, setGripMenu, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
-    styleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument, scopeLabel, readOnly,
+    styleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument, wholeBookLoaded, chapterLabel, readOnly,
 }: Props) {
     // Substituição em todo o HTML do documento (não só o bloco aberto) — mini find/replace
     // acionado a partir da caixa de edição de HTML, já que é o único sítio onde se vê/edita
@@ -28,7 +28,7 @@ export function BlockOverlays({
     const [replaceText, setReplaceText] = useState('');
     const [matchCount, setMatchCount] = useState<number | null>(null);
     // Âmbito escolhido pelo utilizador — nem sempre bate com o que está carregado no editor
-    // (scopeLabel): "Documento" a partir de um capítulo aberto alcança o livro inteiro por
+    // (wholeBookLoaded): "Documento" a partir de um capítulo aberto alcança o livro inteiro por
     // fora do editor (onReplaceInWholeBook, dentro de useBlockOverlays); "Capítulo" a partir
     // de Documento Completo isola só o segmento do bloco aberto. Ver replaceInDocument.
     const [docScope, setDocScope] = useState<'chapter' | 'document'>('chapter');
@@ -46,7 +46,7 @@ export function BlockOverlays({
     }, [replaceOpen, findText, docScope, countInDocument]);
     const openReplace = () => {
         if (!replaceOpen) {
-            setDocScope(scopeLabel === 'Documento' ? 'document' : 'chapter');
+            setDocScope(wholeBookLoaded ? 'document' : 'chapter');
             const ta = htmlTextareaRef.current;
             if (ta && ta.selectionStart !== ta.selectionEnd) setFindText(ta.value.slice(ta.selectionStart, ta.selectionEnd));
         }
@@ -239,23 +239,18 @@ export function BlockOverlays({
                         {replaceOpen && (
                             <div className="absolute top-11 right-2 z-10 w-64 p-2.5 rounded-lg border border-slate-300 bg-white shadow-xl flex flex-col gap-1.5">
                                 <div className="flex gap-1">
-                                    <button
-                                        type="button"
-                                        onMouseDown={(e) => e.preventDefault()}
-                                        onClick={() => setDocScope('document')}
-                                        className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${docScope === 'document' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                                    >
-                                        Documento
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onMouseDown={(e) => e.preventDefault()}
-                                        onClick={() => setDocScope('chapter')}
-                                        title={scopeLabel !== 'Documento' ? scopeLabel : undefined}
-                                        className={`flex-1 min-w-0 truncate px-2 py-1 rounded text-xs font-medium transition-colors ${docScope === 'chapter' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                                    >
-                                        {scopeLabel !== 'Documento' ? scopeLabel : 'Capítulo'}
-                                    </button>
+                                    {([['document', 'Documento'], ['chapter', chapterLabel]] as const).map(([scope, label]) => (
+                                        <button
+                                            key={scope}
+                                            type="button"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => setDocScope(scope)}
+                                            title={scope === 'chapter' ? chapterLabel : undefined}
+                                            className={`flex-1 min-w-0 truncate px-2 py-1 rounded text-xs font-medium transition-colors ${docScope === scope ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
                                 </div>
                                 <input
                                     type="text"
