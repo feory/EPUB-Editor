@@ -25,9 +25,6 @@ const ConversionsModalComponent: React.FC<ConversionsModalProps> = ({ onApply, o
 
     const toggle = (key: keyof ImportOptions) => setOptions(prev => ({ ...prev, [key]: !prev[key] }));
     const anySelected = CONVERSION_OPTIONS.some(o => options[o.key]) || applyDropCaps;
-    // União de Parágrafos escondida nesta modal (pedido do utilizador) — continua disponível
-    // na importação (ImportOptionsModal), que usa CONVERSION_OPTIONS na íntegra.
-    const visibleOptions = CONVERSION_OPTIONS.filter(o => o.key !== 'wrapBoldWithNext');
 
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
@@ -45,7 +42,7 @@ const ConversionsModalComponent: React.FC<ConversionsModalProps> = ({ onApply, o
                         Aplicar conversões ao capítulo atual.
                     </p>
 
-                    {visibleOptions.map(({ key, label, description }) => (
+                    {CONVERSION_OPTIONS.map(({ key, label, description }) => (
                         <label key={key} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-slate-50/50 cursor-pointer hover:border-slate-700 transition-colors">
                             <input
                                 type="checkbox"
