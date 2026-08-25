@@ -98,7 +98,6 @@ export const DEFAULT_CSS = `
     /* === NOTAS DE RODAPÉ === */
     .footnote p { text-indent: 0 !important; margin: 0; }
     .footnote {
-        text-indent: 0 !important;
         font-size: 0.9em;
         margin-top: 0.6em;
         text-align: left;
