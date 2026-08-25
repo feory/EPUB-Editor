@@ -7,29 +7,46 @@ import type { BlockOverlaysApi } from '../useBlockOverlays';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
 import { useNotification } from '../../../../context/NotificationContext';
 
-type Props = BlockOverlaysApi & { readOnly?: boolean };
+type Props = BlockOverlaysApi & { readOnly?: boolean; scopeLabel: string };
 
 /** Overlays estilo Notion renderizados FORA do iframe (posição fixed em coords da viewport). */
 export function BlockOverlays({
     addBtnPos, addBtnFading, plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
     htmlTextareaRef, openPlusMenu, closePlusMenu, plusAction, cancelAddBtnHide, clearAddBtn,
     startBlockDrag, moveBlock, setGripMenu, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
-    styleMenu, styleAction, setStyleMenu, replaceInDocument, readOnly,
+    styleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument, scopeLabel, readOnly,
 }: Props) {
     // Substituição em todo o HTML do documento (não só o bloco aberto) — mini find/replace
     // acionado a partir da caixa de edição de HTML, já que é o único sítio onde se vê/edita
     // HTML em bruto. Estado local ao BlockOverlays (que NUNCA desmonta — só a caixa condicional
-    // por baixo dele desmonta) — sem o reset abaixo, o painel ficava aberto/preenchido para a
-    // sessão de edição seguinte, mesmo noutro bloco.
+    // por baixo dele desmonta): reset feito explicitamente nos 3 pontos de saída (Cancelar,
+    // Guardar, Substituir com sucesso) — nunca via effect a espiar htmlEdit (react-hooks/set-
+    // state-in-effect), senão o painel ficava aberto/preenchido para a sessão seguinte.
     const { showNotification } = useNotification();
     const [replaceOpen, setReplaceOpen] = useState(false);
     const [findText, setFindText] = useState('');
     const [replaceText, setReplaceText] = useState('');
+    const [matchCount, setMatchCount] = useState<number | null>(null);
+    // Âmbito escolhido pelo utilizador — nem sempre bate com o que está carregado no editor
+    // (scopeLabel): "Documento" a partir de um capítulo aberto alcança o livro inteiro por
+    // fora do editor (onReplaceInWholeBook, dentro de useBlockOverlays); "Capítulo" a partir
+    // de Documento Completo isola só o segmento do bloco aberto. Ver replaceInDocument.
+    const [docScope, setDocScope] = useState<'chapter' | 'document'>('chapter');
+    const resetReplace = () => { setReplaceOpen(false); setFindText(''); setReplaceText(''); setMatchCount(null); };
+    // Contagem ao vivo (debounced — getContent() serializa o documento inteiro a cada chamada,
+    // não vale a pena recalcular a cada tecla) para o utilizador ver quantas ocorrências há
+    // ANTES de aplicar, em vez de descobrir só depois do "Substituir tudo" já ter corrido. Só
+    // agenda com o painel aberto + texto preenchido — sem cláusula de limpeza síncrona: o
+    // contador só é mostrado quando findText existe (JSX abaixo), por isso um matchCount
+    // desatualizado enquanto vazio/fechado nunca chega a aparecer.
     useEffect(() => {
-        if (htmlEdit === null) { setReplaceOpen(false); setFindText(''); setReplaceText(''); }
-    }, [htmlEdit]);
+        if (!replaceOpen || !findText) return;
+        const t = setTimeout(() => setMatchCount(countInDocument(findText, docScope)), 150);
+        return () => clearTimeout(t);
+    }, [replaceOpen, findText, docScope, countInDocument]);
     const openReplace = () => {
         if (!replaceOpen) {
+            setDocScope(scopeLabel === 'Documento' ? 'document' : 'chapter');
             const ta = htmlTextareaRef.current;
             if (ta && ta.selectionStart !== ta.selectionEnd) setFindText(ta.value.slice(ta.selectionStart, ta.selectionEnd));
         }
@@ -37,11 +54,14 @@ export function BlockOverlays({
     };
     const applyReplace = () => {
         if (!findText) return;
-        const count = replaceInDocument(findText, replaceText);
+        const count = replaceInDocument(findText, replaceText, docScope);
         if (count === 0) { showNotification('error', 'Sem ocorrências encontradas.'); return; }
-        showNotification('success', `${count} substituição${count === 1 ? '' : 'ões'} feita${count === 1 ? '' : 's'}.`, 2500);
+        showNotification('success', `${count} ${count === 1 ? 'substituição feita' : 'substituições feitas'}.`, 2500);
+        resetReplace();
         endHtmlEdit(); // o documento inteiro foi reescrito — a caixa deste bloco já não é fiável
     };
+    const cancelHtmlEdit = () => { resetReplace(); endHtmlEdit(); };
+    const confirmSaveHtmlEdit = () => { resetReplace(); saveHtmlEdit(htmlTextareaRef.current?.value ?? ''); };
 
     return (
         <>
@@ -199,7 +219,7 @@ export function BlockOverlays({
                             spellCheck={false}
                             autoFocus
                             onKeyDown={(e) => {
-                                if (e.key === 'Escape') endHtmlEdit();
+                                if (e.key === 'Escape') cancelHtmlEdit();
                                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveHtmlEdit(htmlTextareaRef.current?.value ?? '');
                             }}
                             style={{ height: Math.min(Math.max(htmlEditPos.height + 40, 120), 600) }}
@@ -209,15 +229,34 @@ export function BlockOverlays({
                             <button title="Substituir" onMouseDown={(e) => e.preventDefault()} onClick={openReplace} className={`flex items-center justify-center w-7 h-7 rounded-md border shadow-sm ${replaceOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'}`}>
                                 <Replace size={15} />
                             </button>
-                            <button title="Cancelar" onMouseDown={(e) => e.preventDefault()} onClick={endHtmlEdit} className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200 shadow-sm">
+                            <button title="Cancelar" onMouseDown={(e) => e.preventDefault()} onClick={cancelHtmlEdit} className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200 shadow-sm">
                                 <X size={15} />
                             </button>
-                            <button title="Guardar" onMouseDown={(e) => e.preventDefault()} onClick={() => saveHtmlEdit(htmlTextareaRef.current?.value ?? '')} className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-700 hover:bg-slate-800 text-white shadow-sm">
+                            <button title="Guardar" onMouseDown={(e) => e.preventDefault()} onClick={confirmSaveHtmlEdit} className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-700 hover:bg-slate-800 text-white shadow-sm">
                                 <Save size={15} />
                             </button>
                         </div>
                         {replaceOpen && (
                             <div className="absolute top-11 right-2 z-10 w-64 p-2.5 rounded-lg border border-slate-300 bg-white shadow-xl flex flex-col gap-1.5">
+                                <div className="flex gap-1">
+                                    <button
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => setDocScope('document')}
+                                        className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${docScope === 'document' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                    >
+                                        Documento
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => setDocScope('chapter')}
+                                        title={scopeLabel !== 'Documento' ? scopeLabel : undefined}
+                                        className={`flex-1 min-w-0 truncate px-2 py-1 rounded text-xs font-medium transition-colors ${docScope === 'chapter' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                    >
+                                        {scopeLabel !== 'Documento' ? scopeLabel : 'Capítulo'}
+                                    </button>
+                                </div>
                                 <input
                                     type="text"
                                     placeholder="Procurar"
@@ -228,6 +267,11 @@ export function BlockOverlays({
                                     onKeyDown={(e) => { if (e.key === 'Enter') applyReplace(); }}
                                     className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-300 outline-none focus:border-slate-500"
                                 />
+                                {findText && (
+                                    <div className="text-xs px-0.5 -mt-0.5 text-slate-400">
+                                        {matchCount === null ? 'a contar…' : matchCount === 0 ? 'sem ocorrências' : `${matchCount} ocorrência${matchCount === 1 ? '' : 's'}`}
+                                    </div>
+                                )}
                                 <input
                                     type="text"
                                     placeholder="Substituir por"
@@ -241,7 +285,7 @@ export function BlockOverlays({
                                     type="button"
                                     onMouseDown={(e) => e.preventDefault()}
                                     onClick={applyReplace}
-                                    disabled={!findText}
+                                    disabled={!findText || matchCount === 0}
                                     className="mt-0.5 w-full py-1.5 rounded-md bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold disabled:opacity-50"
                                 >
                                     Substituir tudo

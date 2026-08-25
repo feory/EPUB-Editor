@@ -58,6 +58,8 @@ interface WorkEditorProps {
     title?: string;
     activeChapterIndex: number;
     chapters: { title: string, content: string, level: string }[];
+    onCountInWholeBook?: (find: string) => number;
+    onReplaceInWholeBook?: (find: string, replaceWith: string) => number;
     grammarCache?: Record<string, any>;
     onGrammarCheck?: (matches: any[], cache?: Record<string, any>) => void;
     onGrammarClick?: (index: number) => void;
@@ -118,12 +120,12 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
     const syncEditorHeightRef = useRef<() => void>(() => {});
-    const overlays = useBlockOverlays(editorRef);
+    const overlays = useBlockOverlays(editorRef, { activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook });
     const isCleaningRef = useRef(false);
     const isDiffHighlightingRef = useRef(false);
     const grammarCacheRef = useRef(grammarCache);
@@ -927,7 +929,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         resize: true,
                     }}
                 />
-                <BlockOverlays {...overlays} readOnly={readOnly} />
+                <BlockOverlays {...overlays} readOnly={readOnly} scopeLabel={activeChapterIndex === -1 ? 'Documento' : (chapters[activeChapterIndex]?.title || 'Capítulo')} />
             </div>
             {imageCrop.cropImage && (
                 <ImageCropModal

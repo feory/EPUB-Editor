@@ -488,6 +488,8 @@ export function WorkPage() {
                 setHtmlContent={work.setHtmlContent}
                 activeChapterIndex={work.activeChapterIndex}
                 chapters={work.chapters}
+                onCountInWholeBook={work.countInWholeBook}
+                onReplaceInWholeBook={work.handleReplaceInWholeBook}
                 isDragOver={isDragOver}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}

@@ -364,6 +364,25 @@ export function useEbookWork(isbn: string | undefined) {
         showNotification('success', `Page-list: ${inserted} de ${total} páginas marcadas.`);
     }, [chapterSync, commitHtml, showNotification]);
 
+    // Substituição em todo o LIVRO (não só o capítulo carregado no editor) a partir do mini
+    // find/replace da caixa de editar HTML (BlockOverlays). getLatestHtmlContent inclui a
+    // edição ainda presa no debounce (senão perdia-se a diferença entre o que se vê e o que
+    // se grava); commitHtml segue o mesmo padrão das outras transformações de livro inteiro
+    // acima (mantém o capítulo ativo, dispara autosave — o editor re-sincroniza sozinho a
+    // seguir, via a prop controlada `value` do TinyMCE).
+    const countInWholeBook = useCallback((find: string): number => {
+        if (!find) return 0;
+        return chapterSync.getLatestHtmlContent().split(find).length - 1;
+    }, [chapterSync]);
+    const handleReplaceInWholeBook = useCallback((find: string, replaceWith: string): number => {
+        const html = chapterSync.getLatestHtmlContent();
+        const parts = html.split(find);
+        const count = parts.length - 1;
+        if (count === 0) return 0;
+        commitHtml(parts.join(replaceWith));
+        return count;
+    }, [chapterSync, commitHtml]);
+
     // --- Return public API (identical shape to original) ---
     return {
         status: ebook?.status,
@@ -438,6 +457,8 @@ export function useEbookWork(isbn: string | undefined) {
         handleLinkIndiceEntries,
         handleFixLinks,
         handleGeneratePageList,
+        countInWholeBook,
+        handleReplaceInWholeBook,
 
         handleImportPdf: useCallback(
             (file: File, h: number, f: number, settings: ImageSettings, options: ImportOptions) =>
