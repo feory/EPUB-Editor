@@ -9,7 +9,11 @@ interface ShortcutsModalProps {
 const ShortcutsModalComponent: React.FC<ShortcutsModalProps> = ({ onClose }) => {
     useBodyScrollLock();
     const shortcuts = [
-        { group: 'Edição Comum', items: [
+        // native: atalhos nativos do TinyMCE (Negrito/Itálico/Sublinhado/Desfazer/Refazer) —
+        // usam mesmo ⌘ em Mac. Os restantes grupos são registados via editor.addShortcut como
+        // 'meta+X,ctrl+X' (ver setup.ts) — aceitam Control físico em Mac também, por isso
+        // mostram sempre "Ctrl", nunca ⌘.
+        { group: 'Edição Comum', native: true, items: [
             { keys: ['Ctrl', 'B'], desc: 'Negrito' },
             { keys: ['Ctrl', 'I'], desc: 'Itálico' },
             { keys: ['Ctrl', 'U'], desc: 'Sublinhado' },
@@ -23,7 +27,7 @@ const ShortcutsModalComponent: React.FC<ShortcutsModalProps> = ({ onClose }) => 
         ]},
         { group: 'Formatação de Parágrafos', items: [
             { keys: ['Ctrl', 'P'], desc: 'Parágrafo Padrão' },
-            { keys: ['Ctrl', 'I'], desc: 'Parágrafo identado' },
+            { keys: ['Ctrl', 'I'], desc: 'Parágrafo indentado' },
             { keys: ['Ctrl', 'T'], desc: 'Parágrafo de Topo (espaço extra)' },
         ]},
         { group: 'Formatação de Capítulos', items: [
@@ -58,7 +62,7 @@ const ShortcutsModalComponent: React.FC<ShortcutsModalProps> = ({ onClose }) => 
                                         <div className="flex gap-1">
                                             {item.keys.map((key, k) => (
                                                 <kbd key={k} className="min-w-[2.5rem] h-6 flex items-center justify-center px-1.5 rounded border border-border bg-slate-50 text-[10px] font-bold shadow-sm">
-                                                    {key === 'Ctrl' ? cmdKey : key}
+                                                    {key === 'Ctrl' ? (group.native ? cmdKey : 'Ctrl') : key}
                                                 </kbd>
                                             ))}
                                         </div>

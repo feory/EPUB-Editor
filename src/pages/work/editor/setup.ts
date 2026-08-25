@@ -149,8 +149,8 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.addShortcut('meta+p,ctrl+p', 'Parágrafo Padrão', () => editor.execCommand('FormatBlock', false, 'p'));
         // formatter.apply() sozinho não dispara 'Change' — sem isto o React nunca sincroniza
         // a classe aplicada, perdida ao gravar (mesmo motivo de editor.dispatch('Change') em styleAction).
-        editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', () => { editor.formatter.apply('p-indent'); editor.dispatch('Change'); editor.nodeChanged(); });
-        editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', () => { editor.formatter.apply('p-top'); editor.dispatch('Change'); editor.nodeChanged(); });
+        editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', () => { editor.formatter.toggle('p-indent'); editor.dispatch('Change'); editor.nodeChanged(); });
+        editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', () => { editor.formatter.toggle('p-top'); editor.dispatch('Change'); editor.nodeChanged(); });
 
         editor.on('init', () => {
             // selector (não block): aplica a classe ao bloco existente sem lhe trocar a tag —
