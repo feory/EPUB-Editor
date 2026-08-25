@@ -308,8 +308,8 @@ export function HomePage() {
 
     return (
         <div className="flex flex-col min-h-screen bg-bg-color">
-            <nav className="sticky top-0 z-50 bg-surface border-b border-border px-6 py-3 shadow-sm">
-                <div className="max-w-7xl mx-auto flex justify-between items-center gap-6">
+            <nav className="sticky top-0 z-50 bg-surface border-b border-border shadow-sm">
+                <div className="max-w-7xl w-full mx-auto px-6 py-3 flex justify-between items-center gap-6">
                     <button type="button" className="flex items-center gap-2 font-bold text-xl text-slate-700 select-none min-w-[200px]" onClick={() => navigate('/')}>
                         <h1>Epub Manager</h1>
                     </button>
