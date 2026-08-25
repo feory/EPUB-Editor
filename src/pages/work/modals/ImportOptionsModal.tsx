@@ -95,6 +95,8 @@ const ImportOptionsModalComponent: React.FC<ImportOptionsModalProps> = ({ file, 
         setMapping(prev => ({ ...prev, [styleId]: { ...prev[styleId], target } }));
     const setCentered = (styleId: string, centered: boolean) =>
         setMapping(prev => ({ ...prev, [styleId]: { ...prev[styleId], centered } }));
+    const setTop = (styleId: string, top: boolean) =>
+        setMapping(prev => ({ ...prev, [styleId]: { ...prev[styleId], top } }));
 
     const optionList = CONVERSION_OPTIONS;
 
@@ -166,6 +168,17 @@ const ImportOptionsModalComponent: React.FC<ImportOptionsModalProps> = ({ file, 
                                                         className="accent-primary"
                                                     />
                                                     Centrado
+                                                </label>
+                                            )}
+                                            {isIdml && (
+                                                <label className="shrink-0 flex items-center gap-1.5 text-xs text-text-muted cursor-pointer" title="Espaço acima do parágrafo/título (p-top)">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={mapping[s.styleId]?.top ?? false}
+                                                        onChange={e => setTop(s.styleId, e.target.checked)}
+                                                        className="accent-primary"
+                                                    />
+                                                    Topo
                                                 </label>
                                             )}
                                             <select

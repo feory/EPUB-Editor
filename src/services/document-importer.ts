@@ -36,10 +36,12 @@ export interface DocxStyleInfo {
     suggestedCentered: boolean; // estilo de título com jc=center na definição
 }
 
-// `centered` adiciona a classe p-center ao alvo (título h1-h6 OU parágrafo p/p-indent/…)
+// `centered` adiciona a classe p-center ao alvo (título h1-h6 OU parágrafo p/p-indent/…).
+// `top` adiciona p-top (espaço acima) — só aplicado no import IDML (idml-importer.ts).
 export interface DocxStyleMapEntry {
     target: DocxStyleTarget;
     centered?: boolean;
+    top?: boolean;
 }
 
 // chave = styleId

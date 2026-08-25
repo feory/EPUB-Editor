@@ -123,10 +123,15 @@ const STRUCTURAL_STYLES = /ParagraphStyle\/(CAPÍTULOS|PARTES|SUBTÍTULOS|NOTAS|
 const FIGURA_TITULO_RE = /ParagraphStyle\/Figura\s*t[íi]tulo/i;
 
 // Destino escolhido pelo utilizador (DocxStyleTarget) → elemento/classe no editor.
-function targetToTag(target: DocxStyleTarget, centered?: boolean): { tag: string; cls?: string } {
-    if (/^h[1-6]$/.test(target)) return centered ? { tag: target, cls: 'p-center' } : { tag: target };
-    // parágrafo: combina a classe do alvo com p-center (centrado opcional do utilizador)
-    const classes = [target === 'p' ? '' : target, centered && target !== 'p-center' ? 'p-center' : ''].filter(Boolean);
+// `top` adiciona p-top (espaço acima) — igual a `centered`, independente do alvo ser título
+// (h1-h6, junta-se ao tag) ou parágrafo (junta-se às classes).
+function targetToTag(target: DocxStyleTarget, centered?: boolean, top?: boolean): { tag: string; cls?: string } {
+    if (/^h[1-6]$/.test(target)) {
+        const cls = [centered ? 'p-center' : '', top ? 'p-top' : ''].filter(Boolean).join(' ');
+        return cls ? { tag: target, cls } : { tag: target };
+    }
+    // parágrafo: combina a classe do alvo com p-center/p-top (opcionais do utilizador)
+    const classes = [target === 'p' ? '' : target, centered && target !== 'p-center' ? 'p-center' : '', top ? 'p-top' : ''].filter(Boolean);
     return classes.length ? { tag: 'p', cls: classes.join(' ') } : { tag: 'p' };
 }
 
@@ -134,11 +139,12 @@ function targetToTag(target: DocxStyleTarget, centered?: boolean): { tag: string
 // ausente → default interno (STYLE_MAP), que inclui o 'merge' dos números de capítulo.
 function resolveStyle(name: string, mapping: DocxStyleMapping): { tag: string; cls?: string } | 'merge' {
     const entry = mapping[name];
-    if (entry && entry.target !== 'auto') return targetToTag(entry.target, entry.centered);
+    if (entry && entry.target !== 'auto') return targetToTag(entry.target, entry.centered, entry.top);
     const base = STYLE_MAP[name] ?? { tag: 'p' };
-    // 'auto' com "Centrado" marcado: mantém a classificação por omissão, força p-center nela.
-    if (entry?.centered && base !== 'merge') {
-        return { tag: base.tag, cls: [base.cls, 'p-center'].filter(Boolean).join(' ') };
+    // 'auto' com "Centrado"/"Topo" marcado: mantém a classificação por omissão, força as classes nela.
+    if ((entry?.centered || entry?.top) && base !== 'merge') {
+        const cls = [base.cls, entry.centered ? 'p-center' : '', entry.top ? 'p-top' : ''].filter(Boolean).join(' ');
+        return { tag: base.tag, cls };
     }
     return base;
 }
