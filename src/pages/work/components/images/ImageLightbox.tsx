@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { formatFileSize } from '../../../../utils/format';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import type { ImageData } from './useImageGallery';
 
 interface ImageLightboxProps {
@@ -10,6 +11,7 @@ interface ImageLightboxProps {
 }
 
 export const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, isbn, onClose }) => {
+    useBodyScrollLock();
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKeyDown);

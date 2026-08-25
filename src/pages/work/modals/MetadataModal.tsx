@@ -47,7 +47,7 @@ const MetadataModalComponent: React.FC<MetadataModalProps> = ({ ebook, onClose, 
                     </div>
                 </div>
 
-                <div className="overflow-y-auto p-8 space-y-6">
+                <div className="overflow-y-auto overscroll-none p-8 space-y-6">
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-1.5">
                             <label className="text-xs font-black text-text-muted uppercase tracking-wider ml-1">ISBN Livro Físico</label>

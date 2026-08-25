@@ -13,6 +13,7 @@ import type { EpubClassInfo } from '../services/epub-importer';
 import type { ImportOptions } from '../utils/html-cleaner';
 import type { DocxStyleMapping } from '../services/document-importer';
 import { useEbookWork } from './work/useEbookWork';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { WorkToolbar } from './work/components/WorkToolbar';
 import { WorkEditor } from './work/components/WorkEditor';
 import type { WorkEditorRef } from './work/components/WorkEditor';
@@ -138,6 +139,7 @@ export function WorkPage() {
   const [grammarChoiceOpen, setGrammarChoiceOpen] = useState(false);
   const [selectedGrammarIndex, setSelectedGrammarIndex] = useState<number | null>(null);
   const [freedDismissed, setFreedDismissed] = useState(false);
+  useBodyScrollLock(grammarChoiceOpen || (work.presence.freed && !freedDismissed));
 
   const sidebars = useWorkPageSidebars();
 

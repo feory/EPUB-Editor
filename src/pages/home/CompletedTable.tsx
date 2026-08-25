@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ImageIcon, Download, Loader2, RotateCcw, Info } from 'lucide-react';
 import type { Ebook } from '../../api/ebooks-api';
 import { ModalCloseButton } from '../../components/ModalCloseButton';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface CompletedTableProps {
     ebooks: Ebook[];
@@ -16,6 +17,7 @@ export const CompletedTable: React.FC<CompletedTableProps> = ({
 }) => {
     const [downloadingIsbn, setDownloadingIsbn] = useState<string | null>(null);
     const [viewingEbook, setViewingEbook] = useState<Ebook | null>(null);
+    useBodyScrollLock(!!viewingEbook);
     if (ebooks.length === 0) {
         return (
             <div className="flex-1 flex flex-col">
@@ -104,7 +106,7 @@ export const MetadataViewModal: React.FC<{ ebook: Ebook; onClose: () => void }> 
                     <ModalCloseButton onClick={onClose} />
                 </div>
 
-                <dl className="overflow-y-auto p-8 space-y-6">
+                <dl className="overflow-y-auto overscroll-none p-8 space-y-6">
                     <div className="grid grid-cols-2 gap-6">
                         {field('Título', ebook.title)}
                         {field('Autor', ebook.author)}
