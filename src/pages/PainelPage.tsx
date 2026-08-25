@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { Pagination } from '../components/Pagination';
 import { ModalCloseButton } from '../components/ModalCloseButton';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { formatFileSize } from '../utils/format';
 
 const PAGE_SIZE = 12; // par — enche as 2 colunas do BookTable sem sobrar 1 sozinho
@@ -30,15 +31,6 @@ const CATEGORY_COLORS: Record<string, string> = {
 // Deriva da ordem de CATEGORY_LABELS — nunca diverge dele (3 arrays paralelos escritos à mão
 // era um risco real de desalinhamento silencioso).
 const CATEGORY_ORDER = Object.keys(CATEGORY_LABELS);
-
-function StatTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
-    return (
-        <div className="bg-card-bg border border-border rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-1">
-            <p className={`text-lg font-bold ${accent ?? 'text-slate-700'}`}>{value}</p>
-            <p className="text-xs text-text-muted">{label}</p>
-        </div>
-    );
-}
 
 // Donut SVG simples (sem lib de gráficos, mesma linha do resto da app) — anel via
 // stroke-dasharray por categoria (arco = valor/total da circunferência, com um pequeno gap
@@ -301,38 +293,14 @@ function StatsTab() {
     }
 
     return (
-        <>
-            {/* Stat tiles */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatTile label="Livros ativos" value={String(data.active.count)} />
-                <StatTile label="Espaço total (ativos)" value={formatFileSize(data.active.totalBytes)} />
-                <StatTile label="Espaço na Reciclagem" value={formatFileSize(data.trash.totalBytes)} accent="text-amber-600" />
-                <StatTile label="Relatórios de acessibilidade"
-                    value={formatFileSize((data.active.categoryTotals?.aceReports ?? 0) + (data.trash.categoryTotals?.aceReports ?? 0))}
-                    accent="text-amber-600" />
-            </div>
-            <p className="text-xs text-text-muted -mt-4">
-                Relatórios de acessibilidade não são limpos automaticamente.
-            </p>
-
-            {/* Category breakdown — 1 donut por bucket (ativos sempre; Reciclagem só se tiver algo) */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
-                    <div className="px-6 py-4 border-b border-border">
-                        <h2 className="text-base font-semibold text-slate-700">Divisão por categoria (livros ativos)</h2>
-                    </div>
-                    <CategoryDonut totals={data.active.categoryTotals ?? {}} />
+        <div className="flex justify-center">
+            <div className="w-full max-w-xl bg-card-bg border border-border rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-border">
+                    <h2 className="text-base font-semibold text-slate-700">Divisão por categoria ({data.active.count} Livros)</h2>
                 </div>
-                {data.trash.count > 0 && (
-                    <div className="bg-card-bg border border-amber-200 rounded-2xl overflow-hidden">
-                        <div className="px-6 py-4 border-b border-amber-100 bg-amber-50/50">
-                            <h2 className="text-base font-semibold text-amber-700">Divisão por categoria (Reciclagem)</h2>
-                        </div>
-                        <CategoryDonut totals={data.trash.categoryTotals ?? {}} />
-                    </div>
-                )}
+                <CategoryDonut totals={data.active.categoryTotals ?? {}} />
             </div>
-        </>
+        </div>
     );
 }
 
@@ -345,30 +313,28 @@ function ActiveSessionsCard() {
         refetchInterval: 15000,
     });
 
+    if (!sessions || sessions.length === 0) return null;
+
     return (
         <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-border">
                 <h2 className="text-base font-semibold text-slate-700">Quem está a editar agora</h2>
             </div>
-            {!sessions || sessions.length === 0 ? (
-                <p className="px-6 py-8 text-center text-sm text-text-muted">Ninguém a editar neste momento.</p>
-            ) : (
-                <div className="divide-y divide-border">
-                    {sessions.map(s => (
-                        <div key={s.isbn} className="px-6 py-3 flex items-center justify-between gap-4">
-                            <div className="min-w-0">
-                                <p className="text-sm font-medium text-text-color truncate">{s.title ?? s.isbn}</p>
-                                <p className="text-xs text-text-muted truncate">
-                                    {s.holderEmail}{s.others.length > 0 && ` +${s.others.length}`}
-                                </p>
-                            </div>
-                            <span className="shrink-0 text-xs text-text-muted">
-                                {s.minutesAgo <= 0 ? 'agora' : `há ${s.minutesAgo}min`}
-                            </span>
+            <div className="divide-y divide-border">
+                {sessions.map(s => (
+                    <div key={s.isbn} className="px-6 py-3 flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                            <p className="text-sm font-medium text-text-color truncate">{s.title ?? s.isbn}</p>
+                            <p className="text-xs text-text-muted truncate">
+                                {s.holderEmail}{s.others.length > 0 && ` +${s.others.length}`}
+                            </p>
                         </div>
-                    ))}
-                </div>
-            )}
+                        <span className="shrink-0 text-xs text-text-muted">
+                            {s.minutesAgo <= 0 ? 'agora' : `há ${s.minutesAgo}min`}
+                        </span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
@@ -640,6 +606,7 @@ function PasswordInput({ value, onChange, required = false, placeholder = '•�
 }
 
 function UserModal({ title, onClose, onSave, children }: { title: string; onClose: () => void; onSave?: () => void; children: React.ReactNode }) {
+    useBodyScrollLock();
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -1040,18 +1007,21 @@ function LogsTab() {
                 <p className="px-6 py-12 text-center text-sm text-text-muted">Nenhum resultado para "{query}".</p>
             ) : (
                 <div className="divide-y divide-border">
-                    {pageLogs.map(l => (
-                        <div key={l.id} className="px-6 py-3 flex items-center gap-4">
-                            <span className="shrink-0 text-xs text-text-muted w-40">{formatDateTime(l.created_at)}</span>
-                            <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 w-44 text-center truncate">
-                                {ACTION_LABELS[l.action] ?? l.action}
-                            </span>
-                            <span className="shrink-0 text-xs text-text-color w-48 truncate" title={l.user_email ?? ''}>{l.user_email ?? '—'}</span>
-                            <span className="min-w-0 flex-1 text-xs text-text-muted truncate" title={[l.target, formatLogMeta(l.meta)].filter(Boolean).join(' · ')}>
-                                {[l.target, formatLogMeta(l.meta)].filter(Boolean).join(' · ') || '—'}
-                            </span>
-                        </div>
-                    ))}
+                    {pageLogs.map(l => {
+                        const detail = [l.target, formatLogMeta(l.meta)].filter(Boolean).join(' · ');
+                        return (
+                            <div key={l.id} className="px-6 py-3 flex items-center gap-4">
+                                <span className="shrink-0 text-xs text-text-muted w-40">{formatDateTime(l.created_at)}</span>
+                                <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 w-44 text-center truncate">
+                                    {ACTION_LABELS[l.action] ?? l.action}
+                                </span>
+                                <span className="shrink-0 text-xs text-text-color w-48 truncate" title={l.user_email ?? ''}>{l.user_email ?? '—'}</span>
+                                <span className="min-w-0 flex-1 text-xs text-text-muted truncate" title={detail}>
+                                    {detail || '—'}
+                                </span>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
             <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
