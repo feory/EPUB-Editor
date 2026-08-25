@@ -318,6 +318,7 @@ export interface ImportOptions {
   indentAllParagraphs: boolean;
   topOnBoldParagraphs: boolean;
   noIndentAfterBold: boolean;
+  topAfterBoldTop?: boolean;
   wrapBoldWithNext: boolean;
   convertListsToDialogue: boolean;
   detectParagraphSpacing?: boolean; // IDML: SpaceBefore/SpaceAfter → p-top/p-bottom
@@ -388,7 +389,7 @@ function convertFullyStyledParas(html: string): string {
  * Apply user-selected import options to imported HTML
  */
 export function applyImportOptions(html: string, options: ImportOptions): string {
-  if (!options.indentAllParagraphs && !options.topOnBoldParagraphs && !options.noIndentAfterBold && !options.wrapBoldWithNext) return html;
+  if (!options.indentAllParagraphs && !options.topOnBoldParagraphs && !options.noIndentAfterBold && !options.topAfterBoldTop && !options.wrapBoldWithNext) return html;
 
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const paragraphs = Array.from(doc.body.querySelectorAll('p'));
@@ -417,6 +418,15 @@ export function applyImportOptions(html: string, options: ImportOptions): string
       p.classList.add('p-non-indent');
     } else if (options.indentAllParagraphs && !INDENT_CONTROLLED_CLASSES.some((cls) => p.classList.contains(cls))) {
       p.classList.add('p-indent');
+    }
+
+    // "p-bold p-top" (título/rótulo com espaço acima) → o parágrafo seguinte herda o mesmo
+    // espaço, se ainda não tiver — evita o corpo colar-se logo a seguir ao título.
+    if (options.topAfterBoldTop && p.classList.contains('p-bold') && p.classList.contains('p-top')) {
+      const next = p.nextElementSibling;
+      if (next?.tagName === 'P' && !next.className.includes('chapter-break') && !next.classList.contains('footnote') && !next.classList.contains('p-top')) {
+        next.classList.add('p-top');
+      }
     }
   });
 
