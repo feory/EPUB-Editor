@@ -47,7 +47,12 @@ const TOC_TITLE = /^(índice|indice|sumário|sumario|conteúdo|conteudo|table of
 
 function stripPart(part: string): string {
     return part
-        .replace(/<span\b[^>]*\bclass="[^"]*\bidx-link\b[^"]*"[^>]*>([\s\S]*?)<\/span>/g, '$1')
+        // Lookahead até ao </p> (não só o 1º </span>): uma entrada do Índice pode ter um <span>
+        // aninhado dentro do idx-link (ex. marcador de página "pagebreak" antes do título, ver
+        // insertPageBreaks) — sem o lookahead, o [\s\S]*? não-guloso parava no </span> desse
+        // marcador em vez do do próprio idx-link, cortava o resto do título fora do "$1" e
+        // deixava a marcação por fechar (títulos a "colar-se" ao nº do pagelist na reexecução).
+        .replace(/<span\b[^>]*\bclass="[^"]*\bidx-link\b[^"]*"[^>]*>([\s\S]*?)<\/span>(?=\s*<\/p>)/g, '$1')
         .replace(/<p\b[^>]*\bclass="[^"]*\bchapter-anchor\b[^"]*"[^>]*>[\s\S]*?<\/p>/g, '');
 }
 
@@ -64,13 +69,13 @@ function headingPrefixLength(part: string): number {
 // Acha, dentro do conteúdo de UM capítulo, o 1º parágrafo p-bold ainda não usado cujo texto bata
 // com `lineNorm`. `used` evita casar o mesmo parágrafo físico com duas entradas diferentes do
 // Índice.
-function findSubHeading(partContent: string, lineNorm: string, used: Set<number>): { start: number; end: number } | null {
+function findSubHeading(partContent: string, lineNorm: string, used: Set<number>): { start: number; end: number; headingNorm: string } | null {
     const re = /<p\b[^>]*\bclass="[^"]*\bp-bold\b[^"]*"[^>]*>([\s\S]*?)<\/p>/gi;
     let m: RegExpExecArray | null;
     while ((m = re.exec(partContent)) !== null) {
         if (used.has(m.index)) continue;
         const headingNorm = normalizeText(flattenHeadingText(m[1]));
-        if (titlesMatch(lineNorm, headingNorm)) return { start: m.index, end: m.index + m[0].length };
+        if (titlesMatch(lineNorm, headingNorm)) return { start: m.index, end: m.index + m[0].length, headingNorm };
     }
     return null;
 }
@@ -111,8 +116,7 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
     let currentChapter: (typeof targets)[number] | null = null;
 
     const newBody = body.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, (m, attrs, inner) => {
-        const strippedInner = stripTrailingPageNum(inner); // nº de página impresso, não faz falta no Índice ligado
-        const lineNorm = normalizeText(flattenHeadingText(strippedInner));
+        const lineNorm = normalizeText(flattenHeadingText(inner));
         if (lineNorm.length < MIN_TITLE) return m;
 
         // 1. entrada de topo (capítulo/parte) — muda o "capítulo corrente" para as sub-entradas seguintes
@@ -121,7 +125,13 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
             currentChapter = topTarget;
             anchoredChapters.add(topTarget.i);
             linked++;
-            return `<p${attrs}><span class="idx-link" data-target="idx-anchor-${topTarget.i}">${strippedInner}</span></p>`;
+            // Só tira o nº de página impresso ("Cena 1 23" → "Cena 1") quando a linha tem mesmo
+            // mais do que o título. Se já for exatamente o título normalizado (reexecução sobre
+            // uma entrada já ligada, sem nº de página — ex. "Cena 1"), NÃO mexe:
+            // stripTrailingPageNum não distingue nº de página de nº que faça parte do próprio
+            // título, e comia-o numa 2ª execução ("Cena 1" → "Cena").
+            const text = lineNorm === normalizeText(topTarget.title) ? inner : stripTrailingPageNum(inner);
+            return `<p${attrs}><span class="idx-link" data-target="idx-anchor-${topTarget.i}">${text}</span></p>`;
         }
 
         // 2. sub-entrada — só procura DENTRO do capítulo corrente (mesmo texto repete-se entre capítulos)
@@ -137,7 +147,8 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
                 list.push({ pos: match.end, id });
                 subAnchorsByChapter.set(currentChapter.i, list);
                 linked++;
-                return `<p${attrs}><span class="idx-link" data-target="${id}">${strippedInner}</span></p>`;
+                const text = lineNorm === match.headingNorm ? inner : stripTrailingPageNum(inner);
+                return `<p${attrs}><span class="idx-link" data-target="${id}">${text}</span></p>`;
             }
         }
         return m;

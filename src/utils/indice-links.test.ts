@@ -136,6 +136,36 @@ test('linkIndiceEntries: título dividido em duas linhas do Índice ("PARTE III"
     expect(anchored).toBe(1); // as duas linhas apontam ao mesmo capítulo, só 1 âncora de nível
 });
 
+test('linkIndiceEntries: reexecução não come o nº que faz parte do título ("Cena 1")', () => {
+    const parts = [
+        toc('<p>Cena 1 23</p><p>Cena 2 45</p>'),
+        chapter('1', 'Cena 1'),
+        chapter('2', 'Cena 2'),
+    ];
+    const first = linkIndiceEntries(parts);
+    expect(first.linked).toBe(2);
+    expect(first.parts[0]).toContain('>Cena 1</span>'); // nº de página (23) saiu, "1" do título ficou
+    expect(first.parts[0]).toContain('>Cena 2</span>');
+
+    const second = linkIndiceEntries(first.parts);
+    expect(second.parts).toEqual(first.parts); // reexecução: byte-a-byte igual, "1"/"2" sobrevivem
+    expect(second.linked).toBe(first.linked);
+});
+
+test('linkIndiceEntries: reexecução não corrompe entrada com <span> aninhado (pagebreak antes do título)', () => {
+    const parts = [
+        toc('<p><span class="pagebreak" data-page="7"></span>Dramatis Personae 19</p>'),
+        chapter('1', 'Dramatis Personae'),
+    ];
+    const first = linkIndiceEntries(parts);
+    expect(first.linked).toBe(1);
+    expect(first.parts[0]).toContain('<span class="pagebreak" data-page="7"></span>Dramatis Personae</span>');
+
+    const second = linkIndiceEntries(first.parts);
+    expect(second.parts).toEqual(first.parts); // reexecução não parte a marcação nem duplica texto
+    expect(second.linked).toBe(1);
+});
+
 test('linkIndiceEntries: reexecução com sub-entradas continua idempotente', () => {
     const parts = [
         toc('<p>Um fantasma assombra o mundo . . . 358</p><p>Introdução . . . 359</p>'),
