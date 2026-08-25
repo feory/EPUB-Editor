@@ -93,7 +93,7 @@ export const EbookGrid: React.FC<EbookGridProps> = ({
                                     {onDelete && (
                                         deletingIsbn === ebook.ebook_isbn ? (
                                             <>
-                                                <button className="flex-1 flex items-center justify-center p-2 rounded bg-amber-600 hover:bg-amber-700 text-white transition-colors disabled:opacity-50"
+                                                <button className="flex-1 flex items-center justify-center p-2 rounded bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50"
                                                     onClick={(e) => { e.stopPropagation(); onDelete(ebook.ebook_isbn); setDeletingIsbn(null); }}
                                                     disabled={isDeleting} title="Enviar para a Reciclagem (recuperável 30 dias)">
                                                     {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
