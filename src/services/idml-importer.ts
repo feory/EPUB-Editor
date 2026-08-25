@@ -582,6 +582,12 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
         const heurText = (psr.textContent || '').replace(/\s+/g, ' ').trim();
         if (heurTitle && INDEX_TITLE_RE.test(heurText)) inIndexChapter = true;
         else if (rawMap.cls === 'drop-cap') inIndexChapter = false;
+        // Sem CAPITULAR (livro sem letra capitular) a suspensão nunca fechava — ver aviso
+        // acima. Fecha também ao encontrar um parágrafo de corpo claramente longo (prosa real
+        // de capítulo, não uma linha/bloco de listagem do índice): 120 car. é bem acima de
+        // qualquer entrada de índice (títulos ≤60 car., ver isHeuristicTitle) e bem abaixo de
+        // qualquer parágrafo de corpo real.
+        else if (inIndexChapter && rawMap.tag === 'p' && heurText.length > 120) inIndexChapter = false;
 
         // Corpo DENTRO do índice não herda o estilo de import mapeado → auto (corpo simples + LeftIndent).
         const indexBody = inIndexChapter && !heurTitle && rawMap.tag === 'p';
