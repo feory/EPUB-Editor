@@ -19,6 +19,11 @@ export const CONVERSION_OPTIONS: ConversionOption[] = [
         description: 'O parágrafo imediatamente a seguir a um parágrafo totalmente a negrito fica sem indentação.',
     },
     {
+        key: 'topAfterBoldTop',
+        label: 'Espaço no Parágrafo Seguinte',
+        description: 'O parágrafo imediatamente a seguir a um parágrafo negrito com espaço superior (p-bold p-top) também ganha esse espaço, se ainda não tiver.',
+    },
+    {
         key: 'wrapBoldWithNext',
         label: 'União de Parágrafos',
         description: 'Mantém o parágrafo a negrito e o parágrafo seguinte juntos na mesma página, sem quebra entre eles (div noBreak).',
