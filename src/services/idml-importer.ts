@@ -744,7 +744,10 @@ function renderFicha(xml: string, counter: NoteCounter): string {
 function renderFrontMatter(imageIds: string[], texts: string[]): string {
     if (imageIds.length === 0 && texts.length === 0) return '';
     const out = ['<p class="chapter-break" data-title="Frontespício"></p>'];
-    for (const id of imageIds) out.push(`<p class="p-center"><img data-image-id="${id}" src="placeholder" alt="" /></p>`);
+    // O mesmo rosto/capa aparece muitas vezes em mais do que 1 spread do InDesign (ex. duas
+    // páginas de layout espelhado) — readingOrder devolve um id por spread, sem deduplicar;
+    // sem isto, a mesma imagem entrava 2x no frontespício.
+    for (const id of new Set(imageIds)) out.push(`<p class="p-center"><img data-image-id="${id}" src="placeholder" alt="" /></p>`);
     out.push(...texts);
     return out.join('\n');
 }
