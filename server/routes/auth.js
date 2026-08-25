@@ -4,7 +4,7 @@ import { db, stmt } from '../database.js';
 import { corsHeaders } from '../response.js';
 import { loginRateLimit } from '../middleware/rateLimit.js';
 import { SECRET, requireAuth, requireAdmin } from '../middleware/auth.js';
-import { logActivity } from '../log-activity.js';
+import { logActivity, actorFromUser } from '../log-activity.js';
 
 const COOKIE_SECURE = Bun.env.COOKIE_SECURE === 'true';
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -169,7 +169,7 @@ export async function createUser(req, user) {
 
   const hash = await Bun.password.hash(password);
   const result = stmt.createUser.run(email, hash, role);
-  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'user_create',
+  logActivity(actorFromUser(user), 'user_create',
     { target: email, meta: { role }, req });
   return Response.json(
     { data: { id: result.lastInsertRowid, email, role } },
@@ -201,9 +201,9 @@ export async function deleteUser(req, user, targetId) {
     db.run('UPDATE ebooks SET user_id = ? WHERE user_id = ?', [Number(user.sub), id]);
     stmt.deleteUserTokens.run(id);
     stmt.deleteUser.run(id);
+    logActivity(actorFromUser(user), 'user_delete',
+      { target: target.email, meta: { deletedUserId: id, role: target.role }, req });
   })();
-  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'user_delete',
-    { target: target.email, meta: { deletedUserId: id, role: target.role }, req });
   return new Response(null, { status: 204, headers: corsHeaders });
 }
 
@@ -263,7 +263,7 @@ export async function updateUser(req, user, targetId) {
   if (password) stmt.deleteUserTokens.run(id);
 
   const updated = stmt.getUserById.get(id);
-  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'user_update', {
+  logActivity(actorFromUser(user), 'user_update', {
     target: updated.email,
     meta: {
       targetUserId: id,

@@ -127,7 +127,7 @@ export function HomePage() {
             });
             return isbn;
         },
-        onSuccess: (isbn) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); navigate(`/work/${isbn}`); },
+        onSuccess: (isbn) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); navigate(`/work/${isbn}`); },
         onError: (e: any) => { showNotification('error', e?.response?.status === 409 ? 'Já existe um ebook com este ISBN.' : 'Erro ao importar o EPUB.'); },
     });
     // EPUB antigo → abre modal de mapeamento de classes; EPUB da app → importa direto.
@@ -182,7 +182,7 @@ export function HomePage() {
     });
     const permanentDeleteAllMutation = useMutation({
         mutationFn: (isbns: string[]) => Promise.all(isbns.map((isbn) => ebooksApi.permanentDelete(isbn))),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', 'Reciclagem esvaziada.', 3000); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trash'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); showNotification('success', 'Reciclagem esvaziada.', 3000); },
         onError: () => { showNotification('error', 'Erro ao esvaziar a reciclagem.'); },
     });
     const toggleStatus = (e: React.MouseEvent, ebook: Ebook) => {

@@ -1,12 +1,12 @@
+import { getClientIp } from '../response.js';
+
 const store = new Map();
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_REQUESTS = 15;
 const MAX_STORE_SIZE = 10_000;
 
 export function loginRateLimit(req, headers) {
-  const ip = req.headers.get('x-real-ip')
-    ?? req.headers.get('x-forwarded-for')?.split(',')[0].trim()
-    ?? 'unknown';
+  const ip = getClientIp(req) ?? 'unknown';
   const now = Date.now();
   const entry = store.get(ip);
 

@@ -29,6 +29,12 @@ export async function handleGetFile(filePath, headers) {
   return new Response(file, { headers });
 }
 
+export function getClientIp(req) {
+  return req.headers.get('x-real-ip')
+    ?? req.headers.get('x-forwarded-for')?.split(',')[0].trim()
+    ?? null;
+}
+
 export function safeSegment(seg) {
   return typeof seg === 'string' && /^[a-zA-Z0-9_\-.]{1,200}$/.test(seg) && !seg.includes('..');
 }

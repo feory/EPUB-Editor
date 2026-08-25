@@ -3,7 +3,7 @@ import { join } from 'path';
 import { stmt } from '../database.js';
 import { corsHeaders, jsonResponse } from '../response.js';
 import { DATA_DIR } from '../config.js';
-import { logActivity } from '../log-activity.js';
+import { logActivity, actorFromUser } from '../log-activity.js';
 
 export function listTrash(req, user) {
   const data = user.role === 'admin'
@@ -25,7 +25,7 @@ export function hardDeleteEbook(req, isbn, user) {
   stmt.unshareAllForEbook.run(isbn);
   try { rmSync(join(DATA_DIR, isbn), { recursive: true, force: true }); }
   catch (err) { console.error(`[Trash] Falha ao remover ficheiros de ${isbn}:`, err.message); }
-  logActivity({ userId: Number(user.sub), userEmail: user.email }, 'ebook_delete_permanent',
+  logActivity(actorFromUser(user), 'ebook_delete_permanent',
     { target: isbn, meta: { title: ebook?.title }, req });
   return Response.json({ message: 'Ebook permanently deleted' }, { headers: corsHeaders });
 }
