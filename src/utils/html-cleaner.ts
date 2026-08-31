@@ -6,7 +6,7 @@
 import { decodeEntities } from './entities';
 
 // ---------------------------------------------------------------------------
-// Chapter structure patterns (shared with useEbookWork and content.worker)
+// Chapter structure patterns (shared with useEbookWork)
 // ---------------------------------------------------------------------------
 
 // A chapter break is a standalone MARKER paragraph placed BEFORE each heading
@@ -49,7 +49,7 @@ export function matchChapterMarkerElement(content: string): { raw: string; level
 
 /**
  * Classify one split part (a chapter) into { title, level }.
- * Shared by the sidebar (useChapterSync) and the worker (content.worker).
+ * Shared by the sidebar (useChapterSync) and the index linker (indice-links.ts).
  */
 export function classifyChapterPart(content: string, index: number): { title: string; level: 'h1' | 'h2' | 'h3' | 'break'; hrTag?: string } {
     const hrMatch = content.match(HR_BREAK_PATTERN);
