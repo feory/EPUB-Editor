@@ -23,6 +23,12 @@ export interface Figure {
 // separadores de linha do InDesign → espaço
 const clean = (s: string) => s.replace(/[\u2028\u2029\t]+/g, ' ').replace(/\s+/g, ' ').trim();
 
+// Blocos-alvo para colocação de figuras (insertFigures/placeNumberedFigures): parágrafos e
+// títulos, exceto entradas de Índice de Figuras/Tabelas (data-indice — ver markIndiceBlocks
+// em idml-importer.ts).
+const targetBlocksOf = (doc: Document): Element[] =>
+    Array.from(doc.body.querySelectorAll('p, h1, h2, h3, h4, h5, h6')).filter(b => !b.hasAttribute('data-indice'));
+
 // Nº simples ("5") ou decimal capítulo.figura ("11.4"). "figuras?" antes de "fig" — alguns
 // livros escrevem a palavra completa ("Figura 2:"), não só a abreviatura.
 const LABEL_RE = /^(gr[áa]fico|figuras?|fig|quadro|tabela|mapa)\.?\s*(\d+(?:\.\d+)?)/i;
@@ -211,8 +217,7 @@ export function insertFigures(html: string, figures: Figure[]): { html: string; 
     const withRef = figures.filter(f => f.label);
     if (withRef.length === 0) return { html, placed: 0 };
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const blocks = Array.from(doc.body.querySelectorAll('p, h1, h2, h3, h4, h5, h6'))
-        .filter(b => !b.hasAttribute('data-indice')); // exclui entradas de Índice de Figuras/Tabelas
+    const blocks = targetBlocksOf(doc);
     let placed = 0;
     for (const fig of withRef) {
         const caption = fig.captionLines[0];
@@ -271,8 +276,7 @@ const FIG_REF_WORDS = 'figuras?|gr[áa]ficos?|quadros?|tabelas?|imagens?|mapas?'
 export function placeNumberedFigures(html: string, imageIds: string[]): { html: string; placed: number } {
     if (imageIds.length === 0) return { html, placed: 0 };
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const blocks = Array.from(doc.body.querySelectorAll('p, h1, h2, h3, h4, h5, h6'))
-        .filter(b => !b.hasAttribute('data-indice')); // exclui entradas de Índice de Figuras/Tabelas
+    const blocks = targetBlocksOf(doc);
     let placed = 0;
     for (const id of [...imageIds].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))) {
         const num = id.match(/\d+(?:\.\d+)?/)?.[0];
