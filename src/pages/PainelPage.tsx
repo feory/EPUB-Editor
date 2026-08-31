@@ -146,6 +146,45 @@ function BookTable({ books, emptyLabel }: { books: DiskUsageBook[]; emptyLabel: 
     );
 }
 
+// Botão de pesquisa que expande para caixa de texto — BooksTab/UsersTab/LogsTab partilham este
+// comportamento (clicar fora colapsa só se vazio; Escape limpa+colapsa); cada tab continua dono
+// do `query` (a filtragem difere por tab) e passa-o cá para dentro.
+function CollapsibleSearch({ query, onQueryChange, placeholder }: { query: string; onQueryChange: (q: string) => void; placeholder: string }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node) && !query) setOpen(false);
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [open, query]);
+
+    if (!open) {
+        return (
+            <button onClick={() => setOpen(true)} className="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-slate-200 text-text-muted transition-all shrink-0" title="Pesquisar">
+                <Search size={16} />
+            </button>
+        );
+    }
+    return (
+        <div ref={ref} className="relative w-56 animate-in fade-in slide-in-from-right-2 duration-200">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+                type="text"
+                autoFocus
+                placeholder={placeholder}
+                value={query}
+                onChange={e => onQueryChange(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') { onQueryChange(''); setOpen(false); } }}
+                className="w-full pl-8 pr-3 h-9 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+            />
+        </div>
+    );
+}
+
 const TABS = [
     { key: 'stats', label: 'Estatísticas' },
     { key: 'books', label: 'Livros' },
@@ -439,9 +478,7 @@ function BooksTab() {
         queryFn: () => ebooksApi.getDiskUsage().then(r => r.data),
     });
     const [query, setQuery] = useState('');
-    const [searchOpen, setSearchOpen] = useState(false);
     const [confirmOrphan, setConfirmOrphan] = useState<string | null>(null);
-    const searchRef = useRef<HTMLDivElement>(null);
 
     const purgeOrphanMutation = useMutation({
         mutationFn: (isbn: string) => ebooksApi.purgeOrphan(isbn),
@@ -452,16 +489,6 @@ function BooksTab() {
         onError: (err: AxiosError<{ error: string }>) => showNotification('error', err?.response?.data?.error ?? 'Erro ao apagar a pasta.'),
         onSettled: () => setConfirmOrphan(null),
     });
-
-    // Clicar fora colapsa a pesquisa (só quando vazia — não destrói um filtro ativo)
-    useEffect(() => {
-        if (!searchOpen) return;
-        const onDown = (e: MouseEvent) => {
-            if (searchRef.current && !searchRef.current.contains(e.target as Node) && !query) setSearchOpen(false);
-        };
-        document.addEventListener('mousedown', onDown);
-        return () => document.removeEventListener('mousedown', onDown);
-    }, [searchOpen, query]);
 
     const filteredActiveBooks = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -490,24 +517,7 @@ function BooksTab() {
                         Livros <span className="text-text-muted font-normal">({filteredActiveBooks.length})</span>
                     </h2>
                     {data.active.books.length > 0 && (
-                        searchOpen ? (
-                            <div ref={searchRef} className="relative w-56 animate-in fade-in slide-in-from-right-2 duration-200">
-                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                                <input
-                                    type="text"
-                                    autoFocus
-                                    placeholder="Título, isbn ou autor..."
-                                    value={query}
-                                    onChange={e => setQuery(e.target.value)}
-                                    onKeyDown={e => { if (e.key === 'Escape') { setQuery(''); setSearchOpen(false); } }}
-                                    className="w-full pl-8 pr-3 h-9 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
-                                />
-                            </div>
-                        ) : (
-                            <button onClick={() => setSearchOpen(true)} className="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-slate-200 text-text-muted transition-all shrink-0" title="Pesquisar">
-                                <Search size={16} />
-                            </button>
-                        )
+                        <CollapsibleSearch query={query} onQueryChange={setQuery} placeholder="Título, isbn ou autor..." />
                     )}
                 </div>
                 {filteredActiveBooks.length === 0 && query ? (
@@ -649,22 +659,8 @@ function UsersTab() {
     const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
     const [query, setQuery] = useState('');
     const [page, setPage] = useState(1);
-    const [searchOpen, setSearchOpen] = useState(false);
-    const searchRef = useRef<HTMLDivElement>(null);
     const editFormRef = useRef<HTMLFormElement>(null);
     const createFormRef = useRef<HTMLFormElement>(null);
-
-    // Clicar fora colapsa a pesquisa (só quando vazia — não destrói um filtro ativo)
-    useEffect(() => {
-        if (!searchOpen) return;
-        const onDown = (e: MouseEvent) => {
-            if (searchRef.current && !searchRef.current.contains(e.target as Node) && !query) {
-                setSearchOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', onDown);
-        return () => document.removeEventListener('mousedown', onDown);
-    }, [searchOpen, query]);
 
     const { data: users = [], isLoading } = useQuery({
         queryKey: ['admin-users'],
@@ -755,24 +751,7 @@ function UsersTab() {
                     </h2>
                     <div className="flex items-center gap-2">
                         {users.length > 0 && (
-                            searchOpen ? (
-                                <div ref={searchRef} className="relative w-56 animate-in fade-in slide-in-from-right-2 duration-200">
-                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                                    <input
-                                        type="text"
-                                        autoFocus
-                                        placeholder="Email ou role..."
-                                        value={query}
-                                        onChange={e => handleQueryChange(e.target.value)}
-                                        onKeyDown={e => { if (e.key === 'Escape') { handleQueryChange(''); setSearchOpen(false); } }}
-                                        className="w-full pl-8 pr-3 h-9 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
-                                    />
-                                </div>
-                            ) : (
-                                <button onClick={() => setSearchOpen(true)} className="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-slate-200 text-text-muted transition-all shrink-0" title="Pesquisar">
-                                    <Search size={16} />
-                                </button>
-                            )
+                            <CollapsibleSearch query={query} onQueryChange={handleQueryChange} placeholder="Email ou role..." />
                         )}
                         <button
                             onClick={() => setShowCreate(true)}
@@ -936,17 +915,6 @@ function formatLogMeta(raw: string | null): string {
 function LogsTab() {
     const [query, setQuery] = useState('');
     const [page, setPage] = useState(1);
-    const [searchOpen, setSearchOpen] = useState(false);
-    const searchRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!searchOpen) return;
-        const onDown = (e: MouseEvent) => {
-            if (searchRef.current && !searchRef.current.contains(e.target as Node) && !query) setSearchOpen(false);
-        };
-        document.addEventListener('mousedown', onDown);
-        return () => document.removeEventListener('mousedown', onDown);
-    }, [searchOpen, query]);
 
     const { data: logsData = [], isLoading } = useQuery({
         queryKey: ['activity-log'],
@@ -977,24 +945,7 @@ function LogsTab() {
                     Logs {!isLoading && <span className="text-text-muted font-normal">({filteredLogs.length})</span>}
                 </h2>
                 {logsData.length > 0 && (
-                    searchOpen ? (
-                        <div ref={searchRef} className="relative w-56 animate-in fade-in slide-in-from-right-2 duration-200">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                            <input
-                                type="text"
-                                autoFocus
-                                placeholder="Email, ação ou detalhe..."
-                                value={query}
-                                onChange={e => handleQueryChange(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Escape') { handleQueryChange(''); setSearchOpen(false); } }}
-                                className="w-full pl-8 pr-3 h-9 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
-                            />
-                        </div>
-                    ) : (
-                        <button onClick={() => setSearchOpen(true)} className="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-slate-200 text-text-muted transition-all shrink-0" title="Pesquisar">
-                            <Search size={16} />
-                        </button>
-                    )
+                    <CollapsibleSearch query={query} onQueryChange={handleQueryChange} placeholder="Email, ação ou detalhe..." />
                 )}
             </div>
             {isLoading ? (
