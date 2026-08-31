@@ -242,7 +242,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         const chapter = chapterSync.chapters[chapterIndex];
         if (!chapter) return;
 
-        const syncedHtml = chapterSync.getSyncedHtmlContent();
+        const syncedHtml = chapterSync.getLatestHtmlContent();
         const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
         if (!parts[chapterIndex]) return;
 
@@ -257,7 +257,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // Setup partilhado por operações estruturais (reorder/delete): capítulos + parts do split + níveis.
     const getChaptersAndParts = useCallback(() => {
         const chapters = chapterSync.chapters;
-        const parts = chapterSync.splitHtmlIntoParts(chapterSync.getSyncedHtmlContent());
+        const parts = chapterSync.splitHtmlIntoParts(chapterSync.getLatestHtmlContent());
         const levels = chapters.map(c => c.level);
         return { chapters, parts, levels };
     }, [chapterSync]);
@@ -307,7 +307,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
 
     // --- Aplicar capitular ao 1º parágrafo real de cada capítulo (livro inteiro) ---
     const handleApplyDropCaps = useCallback(() => {
-        const syncedHtml = chapterSync.getSyncedHtmlContent();
+        const syncedHtml = chapterSync.getLatestHtmlContent();
         const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
         let applied = 0, already = 0;
         const updatedParts = parts.map((p) => {
@@ -329,7 +329,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
 
     // --- Ligar entradas do Índice do livro aos capítulos correspondentes (livro inteiro) ---
     const handleLinkIndiceEntries = useCallback(() => {
-        const syncedHtml = chapterSync.getSyncedHtmlContent();
+        const syncedHtml = chapterSync.getLatestHtmlContent();
         const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
         const { parts: updatedParts, linked, anchored } = linkIndiceEntries(parts);
         const updatedHtml = updatedParts.join('');
@@ -345,7 +345,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // editor — a validação já corre sobre o livro todo, ver useEbookValidation, mas o fix
     // anterior só tocava editor.getContent() = capítulo ativo). ---
     const handleFixLinks = useCallback(() => {
-        const syncedHtml = chapterSync.getSyncedHtmlContent();
+        const syncedHtml = chapterSync.getLatestHtmlContent();
         const { html: fixedHtml, fixed } = fixLinks(syncedHtml);
         if (fixed === 0 || fixedHtml === syncedHtml) {
             showNotification('info', 'Nenhum link para corrigir.');
@@ -363,7 +363,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // (que já corre extractPdfPageAnchors para o mapa de sync scroll↔PDF — evita fazer o parsing
     // do PDF duas vezes). insertPageBreaks remove marcadores antigos antes de inserir.
     const handleGeneratePageList = useCallback((anchors: PageAnchor[]) => {
-        const syncedHtml = chapterSync.getSyncedHtmlContent();
+        const syncedHtml = chapterSync.getLatestHtmlContent();
         const { html: updatedHtml, inserted, total } = insertPageBreaks(syncedHtml, anchors);
         if (inserted === 0) {
             showNotification('info', 'Nenhuma página do PDF foi encontrada no texto do livro.');
