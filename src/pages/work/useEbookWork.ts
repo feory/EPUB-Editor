@@ -6,7 +6,6 @@ import { getAccessToken, clientId } from '../../api/client';
 import { useNotification } from '../../context/NotificationContext';
 import { useStyles } from '../../context/StyleContext';
 import type { ImageSettings } from '../../components/MarginPreview';
-import { useContentWorker } from '../../hooks/useContentWorker';
 import { compressHtml, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml, applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
@@ -32,7 +31,6 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     const queryClient = useQueryClient();
     const { showNotification, hideNotification } = useNotification();
     const { customCss } = useStyles();
-    useContentWorker(); // kept for side effects / future use
 
     const [contentState, dispatch] = useReducer(contentReducer, initialContentState);
     const skipSyncRef = useRef(false);
