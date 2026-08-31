@@ -1,5 +1,6 @@
 import { decodeHtmlEntities } from './html-utils';
 import type { Section } from './types';
+import { CHAPTER_SPLIT_PATTERN, HR_BREAK_PATTERN, HR_DATA_TITLE_PATTERN, matchChapterMarkerElement, flattenHeadingText } from '../../utils/html-cleaner';
 
 const relocateFootnotes = (html: string): string => {
     const footnoteRegex = /<(p|aside)[^>]*class="[^"]*footnote[^"]*"[^>]*>.*?<\/\1>/gs;
@@ -36,7 +37,7 @@ export function buildSections(processedContent: string): Section[] {
 
     // Split on chapter-break MARKERS (and legacy hr.chapter-break). The marker — not the
     // heading — is the boundary; it is editor-only and stripped from the exported body.
-    const parts = processedContent.split(/(?=<p[^>]*class=["'][^"']*chapter-break[^"']*["']|<hr[^>]*class=["']chapter-break["'])/gi);
+    const parts = processedContent.split(CHAPTER_SPLIT_PATTERN);
 
     parts.forEach((part) => {
         let content = part.trim();
@@ -44,36 +45,33 @@ export function buildSections(processedContent: string): Section[] {
 
         const thisSectionIdx = sections.length;
 
-        const hrMatch = content.match(/^<hr[^>]*class=["']chapter-break["'][^>]*>/i);
+        const hrMatch = content.match(HR_BREAK_PATTERN);
         if (hrMatch) {
-            const titleMatch = hrMatch[0].match(/data-title=["']([^"']+)["']/i);
+            const titleMatch = hrMatch[0].match(HR_DATA_TITLE_PATTERN);
             const title = decodeHtmlEntities(titleMatch ? titleMatch[1] : '');
-            content = content.replace(/^<hr[^>]*class=["']chapter-break["'][^>]*\/*>/i, '');
+            content = content.slice(hrMatch[0].length).trim();
             pushBreakSection(title, `Quebra ${thisSectionIdx + 1}`, content, thisSectionIdx);
             return;
         }
 
-        const markerMatch = content.match(/^<p[^>]*class=["'][^"']*chapter-break(?:-h([123]))?[^"']*["'][^>]*>[\s\S]*?<\/p>/i);
-        if (markerMatch) {
-            const dt = markerMatch[0].match(/data-title=["']([^"']*)["']/i);
-            const dtTitle = decodeHtmlEntities(dt ? dt[1] : '');
-            content = content.slice(markerMatch[0].length).trim(); // strip the editor-only marker
-            const level = markerMatch[1]; // '1' | '2' | '3' | undefined (titleless break)
-            if (!level) {
+        const marker = matchChapterMarkerElement(content);
+        if (marker) {
+            const dtTitle = decodeHtmlEntities(marker.title);
+            content = content.slice(marker.raw.length).trim(); // strip the editor-only marker
+            if (!marker.level) {
                 const isHidden = /\[hidden\]/i.test(dtTitle);
                 const title = dtTitle.replace(/\[hidden\]/gi, '').trim();
                 pushBreakSection(title, `Capítulo ${thisSectionIdx + 1}`, content, thisSectionIdx, isHidden);
                 return;
             }
             const hMatch = content.match(/^<(h[123])[^>]*>([\s\S]*?)<\/\1>/i);
-            const headTitle = hMatch ? decodeHtmlEntities(hMatch[2].replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()) : '';
+            const headTitle = hMatch ? decodeHtmlEntities(flattenHeadingText(hMatch[2])) : '';
             const title = dtTitle || headTitle;
-            if (level === '1') {
+            if (marker.level === 'h1') {
                 sections.push({ title: title || `Capítulo ${thisSectionIdx + 1}`, content: relocateFootnotes(content), level: 'h1', parentIdx: -1, childIndices: [] });
                 currentH1Idx = thisSectionIdx;
             } else {
-                const sectionLevel = level === '3' ? 'h3' : 'h2';
-                sections.push({ title: title || `Secção ${thisSectionIdx + 1}`, content: relocateFootnotes(content), level: sectionLevel, parentIdx: currentH1Idx, childIndices: [] });
+                sections.push({ title: title || `Secção ${thisSectionIdx + 1}`, content: relocateFootnotes(content), level: marker.level, parentIdx: currentH1Idx, childIndices: [] });
                 if (currentH1Idx >= 0) sections[currentH1Idx].childIndices.push(thisSectionIdx);
             }
             return;
