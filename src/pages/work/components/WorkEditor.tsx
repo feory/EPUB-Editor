@@ -14,7 +14,6 @@ import {
 import { runGrammarCheck } from '../utils/grammarCheck';
 import { editorFontCss } from '../utils/editorFonts';
 import { useBlockOverlays } from '../editor/useBlockOverlays';
-import { BlockOverlays } from '../editor/overlays/BlockOverlays';
 import { useImageCrop } from './images/useImageCrop';
 import { ImageCropModal } from './images/ImageCropModal';
 import { createEditorSetup } from '../editor/setup';
@@ -129,7 +128,10 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
     const syncEditorHeightRef = useRef<() => void>(() => {});
-    const overlays = useBlockOverlays(editorRef, { activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook });
+    const overlays = useBlockOverlays(editorRef, {
+        activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook,
+        readOnly, wholeBookLoaded: activeChapterIndex === -1, chapterLabel: chapters[activeChapterIndex]?.title || 'Capítulo',
+    });
     const isCleaningRef = useRef(false);
     const isDiffHighlightingRef = useRef(false);
     const grammarCacheRef = useRef(grammarCache);
@@ -912,7 +914,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
                             openStyleMenu: overlays.openStyleMenu,
-                            wireOverlays: overlays.wireEditor,
+                            wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
                         }),
                         automatic_uploads: true,
@@ -967,7 +969,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         resize: true,
                     }}
                 />
-                <BlockOverlays {...overlays} readOnly={readOnly} wholeBookLoaded={activeChapterIndex === -1} chapterLabel={chapters[activeChapterIndex]?.title || 'Capítulo'} />
+                {overlays.render}
             </div>
             {imageCrop.cropImage && (
                 <ImageCropModal

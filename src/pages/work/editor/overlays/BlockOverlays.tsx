@@ -3,11 +3,51 @@ import {
     Plus, GripVertical, ChevronUp, ChevronDown, Pilcrow, Heading1, Heading2, Heading3, Quote, Type,
     StickyNote, Image as ImageIcon, Copy, Trash2, Minus, X, Save, BookMarked, Replace,
 } from 'lucide-react';
-import type { BlockOverlaysApi } from '../useBlockOverlays';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
 import { useNotification } from '../../../../context/NotificationContext';
 
-type Props = BlockOverlaysApi & { readOnly?: boolean; wholeBookLoaded: boolean; chapterLabel: string };
+type Pos = { top: number; left: number };
+
+// Único sítio que define esta forma — useBlockOverlays deriva o seu "internal" bag daqui
+// via Omit (as 3 últimas são as únicas que atravessam para fora do subsistema de overlays).
+export interface BlockOverlaysProps {
+    addBtnPos: Pos | null;
+    addBtnFading: boolean;
+    plusMenu: Pos | null;
+    gripPos: Pos | null;
+    gripFading: boolean;
+    gripMenu: Pos | null;
+    hrCtl: Pos | null;
+    htmlEdit: string | null;
+    htmlEditPos: { top: number; left: number; width: number; height: number; visible: boolean } | null;
+    dropLine: { top: number; left: number; width: number } | null;
+    htmlTextareaRef: React.RefObject<HTMLTextAreaElement>;
+    styleMenu: { top: number; left: number; kind: 'para' | 'head' } | null;
+    openPlusMenu: (e: React.MouseEvent) => void;
+    closePlusMenu: () => void;
+    plusAction: (type: string) => void;
+    cancelAddBtnHide: () => void;
+    clearAddBtn: () => void;
+    startBlockDrag: (e: React.MouseEvent) => void;
+    moveBlock: (dir: 'up' | 'down') => void;
+    setGripMenu: React.Dispatch<React.SetStateAction<Pos | null>>;
+    gripAction: (action: string) => void;
+    setHrWidth: (full: boolean) => void;
+    deleteHr: () => void;
+    endHtmlEdit: () => void;
+    saveHtmlEdit: (html: string) => void;
+    startHtmlEdit: (top: HTMLElement) => void;
+    openStyleMenu: (kind: 'para' | 'head') => void;
+    styleAction: (format: string) => void;
+    setStyleMenu: React.Dispatch<React.SetStateAction<{ top: number; left: number; kind: 'para' | 'head' } | null>>;
+    replaceInDocument: (find: string, replaceWith: string, scope: 'chapter' | 'document') => number;
+    countInDocument: (find: string, scope: 'chapter' | 'document') => number;
+    readOnly?: boolean;
+    wholeBookLoaded: boolean;
+    chapterLabel: string;
+}
+
+type Props = BlockOverlaysProps;
 
 /** Overlays estilo Notion renderizados FORA do iframe (posição fixed em coords da viewport). */
 export function BlockOverlays({

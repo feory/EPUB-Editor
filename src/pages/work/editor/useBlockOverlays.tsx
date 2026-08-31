@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TinyMCEEditor } from './types';
 import { countInBook, replaceInBook } from './book-find-replace';
+import { BlockOverlays, type BlockOverlaysProps } from './overlays/BlockOverlays';
+
+// As únicas 3 que atravessam para fora do subsistema (WorkEditor/setup.ts); tudo o resto em
+// BlockOverlaysProps só alimenta o render interno — ver useBlockOverlays() no fim do ficheiro.
+type BlockOverlaysInternal = Omit<BlockOverlaysProps, 'readOnly' | 'wholeBookLoaded' | 'chapterLabel'>;
 
 const noop0 = () => 0;
 
@@ -10,21 +15,68 @@ type Pos = { top: number; left: number };
 const iframeOf = (editor: TinyMCEEditor) =>
     (editor.getContainer()?.querySelector('iframe') as HTMLIFrameElement | null);
 
+/**
+ * Geometria pura por trás do "+"/pega: qual bloco está sob o rato (ou perto o suficiente,
+ * dentro de `band` px). Blocos em ordem de documento → bottom cresce monotonicamente, por
+ * isso para assim que ultrapassa a zona do rato (evita varrer o livro inteiro). Não sai no
+ * 1º match: com blocos curtos/próximos vários podem servir a mesma zona — fica sempre com o
+ * mais próximo (bottom maior, ainda dentro da banda). Extraído de evalAddBtn/evalGrip
+ * (useBlockOverlays) para ser testável sem DOM real (happy-dom não calcula layout).
+ */
+export function findHitBlock<T>(
+    blocks: Iterable<T>,
+    getBottom: (b: T) => number,
+    mouseY: number,
+    band: number,
+    isEligible: (b: T) => boolean,
+): T | null {
+    let hit: T | null = null;
+    for (const b of blocks) {
+        const bottom = getBottom(b);
+        if (bottom > mouseY + band) break;
+        if (bottom >= mouseY - band && mouseY >= bottom - 2 && isEligible(b)) hit = b;
+    }
+    return hit;
+}
+
+/**
+ * Geometria pura por trás do reposicionamento do mini-menu (forcePopAbove): decide se cabe
+ * ACIMA do bloco, senão ABAIXO, senão esconde (null). Preferência por cima; ambos os lados
+ * medidos dentro da área visível do iframe (`iframeTop`/`iframeHeight`), nunca da janela.
+ */
+export function placePopover(
+    blockTop: number, blockBottom: number, blockVisible: boolean,
+    popHeight: number, iframeTop: number, iframeHeight: number,
+): { top: number; side: 'top' | 'bottom' } | null {
+    if (!blockVisible) return null;
+    const desiredTop = blockTop - popHeight - 8;
+    if (desiredTop >= iframeTop + 4) return { top: desiredTop, side: 'top' };
+    const desiredBottom = blockBottom + 8;
+    if (desiredBottom + popHeight <= iframeTop + iframeHeight - 4) return { top: desiredBottom, side: 'bottom' };
+    return null;
+}
+
 export interface BlockOverlaysOptions {
     activeChapterIndex: number;
     // Substituição em todo o LIVRO mesmo com só um capítulo carregado no editor — sem isto
     // (activeChapterIndex !== -1), o find/replace só alcança o texto que está na DOM.
     onCountInWholeBook?: (find: string) => number;
     onReplaceInWholeBook?: (find: string, replaceWith: string) => number;
+    readOnly?: boolean;
+    wholeBookLoaded: boolean;
+    chapterLabel: string;
 }
 
 /**
  * Subsistema de overlays estilo Notion (fora do iframe): botão "+", pega de arrastar,
  * menu de inserção, menu da pega, controlo de divisória e edição de HTML inline.
- * Detém todo o estado/refs/handlers; `wireEditor` instala a lógica que reage ao editor.
+ * Detém todo o estado/refs/handlers; devolve uma interface pequena — `render` (o próprio
+ * overlay, pronto a montar), `mount` (liga a lógica ao editor) e os dois pontos de entrada
+ * que o resto do WorkEditor precisa de acionar de fora (mini-menu → editar HTML / mais estilos).
+ * Tudo o resto (20+ campos de estado/handlers) fica interno — só BlockOverlays.tsx os usa.
  */
 export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor | null>, options: BlockOverlaysOptions) {
-    const { activeChapterIndex, onCountInWholeBook = noop0, onReplaceInWholeBook = noop0 } = options;
+    const { activeChapterIndex, onCountInWholeBook = noop0, onReplaceInWholeBook = noop0, readOnly, wholeBookLoaded, chapterLabel } = options;
     // Botão "+" flutuante: posição (viewport) + bloco-âncora do parágrafo/título com foco.
     const [addBtnPos, setAddBtnPos] = useState<Pos | null>(null);
     const [addBtnFading, setAddBtnFading] = useState(false); // fade-out suave do "+"
@@ -394,16 +446,10 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                 if (bottom >= lastMouseY - PLUS_BAND && lastMouseY >= bottom - 2) block = activeBlock;
             } else {
                 // Sem bloco ativo (ainda nenhum clicado nesta sessão): segue o rato como antes.
-                // Os blocos estão em ordem de documento → a borda inferior cresce monotonicamente.
-                // Parar assim que passa a zona do rato evita varrer o livro inteiro (milhares de
-                // getBoundingClientRect por evento em "Documento Completo").
-                for (let b = editor.getBody().firstElementChild as HTMLElement | null; b; b = b.nextElementSibling as HTMLElement | null) {
-                    const bottom = b.getBoundingClientRect().bottom;
-                    if (bottom > lastMouseY + PLUS_BAND) break;
-                    // Não sai no 1º match: com blocos curtos/próximos vários podem servir a mesma
-                    // zona do rato — fica sempre com o mais próximo (bottom maior, ainda ≤ mouseY).
-                    if (bottom >= lastMouseY - PLUS_BAND && lastMouseY >= bottom - 2 && isPlusBlock(b) && b !== getHiddenBlock()) block = b;
-                }
+                const siblings: HTMLElement[] = [];
+                for (let b = editor.getBody().firstElementChild as HTMLElement | null; b; b = b.nextElementSibling as HTMLElement | null) siblings.push(b);
+                block = findHitBlock(siblings, (b) => b.getBoundingClientRect().bottom, lastMouseY, PLUS_BAND,
+                    (b) => isPlusBlock(b) && b !== getHiddenBlock());
             }
             if (!block) { hideAddBtn(); return; }
             const br = block.getBoundingClientRect();
@@ -509,18 +555,14 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                     pop.classList.add(addClass);
                 }
             };
-            // Preferência: em cima. Precisa de espaço acima (dentro da área do editor) E o bloco visível.
-            const desiredTop = blockTop - pop.offsetHeight - 8;
-            if (desiredTop >= ir.top + 4 && blockVisible) {
-                placeAt(desiredTop, pop.getBoundingClientRect().top < blockTop, 'tox-pop--top', 'tox-pop--bottom');
+            // Preferência: em cima; sem espaço, em baixo; sem espaço em lado nenhum, esconder.
+            const placed = placePopover(blockTop, blockBottom, blockVisible, pop.offsetHeight, ir.top, ir.height);
+            if (placed?.side === 'top') {
+                placeAt(placed.top, pop.getBoundingClientRect().top < blockTop, 'tox-pop--top', 'tox-pop--bottom');
                 return;
             }
-            // Sem espaço em cima → tentar em baixo do bloco, sempre dentro da área do editor
-            // (mesma referência — ir — que o ramo de cima, não a janela: o iframe pode não
-            // ocupar o ecrã todo).
-            const desiredBottom = blockBottom + 8;
-            if (desiredBottom + pop.offsetHeight <= ir.top + ir.height - 4 && blockVisible) {
-                placeAt(desiredBottom, pop.getBoundingClientRect().top >= blockBottom, 'tox-pop--bottom', 'tox-pop--top');
+            if (placed?.side === 'bottom') {
+                placeAt(placed.top, pop.getBoundingClientRect().top >= blockBottom, 'tox-pop--bottom', 'tox-pop--top');
                 return;
             }
             pop.style.visibility = 'hidden'; // não cabe em lado nenhum → esconder
@@ -603,13 +645,16 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         });
     };
 
-    return {
+    const internal: BlockOverlaysInternal = {
         addBtnPos, addBtnFading, plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
         htmlTextareaRef, styleMenu,
         openPlusMenu, closePlusMenu, plusAction, cancelAddBtnHide, clearAddBtn,
         startBlockDrag, moveBlock, setGripMenu, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
-        startHtmlEdit, wireEditor, openStyleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument,
+        startHtmlEdit, openStyleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument,
     };
+    const render = <BlockOverlays {...internal} readOnly={readOnly} wholeBookLoaded={wholeBookLoaded} chapterLabel={chapterLabel} />;
+
+    return { render, mount: wireEditor, startHtmlEdit, openStyleMenu };
 }
 
-export type BlockOverlaysApi = ReturnType<typeof useBlockOverlays>;
+export type BlockOverlaysHandle = ReturnType<typeof useBlockOverlays>;
