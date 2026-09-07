@@ -10,7 +10,7 @@ import { compressHtml, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml, applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { moveChapters, renameChapterPart, deleteChapterPart, changeChapterLevel } from '../../utils/toc';
-import { linkIndiceEntries } from '../../utils/indice-links';
+import { linkIndiceEntries, linkOneIndiceEntry } from '../../utils/indice-links';
 import type { DocxStyleMapping } from '../../services/document-importer';
 import { insertPageBreaks } from '../../services/page-list';
 import type { PageAnchor } from '../../services/page-list';
@@ -339,6 +339,26 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         showNotification('success', `${linked} ${linked === 1 ? 'entrada ligada' : 'entradas ligadas'} a ${anchored} ${anchored === 1 ? 'capítulo' : 'capítulos'}.`);
     }, [chapterSync, commitHtml, showNotification]);
 
+    // --- Ligar UMA entrada do Índice ao capítulo escolhido manualmente (mini-menu do editor,
+    // botão "Ligar a capítulo…") — para o que o automático acima não apanha por texto. ---
+    const handleLinkIndiceEntryManual = useCallback((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => {
+        const syncedHtml = chapterSync.getLatestHtmlContent();
+        const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
+        const { parts: updatedParts, ok, reason } = linkOneIndiceEntry(parts, indiceChapterIndex, pIndex, targetChapterIndex);
+        if (!ok) {
+            const reasonMsg = reason === 'entry-paragraph-not-found'
+                ? 'não encontrei o parágrafo do Índice onde tinhas o cursor.'
+                : reason === 'target-marker-missing'
+                    ? 'o capítulo escolhido não tem marcador de capítulo válido.'
+                    : 'tenta de novo.';
+            showNotification('error', 'Não foi possível ligar esta entrada: ' + reasonMsg);
+            return;
+        }
+        commitHtml(updatedParts.join(''));
+        const targetTitle = chapterSync.chapters[targetChapterIndex]?.title;
+        showNotification('success', targetTitle ? `Entrada ligada a "${targetTitle}".` : 'Entrada ligada.');
+    }, [chapterSync, commitHtml, showNotification]);
+
     // --- Corrigir espaçamento de links (livro inteiro, independente do capítulo aberto no
     // editor — a validação já corre sobre o livro todo, ver useEbookValidation, mas o fix
     // anterior só tocava editor.getContent() = capítulo ativo). ---
@@ -459,6 +479,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         handleChangeChapterLevel,
         handleApplyDropCaps,
         handleLinkIndiceEntries,
+        handleLinkIndiceEntryManual,
         handleFixLinks,
         handleGeneratePageList,
         countInWholeBook,

@@ -211,6 +211,15 @@ function formatDateTime(iso: string | null) {
     return new Date(iso.replace(' ', 'T') + 'Z').toLocaleString('pt-PT');
 }
 
+function formatUptime(seconds: number) {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+}
+
 function BackupTab() {
     const { showNotification } = useNotification();
     const queryClient = useQueryClient();
@@ -404,10 +413,12 @@ function SystemHealthCard() {
                         <span className="text-text-color font-medium">{formatFileSize(health.memory.rss)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                        <span className="text-text-muted">epubcheck</span>
-                        <span className={`font-medium ${health.deps.epubcheck === 'not installed' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {health.deps.epubcheck === 'not installed' ? 'não instalado' : 'instalado'}
-                        </span>
+                        <span className="text-text-muted">Uptime</span>
+                        <span className="text-text-color font-medium">{formatUptime(health.uptime)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <span className="text-text-muted">Compressão de conteúdo</span>
+                        <span className="text-text-color font-medium">gzip nível 9 (~70% redução)</span>
                     </div>
                 </div>
             )}

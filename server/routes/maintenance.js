@@ -3,7 +3,7 @@ import { readdir, unlink, stat, rm } from 'fs/promises';
 import { requireAdmin } from '../middleware/auth.js';
 import { join } from 'path';
 import { corsHeaders, safeSegment } from '../response.js';
-import { DATA_DIR } from '../config.js';
+import { DATA_DIR, EPUBCHECK_JAR } from '../config.js';
 import { debugLog } from '../log.js';
 import { stmt } from '../database.js';
 import { b2Configured } from '../b2-client.js';
@@ -253,7 +253,7 @@ export async function runBackup(user) {
 export async function healthCheck() {
   let epubcheckStatus = "not installed";
   try {
-    const proc = Bun.spawn(["epubcheck", "--version"], { stdout: "pipe", stderr: "pipe" });
+    const proc = Bun.spawn(["java", "-jar", EPUBCHECK_JAR, "--version"], { stdout: "pipe", stderr: "pipe" });
     const version = await Bun.readableStreamToText(proc.stdout);
     await proc.exited;
     if (proc.exitCode === 0) epubcheckStatus = version.trim();
@@ -261,6 +261,7 @@ export async function healthCheck() {
   return Response.json({
     status: "ok",
     runtime: "Bun " + Bun.version,
+    uptime: process.uptime(),
     memory: process.memoryUsage(),
     deps: { epubcheck: epubcheckStatus },
   }, { headers: corsHeaders });

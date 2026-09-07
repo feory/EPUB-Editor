@@ -1,5 +1,4 @@
 import JSZip from 'jszip';
-import { v4 as uuidv4 } from 'uuid';
 import { saveAs } from 'file-saver';
 import { ebooksApi } from '../api/ebooks-api';
 import { linkFootnotes } from './pdf/post-processor';
@@ -185,7 +184,7 @@ const exportCss = (css: string): string => {
 
 export const generateEpubBlob = async (htmlContent: string, metadata: BookMetadata, customCss?: string): Promise<Blob> => {
     const zip = new JSZip();
-    const uniqueId = uuidv4();
+    const uniqueId = crypto.randomUUID();
 
     zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
 

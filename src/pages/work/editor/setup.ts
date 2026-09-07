@@ -1,5 +1,6 @@
 import type { Editor } from 'tinymce';
 import { cleanEditorDOM } from '../../../utils/html-cleaner';
+import { isIndiceChapterTitle } from '../../../utils/indice-links';
 import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
 import type { TinyMCEEditor } from './types';
@@ -13,6 +14,13 @@ interface SetupDeps {
     startHtmlEdit: (top: HTMLElement) => void;
     openStyleMenu: (kind: 'para' | 'head') => void;
     onCropImage: (imageId: string) => void;
+    // Capítulos do livro + índice do capítulo aberto — via ref (setup() só corre 1x no mount,
+    // ver comentário junto ao botão idxlinktarget) para ler sempre os valores mais recentes.
+    chaptersRef: React.MutableRefObject<{ title: string; level: string }[]>;
+    activeChapterIndexRef: React.MutableRefObject<number>;
+    // Por ref (não a função direta): setup() só corre 1x no mount — uma prop direta ficava presa
+    // à closure desse 1º render (livro ainda vazio nessa altura), nunca via as edições seguintes.
+    onLinkIndiceEntryRef: React.MutableRefObject<((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void) | undefined>;
     wireOverlays: (
         editor: TinyMCEEditor,
         ctx: { blockOf: (n: Node | null) => Element | null; getHiddenBlock: () => Element | null },
@@ -21,7 +29,8 @@ interface SetupDeps {
 
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
-    const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu, wireOverlays, onCropImage } = deps;
+    const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
+        chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage } = deps;
 
     return (editor: Editor) => {
         editor.addCommand('mceChapterBreak', () => {
@@ -447,6 +456,50 @@ export function createEditorSetup(deps: SetupDeps) {
                 startHtmlEdit(top);
             },
         });
+        // "Ligar a capítulo…" no mini-menu do Índice: dropdown com os capítulos do livro — cobre
+        // as entradas que o automático (Criação Links Índice, ver indice-links.ts) não apanha,
+        // ex. título da entrada e do capítulo não batem por texto (só entradas de topo; ver
+        // linkOneIndiceEntry). Só ativo dentro do capítulo classificado como Índice; chapters/
+        // activeChapterIndex vêm por ref porque este setup() só corre uma vez, no mount.
+        editor.ui.registry.addMenuButton('idxlinktarget', {
+            icon: 'link',
+            tooltip: 'Ligar a capítulo',
+            fetch: (callback) => {
+                const own = activeChapterIndexRef.current;
+                // Já ligada? idx-link já existente no parágrafo diz o capítulo atual (ver
+                // marcação `idx-anchor-<chapterIndex>` / `idx-anchor-<chapterIndex>-<seq>`, tanto
+                // manual como do automático em lote) — marca-o com check no dropdown.
+                const curBlock = blockOf(editor.selection.getNode()) as HTMLElement | null;
+                const curTarget = curBlock?.querySelector('span.idx-link')?.getAttribute('data-target') || '';
+                const currentChapterIndex = Number(curTarget.match(/^idx-anchor-(\d+)/)?.[1] ?? -1);
+                const items = chaptersRef.current
+                    .map((c, i) => ({ c, i }))
+                    .filter(({ c, i }) => i !== own && c.level !== 'break')
+                    .map(({ c, i }) => ({
+                        type: 'togglemenuitem' as const,
+                        // Indentação por nível (h2/h3 mais para dentro) — U+00A0 (nbsp),
+                        // um espaço normal colapsa no texto do menuitem.
+                        text: (c.level === 'h3' ? ' '.repeat(8) : c.level === 'h2' ? ' '.repeat(4) : '') + c.title,
+                        active: i === currentChapterIndex,
+                        onAction: () => {
+                            const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
+                            if (!block || block.nodeName !== 'P') return;
+                            const pIndex = Array.from(editor.getBody().children as HTMLElement[])
+                                .filter((el) => el.nodeName === 'P').indexOf(block);
+                            if (pIndex === -1) return;
+                            onLinkIndiceEntryRef.current?.(pIndex, own, i);
+                        },
+                    }));
+                callback(items);
+            },
+            onSetup: (api) => {
+                const update = () => api.setEnabled(isIndiceChapterTitle(chaptersRef.current[activeChapterIndexRef.current]?.title || ''));
+                update();
+                editor.on('NodeChange', update);
+                return () => editor.off('NodeChange', update);
+            },
+        });
+
         // Combobox de estilo de parágrafo — redundante de propósito com os botões psX (acesso
         // rápido sem procurar o botão certo). Texto mostra o estilo ATIVO; formatChanged (não
         // NodeChange cru) só reavalia quando um destes formatos MUDA mesmo, em vez de escanear
@@ -497,7 +550,7 @@ export function createEditorSetup(deps: SetupDeps) {
             },
             position: 'node',
             scope: 'node',
-            items: 'psmorepara pscombopara blockalignmenu psdefault psindent pstop psspace psquote edithtml',
+            items: 'psmorepara pscombopara blockalignmenu psdefault psindent pstop psspace psquote idxlinktarget edithtml',
         });
         // Em título: "Mais estilos" (⋮) no canto esquerdo, alinhamento logo à direita, depois estilos inline.
         editor.ui.registry.addContextToolbar('headingstyles', {

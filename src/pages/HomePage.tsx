@@ -10,7 +10,7 @@ import { extractEpub, scanEpubClasses } from '../services/epub-importer';
 import type { EpubClassInfo } from '../services/epub-importer';
 import { cleanEditorHtml } from '../utils/html-cleaner';
 import { compressHtml } from '../utils/compression';
-import { MetadataModal } from './work/components/WorkModals';
+import { MetadataModal } from './work/modals/MetadataModal';
 import { CreateEbookModal } from './home/CreateEbookModal';
 import { CoverModal } from './home/CoverModal';
 import { TrashModal } from './home/TrashModal';

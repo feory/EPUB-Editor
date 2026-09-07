@@ -15,6 +15,21 @@ type Pos = { top: number; left: number };
 const iframeOf = (editor: TinyMCEEditor) =>
     (editor.getContainer()?.querySelector('iframe') as HTMLIFrameElement | null);
 
+// A caixa de editar HTML (position:fixed, z-index alto — ver BlockOverlays.tsx) pintava por
+// cima da toolbar sticky e da statusbar do TinyMCE (nenhuma das duas tem z-index próprio, só
+// stacking por ordem no DOM — a nossa caixa vem depois no DOM e ganha sempre). Em vez de entrar
+// numa guerra de z-index com o skin do TinyMCE, limita-se a própria caixa ao espaço ENTRE as
+// duas: nunca começa acima do fundo da toolbar, nunca cresce para lá do topo da statusbar.
+const GAP = 8;
+function chromeBounds(editor: TinyMCEEditor): { minTop: number; maxBottom: number } {
+    const container = editor.getContainer() as HTMLElement | null;
+    const header = container?.querySelector('.tox-editor-header') as HTMLElement | null;
+    const statusbar = container?.querySelector('.tox-statusbar') as HTMLElement | null;
+    const minTop = header ? header.getBoundingClientRect().bottom + GAP : 0;
+    const maxBottom = statusbar ? statusbar.getBoundingClientRect().top - GAP : window.innerHeight;
+    return { minTop, maxBottom };
+}
+
 /**
  * Geometria pura por trás do "+"/pega: qual bloco está sob o rato (ou perto o suficiente,
  * dentro de `band` px). Blocos em ordem de documento → bottom cresce monotonicamente, por
@@ -155,22 +170,31 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const htmlBlockRef = useRef<HTMLElement | null>(null);
     const htmlTextareaRef = useRef<HTMLTextAreaElement>(null);
     const [htmlEdit, setHtmlEdit] = useState<string | null>(null);
-    const [htmlEditPos, setHtmlEditPos] = useState<{ top: number; left: number; width: number; height: number; visible: boolean } | null>(null);
+    const [htmlEditPos, setHtmlEditPos] = useState<{ top: number; left: number; width: number; height: number; maxHeight: number; visible: boolean } | null>(null);
     const repositionHtmlEdit = () => {
         const editor = editorRef.current; const block = htmlBlockRef.current;
         if (!editor || !block) return;
         const iframe = iframeOf(editor);
         if (!iframe) return;
         const ir = iframe.getBoundingClientRect(); const r = block.getBoundingClientRect();
-        const top = ir.top + r.top;
+        const { minTop, maxBottom } = chromeBounds(editor);
+        const top = Math.max(ir.top + r.top, minTop);
         // esconder (sem desmontar → preserva o texto) quando o bloco sai da área visível do editor
         const visible = r.bottom > 0 && r.top < ir.height && top >= 0 && top < window.innerHeight;
-        setHtmlEditPos({ top, left: ir.left + r.left, width: r.width, height: r.height, visible });
+        setHtmlEditPos({ top, left: ir.left + r.left, width: r.width, height: r.height, maxHeight: Math.max(maxBottom - top, 120), visible });
     };
+    // Painel "Substituir" (estado local a BlockOverlays.tsx, ver findText/replaceOpen ali)
+    // regista aqui o próprio reset — por ref, atualizado a cada render (sem efeito) — para que
+    // endHtmlEdit, ponto único de fecho da caixa (clique fora, Cancelar, Guardar, Substituir),
+    // o dispare sempre. Sem isto, fechar a caixa por CLIQUE NOUTRO PARÁGRAFO (mousedown abaixo,
+    // único caminho que não passa por BlockOverlays.tsx) deixava o painel arrastar findText/
+    // replaceOpen de um parágrafo para o seguinte.
+    const onHtmlEditCloseRef = useRef<(() => void) | null>(null);
     const endHtmlEdit = () => {
         const block = htmlBlockRef.current;
         if (block) editorRef.current?.dom.setAttrib(block, 'data-mce-htmledit', null); // volta a mostrar o texto
         htmlBlockRef.current = null; setHtmlEdit(null); setHtmlEditPos(null);
+        onHtmlEditCloseRef.current?.();
     };
     // Abrir a edição de HTML inline para um elemento de topo (usado pela pega e pelo mini-menu).
     const startHtmlEdit = (top: HTMLElement) => {
@@ -183,7 +207,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const iframe = iframeOf(editor);
         if (iframe) {
             const ir = iframe.getBoundingClientRect(); const r = top.getBoundingClientRect();
-            setHtmlEditPos({ top: ir.top + r.top, left: ir.left + r.left, width: r.width, height: r.height, visible: true });
+            const { minTop, maxBottom } = chromeBounds(editor);
+            const boxTop = Math.max(ir.top + r.top, minTop);
+            setHtmlEditPos({ top: boxTop, left: ir.left + r.left, width: r.width, height: r.height, maxHeight: Math.max(maxBottom - boxTop, 120), visible: true });
         }
     };
     const saveHtmlEdit = (html: string) => {
@@ -651,6 +677,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         openPlusMenu, closePlusMenu, plusAction, cancelAddBtnHide, clearAddBtn,
         startBlockDrag, moveBlock, setGripMenu, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
         startHtmlEdit, openStyleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument,
+        onHtmlEditCloseRef,
     };
     const render = <BlockOverlays {...internal} readOnly={readOnly} wholeBookLoaded={wholeBookLoaded} chapterLabel={chapterLabel} />;
 

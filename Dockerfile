@@ -1,4 +1,4 @@
-FROM oven/bun:1
+FROM oven/bun:1.4-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     ELECTRON_DISABLE_SANDBOX=1 \
@@ -53,21 +53,30 @@ RUN ACE_BIN=$(which ace) \
 # Verify ace works headlessly
 RUN ace --version && echo "✓ ace ready"
 
+# Create non-root user BEFORE copying files so COPY --chown doesn't duplicate /app in a new layer
+RUN useradd -m -u 1001 appuser
+
 WORKDIR /app
 
-# Install production dependencies
+# Install production dependencies.
+# Fase 2: o backend importa apenas `jose` e `sharp` (resto das deps é do frontend,
+# que se compila na imagem nginx) — podamos tudo o resto na MESMA layer para não
+# duplicar tamanho. Ver server/*.js imports antes de adicionar algo à lista de manter.
 COPY package.json ./
 RUN bun install --production \
-    && rm -rf /root/.bun/install/cache
+    && rm -rf /root/.bun/install/cache \
+    && rm -rf node_modules/@codemirror node_modules/@uiw node_modules/@tanstack \
+        node_modules/@tinymce node_modules/@tailwindcss node_modules/tinymce \
+        node_modules/react node_modules/react-dom node_modules/react-router-dom \
+        node_modules/react-virtuoso node_modules/react-image-crop \
+        node_modules/lucide-react node_modules/axios node_modules/file-saver \
+        node_modules/jszip node_modules/fflate node_modules/mammoth node_modules/pdfjs-dist \
+        node_modules/concurrently
 
-COPY server.js ./
-COPY server/ ./server/
-COPY tools/ ./tools/
-RUN mkdir -p data temp
-
-# Create non-root user and set permissions
-RUN useradd -m -u 1001 appuser \
-    && chown -R appuser:appuser /app
+COPY --chown=appuser:appuser server.js ./
+COPY --chown=appuser:appuser server/ ./server/
+COPY --chown=appuser:appuser tools/ ./tools/
+RUN mkdir -p data temp && chown appuser:appuser /app data temp
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

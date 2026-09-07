@@ -1,7 +1,6 @@
 import mammoth from 'mammoth';
 import DOMPurify from 'dompurify';
 import JSZip from 'jszip';
-import { v4 as uuidv4 } from 'uuid';
 import { extractIdml } from './idml-importer';
 import { extractEpub } from './epub-importer';
 import type { EpubMetadata } from './epub-importer';
@@ -604,7 +603,7 @@ async function extractHtmlFromDocx(file: File, extractOptions: ExtractOptions = 
             return element.read("base64").then((imageBuffer) => {
                 const buffer = Uint8Array.from(atob(imageBuffer), c => c.charCodeAt(0));
                 const blob = new Blob([buffer], { type: element.contentType });
-                const id = `img-${uuidv4()}`;
+                const id = `img-${crypto.randomUUID()}`;
                 images.set(id, blob);
 
                 return {

@@ -34,10 +34,10 @@ import { sanitizeImageFilename } from '../utils/format';
 import { getStoredFont, storeFont, getStoredFontSize, storeFontSize } from './work/utils/editorFonts';
 import ErrorBoundary from '../components/ErrorBoundary';
 
-const HistoryModal = lazy(() => import('./work/components/WorkModals').then(m => ({ default: m.HistoryModal })));
-const CompareModal = lazy(() => import('./work/components/WorkModals').then(m => ({ default: m.CompareModal })));
-const ShortcutsModal = lazy(() => import('./work/components/WorkModals').then(m => ({ default: m.ShortcutsModal })));
-const StatisticsModal = lazy(() => import('./work/components/WorkModals').then(m => ({ default: m.StatisticsModal })));
+const HistoryModal = lazy(() => import('./work/modals/HistoryModal').then(m => ({ default: m.HistoryModal })));
+const CompareModal = lazy(() => import('./work/modals/CompareModal').then(m => ({ default: m.CompareModal })));
+const ShortcutsModal = lazy(() => import('./work/modals/ShortcutsModal').then(m => ({ default: m.ShortcutsModal })));
+const StatisticsModal = lazy(() => import('./work/modals/StatisticsModal').then(m => ({ default: m.StatisticsModal })));
 const EpubPreviewModal = lazy(() => import('./work/components/EpubPreviewModal').then(m => ({ default: m.EpubPreviewModal })));
 const StyleEditorModal = lazy(() => import('./work/components/StyleEditorModal').then(m => ({ default: m.StyleEditorModal })));
 const FontModal = lazy(() => import('./work/components/FontModal').then(m => ({ default: m.FontModal })));
@@ -484,6 +484,7 @@ export function WorkPage() {
                 onTogglePrintPdf={() => sidebars.togglePanel('printPdf')}
                 showPrintPdfPanel={sidebars.showPrintPdfSidebar}
                 onVisiblePageChange={setEditorVisiblePage}
+                onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
                 activeChapterIndex={work.activeChapterIndex}

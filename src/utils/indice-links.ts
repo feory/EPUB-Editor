@@ -45,6 +45,12 @@ function titlesMatch(lineNorm: string, titleNorm: string): boolean {
 // relacionada, já servida por src/utils/index-cleaner.ts).
 const TOC_TITLE = /^(índice|indice|sumário|sumario|conteúdo|conteudo|table of contents|contents)$/i;
 
+// Usada pelo mini-menu do editor (setup.ts) para só mostrar "Ligar a capítulo…" dentro do
+// capítulo Índice — evita duplicar TOC_TITLE ali.
+export function isIndiceChapterTitle(title: string): boolean {
+    return TOC_TITLE.test(title.trim());
+}
+
 function stripPart(part: string): string {
     return part
         // Lookahead até ao </p> (não só o 1º </span>): uma entrada do Índice pode ter um <span>
@@ -57,7 +63,9 @@ function stripPart(part: string): string {
 }
 
 // Comprimento do prefixo "marcador + heading" no início de uma part h1/h2/h3 — 0 se não houver
-// heading real a seguir ao marcador (quebra sem título / marcador corrompido).
+// heading real a seguir ao marcador (quebra sem título / marcador corrompido). Usada para filtrar
+// os candidatos do automático em lote (linkIndiceEntries) — a ligação manual (linkOneIndiceEntry)
+// não precisa do heading, só do marcador (matchChapterMarkerElement).
 function headingPrefixLength(part: string): number {
     const marker = matchChapterMarkerElement(part);
     if (!marker) return 0;
@@ -114,14 +122,33 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
     const subAnchorsByChapter = new Map<number, { pos: number; id: string }[]>();
     const usedSubHeadings = new Map<number, Set<number>>(); // capítulo → offsets de p-bold já usados
     let currentChapter: (typeof targets)[number] | null = null;
+    // títulos repetidos entre atos/partes (ex. "Cena 1" em Ato I e Ato II) — busca do topo tem de
+    // avançar SÓ para a frente pela ordem física do livro, senão toda a entrada repetida do
+    // Índice ligava sempre ao 1º capítulo com esse título.
+    let topSearchFrom = 0;
 
     const newBody = body.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, (m, attrs, inner) => {
         const lineNorm = normalizeText(flattenHeadingText(inner));
         if (lineNorm.length < MIN_TITLE) return m;
 
         // 1. entrada de topo (capítulo/parte) — muda o "capítulo corrente" para as sub-entradas seguintes
-        const topTarget = targets.find(t => titlesMatch(lineNorm, normalizeText(t.title)));
+        let topTarget: (typeof targets)[number] | undefined;
+        let topTargetIdx = -1;
+        let topTargetNorm = '';
+        for (let k = topSearchFrom; k < targets.length; k++) {
+            const titleNorm = normalizeText(targets[k].title);
+            if (titlesMatch(lineNorm, titleNorm)) {
+                topTarget = targets[k];
+                topTargetIdx = k;
+                topTargetNorm = titleNorm;
+                break;
+            }
+        }
         if (topTarget) {
+            // Só avança o ponteiro quando a linha do Índice cobre o título inteiro. Uma linha mais
+            // curta (título composto partido em duas linhas, ex. "PARTE III" / "ECOLOGIAS...")
+            // ainda deixa o mesmo capítulo elegível para a linha seguinte.
+            if (lineNorm.length >= topTargetNorm.length) topSearchFrom = topTargetIdx + 1;
             currentChapter = topTarget;
             anchoredChapters.add(topTarget.i);
             linked++;
@@ -172,4 +199,58 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
     }
 
     return { parts, linked, anchored: anchoredChapters.size };
+}
+
+export interface LinkOneEntryResult {
+    parts: string[];
+    ok: boolean;
+    // Só presente quando ok:false — diz qual verificação falhou (mostrado na notificação, ver
+    // handleLinkIndiceEntryManual em useEbookWork.ts), para diagnosticar sem adivinhar.
+    reason?: 'index-out-of-range' | 'entry-paragraph-not-found' | 'target-marker-missing';
+}
+
+// Liga UMA entrada do Índice ao capítulo `targetChapterIndex`, escolhida manualmente no editor
+// (mini-menu "Ligar a capítulo…", ver setup.ts) — para os casos que o automático (acima) não
+// apanha, ex. título da entrada e do capítulo não batem por texto. Ao contrário de
+// linkIndiceEntries (lote, livro inteiro), toca só o parágrafo indicado — não mexe nas
+// restantes ligações já feitas (automáticas ou manuais). `pIndex` é a posição (0-based) do <p>
+// dentro do capítulo Índice, contando só <p> (mesma contagem que o botão do mini-menu faz no DOM
+// sobre editor.getBody() — ver idxlinktarget em setup.ts).
+export function linkOneIndiceEntry(rawParts: string[], indiceChapterIndex: number, pIndex: number, targetChapterIndex: number): LinkOneEntryResult {
+    const entryContent = rawParts[indiceChapterIndex];
+    const targetContent = rawParts[targetChapterIndex];
+    if (entryContent === undefined || targetContent === undefined) return { parts: rawParts, ok: false, reason: 'index-out-of-range' };
+
+    const re = /<p([^>]*)>([\s\S]*?)<\/p>/gi;
+    let m: RegExpExecArray | null;
+    let count = -1;
+    let found: { start: number; end: number; attrs: string; inner: string } | null = null;
+    while ((m = re.exec(entryContent)) !== null) {
+        count++;
+        if (count === pIndex) { found = { start: m.index, end: m.index + m[0].length, attrs: m[1], inner: m[2] }; break; }
+    }
+    if (!found) return { parts: rawParts, ok: false, reason: 'entry-paragraph-not-found' };
+
+    const id = `idx-anchor-${targetChapterIndex}`;
+    // religar: tira um idx-link já existente neste parágrafo antes de pôr o novo (mesmo padrão
+    // de stripPart, mas só neste <p> — nunca toca nas outras entradas do Índice).
+    const inner = found.inner.replace(/<span\b[^>]*\bclass="[^"]*\bidx-link\b[^"]*"[^>]*>([\s\S]*?)<\/span>\s*$/, '$1');
+    const newP = `<p${found.attrs}><span class="idx-link" data-target="${id}">${inner}</span></p>`;
+    const parts = rawParts.slice();
+    parts[indiceChapterIndex] = entryContent.slice(0, found.start) + newP + entryContent.slice(found.end);
+
+    // âncora no capítulo alvo — só insere se ainda não lá estiver (reexecução/religação idempotente).
+    // Logo a seguir ao MARCADOR (não headingPrefixLength: essa exige heading imediatamente a
+    // seguir, o que o automático em lote usa para EXCLUIR silenciosamente capítulos sem essa
+    // adjacência dos seus candidatos — aqui o alvo já foi escolhido explicitamente pelo
+    // utilizador no dropdown, por isso não pode falhar só por, p.ex., haver uma imagem entre o
+    // marcador e o heading).
+    if (!targetContent.includes(`id="${id}"`)) {
+        const marker = matchChapterMarkerElement(targetContent);
+        if (!marker) return { parts: rawParts, ok: false, reason: 'target-marker-missing' }; // marcador corrompido/ausente
+        const pos = marker.raw.length;
+        parts[targetChapterIndex] = targetContent.slice(0, pos) + `<p class="chapter-anchor" id="${id}"></p>` + targetContent.slice(pos);
+    }
+
+    return { parts, ok: true };
 }
