@@ -12,8 +12,8 @@ export function compressHtml(html: string): string {
         // Convert string to Uint8Array
         const data = strToU8(html);
 
-        // Compress with gzip (level 6 = balanced speed/compression)
-        const compressed = gzipSync(data, { level: 6 });
+        // Compress with gzip (level 9 = máxima compressão; mais lento a comprimir, sem custo na descompressão)
+        const compressed = gzipSync(data, { level: 9 });
 
         // Convert to base64 without spread operator (prevents stack overflow)
         let binary = '';
@@ -22,12 +22,6 @@ export function compressHtml(html: string): string {
             binary += String.fromCharCode(compressed[i]);
         }
         const base64 = btoa(binary);
-
-        const originalSize = (html.length / 1024).toFixed(2);
-        const compressedSize = (base64.length / 1024).toFixed(2);
-        const ratio = ((1 - base64.length / html.length) * 100).toFixed(1);
-
-        console.log(`[Compression] ${originalSize}KB → ${compressedSize}KB (${ratio}% redução)`);
 
         return base64;
     } catch (error) {
@@ -62,8 +56,6 @@ export function decompressHtml(compressed: string): string {
 
         // Convert back to string
         const html = strFromU8(decompressed);
-
-        console.log(`[Decompression] ${(compressed.length / 1024).toFixed(2)}KB → ${(html.length / 1024).toFixed(2)}KB`);
 
         return html;
     } catch (error) {

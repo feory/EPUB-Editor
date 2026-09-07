@@ -4,25 +4,25 @@ export const DEFAULT_CSS = `
     /* === TIPOGRAFIA === */
     @font-face {
         font-family: "Crimson Text";
-        src: url("Fonts/CrimsonText-Regular.ttf");
+        src: url("/CrimsonText-Regular.ttf");
         font-weight: normal;
         font-style: normal;
     }
     @font-face {
         font-family: "Crimson Text";
-        src: url("Fonts/CrimsonText-Italic.ttf");
+        src: url("/CrimsonText-Italic.ttf");
         font-weight: normal;
         font-style: italic;
     }
     @font-face {
         font-family: "Crimson Text";
-        src: url("Fonts/CrimsonText-Bold.ttf");
+        src: url("/CrimsonText-Bold.ttf");
         font-weight: bold;
         font-style: normal;
     }
     @font-face {
         font-family: "Crimson Text";
-        src: url("Fonts/CrimsonText-BoldItalic.ttf");
+        src: url("/CrimsonText-BoldItalic.ttf");
         font-weight: bold;
         font-style: italic;
     }
@@ -213,6 +213,11 @@ const MISSING_PARAGRAPH_STYLES = `    .p-bold       { font-weight: bold !importa
 export function patchLoadedCss(css: string): string {
   // Marcador de capítulo: retirar o prefixo "Capítulo - " (livros antigos guardaram-no no CSS).
   css = css.replace(/content:\s*"Cap[íi]tulo - "\s+attr\(data-title\)/g, 'content: attr(data-title)');
+  // Fonte Crimson Text: livros gravados antes da correção tinham "Fonts/…" (relativo — dentro do
+  // srcdoc do TinyMCE resolvia contra a URL da página, ex. /work/Fonts/…, nunca contra a raiz onde
+  // os .ttf realmente estão servidos). Só troca ESTE ficheiro específico (não generaliza a outros
+  // url("Fonts/…") que possam existir, ex. os do export EPUB).
+  css = css.replace(/url\(["']?Fonts\/(CrimsonText-[\w]+\.ttf)["']?\)/g, 'url("/$1")');
   if (css.includes('.p-italic')) return css;
   const marker = '/* === ESTILOS DE PARÁGRAFO === */';
   const idx = css.indexOf(marker);

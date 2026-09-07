@@ -19,7 +19,7 @@ export interface BlockOverlaysProps {
     gripMenu: Pos | null;
     hrCtl: Pos | null;
     htmlEdit: string | null;
-    htmlEditPos: { top: number; left: number; width: number; height: number; visible: boolean } | null;
+    htmlEditPos: { top: number; left: number; width: number; height: number; maxHeight: number; visible: boolean } | null;
     dropLine: { top: number; left: number; width: number } | null;
     htmlTextareaRef: React.RefObject<HTMLTextAreaElement>;
     styleMenu: { top: number; left: number; kind: 'para' | 'head' } | null;
@@ -42,6 +42,7 @@ export interface BlockOverlaysProps {
     setStyleMenu: React.Dispatch<React.SetStateAction<{ top: number; left: number; kind: 'para' | 'head' } | null>>;
     replaceInDocument: (find: string, replaceWith: string, scope: 'chapter' | 'document') => number;
     countInDocument: (find: string, scope: 'chapter' | 'document') => number;
+    onHtmlEditCloseRef: React.MutableRefObject<(() => void) | null>;
     readOnly?: boolean;
     wholeBookLoaded: boolean;
     chapterLabel: string;
@@ -54,14 +55,12 @@ export function BlockOverlays({
     addBtnPos, addBtnFading, plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
     htmlTextareaRef, openPlusMenu, closePlusMenu, plusAction, cancelAddBtnHide, clearAddBtn,
     startBlockDrag, moveBlock, setGripMenu, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
-    styleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument, wholeBookLoaded, chapterLabel, readOnly,
+    styleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument, onHtmlEditCloseRef, wholeBookLoaded, chapterLabel, readOnly,
 }: Props) {
     // Substituição em todo o HTML do documento (não só o bloco aberto) — mini find/replace
     // acionado a partir da caixa de edição de HTML, já que é o único sítio onde se vê/edita
     // HTML em bruto. Estado local ao BlockOverlays (que NUNCA desmonta — só a caixa condicional
-    // por baixo dele desmonta): reset feito explicitamente nos 3 pontos de saída (Cancelar,
-    // Guardar, Substituir com sucesso) — nunca via effect a espiar htmlEdit (react-hooks/set-
-    // state-in-effect), senão o painel ficava aberto/preenchido para a sessão seguinte.
+    // por baixo dele desmonta).
     const { showNotification } = useNotification();
     const [replaceOpen, setReplaceOpen] = useState(false);
     const [findText, setFindText] = useState('');
@@ -73,6 +72,12 @@ export function BlockOverlays({
     // de Documento Completo isola só o segmento do bloco aberto. Ver replaceInDocument.
     const [docScope, setDocScope] = useState<'chapter' | 'document'>('chapter');
     const resetReplace = () => { setReplaceOpen(false); setFindText(''); setReplaceText(''); setMatchCount(null); };
+    // Regista-se em endHtmlEdit (useBlockOverlays.tsx) — ponto único de fecho da caixa (clique
+    // fora, Cancelar, Guardar, Substituir com sucesso) — por ref, reatribuído a cada render (sem
+    // efeito, sem risco de state-in-effect). Sem isto, fechar por CLIQUE NOUTRO PARÁGRAFO (único
+    // caminho que fecha por fora deste componente) deixava o painel aberto/preenchido a arrastar
+    // para a sessão seguinte.
+    onHtmlEditCloseRef.current = resetReplace;
     // Contagem ao vivo (debounced — getContent() serializa o documento inteiro a cada chamada,
     // não vale a pena recalcular a cada tecla) para o utilizador ver quantas ocorrências há
     // ANTES de aplicar, em vez de descobrir só depois do "Substituir tudo" já ter corrido. Só
@@ -97,11 +102,18 @@ export function BlockOverlays({
         const count = replaceInDocument(findText, replaceText, docScope);
         if (count === 0) { showNotification('error', 'Sem ocorrências encontradas.'); return; }
         showNotification('success', `${count} ${count === 1 ? 'substituição feita' : 'substituições feitas'}.`, 2500);
-        resetReplace();
-        endHtmlEdit(); // o documento inteiro foi reescrito — a caixa deste bloco já não é fiável
+        endHtmlEdit(); // o documento inteiro foi reescrito — a caixa deste bloco já não é fiável (reset do painel via onHtmlEditCloseRef)
     };
-    const cancelHtmlEdit = () => { resetReplace(); endHtmlEdit(); };
-    const confirmSaveHtmlEdit = () => { resetReplace(); saveHtmlEdit(htmlTextareaRef.current?.value ?? ''); };
+    const cancelHtmlEdit = () => endHtmlEdit(); // reset do painel via onHtmlEditCloseRef
+    const confirmSaveHtmlEdit = () => saveHtmlEdit(htmlTextareaRef.current?.value ?? ''); // idem (saveHtmlEdit chama endHtmlEdit)
+
+    // Painel "Substituir" sempre abaixo da toolbar (top-11) cortava-se fora do espaço disponível
+    // (statusbar do TinyMCE, ou fundo do ecrã) na última linha do capítulo. Mesma ideia do
+    // forcePopAbove do mini-menu (useBlockOverlays.tsx): sem espaço a seguir aos 44px da
+    // toolbar, abre para cima. ~260px cobre o painel cheio (scope + 2 inputs + contagem + botão);
+    // htmlEditPos.maxHeight já vem limitado à statusbar (ver chromeBounds em useBlockOverlays.tsx).
+    const REPLACE_PANEL_HEIGHT = 260;
+    const replaceOpensAbove = !!htmlEditPos && htmlEditPos.maxHeight - 44 < REPLACE_PANEL_HEIGHT;
 
     return (
         <>
@@ -262,7 +274,7 @@ export function BlockOverlays({
                                 if (e.key === 'Escape') cancelHtmlEdit();
                                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveHtmlEdit(htmlTextareaRef.current?.value ?? '');
                             }}
-                            style={{ height: Math.min(Math.max(htmlEditPos.height + 40, 120), 600) }}
+                            style={{ height: Math.min(Math.max(htmlEditPos.height + 40, 120), 600, htmlEditPos.maxHeight) }}
                             className="w-full font-mono text-sm leading-relaxed p-3 pr-24 rounded-lg border border-slate-300 bg-slate-50 text-slate-700 outline-none shadow-xl resize-y"
                         />
                         <div className="absolute top-2 right-2 flex gap-1">
@@ -277,7 +289,7 @@ export function BlockOverlays({
                             </button>
                         </div>
                         {replaceOpen && (
-                            <div className="absolute top-11 right-2 z-10 w-64 p-2.5 rounded-lg border border-slate-300 bg-white shadow-xl flex flex-col gap-1.5">
+                            <div className={`absolute right-2 z-10 w-64 p-2.5 rounded-lg border border-slate-300 bg-white shadow-xl flex flex-col gap-1.5 ${replaceOpensAbove ? 'bottom-full mb-2' : 'top-11'}`}>
                                 <div className="flex gap-1">
                                     {([['document', 'Documento'], ['chapter', chapterLabel]] as const).map(([scope, label]) => (
                                         <button
