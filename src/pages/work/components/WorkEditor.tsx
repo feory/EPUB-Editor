@@ -70,6 +70,7 @@ interface WorkEditorProps {
     onTogglePrintPdf?: () => void;
     showPrintPdfPanel?: boolean;
     onVisiblePageChange?: (page: number) => void;
+    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void;
     readOnly?: boolean;
     editorFont?: string;
     editorFontSize?: string;
@@ -123,7 +124,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -142,6 +143,14 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     onImageUploadedRef.current = onImageUploaded;
     const onVisiblePageChangeRef = useRef(onVisiblePageChange);
     onVisiblePageChangeRef.current = onVisiblePageChange;
+    // Ligação manual do Índice (setup.ts, botão idxlinktarget): setup() só corre 1x no mount,
+    // por isso chapters/activeChapterIndex (mudam a cada render) só lá chegam por ref.
+    const chaptersRef = useRef(chapters);
+    chaptersRef.current = chapters;
+    const activeChapterIndexRef = useRef(activeChapterIndex);
+    activeChapterIndexRef.current = activeChapterIndex;
+    const onLinkIndiceEntryRef = useRef(onLinkIndiceEntry);
+    onLinkIndiceEntryRef.current = onLinkIndiceEntry;
     const { getCurrentCss } = useStyles();
     const currentCss = getCurrentCss();
     const imageCrop = useImageCrop(isbn ?? '', (imageId) => refreshImageInEditor(editorRef.current, imageId));
@@ -914,6 +923,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
                             openStyleMenu: overlays.openStyleMenu,
+                            chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef,
                             wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
                         }),

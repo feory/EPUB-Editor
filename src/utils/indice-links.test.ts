@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { linkIndiceEntries } from './indice-links';
+import { linkIndiceEntries, linkOneIndiceEntry } from './indice-links';
 
 const toc = (body: string) => `<p class="chapter-break-h1" data-title="Índice"></p><h1>Índice</h1>${body}`;
 const chapter = (n: string, title: string, body = '<p>corpo</p>') =>
@@ -192,4 +192,68 @@ test('linkIndiceEntries: variantes de título do Índice são detetadas, "Índic
     ];
     const result = linkIndiceEntries(partsRemissivo);
     expect(result.linked).toBe(0); // "Índice Remissivo" não é detetado como capítulo de TOC
+});
+
+test('linkIndiceEntries: título repetido em atos diferentes liga cada entrada ao capítulo certo (não sempre ao 1º)', () => {
+    const parts = [
+        toc('<p>Ato I</p><p>Cena 1 . . . 5</p><p>Ato II</p><p>Cena 1 . . . 40</p>'),
+        chapter('1', 'Ato I'),
+        chapter('2', 'Cena 1'),
+        chapter('3', 'Ato II'),
+        chapter('4', 'Cena 1'),
+    ];
+    const { parts: out, linked, anchored } = linkIndiceEntries(parts);
+    expect(linked).toBe(4);
+    expect(anchored).toBe(4);
+    expect(out[0]).toContain('data-target="idx-anchor-2"'); // 1ª "Cena 1" → capítulo do Ato I
+    expect(out[0]).toContain('data-target="idx-anchor-4"'); // 2ª "Cena 1" → capítulo do Ato II, não repete idx-anchor-2
+});
+
+test('linkOneIndiceEntry: liga o p-ésimo parágrafo do Índice ao capítulo escolhido', () => {
+    const parts = [
+        toc('<p>Introdução Qualquer Coisa</p><p>Um Capítulo Sem Nada A Ver</p>'),
+        chapter('1', 'Prefácio'),
+        chapter('2', 'Desenvolvimento'),
+    ];
+    // pIndex conta TODOS os <p>, incluindo o marcador chapter-break-h1 (pIndex 0) — mesma
+    // contagem que o mini-menu faz sobre editor.getBody() (ver idxlinktarget em setup.ts).
+    const { parts: out, ok } = linkOneIndiceEntry(parts, 0, 2, 2); // pIndex 2 = "Um Capítulo..." → capítulo 2
+    expect(ok).toBe(true);
+    expect(out[0]).toContain('<p><span class="idx-link" data-target="idx-anchor-2">Um Capítulo Sem Nada A Ver</span></p>');
+    expect(out[0]).not.toContain('idx-anchor-1'); // 1ª entrada não tocada
+    expect(out[2]).toContain('<p class="chapter-anchor" id="idx-anchor-2"></p>');
+});
+
+test('linkOneIndiceEntry: religar troca o alvo sem duplicar a âncora antiga', () => {
+    const parts = [
+        toc('<p>Entrada</p>'),
+        chapter('1', 'Capítulo A'),
+        chapter('2', 'Capítulo B'),
+    ];
+    const first = linkOneIndiceEntry(parts, 0, 1, 1); // pIndex 1 = "Entrada" (0 é o marcador chapter-break-h1)
+    expect(first.ok).toBe(true);
+    const second = linkOneIndiceEntry(first.parts, 0, 1, 2);
+    expect(second.ok).toBe(true);
+    expect(second.parts[0]).toContain('data-target="idx-anchor-2"');
+    expect(second.parts[0]).not.toContain('idx-anchor-1');
+});
+
+test('linkOneIndiceEntry: liga a um capítulo cujo heading não vem logo a seguir ao marcador (ex. imagem antes do título)', () => {
+    const parts = [
+        toc('<p>Introdução</p>'),
+        `<p class="chapter-break-h1" data-title="Introdução"></p><p><img src="capa.jpg"></p><h1>Introdução</h1><p>corpo</p>`,
+    ];
+    const { parts: out, ok } = linkOneIndiceEntry(parts, 0, 1, 1); // pIndex 1 = "Introdução" (0 é o marcador)
+    expect(ok).toBe(true);
+    expect(out[0]).toContain('data-target="idx-anchor-1"');
+    expect(out[1]).toStartWith('<p class="chapter-break-h1" data-title="Introdução"></p><p class="chapter-anchor" id="idx-anchor-1"></p>');
+});
+
+test('linkOneIndiceEntry: pIndex ou capítulos fora de alcance devolve ok:false sem mexer nas parts', () => {
+    const parts = [toc('<p>Entrada</p>'), chapter('1', 'Capítulo A')];
+    const r1 = linkOneIndiceEntry(parts, 0, 5, 1); // pIndex inexistente
+    expect(r1.ok).toBe(false);
+    expect(r1.parts).toBe(parts);
+    const r2 = linkOneIndiceEntry(parts, 0, 0, 9); // capítulo alvo inexistente
+    expect(r2.ok).toBe(false);
 });

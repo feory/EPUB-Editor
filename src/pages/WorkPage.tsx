@@ -484,6 +484,7 @@ export function WorkPage() {
                 onTogglePrintPdf={() => sidebars.togglePanel('printPdf')}
                 showPrintPdfPanel={sidebars.showPrintPdfSidebar}
                 onVisiblePageChange={setEditorVisiblePage}
+                onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
                 activeChapterIndex={work.activeChapterIndex}
