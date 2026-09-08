@@ -2,7 +2,7 @@
 
 Plataforma de edição de ebooks: importação (PDF, DOCX, IDML, EPUB legacy), edição em rich-text com TinyMCE, gestão de capítulos, notas de rodapé, page-list, galeria de imagens, validação (ACE/EPUB) e exportação para EPUB3.
 
-Versão atual: **0.9.4.4.1** — ver histórico completo em [CLAUDE.md](./CLAUDE.md).
+Versão atual: **0.9.17** — ver histórico completo em [Releases](https://github.com/feory/EPUB-Editor/releases).
 
 ## Stack
 
