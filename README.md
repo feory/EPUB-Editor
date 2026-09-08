@@ -95,5 +95,3 @@ src/services/       importadores (PDF/DOCX/IDML/EPUB) e exportador EPUB
 src/utils/          transformações de HTML puras, partilhadas editor/export
 server/             API Bun + SQLite
 ```
-
-Notas técnicas mais profundas (arquitetura de capítulos, importadores, exportação) vivem em [CLAUDE.md](./CLAUDE.md).
