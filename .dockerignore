@@ -1,0 +1,8 @@
+node_modules
+dist
+data
+temp
+.git
+ebooks.db
+ebooks.db-shm
+ebooks.db-wal
