@@ -81,6 +81,9 @@ export const generatePageListXhtml = (pageEntries: { section: number; page: numb
   <title>Lista de Páginas</title>
   <meta charset="utf-8" />
   <link rel="stylesheet" type="text/css" href="style.css" />
+  <style>
+    ol { list-style-type: none; padding-left: 0; }
+  </style>
 </head>
 <body>
   <section aria-label="Lista de Páginas">
