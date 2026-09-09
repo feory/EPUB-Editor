@@ -463,10 +463,10 @@ export function applyImportOptions(html: string, options: ImportOptions): string
       wrapGroup([h, next]);
     }
 
-    // (c) Corrida de parágrafos negrito (inline OU classe p-bold, ex. "p-bold p-top")
-    //     + o parágrafo normal a seguir → todos no mesmo noBreak.
+    // (c) Corrida de parágrafos negrito/itálico (inline OU classe p-bold/p-italic/p-bold-italic,
+    //     ex. "p-bold p-top") + o parágrafo normal a seguir → todos no mesmo noBreak.
     const isBoldP = (el: Element | null) =>
-      el?.tagName === 'P' && isBoldPara(el) && !el.classList.contains('footnote');
+      el?.tagName === 'P' && (isBoldPara(el) || el.classList.contains('p-italic') || el.classList.contains('p-bold-italic')) && !el.classList.contains('footnote');
     for (const p of paragraphs) {
       if (!isBoldP(p) || inNoBreak(p)) continue;
       const group: Element[] = [p];
@@ -474,6 +474,12 @@ export function applyImportOptions(html: string, options: ImportOptions): string
       while (isBoldP(sib)) {
         group.push(sib as Element);
         sib = (sib as Element).nextElementSibling;
+      }
+      // Marcadores vazios entre o negrito/itálico e o corpo (ex. <p class="chapter-anchor"> da
+      // ligação de Índice) não contam como "parágrafo seguinte" — saltar até ao 1º com texto.
+      while (sib?.tagName === 'P' && !(sib.textContent ?? '').trim()) {
+        group.push(sib);
+        sib = sib.nextElementSibling;
       }
       if (sib?.tagName === 'P') group.push(sib); // parágrafo normal a seguir
       if (group.length < 2) continue;

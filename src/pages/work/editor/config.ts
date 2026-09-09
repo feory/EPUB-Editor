@@ -42,7 +42,9 @@ export const STYLE_FORMATS = [
         { title: 'Capitular (Drop Cap)', format: 'drop-cap' },
         { title: 'Nota de Rodapé', format: 'footnote' },
         { title: 'Box', format: 'box' },
-        { title: 'Unido', format: 'noBreak' },
+        // "Unido" tirado daqui de propósito: o menu Styles aplica via editor.formatter nativo,
+        // que funde vários <p> selecionados num só bloco. O botão da toolbar (ps-union, setup.ts)
+        // faz o mesmo wrap manualmente (sem esse bug) — é o único caminho para "noBreak" agora.
     ]},
 ];
 

@@ -187,7 +187,6 @@ export function createEditorSetup(deps: SetupDeps) {
             editor.formatter.register('underline', { inline: 'u' });
             editor.formatter.register('small-caps', { inline: 'span', classes: 'small-caps' });
             editor.formatter.register('box', { block: 'div', classes: 'box', wrapper: true });
-            editor.formatter.register('noBreak', { block: 'div', classes: 'noBreak', wrapper: true });
         });
 
         const setImgAlign = (cls: string) => {
@@ -625,15 +624,26 @@ export function createEditorSetup(deps: SetupDeps) {
             icon: 'ps-union',
             tooltip: 'União entre título e o parágrafo',
             onAction: () => {
-                if (editor.formatter.match('noBreak')) {
-                    editor.formatter.remove('noBreak');
+                // Wrap manual (igual ao botão "box") em vez de editor.formatter.apply: o
+                // formatter nativo do TinyMCE, ao abranger seleção com vários <p>, funde-os
+                // num só bloco em vez de os envolver preservando cada um.
+                const selectedNode = editor.selection.getNode();
+                const existingWrap = editor.dom.getParent(selectedNode, '.noBreak') as HTMLElement | null;
+                if (existingWrap) {
+                    editor.dom.setOuterHTML(existingWrap, existingWrap.innerHTML);
                 } else {
-                    editor.formatter.apply('noBreak');
+                    const html = editor.selection.getContent({ format: 'html' });
+                    if (html.trim()) {
+                        editor.selection.setContent(`<div class="noBreak">${html}</div>`);
+                    }
                 }
                 editor.dispatch('Change');
             },
             onSetup: (api) => {
-                const handler = () => api.setActive(!!editor.formatter.match('noBreak'));
+                const handler = () => {
+                    const node = editor.selection.getNode();
+                    api.setActive(!!editor.dom.getParent(node, '.noBreak'));
+                };
                 editor.on('NodeChange', handler);
                 return () => editor.off('NodeChange', handler);
             },
