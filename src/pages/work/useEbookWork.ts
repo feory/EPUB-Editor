@@ -442,6 +442,16 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
             },
             [saveMutation, chapterSync.getLatestHtmlContent, readOnly]
         ),
+        // Mesmo padrão silencioso de moveChapters/deleteChapterPart/createChapter (showNotif
+        // omitido) — para mutações estruturais que persistem de imediato sem ser o botão
+        // "Guardar" (ex. apagar um comentário: o toast genérico de guardar não faz sentido aí).
+        saveContentSilently: useCallback(
+            () => {
+                if (readOnly) return;
+                saveMutation.mutate({ content: chapterSync.getLatestHtmlContent() });
+            },
+            [saveMutation, chapterSync.getLatestHtmlContent, readOnly]
+        ),
 
         showHistory: history.isHistoryOpen,
         setShowHistory: history.setIsHistoryOpen,

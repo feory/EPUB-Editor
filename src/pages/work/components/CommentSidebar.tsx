@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Check, Trash2, CornerDownRight } from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
 import { PanelResizeHandle } from './PanelResizeHandle';
-import type { CommentThread } from '../hooks/useComments';
+import type { CommentThreadView } from '../hooks/useCommentEditorSync';
 import type { Comment } from '../../../api/ebooks-api';
 
 const ListFooter = () => <div className="h-5" />;
@@ -16,7 +16,8 @@ function formatTimestamp(ts: string) {
 }
 
 interface CommentSidebarProps {
-    threads: CommentThread[];
+    threads: CommentThreadView[];
+    unresolvedCount: number;
     draftAnchorId: string | null;
     onCancelDraft: () => void;
     onSubmitDraft: (text: string) => void;
@@ -24,7 +25,6 @@ interface CommentSidebarProps {
     onResolve: (id: number, resolved: boolean) => void;
     onDelete: (id: number) => void;
     onGoTo: (anchorId: string) => void;
-    isOrphan: (anchorId: string) => boolean;
     currentUserId: number;
     currentUserRole: 'admin' | 'user';
     onClose: () => void;
@@ -59,14 +59,12 @@ function CommentMessage({ comment, currentUserId, currentUserRole, onDelete }: {
 }
 
 const CommentSidebarComponent: React.FC<CommentSidebarProps> = ({
-    threads, draftAnchorId, onCancelDraft, onSubmitDraft, onReply, onResolve, onDelete, onGoTo, isOrphan,
+    threads, unresolvedCount, draftAnchorId, onCancelDraft, onSubmitDraft, onReply, onResolve, onDelete, onGoTo,
     currentUserId, currentUserRole, onClose, width, onResize,
 }) => {
     const [draftText, setDraftText] = useState('');
     const [replyingId, setReplyingId] = useState<number | null>(null);
     const [replyText, setReplyText] = useState('');
-
-    const unresolvedCount = threads.filter(t => !t.root.resolved).length;
 
     return (
         <aside style={{ width }} className="fixed right-0 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-0 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border-l border-border flex flex-col z-40 animate-in slide-in-from-right duration-300">
@@ -75,7 +73,7 @@ const CommentSidebarComponent: React.FC<CommentSidebarProps> = ({
                 <div>
                     <h3 className="font-black text-slate-900 leading-tight">Comentários</h3>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        {unresolvedCount} {unresolvedCount === 1 ? 'por resolver' : 'por resolver'}
+                        {unresolvedCount} por resolver
                     </p>
                 </div>
                 <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-500 transition-all">
@@ -117,7 +115,7 @@ const CommentSidebarComponent: React.FC<CommentSidebarProps> = ({
                         data={threads}
                         components={{ Footer: ListFooter }}
                         itemContent={(_i, thread) => {
-                            const orphan = isOrphan(thread.anchorId);
+                            const { orphan } = thread;
                             return (
                                 <div className="px-5 pt-5">
                                     <div

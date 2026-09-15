@@ -9,7 +9,7 @@ import { cleanIndexText, linkIndexPages, wrapPageLinks, INDEX_PAGE_LIST, isPageC
 import { sanitizeImageFilename } from '../../../utils/format';
 import {
     getContentBlocks, unwrapNode, clearMarkers,
-    clearGrammarErrorsInBody,
+    clearGrammarErrorsInBody, pulseHighlight,
 } from '../utils/editorDom';
 import { runGrammarCheck } from '../utils/grammarCheck';
 import { editorFontCss } from '../utils/editorFonts';
@@ -733,8 +733,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             if (!span) return false;
             editor.focus();
             span.scrollIntoView({ behavior: 'auto', block: 'center' });
-            span.classList.add('highlight-pulse');
-            setTimeout(() => span.classList.remove('highlight-pulse'), 3000);
+            pulseHighlight(span);
             return true;
         },
 

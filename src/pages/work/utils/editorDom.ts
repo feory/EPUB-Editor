@@ -32,6 +32,12 @@ export function clearGrammarErrorsInBody(body: HTMLElement) {
     clearMarkers(body, 'grammar-error-highlight');
 }
 
+// Destaque temporário de "cheguei aqui" (scrollToImage/scrollToPage/scrollToComment).
+export function pulseHighlight(el: Element) {
+    el.classList.add('highlight-pulse');
+    setTimeout(() => el.classList.remove('highlight-pulse'), 3000);
+}
+
 export type BatchMapEntry = { index: number; text: string; offset: number; separatorLength: number };
 
 export async function processBatch(

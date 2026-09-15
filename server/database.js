@@ -194,6 +194,7 @@ export const stmt = {
   getComment:           db.prepare('SELECT * FROM comments WHERE id = ?'),
   resolveComment:       db.prepare('UPDATE comments SET resolved = ? WHERE id = ?'),
   deleteComment:        db.prepare('DELETE FROM comments WHERE id = ? OR parent_id = ?'),
+  deleteCommentsByIsbn: db.prepare('DELETE FROM comments WHERE ebook_isbn = ?'),
 };
 
 export function migrateGrammarToDb() {
@@ -225,7 +226,7 @@ export function purgeOldTrash() {
     stmt.grammarDeleteIsbn.run(ebook_isbn);
     stmt.grammarSessionDelete.run(ebook_isbn);
     stmt.unshareAllForEbook.run(ebook_isbn);
-    db.run('DELETE FROM comments WHERE ebook_isbn = ?', [ebook_isbn]);
+    stmt.deleteCommentsByIsbn.run(ebook_isbn);
     try { rmSync(join(DATA_DIR, ebook_isbn), { recursive: true, force: true }); } catch {}
   }
   if (old.length > 0) console.log(`Purged ${old.length} ebooks from trash (> 30 days)`);

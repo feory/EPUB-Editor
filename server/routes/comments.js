@@ -8,6 +8,13 @@ export function getComments(isbn) {
 
 const MAX_TEXT = 5_000;
 
+// Comentário pertencente a este isbn, ou null (404 para o chamador) — dedup do lookup
+// repetido em addComment (parentId)/resolveComment/deleteComment.
+function getOwnedComment(isbn, id) {
+  const comment = stmt.getComment.get(id);
+  return comment && comment.ebook_isbn === isbn ? comment : null;
+}
+
 export async function addComment(req, isbn, user) {
   const { anchorId, parentId, text } = await req.json();
   if (typeof anchorId !== 'string' || !anchorId) {
@@ -16,12 +23,8 @@ export async function addComment(req, isbn, user) {
   if (typeof text !== 'string' || !text.trim() || text.length > MAX_TEXT) {
     return Response.json({ error: 'Texto inválido' }, { status: 400, headers: corsHeaders });
   }
-  let parent = null;
-  if (parentId != null) {
-    parent = stmt.getComment.get(parentId);
-    if (!parent || parent.ebook_isbn !== isbn) {
-      return Response.json({ error: 'Thread não encontrada' }, { status: 404, headers: corsHeaders });
-    }
+  if (parentId != null && !getOwnedComment(isbn, parentId)) {
+    return Response.json({ error: 'Thread não encontrada' }, { status: 404, headers: corsHeaders });
   }
   const result = stmt.insertComment.run(isbn, anchorId, parentId ?? null, Number(user.sub), text.trim());
   const comment = stmt.getComment.get(result.lastInsertRowid);
@@ -29,8 +32,7 @@ export async function addComment(req, isbn, user) {
 }
 
 export async function resolveComment(req, isbn, id, user) {
-  const comment = stmt.getComment.get(id);
-  if (!comment || comment.ebook_isbn !== isbn) {
+  if (!getOwnedComment(isbn, id)) {
     return Response.json({ error: 'Não encontrado' }, { status: 404, headers: corsHeaders });
   }
   const { resolved } = await req.json();
@@ -39,8 +41,8 @@ export async function resolveComment(req, isbn, id, user) {
 }
 
 export function deleteComment(isbn, id, user) {
-  const comment = stmt.getComment.get(id);
-  if (!comment || comment.ebook_isbn !== isbn) {
+  const comment = getOwnedComment(isbn, id);
+  if (!comment) {
     return Response.json({ error: 'Não encontrado' }, { status: 404, headers: corsHeaders });
   }
   if (user.role !== 'admin' && comment.user_id !== Number(user.sub)) {

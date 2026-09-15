@@ -2,46 +2,36 @@ import { useState, useCallback } from 'react';
 
 type Panel = 'grammar' | 'validation' | 'imageGallery' | 'printPdf' | 'comments';
 
+// Um único painel lateral aberto de cada vez — activePanel substitui 5 booleans paralelos
+// que tinham de ser mantidos mutuamente exclusivos à mão em openPanel/closeAllPanels/togglePanel.
 export function useWorkPageSidebars() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [showGrammarSidebar, setShowGrammarSidebar] = useState(false);
-    const [showValidationSidebar, setShowValidationSidebar] = useState(false);
-    const [showImageGallerySidebar, setShowImageGallerySidebar] = useState(false);
-    const [showPrintPdfSidebar, setShowPrintPdfSidebar] = useState(false);
-    const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+    const [activePanel, setActivePanel] = useState<Panel | null>(null);
 
-    const openPanel = useCallback((panel: Panel) => {
-        setShowGrammarSidebar(panel === 'grammar');
-        setShowValidationSidebar(panel === 'validation');
-        setShowImageGallerySidebar(panel === 'imageGallery');
-        setShowPrintPdfSidebar(panel === 'printPdf');
-        setShowCommentsSidebar(panel === 'comments');
-    }, []);
-
-    const closeAllPanels = useCallback(() => {
-        setShowGrammarSidebar(false);
-        setShowValidationSidebar(false);
-        setShowImageGallerySidebar(false);
-        setShowPrintPdfSidebar(false);
-        setShowCommentsSidebar(false);
-    }, []);
-
+    const openPanel = useCallback((panel: Panel) => setActivePanel(panel), []);
+    const closeAllPanels = useCallback(() => setActivePanel(null), []);
     const togglePanel = useCallback((panel: Panel) => {
-        setShowGrammarSidebar(prev => panel === 'grammar' ? !prev : false);
-        setShowValidationSidebar(prev => panel === 'validation' ? !prev : false);
-        setShowImageGallerySidebar(prev => panel === 'imageGallery' ? !prev : false);
-        setShowPrintPdfSidebar(prev => panel === 'printPdf' ? !prev : false);
-        setShowCommentsSidebar(prev => panel === 'comments' ? !prev : false);
+        setActivePanel(prev => prev === panel ? null : panel);
         setIsSidebarOpen(false);
     }, []);
 
+    // setShowXSidebar(bool) — API mantida para os call-sites existentes (todos só fecham
+    // com `false`); abrir um painel específico continua a ser feito via openPanel/togglePanel.
+    const setPanelOpen = (panel: Panel) => (open: boolean) => setActivePanel(open ? panel : null);
+
     return {
         isSidebarOpen, setIsSidebarOpen,
-        showGrammarSidebar, setShowGrammarSidebar,
-        showValidationSidebar, setShowValidationSidebar,
-        showImageGallerySidebar, setShowImageGallerySidebar,
-        showPrintPdfSidebar, setShowPrintPdfSidebar,
-        showCommentsSidebar, setShowCommentsSidebar,
+        activePanel,
+        showGrammarSidebar: activePanel === 'grammar',
+        setShowGrammarSidebar: setPanelOpen('grammar'),
+        showValidationSidebar: activePanel === 'validation',
+        setShowValidationSidebar: setPanelOpen('validation'),
+        showImageGallerySidebar: activePanel === 'imageGallery',
+        setShowImageGallerySidebar: setPanelOpen('imageGallery'),
+        showPrintPdfSidebar: activePanel === 'printPdf',
+        setShowPrintPdfSidebar: setPanelOpen('printPdf'),
+        showCommentsSidebar: activePanel === 'comments',
+        setShowCommentsSidebar: setPanelOpen('comments'),
         openPanel, closeAllPanels, togglePanel,
     };
 }

@@ -23,6 +23,7 @@ import { FocusModeBar } from './work/components/FocusModeBar';
 import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { CommentSidebar } from './work/components/CommentSidebar';
 import { useComments } from './work/hooks/useComments';
+import { useCommentEditorSync } from './work/hooks/useCommentEditorSync';
 import { useAuth } from '../context/AuthContext';
 import { ValidationSidebar } from './work/components/ValidationSidebar';
 import { ImageGallerySidebar } from './work/components/ImageGallerySidebar';
@@ -219,11 +220,11 @@ export function WorkPage() {
   const closeDiffSidebar = diff.closeDiffSidebar;
   const closeVersionDiff = work.versionDiff.close;
   useEffect(() => {
-    if (sidebars.showGrammarSidebar || sidebars.showValidationSidebar || sidebars.showImageGallerySidebar || sidebars.showPrintPdfSidebar || sidebars.showCommentsSidebar) {
+    if (sidebars.activePanel) {
       closeDiffSidebar();
       closeVersionDiff();
     }
-  }, [sidebars.showGrammarSidebar, sidebars.showValidationSidebar, sidebars.showImageGallerySidebar, sidebars.showPrintPdfSidebar, sidebars.showCommentsSidebar, closeDiffSidebar, closeVersionDiff]);
+  }, [sidebars.activePanel, closeDiffSidebar, closeVersionDiff]);
 
   // Inverso: abrir a comparação (diff de ficheiro ou de versões) fecha os painéis laterais.
   const closeAllPanels = sidebars.closeAllPanels;
@@ -314,17 +315,18 @@ export function WorkPage() {
     (imageId) => `data-image-id="${imageId}"`,
     (editor, imageId) => editor.scrollToImage(imageId),
   );
-  const handleGoToComment = useGoToChapterMarker<string>(
-    editorRef, work.fullHtmlContent, work.activeChapterIndex, work.setActiveChapterIndex,
-    (anchorId) => `data-comment-id="${anchorId}"`,
-    (editor, anchorId) => editor.scrollToComment(anchorId),
-  );
-
-  // Classe "dimmed" do span é só visual (não persiste no HTML) — reaplicar sempre que os
-  // threads mudam (resolver/reabrir) ou o capítulo é trocado (remonta o DOM do editor).
-  useEffect(() => {
-    comments.threads.forEach(t => editorRef.current?.setCommentResolved(t.anchorId, !!t.root.resolved));
-  }, [comments.threads, work.activeChapterIndex]);
+  // Seam entre o estado de comentários (useComments, servidor) e o editor (editorRef, DOM
+  // do TinyMCE) — ver candidato A do architecture review desta sessão.
+  const commentSync = useCommentEditorSync({
+    editorRef,
+    threads: comments.threads,
+    resolveComment: comments.resolveComment,
+    deleteComment: comments.deleteComment,
+    fullHtmlContent: work.fullHtmlContent,
+    activeChapterIndex: work.activeChapterIndex,
+    setActiveChapterIndex: work.setActiveChapterIndex,
+    saveContentSilently: work.saveContentSilently,
+  });
 
   // Ferramenta "Atualização Pagelist": PDF trocado com o painel PDF de Impressão eventualmente
   // aberto — o painel só relê o ficheiro no mount; bump de pdfVersion força-o a remontar.
@@ -382,7 +384,7 @@ export function WorkPage() {
     } catch { return ts; }
   };
 
-  const anySidebarOpen = sidebars.showGrammarSidebar || sidebars.showValidationSidebar || sidebars.showImageGallerySidebar || sidebars.showPrintPdfSidebar || sidebars.showCommentsSidebar || diff.showDiffSidebar || work.versionDiff.open;
+  const anySidebarOpen = !!sidebars.activePanel || diff.showDiffSidebar || work.versionDiff.open;
 
   const presence = work.presence;
   const presenceBanner = work.readOnly
@@ -549,7 +551,8 @@ export function WorkPage() {
 
       {sidebars.showCommentsSidebar && user && (
         <CommentSidebar
-          threads={comments.threads}
+          threads={commentSync.threads}
+          unresolvedCount={comments.unresolvedCount}
           draftAnchorId={comments.draftAnchorId}
           onCancelDraft={() => comments.setDraftAnchorId(null)}
           onSubmitDraft={(text) => {
@@ -558,20 +561,9 @@ export function WorkPage() {
             comments.setDraftAnchorId(null);
           }}
           onReply={(anchorId, rootId, text) => comments.addComment({ anchorId, text, parentId: rootId })}
-          onResolve={(id, resolved) => comments.resolveComment({ id, resolved })}
-          onDelete={(id) => {
-            // Apagar a raiz apaga a thread toda (backend) — desembrulha o span também,
-            // senão a marcação amarela fica no texto sem comentário nenhum por trás. Grava
-            // já a seguir: sem isto a remoção só existe em memória e um refresh sem "Guardar"
-            // à mão repunha o span (comentário já apagado da BD, mas o texto continuava marcado).
-            const thread = comments.threads.find(t => t.root.id === id);
-            comments.deleteComment(id);
-            if (thread && editorRef.current?.removeCommentAnchor(thread.anchorId)) {
-              work.saveContent();
-            }
-          }}
-          onGoTo={handleGoToComment}
-          isOrphan={(anchorId) => !work.fullHtmlContent.includes(`data-comment-id="${anchorId}"`)}
+          onResolve={commentSync.resolve}
+          onDelete={commentSync.remove}
+          onGoTo={commentSync.goTo}
           currentUserId={user.id}
           currentUserRole={user.role}
           onClose={() => sidebars.setShowCommentsSidebar(false)}
