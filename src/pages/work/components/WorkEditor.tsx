@@ -71,6 +71,7 @@ interface WorkEditorProps {
     showPrintPdfPanel?: boolean;
     onVisiblePageChange?: (page: number) => void;
     onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void;
+    onAddComment?: (anchorId: string) => void;
     readOnly?: boolean;
     editorFont?: string;
     editorFontSize?: string;
@@ -83,6 +84,9 @@ export interface WorkEditorRef {
     scrollToContent: (text: string, paragraphIndex?: number) => void;
     scrollToImage: (imageId: string) => boolean;
     scrollToPage: (folio: number) => boolean;
+    scrollToComment: (anchorId: string) => boolean;
+    removeCommentAnchor: (anchorId: string) => boolean;
+    setCommentResolved: (anchorId: string, resolved: boolean) => void;
     highlightGrammarErrors: (matches: any[]) => void;
     clearGrammarErrors: () => void;
     filterGrammarHighlights: (filter: 'all' | 'spelling' | 'grammar') => void;
@@ -124,7 +128,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, onAddComment, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -722,6 +726,46 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             return true;
         },
 
+        scrollToComment: (anchorId: string) => {
+            const editor = editorRef.current;
+            if (!editor) return false;
+            const span = editor.getBody()?.querySelector(`span.comment-anchor[data-comment-id="${anchorId}"]`) as HTMLElement | null;
+            if (!span) return false;
+            editor.focus();
+            span.scrollIntoView({ behavior: 'auto', block: 'center' });
+            span.classList.add('highlight-pulse');
+            setTimeout(() => span.classList.remove('highlight-pulse'), 3000);
+            return true;
+        },
+
+        // Só desembrulha (mantém o texto) — chamado quando a thread-raiz é apagada. Só afeta
+        // o capítulo ATIVO (span de outro capítulo, ainda não montado, sai no próximo load
+        // desse capítulo se algum dia se limpar; caso raro, sem impacto visual imediato).
+        // Devolve found: o chamador grava logo a seguir (senão a remoção só existe em
+        // memória — refrescar a página sem "Guardar" à mão repunha o span, comentário já
+        // apagado da BD ou não).
+        removeCommentAnchor: (anchorId: string) => {
+            const editor = editorRef.current;
+            if (!editor) return false;
+            const body = editor.getBody();
+            const span = body?.querySelector(`span.comment-anchor[data-comment-id="${anchorId}"]`);
+            if (!span?.parentNode) return false;
+            unwrapNode(span);
+            body.normalize();
+            editor.dispatch('Change');
+            return true;
+        },
+
+        // Classe puramente visual (dimmed) — não altera o HTML persistido, por isso não
+        // dispara 'Change'. Reaplicada pelo chamador sempre que os threads/capítulo mudam,
+        // já que trocar de capítulo remonta o DOM do editor e perde a classe.
+        setCommentResolved: (anchorId: string, resolved: boolean) => {
+            const editor = editorRef.current;
+            if (!editor) return;
+            const span = editor.getBody()?.querySelector(`span.comment-anchor[data-comment-id="${anchorId}"]`);
+            span?.classList.toggle('comment-anchor-resolved', resolved);
+        },
+
         insertContent: (content: string) => {
             const editor = editorRef.current;
             if (!editor) return;
@@ -906,7 +950,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         // preservar o marcador de quebra de página e o de link do Índice (span vazio
                         // com classe/dados) — em TinyMCE isto SUBSTITUI, não estende, os atributos
                         // permitidos no span; sem data-target aqui, o marcador idx-link perde o alvo
-                        extended_valid_elements: 'span[class|data-page|data-target|id|style]',
+                        extended_valid_elements: 'span[class|data-page|data-target|data-comment-id|id|style]',
                         plugins: EDITOR_PLUGINS,
                         // Bubble de formatação na seleção de texto (só selection; sem barras de inserção/imagem).
                         quickbars_insert_toolbar: false,
@@ -926,6 +970,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef,
                             wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
+                            onAddComment,
                         }),
                         automatic_uploads: true,
                         paste_data_images: true,

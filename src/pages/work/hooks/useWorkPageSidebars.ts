@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-type Panel = 'grammar' | 'validation' | 'imageGallery' | 'printPdf';
+type Panel = 'grammar' | 'validation' | 'imageGallery' | 'printPdf' | 'comments';
 
 export function useWorkPageSidebars() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -8,12 +8,14 @@ export function useWorkPageSidebars() {
     const [showValidationSidebar, setShowValidationSidebar] = useState(false);
     const [showImageGallerySidebar, setShowImageGallerySidebar] = useState(false);
     const [showPrintPdfSidebar, setShowPrintPdfSidebar] = useState(false);
+    const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
 
     const openPanel = useCallback((panel: Panel) => {
         setShowGrammarSidebar(panel === 'grammar');
         setShowValidationSidebar(panel === 'validation');
         setShowImageGallerySidebar(panel === 'imageGallery');
         setShowPrintPdfSidebar(panel === 'printPdf');
+        setShowCommentsSidebar(panel === 'comments');
     }, []);
 
     const closeAllPanels = useCallback(() => {
@@ -21,6 +23,7 @@ export function useWorkPageSidebars() {
         setShowValidationSidebar(false);
         setShowImageGallerySidebar(false);
         setShowPrintPdfSidebar(false);
+        setShowCommentsSidebar(false);
     }, []);
 
     const togglePanel = useCallback((panel: Panel) => {
@@ -28,6 +31,7 @@ export function useWorkPageSidebars() {
         setShowValidationSidebar(prev => panel === 'validation' ? !prev : false);
         setShowImageGallerySidebar(prev => panel === 'imageGallery' ? !prev : false);
         setShowPrintPdfSidebar(prev => panel === 'printPdf' ? !prev : false);
+        setShowCommentsSidebar(prev => panel === 'comments' ? !prev : false);
         setIsSidebarOpen(false);
     }, []);
 
@@ -37,6 +41,7 @@ export function useWorkPageSidebars() {
         showValidationSidebar, setShowValidationSidebar,
         showImageGallerySidebar, setShowImageGallerySidebar,
         showPrintPdfSidebar, setShowPrintPdfSidebar,
+        showCommentsSidebar, setShowCommentsSidebar,
         openPanel, closeAllPanels, togglePanel,
     };
 }

@@ -9,6 +9,7 @@ import * as authRoutes from './routes/auth.js';
 import * as ebooks from './routes/ebooks.js';
 import * as content from './routes/content.js';
 import * as grammar from './routes/grammar.js';
+import * as comments from './routes/comments.js';
 import * as epub from './routes/epub.js';
 import * as images from './routes/images.js';
 import * as printPdf from './routes/print-pdf.js';
@@ -188,6 +189,8 @@ export const server = Bun.serve({
           if (sub === 'cover'                && method === "POST") return epub.saveCover(req, isbn);
           if (sub === 'grammar'              && method === "GET")  return grammar.getGrammar(isbn);
           if (sub === 'grammar'              && method === "POST") return grammar.saveGrammar(req, isbn);
+          if (sub === 'comments'             && method === "GET")  return comments.getComments(isbn);
+          if (sub === 'comments'             && method === "POST") return comments.addComment(req, isbn, user);
           if (sub === 'validate'             && method === "POST") return validation.validate(req);
           if (sub === 'validate-accessibility' && method === "POST") return validation.validateAccessibility(req, isbn);
           if (sub === 'epub'                 && method === "POST") return epub.saveEpub(req, isbn);
@@ -205,6 +208,12 @@ export const server = Bun.serve({
 
         if (parts.length === 6 && parts[4] === 'share' && method === "DELETE") {
           return ebooks.unshareEbook(isbn, parts[5], user);
+        }
+
+        if (parts.length === 6 && parts[4] === 'comments') {
+          const commentId = Number(parts[5]);
+          if (method === "PUT")    return comments.resolveComment(req, isbn, commentId, user);
+          if (method === "DELETE") return comments.deleteComment(isbn, commentId, user);
         }
 
         if (parts.length === 5 && parts[4] === 'print-pdf') {

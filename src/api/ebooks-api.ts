@@ -27,6 +27,18 @@ export interface ShareUser {
     email: string;
 }
 
+export interface Comment {
+    id: number;
+    ebook_isbn: string;
+    anchor_id: string;
+    parent_id: number | null;
+    user_id: number;
+    user_email: string;
+    text: string;
+    resolved: 0 | 1;
+    created_at: string;
+}
+
 export interface DiskUsageBook {
     isbn: string;
     title: string | null;
@@ -207,9 +219,18 @@ export const ebooksApi = {
             headers: { 'Content-Type': 'multipart/form-data' }
         }),
 
-    saveGrammar: (isbn: string, matches: any[], cache: Record<string, any> = {}) => 
+    saveGrammar: (isbn: string, matches: any[], cache: Record<string, any> = {}) =>
         apiClient.post(`/ebooks/${isbn}/grammar`, { matches, cache }),
     getGrammar: (isbn: string) => apiClient.get(`/ebooks/${isbn}/grammar`),
+
+    // Comments
+    getComments: (isbn: string) => apiClient.get<{ comments: Comment[] }>(`/ebooks/${isbn}/comments`),
+    addComment: (isbn: string, anchorId: string, text: string, parentId?: number) =>
+        apiClient.post<{ comment: Comment }>(`/ebooks/${isbn}/comments`, { anchorId, text, parentId }),
+    resolveComment: (isbn: string, id: number, resolved: boolean) =>
+        apiClient.put(`/ebooks/${isbn}/comments/${id}`, { resolved }),
+    deleteComment: (isbn: string, id: number) =>
+        apiClient.delete(`/ebooks/${isbn}/comments/${id}`),
 
     // EPUB management
     uploadEpub: (isbn: string, epubBlob: Blob) => {

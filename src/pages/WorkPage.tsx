@@ -21,6 +21,9 @@ import { ChapterSidebar } from './work/components/ChapterSidebar';
 import { TocModal } from './work/components/TocModal';
 import { FocusModeBar } from './work/components/FocusModeBar';
 import { GrammarSidebar } from './work/components/GrammarSidebar';
+import { CommentSidebar } from './work/components/CommentSidebar';
+import { useComments } from './work/hooks/useComments';
+import { useAuth } from '../context/AuthContext';
 import { ValidationSidebar } from './work/components/ValidationSidebar';
 import { ImageGallerySidebar } from './work/components/ImageGallerySidebar';
 import { DiffSidebar } from './work/components/DiffSidebar';
@@ -57,6 +60,8 @@ export function WorkPage() {
   const { setCustomCss } = useStyles();
   const editorRef = useRef<WorkEditorRef>(null);
   const work = useEbookWork(isbn, editorRef);
+  const { user } = useAuth();
+  const comments = useComments(isbn);
 
   useEffect(() => {
     if (work.status === 'completed') {
@@ -214,11 +219,11 @@ export function WorkPage() {
   const closeDiffSidebar = diff.closeDiffSidebar;
   const closeVersionDiff = work.versionDiff.close;
   useEffect(() => {
-    if (sidebars.showGrammarSidebar || sidebars.showValidationSidebar || sidebars.showImageGallerySidebar || sidebars.showPrintPdfSidebar) {
+    if (sidebars.showGrammarSidebar || sidebars.showValidationSidebar || sidebars.showImageGallerySidebar || sidebars.showPrintPdfSidebar || sidebars.showCommentsSidebar) {
       closeDiffSidebar();
       closeVersionDiff();
     }
-  }, [sidebars.showGrammarSidebar, sidebars.showValidationSidebar, sidebars.showImageGallerySidebar, sidebars.showPrintPdfSidebar, closeDiffSidebar, closeVersionDiff]);
+  }, [sidebars.showGrammarSidebar, sidebars.showValidationSidebar, sidebars.showImageGallerySidebar, sidebars.showPrintPdfSidebar, sidebars.showCommentsSidebar, closeDiffSidebar, closeVersionDiff]);
 
   // Inverso: abrir a comparação (diff de ficheiro ou de versões) fecha os painéis laterais.
   const closeAllPanels = sidebars.closeAllPanels;
@@ -309,6 +314,17 @@ export function WorkPage() {
     (imageId) => `data-image-id="${imageId}"`,
     (editor, imageId) => editor.scrollToImage(imageId),
   );
+  const handleGoToComment = useGoToChapterMarker<string>(
+    editorRef, work.fullHtmlContent, work.activeChapterIndex, work.setActiveChapterIndex,
+    (anchorId) => `data-comment-id="${anchorId}"`,
+    (editor, anchorId) => editor.scrollToComment(anchorId),
+  );
+
+  // Classe "dimmed" do span é só visual (não persiste no HTML) — reaplicar sempre que os
+  // threads mudam (resolver/reabrir) ou o capítulo é trocado (remonta o DOM do editor).
+  useEffect(() => {
+    comments.threads.forEach(t => editorRef.current?.setCommentResolved(t.anchorId, !!t.root.resolved));
+  }, [comments.threads, work.activeChapterIndex]);
 
   // Ferramenta "Atualização Pagelist": PDF trocado com o painel PDF de Impressão eventualmente
   // aberto — o painel só relê o ficheiro no mount; bump de pdfVersion força-o a remontar.
@@ -366,7 +382,7 @@ export function WorkPage() {
     } catch { return ts; }
   };
 
-  const anySidebarOpen = sidebars.showGrammarSidebar || sidebars.showValidationSidebar || sidebars.showImageGallerySidebar || sidebars.showPrintPdfSidebar || diff.showDiffSidebar || work.versionDiff.open;
+  const anySidebarOpen = sidebars.showGrammarSidebar || sidebars.showValidationSidebar || sidebars.showImageGallerySidebar || sidebars.showPrintPdfSidebar || sidebars.showCommentsSidebar || diff.showDiffSidebar || work.versionDiff.open;
 
   const presence = work.presence;
   const presenceBanner = work.readOnly
@@ -409,6 +425,8 @@ export function WorkPage() {
             sidebars.togglePanel('imageGallery');
             if (!sidebars.showImageGallerySidebar) diff.closeDiffSidebar();
           }}
+          onToggleComments={() => sidebars.togglePanel('comments')}
+          unresolvedCommentsCount={comments.unresolvedCount}
           onOpenCompare={() => { setShowCompare(true); work.refetchHistory(); }}
           onShowShortcuts={() => setShowShortcuts(true)}
           onShowStats={() => setShowStats(true)}
@@ -485,6 +503,7 @@ export function WorkPage() {
                 showPrintPdfPanel={sidebars.showPrintPdfSidebar}
                 onVisiblePageChange={setEditorVisiblePage}
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
+                onAddComment={(anchorId) => { comments.setDraftAnchorId(anchorId); sidebars.openPanel('comments'); }}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
                 activeChapterIndex={work.activeChapterIndex}
@@ -523,6 +542,39 @@ export function WorkPage() {
           filter={grammarFilter}
           onFilterChange={setGrammarFilter}
           selectedErrorIndex={selectedGrammarIndex}
+          width={panelWidth}
+          onResize={handlePanelResize}
+        />
+      )}
+
+      {sidebars.showCommentsSidebar && user && (
+        <CommentSidebar
+          threads={comments.threads}
+          draftAnchorId={comments.draftAnchorId}
+          onCancelDraft={() => comments.setDraftAnchorId(null)}
+          onSubmitDraft={(text) => {
+            if (!comments.draftAnchorId) return;
+            comments.addComment({ anchorId: comments.draftAnchorId, text });
+            comments.setDraftAnchorId(null);
+          }}
+          onReply={(anchorId, rootId, text) => comments.addComment({ anchorId, text, parentId: rootId })}
+          onResolve={(id, resolved) => comments.resolveComment({ id, resolved })}
+          onDelete={(id) => {
+            // Apagar a raiz apaga a thread toda (backend) — desembrulha o span também,
+            // senão a marcação amarela fica no texto sem comentário nenhum por trás. Grava
+            // já a seguir: sem isto a remoção só existe em memória e um refresh sem "Guardar"
+            // à mão repunha o span (comentário já apagado da BD, mas o texto continuava marcado).
+            const thread = comments.threads.find(t => t.root.id === id);
+            comments.deleteComment(id);
+            if (thread && editorRef.current?.removeCommentAnchor(thread.anchorId)) {
+              work.saveContent();
+            }
+          }}
+          onGoTo={handleGoToComment}
+          isOrphan={(anchorId) => !work.fullHtmlContent.includes(`data-comment-id="${anchorId}"`)}
+          currentUserId={user.id}
+          currentUserRole={user.role}
+          onClose={() => sidebars.setShowCommentsSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}
         />

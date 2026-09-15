@@ -100,6 +100,22 @@ db.run(`CREATE TABLE IF NOT EXISTS activity_log (
 
 db.run("CREATE INDEX IF NOT EXISTS idx_activity_log_created_at ON activity_log(created_at)");
 
+// Comentários do editor, ancorados a um <span class="comment-anchor" data-comment-id="…">
+// inserido no HTML (mesmo padrão do pagebreak) — anchor_id é esse uuid, não posição/offset.
+// Removidos do HTML no export EPUB (ver html-cleaner.ts), nunca chegam ao ficheiro final.
+db.run(`CREATE TABLE IF NOT EXISTS comments (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  ebook_isbn TEXT NOT NULL REFERENCES ebooks(ebook_isbn) ON DELETE CASCADE,
+  anchor_id  TEXT NOT NULL,
+  parent_id  INTEGER REFERENCES comments(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  text       TEXT NOT NULL,
+  resolved   INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
+db.run("CREATE INDEX IF NOT EXISTS idx_comments_isbn ON comments(ebook_isbn)");
+
 export const stmt = {
   // ebooks
   listEbooks:           db.prepare('SELECT * FROM ebooks WHERE deleted_at IS NULL ORDER BY created_at DESC'),
@@ -130,6 +146,7 @@ export const stmt = {
   renameEbookShares:    db.prepare('UPDATE ebook_shares SET ebook_isbn = ? WHERE ebook_isbn = ?'),
   renameGrammarCache:   db.prepare('UPDATE grammar_cache SET isbn = ? WHERE isbn = ?'),
   renameGrammarSession: db.prepare('UPDATE grammar_sessions SET isbn = ? WHERE isbn = ?'),
+  renameComments:       db.prepare('UPDATE comments SET ebook_isbn = ? WHERE ebook_isbn = ?'),
   // users
   createUser:           db.prepare('INSERT INTO users (email, password, role) VALUES (?, ?, ?)'),
   getUserByEmail:       db.prepare('SELECT * FROM users WHERE email = ?'),
@@ -166,6 +183,17 @@ export const stmt = {
   // Teto de 1000 = decisão consciente (payload JSON pequeno mesmo assim; equivalente ao
   // LIMIT 20 de listBackupRuns, mas maior porque há muito mais eventos/dia).
   listActivityLog:      db.prepare('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 1000'),
+  // comments
+  commentsListByIsbn:   db.prepare(`
+    SELECT c.*, u.email AS user_email FROM comments c JOIN users u ON u.id = c.user_id
+    WHERE c.ebook_isbn = ? ORDER BY c.created_at ASC
+  `),
+  insertComment:        db.prepare(`
+    INSERT INTO comments (ebook_isbn, anchor_id, parent_id, user_id, text) VALUES (?, ?, ?, ?, ?)
+  `),
+  getComment:           db.prepare('SELECT * FROM comments WHERE id = ?'),
+  resolveComment:       db.prepare('UPDATE comments SET resolved = ? WHERE id = ?'),
+  deleteComment:        db.prepare('DELETE FROM comments WHERE id = ? OR parent_id = ?'),
 };
 
 export function migrateGrammarToDb() {
@@ -197,6 +225,7 @@ export function purgeOldTrash() {
     stmt.grammarDeleteIsbn.run(ebook_isbn);
     stmt.grammarSessionDelete.run(ebook_isbn);
     stmt.unshareAllForEbook.run(ebook_isbn);
+    db.run('DELETE FROM comments WHERE ebook_isbn = ?', [ebook_isbn]);
     try { rmSync(join(DATA_DIR, ebook_isbn), { recursive: true, force: true }); } catch {}
   }
   if (old.length > 0) console.log(`Purged ${old.length} ebooks from trash (> 30 days)`);

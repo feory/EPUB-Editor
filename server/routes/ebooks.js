@@ -120,6 +120,7 @@ export async function updateMetadata(req, isbn) {
           stmt.renameEbookShares.run(newIsbn, isbn);
           stmt.renameGrammarCache.run(newIsbn, isbn);
           stmt.renameGrammarSession.run(newIsbn, isbn);
+          stmt.renameComments.run(newIsbn, isbn);
         }
       })();
     } catch (dbErr) {

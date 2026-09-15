@@ -150,6 +150,9 @@ const PATTERNS = {
   // Grammar highlights (for editor)
   grammarHighlight: /<span[^>]*class=["']grammar-error-highlight["'][^>]*>(.*?)<\/span>/gi,
 
+  // Comment anchors (editor-only, ver comments.js) — nunca exportados para o EPUB
+  commentAnchor: /<span[^>]*class=["'][^"']*\bcomment-anchor\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi,
+
   // List items formatted as paragraphs (alíneas)
   // Matches: <p>a) text</p>, <p>1) text</p>, <p>i) text</p>, e também o marcador envolvido
   // numa tag inline (ex. <p><strong>a) </strong>… do IDML quando o estilo do parágrafo é Bold).
@@ -173,14 +176,19 @@ export function cleanHtml(html: string, options: CleanHtmlOptions = {}): string 
     removeGraySpans = true,
     fixSupSpacing = true,
     removeGrammarHighlights = false, // Only for editor
+    removeCommentAnchors = false, // Only for EPUB export
     addAlineaClass = true,
   } = options;
 
   let cleaned = html;
-  
+
   // Single pass for all replacements (order matters for some transformations)
   if (removeGrammarHighlights) {
     cleaned = cleaned.replace(PATTERNS.grammarHighlight, '$1');
+  }
+
+  if (removeCommentAnchors) {
+    cleaned = cleaned.replace(PATTERNS.commentAnchor, '$1');
   }
 
   if (removeEmptyParagraphs) {
@@ -254,6 +262,7 @@ export interface CleanHtmlOptions {
   removeGraySpans?: boolean;
   fixSupSpacing?: boolean;
   removeGrammarHighlights?: boolean;
+  removeCommentAnchors?: boolean;
   addAlineaClass?: boolean;
 }
 
@@ -268,6 +277,7 @@ export function cleanEpubHtml(html: string): string {
     convertRedSpansToFootnotes: true,
     removeGraySpans: true,
     fixSupSpacing: true,
+    removeCommentAnchors: true,
     addAlineaClass: true,
   });
 }

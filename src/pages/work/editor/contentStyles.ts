@@ -9,6 +9,8 @@ export function buildContentStyle(currentCss: string): string {
 ::spelling-error { text-decoration: underline wavy #e53e3e; text-decoration-thickness: 2px; }
 .spell-error-highlight { text-decoration: underline wavy #e53e3e; text-decoration-thickness: 2px; cursor: pointer; }
 .idx-link { text-decoration: underline dotted; text-decoration-color: #64748b; text-underline-offset: 3px; background-color: rgba(100, 116, 139, 0.08); border-radius: 2px; cursor: default; }
+.comment-anchor { background-color: rgba(245, 158, 11, 0.18); border-bottom: 2px solid #f59e0b; cursor: pointer; }
+.comment-anchor.comment-anchor-resolved { background-color: transparent; border-bottom-color: #cbd5e1; opacity: 0.6; }
 .noBreak { outline: 2px dashed #94a3b8; background: rgba(100,116,139,0.05); position: relative; padding: 2px 0; }
 .noBreak::before { content: "Unido"; position: absolute; top: 0; right: 0; font-size: 9px; font-weight: bold; color: #475569; background: rgba(100,116,139,0.15); padding: 1px 5px; border-bottom-left-radius: 4px; pointer-events: none; }
 [data-mce-psactive] { box-shadow: 0 0 0 3px #fff, 0 0 0 4px #dbe2ea !important; }

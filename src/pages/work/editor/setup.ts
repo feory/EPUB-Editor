@@ -14,6 +14,7 @@ interface SetupDeps {
     startHtmlEdit: (top: HTMLElement) => void;
     openStyleMenu: (kind: 'para' | 'head') => void;
     onCropImage: (imageId: string) => void;
+    onAddComment?: (anchorId: string) => void;
     // Capítulos do livro + índice do capítulo aberto — via ref (setup() só corre 1x no mount,
     // ver comentário junto ao botão idxlinktarget) para ler sempre os valores mais recentes.
     chaptersRef: React.MutableRefObject<{ title: string; level: string }[]>;
@@ -30,7 +31,7 @@ interface SetupDeps {
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
     const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
-        chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage } = deps;
+        chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment } = deps;
 
     return (editor: Editor) => {
         editor.addCommand('mceChapterBreak', () => {
@@ -646,6 +647,22 @@ export function createEditorSetup(deps: SetupDeps) {
                 };
                 editor.on('NodeChange', handler);
                 return () => editor.off('NodeChange', handler);
+            },
+        });
+
+        // Comentário: envolve a seleção num span.comment-anchor (mesmo padrão de wrap
+        // manual do "box"/"noBreak" — editor.formatter.apply não serve para inline com uuid
+        // dinâmico). O span é removido do HTML antes do export (ver html-cleaner.ts).
+        editor.ui.registry.addButton('addcomment', {
+            icon: 'comment',
+            tooltip: 'Comentar',
+            onAction: () => {
+                const html = editor.selection.getContent({ format: 'html' });
+                if (!html.trim()) return;
+                const anchorId = crypto.randomUUID();
+                editor.selection.setContent(`<span class="comment-anchor" data-comment-id="${anchorId}">${html}</span>`);
+                editor.dispatch('Change');
+                onAddComment?.(anchorId);
             },
         });
 
