@@ -77,34 +77,51 @@ interface WorkEditorProps {
     editorFontSize?: string;
 }
 
+// Agrupado por domínio (só a ordem/comentários — a forma do ref continua flat, sem
+// namespaces; ver candidato D do architecture review desta sessão: restruturar em
+// namespaces reais tocaria todos os call-sites por um ganho só de navegação, sem locality
+// nova nenhuma — não compensa agora).
 export interface WorkEditorRef {
-    highlightDiffParagraphs: (indices: number[]) => void;
-    highlightDiffContent: (items: import('../../../workers/diff.worker').DiffItem[]) => void;
-    clearDiffHighlights: () => void;
+    // Navegação / scroll
     scrollToContent: (text: string, paragraphIndex?: number) => void;
     scrollToImage: (imageId: string) => boolean;
     scrollToPage: (folio: number) => boolean;
+
+    // Comentários (mesmo trio que useCommentEditorSync consome)
     scrollToComment: (anchorId: string) => boolean;
     removeCommentAnchor: (anchorId: string) => boolean;
     setCommentResolved: (anchorId: string, resolved: boolean) => void;
+
+    // Gramática
     highlightGrammarErrors: (matches: any[]) => void;
     clearGrammarErrors: () => void;
     filterGrammarHighlights: (filter: 'all' | 'spelling' | 'grammar') => void;
     removeGrammarHighlights: (indices: Set<number>) => void;
     applyGrammarSuggestion: (index: number, suggestion: string) => void;
-    getTextBlocks: () => string[];
+    triggerGrammarCheck: () => void;
+
+    // Ortografia
     highlightSpellErrors: (issues: any[]) => void;
     clearSpellErrors: () => void;
     applySpellSuggestion: (index: number, suggestion: string) => void;
+
+    // Diff (comparação de versões)
+    highlightDiffParagraphs: (indices: number[]) => void;
+    highlightDiffContent: (items: import('../../../workers/diff.worker').DiffItem[]) => void;
+    clearDiffHighlights: () => void;
+
+    // Imagens
+    removeImagesById: (imageIds: string[]) => string;
+    refreshImage: (imageId: string) => void;
+
+    // Conteúdo / sincronização
+    getTextBlocks: () => string[];
     insertContent: (content: string) => void;
     setContent: (content: string) => void;
     // Sincroniza o editor com um novo fullHtml (transformações de livro inteiro, ex.
     // useEbookWork.commitHtml) SEM limpar o undo — devolve o fullHtml reconciliado (segmento
     // reserializado) que o chamador deve persistir. Ver comentário na implementação.
     syncExternalContent: (newFullHtml: string, chapterIndex: number) => string;
-    removeImagesById: (imageIds: string[]) => string;
-    refreshImage: (imageId: string) => void;
-    triggerGrammarCheck: () => void;
     cleanIndexSelection: () => void;
     linkIndexPagesSelection: () => void;
     applyConversions: (options: ImportOptions) => void;
