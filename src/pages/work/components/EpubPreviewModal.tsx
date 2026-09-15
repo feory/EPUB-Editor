@@ -39,9 +39,24 @@ const EpubPreviewModalComponent: React.FC<EpubPreviewModalProps> = ({ epubBlob, 
         if (loadingRef.current) setShowFallback(true);
     }, 8000);
 
-    const epubUrl = URL.createObjectURL(epubBlob);
     const iframe = iframeRef.current;
     if (!iframe) return;
+
+    // Passar o binário por postMessage (Transferable) em vez de o iframe (srcdoc, origem
+    // opaca) ir buscar um blob: URL criado no documento pai — esse fetch falha com "Failed
+    // to fetch" consoante o contexto/sandbox do browser; postMessage não depende de origem.
+    let pendingBuffer: ArrayBuffer | null = null;
+    let iframeReady = false;
+    const trySendBuffer = () => {
+      if (iframeReady && pendingBuffer && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'epub-data', buffer: pendingBuffer }, '*', [pendingBuffer]);
+        pendingBuffer = null;
+      }
+    };
+    epubBlob.arrayBuffer().then((buffer) => {
+      pendingBuffer = buffer;
+      trySendBuffer();
+    }).catch((err) => setError('Falha a ler o ficheiro: ' + err.message));
 
     const readerHtml = `
       <!DOCTYPE html>
@@ -66,13 +81,25 @@ const EpubPreviewModalComponent: React.FC<EpubPreviewModalProps> = ({ epubBlob, 
 
           window.onerror = (m) => reportError("JS Error: " + m);
 
+          function waitForBuffer() {
+            return new Promise((resolve) => {
+              window.addEventListener('message', function handler(e) {
+                if (e.data && e.data.type === 'epub-data') {
+                  window.removeEventListener('message', handler);
+                  resolve(e.data.buffer);
+                }
+              });
+            });
+          }
+
           async function init() {
             try {
-              log("A descarregar binário...");
-              const resp = await fetch("${epubUrl}");
-              const buffer = await resp.arrayBuffer();
-              log("Binário carregado (" + buffer.byteLength + " bytes). Inicializando motor...");
-              
+              log("Pronto — a anunciar ao pai...");
+              window.parent.postMessage({type: "preview-ready"}, "*");
+              log("A aguardar binário...");
+              const buffer = await waitForBuffer();
+              log("Binário recebido (" + buffer.byteLength + " bytes). Inicializando motor...");
+
               const book = ePub(buffer);
               const viewer = document.getElementById("viewer");
               
@@ -92,6 +119,7 @@ const EpubPreviewModalComponent: React.FC<EpubPreviewModalProps> = ({ epubBlob, 
               });
 
               window.addEventListener("message", (e) => {
+                if (!e.data || !e.data.type) return;
                 log("Comando recebido: " + e.data.type + (e.data.href ? " -> " + e.data.href : ""));
                 if (e.data.type === "next") rendition.next();
                 if (e.data.type === "prev") rendition.prev();
@@ -145,6 +173,10 @@ const EpubPreviewModalComponent: React.FC<EpubPreviewModalProps> = ({ epubBlob, 
     const handleMessage = (e: MessageEvent) => {
       // Only accept messages from our own preview iframe.
       if (e.source !== iframeRef.current?.contentWindow || !e.data) return;
+      if (e.data.type === 'preview-ready') {
+          iframeReady = true;
+          trySendBuffer();
+      }
       if (e.data.type === 'ready') {
           setLoading(false);
           setError(null);
@@ -173,7 +205,6 @@ const EpubPreviewModalComponent: React.FC<EpubPreviewModalProps> = ({ epubBlob, 
     window.addEventListener('message', handleMessage);
 
     return () => {
-      URL.revokeObjectURL(epubUrl);
       window.removeEventListener('message', handleMessage);
       clearTimeout(timer);
     };
