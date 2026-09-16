@@ -75,6 +75,8 @@ interface WorkEditorProps {
     onTogglePrintPdf?: () => void;
     showPrintPdfPanel?: boolean;
     onVisiblePageChange?: (page: number) => void;
+    onChapterEndReached?: () => void;
+    onChapterStartReached?: () => void;
     onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void;
     onAddComment?: (anchorId: string) => void;
     readOnly?: boolean;
@@ -150,7 +152,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, onAddComment, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onChapterEndReached, onChapterStartReached, onLinkIndiceEntry, onAddComment, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -169,6 +171,34 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     onImageUploadedRef.current = onImageUploaded;
     const onVisiblePageChangeRef = useRef(onVisiblePageChange);
     onVisiblePageChangeRef.current = onVisiblePageChange;
+    const onChapterEndReachedRef = useRef(onChapterEndReached);
+    onChapterEndReachedRef.current = onChapterEndReached;
+    const onChapterStartReachedRef = useRef(onChapterStartReached);
+    onChapterStartReachedRef.current = onChapterStartReached;
+    // Um só disparo por capítulo por direção — sem isto, scroll repetido no fundo/topo (ex.
+    // utilizador continua a fazer scroll enquanto o capítulo seguinte/anterior carrega)
+    // dispararia várias trocas seguidas. chapterScrolledRef exige um scroll real (o capítulo
+    // seguinte/anterior carrega sempre no topo, scrollY=0 — sem esta guarda, um capítulo curto
+    // que já "chega ao fundo"/"está no início" só por caber no ecrã disparava logo outra troca,
+    // ping-pong entre dois capítulos.
+    const chapterEndFiredRef = useRef(false);
+    const chapterStartFiredRef = useRef(false);
+    const chapterScrolledRef = useRef(false);
+    // Cooldown após trocar de capítulo: o carregamento do conteúdo novo (altura/scroll do
+    // iframe ainda a assentar) pode por si só disparar um evento de scroll residual — sem esta
+    // janela, um capítulo curto a mais dava ping-pong imediato entre dois capítulos.
+    const chapterSwitchCooldownRef = useRef(false);
+    // Recuar por scroll-to-start deve continuar a sensação de scroll contínuo: entra no
+    // capítulo anterior já no fim, não no início (comportamento normal de troca por sidebar).
+    const scrollToEndOnLoadRef = useRef(false);
+    useEffect(() => {
+        chapterEndFiredRef.current = false;
+        chapterStartFiredRef.current = false;
+        chapterScrolledRef.current = false;
+        chapterSwitchCooldownRef.current = true;
+        const timer = setTimeout(() => { chapterSwitchCooldownRef.current = false; }, 600);
+        return () => clearTimeout(timer);
+    }, [activeChapterIndex]);
     // Ligação manual do Índice (setup.ts, botão idxlinktarget): setup() só corre 1x no mount,
     // por isso chapters/activeChapterIndex (mudam a cada render) só lá chegam por ref.
     const chaptersRef = useRef(chapters);
@@ -223,8 +253,21 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         if (!editor) return;
         setTimeout(() => {
             const editorWin = editor.getWin();
-            if (editorWin) editorWin.scrollTo(0, 0);
-            editor.selection.setCursorLocation(editor.getBody().firstChild, 0);
+            const body = editor.getBody();
+            if (scrollToEndOnLoadRef.current) {
+                scrollToEndOnLoadRef.current = false;
+                if (editorWin) editorWin.scrollTo(0, body.scrollHeight);
+                const lastChild = body.lastChild;
+                if (lastChild) {
+                    const offset = lastChild.nodeType === Node.TEXT_NODE
+                        ? (lastChild.textContent?.length ?? 0)
+                        : lastChild.childNodes.length;
+                    editor.selection.setCursorLocation(lastChild, offset);
+                }
+            } else {
+                if (editorWin) editorWin.scrollTo(0, 0);
+                editor.selection.setCursorLocation(body.firstChild, 0);
+            }
         }, 100);
     }, [activeChapterIndex]);
 
@@ -950,9 +993,45 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             });
                             if (current !== null) onVisiblePageChangeRef.current?.(current);
                         };
+                        // Scroll até ao fundo/início do capítulo (não "Documento Completo") →
+                        // avança/recua de capítulo. Um só disparo por direção por capítulo
+                        // (chapterEndFiredRef/chapterStartFiredRef, resetados ao mudar de
+                        // capítulo); chapterScrolledRef exige scroll real antes de disparar
+                        // qualquer um dos dois — o capítulo seguinte/anterior carrega sempre no
+                        // topo (scrollY=0), sem isto um capítulo curto a mais disparava logo a
+                        // troca seguinte (ping-pong).
+                        const detectChapterEnd = () => {
+                            if (chapterSwitchCooldownRef.current) return;
+                            if (!chapterScrolledRef.current || chapterEndFiredRef.current) return;
+                            if (activeChapterIndexRef.current === -1) return;
+                            if (activeChapterIndexRef.current >= chaptersRef.current.length - 1) return;
+                            const win = editor.getWin();
+                            const body = editor.getBody();
+                            if (win.scrollY + win.innerHeight >= body.scrollHeight - 24) {
+                                chapterEndFiredRef.current = true;
+                                onChapterEndReachedRef.current?.();
+                            }
+                        };
+                        const detectChapterStart = () => {
+                            if (chapterSwitchCooldownRef.current) return;
+                            if (!chapterScrolledRef.current || chapterStartFiredRef.current) return;
+                            if (activeChapterIndexRef.current <= 0) return;
+                            if (editor.getWin().scrollY <= 24) {
+                                chapterStartFiredRef.current = true;
+                                scrollToEndOnLoadRef.current = true;
+                                onChapterStartReachedRef.current?.();
+                            }
+                        };
                         const onEditorScroll = () => {
+                            // Só conta scroll real do utilizador fora do cooldown — o próprio
+                            // reposicionamento automático ao entrar num capítulo (topo, ou fim
+                            // vindo de detectChapterStart) dispara eventos de scroll que não são
+                            // o utilizador a mexer.
+                            if (!chapterSwitchCooldownRef.current && editor.getWin().scrollY > 24) {
+                                chapterScrolledRef.current = true;
+                            }
                             clearTimeout(pageScrollTimer);
-                            pageScrollTimer = setTimeout(detectVisiblePage, 150);
+                            pageScrollTimer = setTimeout(() => { detectVisiblePage(); detectChapterEnd(); detectChapterStart(); }, 150);
                         };
                         editor.getWin().addEventListener('scroll', onEditorScroll, { passive: true });
                         editor.on('remove', () => {

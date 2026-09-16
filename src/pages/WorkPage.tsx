@@ -504,6 +504,16 @@ export function WorkPage() {
                 onTogglePrintPdf={() => sidebars.togglePanel('printPdf')}
                 showPrintPdfPanel={sidebars.showPrintPdfSidebar}
                 onVisiblePageChange={setEditorVisiblePage}
+                onChapterEndReached={() => {
+                  if (work.activeChapterIndex !== -1 && work.activeChapterIndex < work.chapters.length - 1) {
+                    work.setActiveChapterIndex(work.activeChapterIndex + 1);
+                  }
+                }}
+                onChapterStartReached={() => {
+                  if (work.activeChapterIndex > 0) {
+                    work.setActiveChapterIndex(work.activeChapterIndex - 1);
+                  }
+                }}
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 onAddComment={(anchorId) => { comments.setDraftAnchorId(anchorId); sidebars.openPanel('comments'); }}
                 htmlContent={work.htmlContent}
