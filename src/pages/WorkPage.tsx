@@ -13,6 +13,7 @@ import type { EpubClassInfo } from '../services/epub-importer';
 import type { ImportOptions } from '../utils/html-cleaner';
 import type { DocxStyleMapping } from '../services/document-importer';
 import { useEbookWork } from './work/useEbookWork';
+import type { GrammarMatch } from './work/hooks/useEbookGrammar';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { WorkToolbar } from './work/components/WorkToolbar';
 import { WorkEditor } from './work/components/WorkEditor';
@@ -334,7 +335,7 @@ export function WorkPage() {
     setPdfVersion(v => v + 1);
   }, [work]);
 
-  const handleGrammarCheck = (matches: unknown[], cache?: Record<string, unknown>) => {
+  const handleGrammarCheck = (matches: GrammarMatch[], cache?: Record<string, GrammarMatch[]>) => {
     work.setGrammarIssues(matches);
     if (cache !== undefined) work.handleSaveGrammar(matches, cache);
     if (!sidebars.showGrammarSidebar) sidebars.openPanel('grammar');

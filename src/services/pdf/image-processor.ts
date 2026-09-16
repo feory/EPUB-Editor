@@ -38,7 +38,7 @@ export const convertImageToBlob = async (imgObj: PdfObj, settings?: ImageSetting
   }
 
   // Helper to draw with scaling
-  const drawImage = async (source: any) => {
+  const drawImage = async (source: CanvasImageSource) => {
     ctx.drawImage(source, 0, 0, targetWidth, targetHeight);
   };
 
@@ -48,12 +48,12 @@ export const convertImageToBlob = async (imgObj: PdfObj, settings?: ImageSetting
         if (imgObj.bitmap instanceof ImageBitmap) {
           await drawImage(imgObj.bitmap);
         } else {
-          const bitmap = await createImageBitmap(imgObj.bitmap as any);
+          const bitmap = await createImageBitmap(imgObj.bitmap as unknown as ImageBitmapSource);
           await drawImage(bitmap);
         }
       } catch {
         if (ArrayBuffer.isView(imgObj.bitmap) || imgObj.bitmap instanceof ArrayBuffer) {
-          const data = new Uint8ClampedArray(imgObj.bitmap as any);
+          const data = new Uint8ClampedArray(imgObj.bitmap as unknown as ArrayBuffer);
           const tempCanvas = document.createElement('canvas');
           tempCanvas.width = originalWidth;
           tempCanvas.height = originalHeight;
@@ -135,12 +135,12 @@ export const extractImagesFromPage = async (
     const fn = operatorList.fnArray[i];
 
     if (
-      fn === (pdfjsLib.OPS as any).paintImageXObject ||
-      fn === (pdfjsLib.OPS as any).paintInlineImageXObject
+      fn === pdfjsLib.OPS.paintImageXObject ||
+      fn === pdfjsLib.OPS.paintInlineImageXObject
     ) {
       try {
         const args = operatorList.argsArray[i];
-        const imgName = args[0];
+        const imgName = args[0] as string;
 
         let imgObj: PdfObj;
         if (page.objs.has(imgName)) {

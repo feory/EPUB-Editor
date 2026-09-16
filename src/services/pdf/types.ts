@@ -68,10 +68,10 @@ export interface PdfPage {
   };
   getViewport: (options: { scale: number }) => { width: number; height: number };
   getOperatorList: () => Promise<PdfOperatorList>;
-  getTextContent: () => Promise<{ items: any[] }>;
+  getTextContent: () => Promise<{ items: TextItem[] }>;
 }
 
 export interface PdfOperatorList {
   fnArray: number[];
-  argsArray: any[][];
+  argsArray: unknown[][];
 }
