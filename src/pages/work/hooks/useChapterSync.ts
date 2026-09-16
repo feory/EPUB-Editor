@@ -37,45 +37,52 @@ export function useChapterSync(
 
     const isLargeBook = useMemo(() => fullHtml.length > 500 * 1024, [fullHtml.length]);
 
+    // Computados via useMemo (não pela função com cache em ref — essa é só para
+    // chamadores fora do render, ver efeito abaixo que mantém a cache quente para eles).
+    const cleanedFullHtml = useMemo(() => cleanHeadings(fullHtml), [fullHtml]);
+    const filteredParts = useMemo(
+        () => cleanedFullHtml.split(CHAPTER_SPLIT_PATTERN).filter(content => content.trim().length > 0),
+        [cleanedFullHtml]
+    );
+
+    useEffect(() => {
+        cleanHtmlCacheRef.current = { html: fullHtml, cleaned: cleanedFullHtml };
+        splitCacheRef.current = { html: cleanedFullHtml, parts: filteredParts };
+    }, [fullHtml, cleanedFullHtml, filteredParts]);
+
     const chapters = useMemo<ChapterPart[]>(() => {
         if (!fullHtml) return [];
-        const cleanedHtml = cleanHtmlCached(fullHtml);
-        const parts = cleanedHtml.split(CHAPTER_SPLIT_PATTERN);
-        return parts
-            .filter(content => content.trim().length > 0)
-            .map((content, index) => {
-                // Never drop a part: chapters[] must stay 1:1 with the split parts,
-                // otherwise sidebar indices write edits into the wrong chapter.
-                const { title, level, hrTag } = classifyChapterPart(content, index);
-                return isLargeBook
-                    ? { title, content: '', level, hrTag, _size: content.length }
-                    : { title, content, level, hrTag };
-            });
-    }, [fullHtml, isLargeBook, cleanHtmlCached]);
+        // Never drop a part: chapters[] must stay 1:1 with the split parts,
+        // otherwise sidebar indices write edits into the wrong chapter.
+        return filteredParts.map((content, index) => {
+            const { title, level, hrTag } = classifyChapterPart(content, index);
+            return isLargeBook
+                ? { title, content: '', level, hrTag, _size: content.length }
+                : { title, content, level, hrTag };
+        });
+    }, [fullHtml, isLargeBook, filteredParts]);
 
     const currentEditorContent = useMemo(() => {
         if (activeChapterIndex === -1) return fullHtml;
-        const cleanedHtml = cleanHtmlCached(fullHtml);
-        const parts = splitHtmlIntoParts(cleanedHtml);
-        return parts[activeChapterIndex] || '';
-    }, [fullHtml, activeChapterIndex, cleanHtmlCached, splitHtmlIntoParts]);
+        return filteredParts[activeChapterIndex] || '';
+    }, [fullHtml, activeChapterIndex, filteredParts]);
 
     const getSyncedHtmlContent = useCallback(() => cleanHtmlCached(fullHtml), [fullHtml, cleanHtmlCached]);
 
     // Refs so changeActiveChapter can flush pending edits without depending on
     // content state (callback stays stable per keystroke — sidebar memoization).
-    const localContentRef = useRef('');
-    const syncedContentRef = useRef('');
+    const localContentRef = useRef(currentEditorContent);
+    const syncedContentRef = useRef(currentEditorContent);
 
     // Livro completo INCLUINDO a edição que ainda está presa no debounce (800/1500ms).
     // getSyncedHtmlContent deriva só do fullHtml, logo devolvia conteúdo antigo a quem grava:
     // escrever e carregar em Guardar (ou sair) dentro da janela do debounce não gravava nada.
     const getLatestHtmlContent = useCallback(() => {
         const pending = localContentRef.current;
-        const cleanedFullHtml = cleanHtmlCached(fullHtml);
-        if (skipSyncRef.current || pending === syncedContentRef.current) return cleanedFullHtml;
-        if (!pending && activeChapterIndex === -1) return cleanedFullHtml; // vazio transitório
-        return replaceChapterContent(fullHtml, pending, activeChapterIndex, cleanedFullHtml) ?? cleanedFullHtml;
+        const cleanedHtml = cleanHtmlCached(fullHtml);
+        if (skipSyncRef.current || pending === syncedContentRef.current) return cleanedHtml;
+        if (!pending && activeChapterIndex === -1) return cleanedHtml; // vazio transitório
+        return replaceChapterContent(fullHtml, pending, activeChapterIndex, cleanedHtml) ?? cleanedHtml;
     }, [fullHtml, activeChapterIndex, cleanHtmlCached, skipSyncRef]);
 
     const changeActiveChapter = useCallback((index: number) => {
@@ -91,8 +98,12 @@ export function useChapterSync(
     }, [activeChapterIndex, isLargeBook, dispatch, skipSyncRef]);
 
     const [localEditorContent, setLocalEditorContent] = useState(currentEditorContent);
-
+    // Resincroniza o buffer local (estado independente, mutado depois por handleEditorChange)
+    // sempre que currentEditorContent muda (troca de capítulo/carregamento) — não é estado
+    // puramente derivado, por isso o efeito é a via legítima (o "sem Effect" do React exige
+    // mexer só em setState durante o render, nunca em refs, o que este hook também precisa).
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLocalEditorContent(currentEditorContent);
         localContentRef.current = currentEditorContent;
         syncedContentRef.current = currentEditorContent;

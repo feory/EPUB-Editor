@@ -73,11 +73,11 @@ export function BlockOverlays({
     const [docScope, setDocScope] = useState<'chapter' | 'document'>('chapter');
     const resetReplace = () => { setReplaceOpen(false); setFindText(''); setReplaceText(''); setMatchCount(null); };
     // Regista-se em endHtmlEdit (useBlockOverlays.tsx) — ponto único de fecho da caixa (clique
-    // fora, Cancelar, Guardar, Substituir com sucesso) — por ref, reatribuído a cada render (sem
-    // efeito, sem risco de state-in-effect). Sem isto, fechar por CLIQUE NOUTRO PARÁGRAFO (único
-    // caminho que fecha por fora deste componente) deixava o painel aberto/preenchido a arrastar
-    // para a sessão seguinte.
-    onHtmlEditCloseRef.current = resetReplace;
+    // fora, Cancelar, Guardar, Substituir com sucesso) — por ref, reatribuído a cada render via
+    // efeito (sem escrever a ref durante o render). Sem isto, fechar por CLIQUE NOUTRO PARÁGRAFO
+    // (único caminho que fecha por fora deste componente) deixava o painel aberto/preenchido a
+    // arrastar para a sessão seguinte.
+    useEffect(() => { onHtmlEditCloseRef.current = resetReplace; });
     // Contagem ao vivo (debounced — getContent() serializa o documento inteiro a cada chamada,
     // não vale a pena recalcular a cada tecla) para o utilizador ver quantas ocorrências há
     // ANTES de aplicar, em vez de descobrir só depois do "Substituir tudo" já ter corrido. Só

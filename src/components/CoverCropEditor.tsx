@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import ReactCrop, { type Crop } from 'react-image-crop';
 import { Crop as CropIcon, Check, X, RotateCcw } from 'lucide-react';
 import 'react-image-crop/dist/ReactCrop.css';
@@ -22,13 +22,17 @@ export function CoverCropEditor({ imageUrl, onSave, onCancel, label = 'Ajuste a 
 
     function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
         const { width, height } = e.currentTarget;
-        setCrop(createInitialCrop(width, height));
+        const initial = createInitialCrop(width, height);
+        setCrop(initial);
+        setCompletedCrop(initial);
     }
 
     const resetCrop = () => {
         if (imgRef.current) {
             const { width, height } = imgRef.current;
-            setCrop(createInitialCrop(width, height));
+            const initial = createInitialCrop(width, height);
+            setCrop(initial);
+            setCompletedCrop(initial);
         }
     };
 
@@ -106,13 +110,6 @@ export function CoverCropEditor({ imageUrl, onSave, onCancel, label = 'Ajuste a 
         }
     };
 
-    // Update completedCrop when crop changes
-    useEffect(() => {
-        if (crop) {
-            setCompletedCrop(crop);
-        }
-    }, [crop]);
-
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2 text-sm text-text-muted">
@@ -123,7 +120,7 @@ export function CoverCropEditor({ imageUrl, onSave, onCancel, label = 'Ajuste a 
             <div className="relative bg-white rounded-xl overflow-hidden flex items-center justify-center p-4 min-h-[300px] md:min-h-[400px] xl:min-h-[500px]">
                 <ReactCrop
                     crop={crop}
-                    onChange={(_, percentCrop) => setCrop(percentCrop)}
+                    onChange={(_, percentCrop) => { setCrop(percentCrop); setCompletedCrop(percentCrop); }}
                     onComplete={(_, percentCrop) => setCompletedCrop(percentCrop)}
                     className="max-h-[380px] md:max-h-[480px] xl:max-h-[600px]"
                 >

@@ -61,7 +61,7 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
     useEffect(() => { imagesRef.current = images; }, [images]);
     // Fresh htmlContent via ref → callbacks below stay stable (don't depend on htmlContent)
     const htmlContentRef = useRef(htmlContent);
-    htmlContentRef.current = htmlContent;
+    useEffect(() => { htmlContentRef.current = htmlContent; });
 
     const countImageUsage = useCallback((html: string, imageId: string): number => {
         const matches = html.match(new RegExp(`data-image-id="${imageId}"`, 'g'));

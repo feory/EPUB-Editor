@@ -23,7 +23,11 @@ export function useEbookGrammar({ isbn }: { isbn: string | undefined }) {
         gcTime: 10 * 60 * 1000,
     });
 
+    // grammarIssues é estado independente (mutado depois por resolve/dismiss), só semeado
+    // a partir da query quando esta resolve com dados novos — não substitui resoluções locais
+    // em curso nem limpa ao devolver vazio (refetch transitório).
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (grammarData && grammarData.length > 0) setGrammarIssues(grammarData);
     }, [grammarData]);
 

@@ -99,9 +99,11 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // Gravar usa SEMPRE o getter "latest" (inclui a edição ainda presa no debounce) — não o
     // getSyncedHtmlContent, que só vê o que já passou pelo reducer.
     const getSyncedRef = useRef(chapterSync.getLatestHtmlContent);
-    getSyncedRef.current = chapterSync.getLatestHtmlContent;
     const saveMutRef = useRef(saveMutation);
-    saveMutRef.current = saveMutation;
+    useEffect(() => {
+        getSyncedRef.current = chapterSync.getLatestHtmlContent;
+        saveMutRef.current = saveMutation;
+    });
 
     useEffect(() => {
         if (!isbn) return;
@@ -127,7 +129,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // minutos — perdia-se tudo o que fosse escrito depois do último save (ou a sessão inteira,
     // se durasse menos de 5 min).
     const readOnlyRef = useRef(readOnly);
-    readOnlyRef.current = readOnly;
+    useEffect(() => { readOnlyRef.current = readOnly; });
 
     const pendingContent = useCallback(() => {
         if (readOnlyRef.current || !isbn) return null;

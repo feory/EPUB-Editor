@@ -205,7 +205,6 @@ export function WorkPage() {
     } else if (editorRef.current && !sidebars.showGrammarSidebar) {
       editorRef.current.clearGrammarErrors();
       // Reset legítimo da seleção local ao fechar a sidebar de gramática (sincroniza com o toggle externo).
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedGrammarIndex(null);
     }
   }, [work.grammarIssues, sidebars.showGrammarSidebar, work.activeChapterIndex]);

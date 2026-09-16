@@ -63,6 +63,10 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
         }
     }, [isbn]);
 
+    // Fetch-on-mount/isbn-change: setStatus('loading') no arranque de loadPdf é síncrono de
+    // propósito (mostra o loading antes do fetch), não estado derivado — sem migração para
+    // react-query aqui (canvas/pdfjs/anchors não cabem no modelo de query).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { loadPdf(); }, [loadPdf]);
 
     // Scroll no editor → salta para a página física correspondente ao folio visível.

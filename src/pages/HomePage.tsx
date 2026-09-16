@@ -69,10 +69,12 @@ export function HomePage() {
     }, [viewMode]);
 
     useEffect(() => {
-        if (!showCoverModal) {
+        if (!showCoverModal) return;
+        // Cleanup ao fechar: revoga os blob URLs (recurso do browser, não estado derivado).
+        return () => {
             setCoverUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
             setCropImageUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
-        }
+        };
     }, [showCoverModal]);
 
     const { data: ebooks = [], isLoading: loading } = useQuery({
