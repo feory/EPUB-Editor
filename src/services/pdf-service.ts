@@ -2,7 +2,6 @@ import * as pdfjsLib from 'pdfjs-dist';
 import type {
   ExtractionOptions,
   ExtractionResult,
-  TextItem,
   Span,
   ProcessedParagraph,
   ExtractedImage,
@@ -58,12 +57,12 @@ export const extractHtmlFromPdf = async (file: File, options: ExtractionOptions 
     const sortedImages = [...pageImages].sort((a, b) => b.position - a.position);
 
     // 2. Filter Text Items
-    const items = (textContent.items as any[])
+    const items = textContent.items
       .filter((item) => 'str' in item)
       .filter((item) => {
         const itemY = item.transform[5];
         return itemY >= minY && itemY <= maxY;
-      }) as TextItem[];
+      });
 
     // 3. Process Text with Heuristics
     heuristics.resetPageMetrics();

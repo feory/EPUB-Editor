@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
+import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 import { Check, X, ChevronLeft, ChevronRight, Loader2, Settings, Image as ImageIcon } from 'lucide-react';
 
 export interface ImageSettings {
@@ -34,9 +35,9 @@ export const MarginPreview = ({ file, onConfirm, onCancel }: MarginPreviewProps)
   });
 
   useEffect(() => {
-    let renderTask: any = null;
+    let renderTask: RenderTask | null = null;
     let isMounted = true;
-    let pdf: any = null;
+    let pdf: PDFDocumentProxy | null = null;
 
     const renderPage = async () => {
       if (!canvasRef.current || !isMounted) return;
@@ -81,8 +82,8 @@ export const MarginPreview = ({ file, onConfirm, onCancel }: MarginPreviewProps)
         if (isMounted) {
           setIsLoading(false);
         }
-      } catch (error: any) {
-        if (error?.name !== 'RenderingCancelledException' && isMounted) {
+      } catch (error) {
+        if (!(error instanceof Error && error.name === 'RenderingCancelledException') && isMounted) {
           console.error('Error rendering PDF preview:', error);
         }
         if (isMounted) {

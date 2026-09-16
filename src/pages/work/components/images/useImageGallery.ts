@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import type { AxiosError } from 'axios';
 import { ebooksApi } from '../../../../api/ebooks-api';
 import { useNotification } from '../../../../context/NotificationContext';
 import { sanitizeImageFilename } from '../../../../utils/format';
@@ -227,9 +228,9 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
             setRenamingId(null);
             setNewName('');
             showNotification('success', 'Imagem renomeada com sucesso', 2000);
-        } catch (error: any) {
+        } catch (error) {
             console.error('Failed to rename image:', error);
-            showNotification('error', error.response?.data?.error || 'Erro ao renomear imagem');
+            showNotification('error', (error as AxiosError<{ error: string }>).response?.data?.error || 'Erro ao renomear imagem');
         }
     }, [isbn, countImageUsage, onContentUpdate, loadImage, showNotification]);
 

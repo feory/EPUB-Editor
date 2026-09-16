@@ -5,6 +5,7 @@ import type { ValidationResult } from '../../../api/ebooks-api';
 import { generateEpubBlob } from '../../../services/epub-service';
 import { validateFootnotes, type ValidationReport } from '../../../services/footnote-validator';
 import { validateLinks, type LinkReport } from '../../../services/link-validator';
+import type { BookMetadata } from '../../../services/epub-service';
 
 type ValidationConfig = {
     type: 'footnotes' | 'epub' | 'accessibility' | 'links';
@@ -19,7 +20,7 @@ type ValidationConfig = {
 interface UseEbookValidationOptions {
     isbn: string | undefined;
     getSyncedHtmlContent: () => string;
-    prepareEpubAssets: (html: string) => Promise<{ metadata: any; imageMap: Map<string, Blob>; coverBlob: Blob | null }>;
+    prepareEpubAssets: (html: string) => Promise<{ metadata: BookMetadata; imageMap: Map<string, Blob>; coverBlob: Blob | null }>;
     customCss: string;
     showNotification: (type: string, message: string, duration?: number) => string;
     hideNotification: (id: string) => void;
@@ -51,7 +52,7 @@ export function useEbookValidation({
                 // (ACE/epubcheck demoram > 3s); fechada quando chega o resultado.
                 const pendingId = showNotification('info', config.startMessage, 0);
 
-                let validationData: any;
+                let validationData: ValidationResult;
                 try {
                     const { metadata } = await prepareEpubAssets(html);
                     const blob = await generateEpubBlob(html, metadata, customCss);

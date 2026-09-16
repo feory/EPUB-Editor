@@ -5,6 +5,7 @@ import { Plus, Loader2, Search, X, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ebooksApi } from '../api/ebooks-api';
 import type { Ebook } from '../api/ebooks-api';
+import type { AxiosError } from 'axios';
 import { useNotification } from '../context/NotificationContext';
 import { extractEpub, scanEpubClasses } from '../services/epub-importer';
 import type { EpubClassInfo } from '../services/epub-importer';
@@ -92,7 +93,7 @@ export function HomePage() {
         onError: () => { showNotification('error', 'Erro ao atualizar metadados.'); },
     });
     const createEbookMutation = useMutation({
-        mutationFn: (data: any) => ebooksApi.create(data),
+        mutationFn: (data: Omit<Ebook, 'status'>) => ebooksApi.create(data),
         onSuccess: (_, variables) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); setIsModalOpen(false); navigate(`/work/${variables.ebook_isbn}`); },
         onError: () => { showNotification('error', 'Erro ao criar ebook. Verifique se o ISBN já existe.'); },
     });
@@ -130,7 +131,7 @@ export function HomePage() {
             return isbn;
         },
         onSuccess: (isbn) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); navigate(`/work/${isbn}`); },
-        onError: (e: any) => { showNotification('error', e?.response?.status === 409 ? 'Já existe um ebook com este ISBN.' : 'Erro ao importar o EPUB.'); },
+        onError: (e: AxiosError) => { showNotification('error', e?.response?.status === 409 ? 'Já existe um ebook com este ISBN.' : 'Erro ao importar o EPUB.'); },
     });
     // EPUB antigo → abre modal de mapeamento de classes; EPUB da app → importa direto.
     const handleImportEpub = async (e: React.ChangeEvent<HTMLInputElement>) => {

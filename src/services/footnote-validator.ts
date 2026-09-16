@@ -98,7 +98,7 @@ export function validateFootnotes(html: string): ValidationReport {
       // Find surrounding context safely
       const startContext = Math.max(0, ref.index - 40);
       const endContext = Math.min(cleanHtml.length, ref.index + 40);
-      let contextRaw = cleanHtml.substring(startContext, endContext);
+      const contextRaw = cleanHtml.substring(startContext, endContext);
       
       // Clean tags to avoid partial HTML
       let contextClean = contextRaw.replace(/<[^>]*>/g, '');

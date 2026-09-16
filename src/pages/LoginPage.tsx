@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import type { AxiosError } from 'axios';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -19,10 +20,11 @@ export function LoginPage() {
     try {
       await login(email, password);
       navigate('/');
-    } catch (err: any) {
-      const status = err?.response?.status;
+    } catch (err) {
+      const axiosErr = err as AxiosError;
+      const status = axiosErr?.response?.status;
       if (status === 429) {
-        const retryAfter = err.response.headers?.['retry-after'];
+        const retryAfter = axiosErr.response?.headers?.['retry-after'];
         const minutes = retryAfter ? Math.ceil(Number(retryAfter) / 60) : 15;
         setError(`Demasiadas tentativas. Tente novamente em ${minutes} min.`);
       } else if (status === 401) {
