@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useReducer } from 'react';
 import type { RefObject } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { ebooksApi } from '../../api/ebooks-api';
 import { getAccessToken, clientId } from '../../api/client';
 import { useNotification } from '../../context/NotificationContext';
@@ -57,8 +58,15 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
             try {
                 const response = await ebooksApi.getContent(isbn!);
                 return { content: decompressHtml(response.data.content), source: 'saved' as const };
-            } catch {
-                return { content: '', source: 'none' as const };
+            } catch (err) {
+                // 404 = livro genuinamente sem conteúdo gravado ainda (caso normal, "source: none").
+                // Qualquer outro erro (rede, timeout, 5xx) tem de propagar — engoli-lo aqui fazia
+                // cache permanente (staleTime: Infinity) de um resultado "vazio" falso-positivo,
+                // sem retry, só corrigível com reload da página inteira.
+                if (isAxiosError(err) && err.response?.status === 404) {
+                    return { content: '', source: 'none' as const };
+                }
+                throw err;
             }
         },
         enabled: !!isbn,
