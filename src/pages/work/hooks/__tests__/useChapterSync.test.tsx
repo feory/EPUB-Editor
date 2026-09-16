@@ -125,3 +125,69 @@ test('PADRÃO CORRETO: getLatestHtmlContent + LOAD_CONTENT preserva a edição p
     expect(afterReplace).not.toContain('original um');
     h.unmount();
 });
+
+// --- Bug reportado: "entro no livro e clico logo de imediato num capítulo, o conteúdo
+// desaparece". O wrapper @tinymce/tinymce-react liga os listeners de onEditorChange antes de
+// o TinyMCE acabar de inicializar (ver setup.ts); trocar de capítulo mesmo ao entrar apanha
+// esse arranque e o 1º handleEditorChange que chega pode ser um vazio bolha do próprio editor,
+// não o utilizador a apagar texto. O guard de "vazio transitório" só cobria "Documento
+// Completo" (activeChapterIndex === -1) — dentro de um capítulo real, esse vazio passava
+// direto pelo debounce e apagava o capítulo inteiro. Fix: sawRealContentRef só deixa um vazio
+// chegar ao reducer depois de o TinyMCE já ter confirmado conteúdo real para o capítulo ativo.
+test('BUG: handleEditorChange("") logo após trocar de capítulo NÃO apaga o capítulo (vazio transitório do arranque do TinyMCE)', async () => {
+    const h = mountChapterSync();
+    h.dispatch({ type: 'LOAD_CONTENT', payload: TWO_CHAPTERS });
+    h.dispatch({ type: 'CHANGE_CHAPTER', index: 0 });
+
+    // Simula o TinyMCE, ainda a inicializar, a reportar um vazio transitório antes de
+    // confirmar o conteúdo real do capítulo 0.
+    act(() => { h.api().handleEditorChange(''); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 900)); });
+
+    const synced = h.api().getSyncedHtmlContent();
+    expect(synced).toContain('original um'); // capítulo 0 sobrevive
+    expect(synced).toContain('original dois');
+    h.unmount();
+});
+
+test('apagar de propósito o texto todo de um capítulo continua a funcionar (depois de conteúdo real confirmado)', async () => {
+    const h = mountChapterSync();
+    h.dispatch({ type: 'LOAD_CONTENT', payload: TWO_CHAPTERS });
+    h.dispatch({ type: 'CHANGE_CHAPTER', index: 0 });
+
+    // TinyMCE confirma primeiro o conteúdo real carregado (como aconteceria sempre na prática
+    // antes de o utilizador poder selecionar tudo e apagar).
+    act(() => { h.api().handleEditorChange('<p class="chapter-break-h1" data-title="Um"></p><h1>Um</h1><p>original um</p>'); });
+    // Depois o utilizador apaga tudo.
+    act(() => { h.api().handleEditorChange(''); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 900)); });
+
+    const synced = h.api().getSyncedHtmlContent();
+    expect(synced).not.toContain('original um'); // capítulo 0 esvaziado de propósito
+    expect(synced).toContain('original dois');    // capítulo 1 intocado
+    h.unmount();
+});
+
+// --- Repro exata capturada com logs [DEBUG-a4f2] no browser real: o TinyMCE dispara o evento
+// nativo 'init' (onInit) ANTES de o wrapper aplicar o initialValue real — nesse instante
+// editor.initialized já é true e getContent() ainda é '', o que dispara um onEditorChange('')
+// legítimo do próprio arranque do editor enquanto ainda em "Documento Completo"
+// (activeChapterIndex === -1). O 1º fix só tratava disto dentro do EFEITO de debounce; o FLUSH
+// de changeActiveChapter tinha a condição ao contrário — `activeChapterIndex === -1` estava a
+// ser usado para PERMITIR o flush vazio em vez de o bloquear (como o guard do debounce já
+// fazia), escrevendo '' em replaceChapterContent(fullHtml, '', -1) === '' — o livro inteiro.
+test('BUG (repro real): trocar de capítulo a partir de "Documento Completo" com um vazio transitório pendente NÃO apaga o livro', async () => {
+    const h = mountChapterSync();
+    h.dispatch({ type: 'LOAD_CONTENT', payload: TWO_CHAPTERS }); // activeChapterIndex fica -1
+
+    // TinyMCE, ainda a inicializar, dispara onEditorChange('') em "Documento Completo".
+    act(() => { h.api().handleEditorChange(''); });
+    // Utilizador clica num capítulo real de imediato (mesmo instante, antes do debounce).
+    act(() => { h.api().changeActiveChapter(1); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 900)); });
+
+    const synced = h.api().getSyncedHtmlContent();
+    expect(synced).toContain('original um');  // livro sobrevive
+    expect(synced).toContain('original dois');
+    h.unmount();
+});

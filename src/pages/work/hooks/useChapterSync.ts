@@ -73,6 +73,15 @@ export function useChapterSync(
     // content state (callback stays stable per keystroke — sidebar memoization).
     const localContentRef = useRef(currentEditorContent);
     const syncedContentRef = useRef(currentEditorContent);
+    // Confirma que o TinyMCE já reportou pelo menos uma vez conteúdo real (não vazio) DEPOIS da
+    // troca/carregamento atual — protege o guard de "vazio transitório" mais abaixo: entrar num
+    // livro e mudar logo de capítulo apanha o TinyMCE ainda a inicializar (setup.ts liga os
+    // listeners antes de a `value` controlada assentar), e o 1º handleEditorChange que chega
+    // pode ser um vazio bolha do próprio arranque do editor, não o utilizador a apagar texto.
+    // Só depois de ver conteúdo real é que um vazio a seguir passa a ser tratado como apagar
+    // de propósito (ver useChapterSync.test.tsx para o caso reproduzido: vazio logo após
+    // CHANGE_CHAPTER apagava o capítulo inteiro ao fim do debounce).
+    const sawRealContentRef = useRef(false);
 
     // Livro completo INCLUINDO a edição que ainda está presa no debounce (800/1500ms).
     // getSyncedHtmlContent deriva só do fullHtml, logo devolvia conteúdo antigo a quem grava:
@@ -89,8 +98,16 @@ export function useChapterSync(
         if (index === activeChapterIndex) return;
         // Flush edits still inside the debounce window to THIS chapter before
         // switching, otherwise they are lost (timer cleared) or, worse, written
-        // into the destination chapter (duplicated chapters).
-        if (!skipSyncRef.current && localContentRef.current !== syncedContentRef.current) {
+        // into the destination chapter (duplicated chapters). Mesmo guard de vazio
+        // transitório do efeito de debounce abaixo, e com a MESMA polaridade: em
+        // "Documento Completo" (activeChapterIndex === -1) um vazio nunca é aceite (apaga o
+        // livro inteiro — replaceChapterContent com índice -1 devolve o conteúdo tal e qual);
+        // dentro de um capítulo real só depois de o TinyMCE confirmar conteúdo real
+        // (sawRealContentRef). Sem isto, trocar de capítulo (mesmo a partir de "Documento
+        // Completo") antes de o TinyMCE acabar de inicializar apagava o livro aqui, sem
+        // sequer esperar pelo debounce.
+        if (!skipSyncRef.current && localContentRef.current !== syncedContentRef.current
+            && (localContentRef.current || (activeChapterIndex !== -1 && sawRealContentRef.current))) {
             dispatch({ type: 'UPDATE_CONTENT', content: localContentRef.current, chapterIndex: activeChapterIndex });
         }
         if (isLargeBook) dispatch({ type: 'SET_LOADING', loading: true });
@@ -107,9 +124,13 @@ export function useChapterSync(
         setLocalEditorContent(currentEditorContent);
         localContentRef.current = currentEditorContent;
         syncedContentRef.current = currentEditorContent;
+        // Vazio já reset é seguro (não há nada a confirmar); conteúdo real precisa de
+        // handleEditorChange o reportar de volta antes de um vazio ser aceite como apagar.
+        sawRealContentRef.current = !currentEditorContent;
     }, [currentEditorContent]);
 
     const handleEditorChange = useCallback((newContent: string) => {
+        if (newContent) sawRealContentRef.current = true;
         localContentRef.current = newContent;
         setLocalEditorContent(newContent);
     }, []);
@@ -121,8 +142,11 @@ export function useChapterSync(
         // Vazio só é aceite dentro de um capítulo (apagar o texto todo de um capítulo é
         // legítimo e antes nunca chegava ao reducer). Em "Documento Completo" continua
         // bloqueado: aí um vazio é sempre transitório (editor ainda sem conteúdo) e
-        // aplicá-lo apagaria o livro inteiro.
-        if (!localEditorContent && activeChapterIndex === -1) return;
+        // aplicá-lo apagaria o livro inteiro. Dentro de um capítulo, só aceite depois de o
+        // TinyMCE já ter confirmado conteúdo real (sawRealContentRef) — sem isto, um vazio
+        // transitório do arranque do editor (troca de capítulo antes de o TinyMCE acabar de
+        // inicializar) apagava o capítulo todo.
+        if (!localEditorContent && (activeChapterIndex === -1 || !sawRealContentRef.current)) return;
 
         const debounceMs = localEditorContent.length > 500_000 ? 1500 : 800;
         const timer = setTimeout(() => {
