@@ -27,7 +27,7 @@ interface ImageCardProps {
 }
 
 const ImageCardComponent: React.FC<ImageCardProps> = ({
-    image, isbn,
+    image,
     isSelected, isRenaming, newName,
     onNewNameChange, onToggleSelect,
     onInsert, onLocate, onView, onDelete, confirmingDelete, onRequestDelete, onCancelDelete, onReplaceImage, onCropImage,

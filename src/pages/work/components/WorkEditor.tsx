@@ -555,7 +555,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         span.setAttribute('data-issue-type', match.rule?.issueType === 'misspelling' ? 'spelling' : 'grammar');
                         try {
                             range.surroundContents(span);
-                        } catch (e) {
+                        } catch {
                             console.warn('Could not surround grammar error in block:', errorText);
                         }
                         break;
@@ -1014,7 +1014,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             };
                             input.click();
                         },
-                        images_upload_handler: async (blobInfo: any, _progress: any) => {
+                        images_upload_handler: async (blobInfo: any) => {
                             const { filename, imageId } = sanitizeImageFilename(blobInfo.filename() || 'image.png');
                             const formData = new FormData();
                             formData.append('images', blobInfo.blob(), filename);

@@ -96,10 +96,10 @@ export const MarginPreview = ({ file, onConfirm, onCancel }: MarginPreviewProps)
     return () => {
       isMounted = false;
       if (renderTask) {
-        try { renderTask.cancel(); } catch { }
+        try { renderTask.cancel(); } catch { /* já cancelada/concluída */ }
       }
       if (pdf) {
-        try { pdf.cleanup(); } catch { }
+        try { pdf.cleanup(); } catch { /* já limpo */ }
       }
     };
   }, [file, currentPage, totalPages]);

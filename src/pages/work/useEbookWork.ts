@@ -80,7 +80,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     const savedContentRef = useRef<string | null>(null);
 
     const saveMutation = useMutation({
-        mutationFn: ({ content, showNotif }: { content: string; showNotif?: boolean }) =>
+        mutationFn: ({ content }: { content: string; showNotif?: boolean }) =>
             ebooksApi.saveContent(isbn!, compressHtml(content)),
         onSuccess: (_, variables) => {
             savedContentRef.current = variables.content;

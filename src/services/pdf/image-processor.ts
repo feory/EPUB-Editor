@@ -51,7 +51,7 @@ export const convertImageToBlob = async (imgObj: PdfObj, settings?: ImageSetting
           const bitmap = await createImageBitmap(imgObj.bitmap as any);
           await drawImage(bitmap);
         }
-      } catch (err) {
+      } catch {
         if (ArrayBuffer.isView(imgObj.bitmap) || imgObj.bitmap instanceof ArrayBuffer) {
           const data = new Uint8ClampedArray(imgObj.bitmap as any);
           const tempCanvas = document.createElement('canvas');

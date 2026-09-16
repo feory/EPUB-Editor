@@ -234,7 +234,11 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
     }, [isbn, countImageUsage, onContentUpdate, loadImage, showNotification]);
 
     const toggleSelection = useCallback((imageId: string) => {
-        setSelectedIds(prev => { const s = new Set(prev); s.has(imageId) ? s.delete(imageId) : s.add(imageId); return s; });
+        setSelectedIds(prev => {
+            const s = new Set(prev);
+            if (s.has(imageId)) s.delete(imageId); else s.add(imageId);
+            return s;
+        });
     }, []);
 
     const clearSelection = useCallback(() => { setSelectedIds(new Set()); }, []);

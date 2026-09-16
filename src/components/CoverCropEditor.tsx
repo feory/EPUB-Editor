@@ -10,7 +10,7 @@ interface CoverCropEditorProps {
     label?: string;
 }
 
-function createInitialCrop(_mediaWidth: number, _mediaHeight: number): Crop {
+function createInitialCrop(): Crop {
     return { unit: '%', x: 0, y: 0, width: 100, height: 100 };
 }
 
@@ -20,17 +20,15 @@ export function CoverCropEditor({ imageUrl, onSave, onCancel, label = 'Ajuste a 
     const [completedCrop, setCompletedCrop] = useState<Crop>();
     const [isProcessing, setIsProcessing] = useState(false);
 
-    function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
-        const { width, height } = e.currentTarget;
-        const initial = createInitialCrop(width, height);
+    function onImageLoad() {
+        const initial = createInitialCrop();
         setCrop(initial);
         setCompletedCrop(initial);
     }
 
     const resetCrop = () => {
         if (imgRef.current) {
-            const { width, height } = imgRef.current;
-            const initial = createInitialCrop(width, height);
+            const initial = createInitialCrop();
             setCrop(initial);
             setCompletedCrop(initial);
         }

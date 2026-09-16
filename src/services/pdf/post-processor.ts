@@ -161,7 +161,7 @@ export function consolidateSplitParagraphs(html: string): string {
       const lastText = lastParagraphContent.replace(/<[^>]+>/g, '').trim();
       if (!/[a-zà-ÿ-]$/.test(lastText)) continue;
 
-      let mergedContent = '';
+      let mergedContent: string;
       const nextContent = paragraphContent.trim();
 
       if (lastParagraphContent.endsWith('-') && nextContent.startsWith('-')) {
