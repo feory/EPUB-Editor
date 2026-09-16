@@ -1,12 +1,18 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { ebooksApi } from '../api/ebooks-api';
 import type { AxiosError } from 'axios';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { data: health } = useQuery({
+    queryKey: ['system-health'],
+    queryFn: () => ebooksApi.getHealth().then(r => r.data),
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -112,6 +118,10 @@ export function LoginPage() {
             Entrar
           </button>
         </form>
+
+        {health?.version && (
+          <p className="mt-4 text-center text-xs text-text-muted">v{health.version}</p>
+        )}
       </div>
     </div>
   );

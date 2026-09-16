@@ -1,7 +1,7 @@
 {
   "name": "pdf-to-epub-tool",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.9.21",
   "type": "module",
   "scripts": {
     "postinstall": "cp -r node_modules/tinymce public/tinymce 2>/dev/null || true",

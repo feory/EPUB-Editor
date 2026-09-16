@@ -101,6 +101,7 @@ export interface ActivityLogEntry {
 
 export interface HealthResponse {
     status: string;
+    version: string;
     runtime: string;
     uptime: number; // segundos desde o arranque do processo (process.uptime())
     memory: { rss: number; heapTotal: number; heapUsed: number; external: number; arrayBuffers: number };

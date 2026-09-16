@@ -10,6 +10,7 @@ import { b2Configured } from '../b2-client.js';
 import { runAndLog, rescheduleBackup } from '../backup.js';
 import { parseCron } from '../cron-schedule.js';
 import * as presence from '../presence.js';
+import pkg from '../../package.json' with { type: 'json' };
 
 // Apaga, dentro de `dir`, os ficheiros que passam `filter` e têm mais de `limit` (mtime) —
 // preservando SEMPRE o mais recente. Devolve { count, bytes } apagados.
@@ -260,6 +261,7 @@ export async function healthCheck() {
   } catch {}
   return Response.json({
     status: "ok",
+    version: pkg.version,
     runtime: "Bun " + Bun.version,
     uptime: process.uptime(),
     memory: process.memoryUsage(),

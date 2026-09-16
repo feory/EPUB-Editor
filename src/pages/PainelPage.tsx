@@ -405,6 +405,10 @@ function SystemHealthCard() {
             ) : (
                 <div className="px-6 py-4 flex flex-col gap-2 text-sm">
                     <div className="flex items-center justify-between">
+                        <span className="text-text-muted">Versão</span>
+                        <span className="text-text-color font-medium">{health.version}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
                         <span className="text-text-muted">Runtime</span>
                         <span className="text-text-color font-medium">{health.runtime}</span>
                     </div>
