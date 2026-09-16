@@ -1,5 +1,6 @@
 import React, { useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
+import type { RawEditorOptions } from 'tinymce';
 import { Maximize2, FileText } from 'lucide-react';
 import { useStyles } from '../../../context/StyleContext';
 import { ebooksApi } from '../../../api/ebooks-api';
@@ -45,6 +46,10 @@ import 'tinymce/plugins/wordcount/plugin';
 import 'tinymce/skins/ui/oxide/skin.css';
 import 'tinymce/skins/ui/oxide/content.css';
 import type { TinyMCEEditor } from '../editor/types';
+import type { GrammarMatch } from '../hooks/useEbookGrammar';
+
+type FilePickerCallback = NonNullable<RawEditorOptions['file_picker_callback']>;
+type BlobInfo = Parameters<NonNullable<RawEditorOptions['images_upload_handler']>>[0];
 
 interface WorkEditorProps {
     htmlContent: string;
@@ -59,8 +64,8 @@ interface WorkEditorProps {
     chapters: { title: string, content: string, level: string }[];
     onCountInWholeBook?: (find: string) => number;
     onReplaceInWholeBook?: (find: string, replaceWith: string) => number;
-    grammarCache?: Record<string, any>;
-    onGrammarCheck?: (matches: any[], cache?: Record<string, any>) => void;
+    grammarCache?: Record<string, GrammarMatch[]>;
+    onGrammarCheck?: (matches: GrammarMatch[], cache?: Record<string, GrammarMatch[]>) => void;
     onGrammarClick?: (index: number) => void;
     onSave?: () => void;
     onExport?: () => void;
@@ -93,7 +98,7 @@ export interface WorkEditorRef {
     setCommentResolved: (anchorId: string, resolved: boolean) => void;
 
     // Gramática
-    highlightGrammarErrors: (matches: any[]) => void;
+    highlightGrammarErrors: (matches: GrammarMatch[]) => void;
     clearGrammarErrors: () => void;
     filterGrammarHighlights: (filter: 'all' | 'spelling' | 'grammar') => void;
     removeGrammarHighlights: (indices: Set<number>) => void;
@@ -101,7 +106,7 @@ export interface WorkEditorRef {
     triggerGrammarCheck: () => void;
 
     // Ortografia
-    highlightSpellErrors: (issues: any[]) => void;
+    highlightSpellErrors: (issues: GrammarMatch[]) => void;
     clearSpellErrors: () => void;
     applySpellSuggestion: (index: number, suggestion: string) => void;
 
@@ -219,7 +224,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         setTimeout(() => {
             const editorWin = editor.getWin();
             if (editorWin) editorWin.scrollTo(0, 0);
-            editor.selection.setCursorLocation(editor.getBody().firstChild as any, 0);
+            editor.selection.setCursorLocation(editor.getBody().firstChild, 0);
         }, 100);
     }, [activeChapterIndex]);
 
@@ -520,7 +525,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             });
         },
 
-        highlightGrammarErrors: (matches: any[]) => {
+        highlightGrammarErrors: (matches: GrammarMatch[]) => {
             const editor = editorRef.current;
             if (!editor || matches.length === 0) return;
 
@@ -605,7 +610,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             return getContentBlocks(editor.getBody()).map(el => (el.textContent || '').trim());
         },
 
-        highlightSpellErrors: (issues: any[]) => {
+        highlightSpellErrors: (issues: GrammarMatch[]) => {
             const editor = editorRef.current;
             if (!editor || issues.length === 0) return;
             const body = editor.getBody();
@@ -613,6 +618,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const blocks = getContentBlocks(body);
 
             issues.forEach((issue, idx) => {
+                if (issue.word === undefined) return;
                 const block = blocks[issue.paragraphIndex];
                 if (!block) return;
                 const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
@@ -991,7 +997,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         automatic_uploads: true,
                         paste_data_images: true,
                         file_picker_types: 'image',
-                        file_picker_callback: (callback: (value: string, meta?: Record<string, any>) => void) => {
+                        file_picker_callback: ((callback) => {
                             const input = document.createElement('input');
                             input.type = 'file';
                             input.accept = 'image/*';
@@ -1013,8 +1019,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                                 reader.readAsDataURL(file);
                             };
                             input.click();
-                        },
-                        images_upload_handler: async (blobInfo: any) => {
+                        }) as FilePickerCallback,
+                        images_upload_handler: async (blobInfo: BlobInfo) => {
                             const { filename, imageId } = sanitizeImageFilename(blobInfo.filename() || 'image.png');
                             const formData = new FormData();
                             formData.append('images', blobInfo.blob(), filename);
