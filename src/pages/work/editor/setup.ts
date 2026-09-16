@@ -226,7 +226,8 @@ export function createEditorSetup(deps: SetupDeps) {
         // Botão direito em cima de uma imagem → "Cortar imagem" (editor de corte, mesmo
         // mecanismo da Galeria: grava sobre o mesmo data-image-id).
         editor.ui.registry.addMenuItem('imagecrop', {
-            text: 'Cortar imagem',
+            text: 'Editar Imagem',
+            icon: 'crop',
             onAction: () => {
                 const node = editor.selection.getNode();
                 const imageId = node?.nodeName === 'IMG' ? node.getAttribute('data-image-id') : null;

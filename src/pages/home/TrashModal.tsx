@@ -72,7 +72,7 @@ export const TrashModal: React.FC<TrashModalProps> = ({
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
-            <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-4xl xl:max-w-5xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
                 <div className="flex items-center justify-between p-6 border-b border-border shrink-0 gap-4">
                     <div className="flex items-center gap-3 shrink-0">
                         <h2 className="text-xl font-bold text-slate-700">Reciclagem</h2>
@@ -135,14 +135,14 @@ export const TrashModal: React.FC<TrashModalProps> = ({
                     </div>
                 </div>
 
-                <div className="overflow-auto flex-1">
+                <div className="overflow-auto flex-1 flex flex-col">
                     {trashEbooks.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 gap-4 text-text-muted">
+                        <div className="flex flex-col items-center justify-center flex-1 gap-4 text-text-muted">
                             <Trash2 size={40} className="opacity-20" />
                             <p className="italic">A reciclagem está vazia.</p>
                         </div>
                     ) : filtered.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 gap-4 text-text-muted">
+                        <div className="flex flex-col items-center justify-center flex-1 gap-4 text-text-muted">
                             <Search size={40} className="opacity-20" />
                             <p className="italic">Nenhum resultado para "{query}".</p>
                         </div>

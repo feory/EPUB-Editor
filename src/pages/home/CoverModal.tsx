@@ -1,5 +1,5 @@
 import React from 'react';
-import { ImageIcon, FileUp } from 'lucide-react';
+import { ImageIcon, FileUp, Trash2 } from 'lucide-react';
 import { CoverCropEditor } from '../../components/CoverCropEditor';
 import { ModalCloseButton } from '../../components/ModalCloseButton';
 import type { Ebook } from '../../api/ebooks-api';
@@ -15,11 +15,12 @@ interface CoverModalProps {
     onCropSave: (blob: Blob) => void;
     onCropCancel: () => void;
     onGenerateAutoCover: () => void;
+    onRemoveCover: () => void;
 }
 
 export const CoverModal: React.FC<CoverModalProps> = ({
     isOpen, onClose, ebook, coverUrl, cropImageUrl,
-    onFileUpload, onCropSave, onCropCancel, onGenerateAutoCover,
+    onFileUpload, onCropSave, onCropCancel, onGenerateAutoCover, onRemoveCover,
 }) => {
     useBodyScrollLock(isOpen);
     if (!isOpen) return null;
@@ -27,7 +28,7 @@ export const CoverModal: React.FC<CoverModalProps> = ({
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !cropImageUrl && onClose()} />
-            <div className={`relative bg-surface rounded-2xl shadow-2xl w-full overflow-hidden animate-in fade-in zoom-in duration-200 ${cropImageUrl ? 'max-w-xl' : 'max-w-md'}`}>
+            <div className={`relative bg-surface rounded-2xl shadow-2xl w-full overflow-hidden animate-in fade-in zoom-in duration-200 max-w-xl md:max-w-2xl xl:max-w-3xl`}>
                 <div className="flex items-center justify-between p-6 border-b border-border">
                     <h2 className="text-xl font-bold text-slate-700">
                         {cropImageUrl ? 'Ajuste de Capa' : `Capa: ${ebook.title}`}
@@ -50,7 +51,7 @@ export const CoverModal: React.FC<CoverModalProps> = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="grid grid-cols-2 gap-3 w-full">
+                            <div className={`grid gap-3 w-full ${coverUrl ? 'grid-cols-3' : 'grid-cols-2'}`}>
                                 <label className="inline-flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer shadow-sm active:scale-95">
                                     <FileUp size={18} />
                                     <span>Upload</span>
@@ -63,6 +64,15 @@ export const CoverModal: React.FC<CoverModalProps> = ({
                                     <ImageIcon size={18} />
                                     <span>Gerar Auto</span>
                                 </button>
+                                {coverUrl && (
+                                    <button
+                                        className="inline-flex items-center justify-center gap-2 bg-rose-50 hover:bg-rose-100 text-rose-600 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95"
+                                        onClick={onRemoveCover}
+                                    >
+                                        <Trash2 size={18} />
+                                        <span>Remover</span>
+                                    </button>
+                                )}
                             </div>
                         </>
                     )}

@@ -165,6 +165,15 @@ export function HomePage() {
         },
         onError: () => { showNotification('error', 'Erro ao carregar capa.'); },
     });
+    const deleteCoverMutation = useMutation({
+        mutationFn: (isbn: string) => ebooksApi.deleteCover(isbn),
+        onSuccess: (_, isbn) => {
+            setCoverVersions(prev => ({ ...prev, [isbn]: Date.now() }));
+            queryClient.invalidateQueries({ queryKey: ['ebooks'] });
+            showNotification('success', 'Capa removida.');
+        },
+        onError: () => { showNotification('error', 'Erro ao remover capa.'); },
+    });
     const deleteEbookMutation = useMutation({
         mutationFn: (vars: { isbn: string; title: string }) => ebooksApi.deleteEbook(vars.isbn),
         onSuccess: (_data, vars) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['trash'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); showNotification('success', `Ebook ${vars.title} movido para a reciclagem.`, 3000); },
@@ -237,6 +246,12 @@ export function HomePage() {
         const fd = new FormData();
         fd.append('cover', croppedBlob, 'cover.jpg');
         uploadCoverMutation.mutate({ isbn: selectedEbook.ebook_isbn, data: fd });
+    };
+
+    const handleRemoveCover = () => {
+        if (!selectedEbook) return;
+        setCoverUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+        deleteCoverMutation.mutate(selectedEbook.ebook_isbn);
     };
 
     const handleDownloadEpub = async (isbn: string) => {
@@ -467,6 +482,7 @@ export function HomePage() {
                     onFileUpload={handleCoverUpload}
                     onCropSave={handleCropSave}
                     onCropCancel={() => setCropImageUrl(null)}
+                    onRemoveCover={handleRemoveCover}
                     onGenerateAutoCover={generateAutoCover}
                 />
             )}

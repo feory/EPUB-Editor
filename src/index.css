@@ -104,6 +104,20 @@ body {
     box-shadow: var(--shadow-md);
 }
 
+@media (min-width: 768px) {
+    .cover-preview-large {
+        width: 320px;
+        height: 427px;
+    }
+}
+
+@media (min-width: 1280px) {
+    .cover-preview-large {
+        width: 400px;
+        height: 533px;
+    }
+}
+
 .cover-preview-large img {
     width: 100%;
     height: 100%;

@@ -51,7 +51,7 @@ const CompareModalComponent: React.FC<CompareModalProps> = ({ files, formatTimes
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-lg md:max-w-xl xl:max-w-2xl overflow-hidden flex flex-col h-[80vh]" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-6 border-b border-border bg-slate-50/50">
                     <h2 className="text-xl font-bold text-slate-700 flex items-center gap-2">
                         <GitCompare size={20} className="text-slate-500" />

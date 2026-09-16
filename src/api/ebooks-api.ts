@@ -158,10 +158,12 @@ export const ebooksApi = {
     // Cover management
     getCover: (isbn: string) => apiClient.get(`/ebooks/${isbn}/cover`, { responseType: 'blob' }),
     
-    uploadCover: (isbn: string, formData: FormData) => 
+    uploadCover: (isbn: string, formData: FormData) =>
         apiClient.post(`/ebooks/${isbn}/cover`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         }),
+
+    deleteCover: (isbn: string) => apiClient.delete(`/ebooks/${isbn}/cover`),
 
     // Content management
     getContent: (isbn: string, filename?: string) =>

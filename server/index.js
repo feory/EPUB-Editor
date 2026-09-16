@@ -187,6 +187,7 @@ export const server = Bun.serve({
           if (sub === 'history'              && method === "GET")  return content.getHistory(req, isbn);
           if (sub === 'cover'                && method === "GET")  return epub.getCover(isbn);
           if (sub === 'cover'                && method === "POST") return epub.saveCover(req, isbn);
+          if (sub === 'cover'                && method === "DELETE") return epub.deleteCover(isbn);
           if (sub === 'grammar'              && method === "GET")  return grammar.getGrammar(isbn);
           if (sub === 'grammar'              && method === "POST") return grammar.saveGrammar(req, isbn);
           if (sub === 'comments'             && method === "GET")  return comments.getComments(isbn);

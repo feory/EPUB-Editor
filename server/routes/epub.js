@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, renameSync } from 'fs';
+import { existsSync, mkdirSync, renameSync, unlinkSync } from 'fs';
 import { readdir, stat } from 'fs/promises';
 import { join, resolve } from 'path';
 import { corsHeaders, handleGetFile, safeSegment } from '../response.js';
@@ -81,4 +81,10 @@ export async function saveCover(req, isbn) {
   if (cover.size > MAX_COVER_SIZE) return Response.json({ error: 'File too large' }, { status: 413, headers: corsHeaders });
   await Bun.write(join(DATA_DIR, isbn, 'cover.jpg'), cover);
   return Response.json({ message: 'Cover saved' }, { headers: corsHeaders });
+}
+
+export function deleteCover(isbn) {
+  const coverPath = join(DATA_DIR, isbn, 'cover.jpg');
+  if (existsSync(coverPath)) unlinkSync(coverPath);
+  return Response.json({ message: 'Cover deleted' }, { headers: corsHeaders });
 }

@@ -14,7 +14,7 @@ function createInitialCrop(_mediaWidth: number, _mediaHeight: number): Crop {
     return { unit: '%', x: 0, y: 0, width: 100, height: 100 };
 }
 
-export function CoverCropEditor({ imageUrl, onSave, onCancel, label = 'Ajuste a area de corte para a capa' }: CoverCropEditorProps) {
+export function CoverCropEditor({ imageUrl, onSave, onCancel, label = 'Ajuste a área de corte para a capa' }: CoverCropEditorProps) {
     const imgRef = useRef<HTMLImageElement>(null);
     const [crop, setCrop] = useState<Crop>();
     const [completedCrop, setCompletedCrop] = useState<Crop>();
@@ -120,19 +120,19 @@ export function CoverCropEditor({ imageUrl, onSave, onCancel, label = 'Ajuste a 
                 <span>{label}</span>
             </div>
 
-            <div className="relative bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center p-4 min-h-[300px]">
+            <div className="relative bg-white rounded-xl overflow-hidden flex items-center justify-center p-4 min-h-[300px] md:min-h-[400px] xl:min-h-[500px]">
                 <ReactCrop
                     crop={crop}
                     onChange={(_, percentCrop) => setCrop(percentCrop)}
                     onComplete={(_, percentCrop) => setCompletedCrop(percentCrop)}
-                    className="max-h-[380px]"
+                    className="max-h-[380px] md:max-h-[480px] xl:max-h-[600px]"
                 >
                     <img
                         ref={imgRef}
                         src={imageUrl}
                         alt="Crop preview"
                         onLoad={onImageLoad}
-                        className="max-h-[380px] max-w-full object-contain"
+                        className="max-h-[380px] md:max-h-[480px] xl:max-h-[600px] max-w-full object-contain"
                         crossOrigin="anonymous"
                     />
                 </ReactCrop>
