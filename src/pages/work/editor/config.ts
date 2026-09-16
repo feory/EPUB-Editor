@@ -7,7 +7,7 @@ export const EDITOR_PLUGINS = [
 ];
 
 // Bubble de formatação na seleção de texto (só selection; sem barras de inserção/imagem).
-export const QUICKBARS_SELECTION_TOOLBAR = 'bold italic underline superscript smallcaps smalltext | link | addcomment';
+export const QUICKBARS_SELECTION_TOOLBAR = 'bold italic underline superscript smallcaps smalltext forecolor | link | addcomment';
 
 export const EDITOR_TOOLBAR =
     'undo redo | styles removeformat | ' +
