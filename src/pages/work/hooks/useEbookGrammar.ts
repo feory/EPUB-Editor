@@ -2,9 +2,23 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ebooksApi } from '../../../api/ebooks-api';
 
+// Forma "slim" produzida por processBatch (editorDom.ts, verificação LanguageTool) e por
+// spell.worker.ts (ortografia local, ainda não instanciado) — mesmo shape para os dois.
+export interface GrammarMatch {
+    offset: number;
+    length: number;
+    message: string;
+    shortMessage?: string;
+    replacements?: { value: string }[];
+    context?: { text: string; offset: number; length: number };
+    rule?: { id?: string; issueType?: string };
+    paragraphIndex: number;
+    word?: string;
+}
+
 export function useEbookGrammar({ isbn }: { isbn: string | undefined }) {
-    const [grammarIssues, setGrammarIssues] = useState<any[]>([]);
-    const [grammarCache, setGrammarCache] = useState<Record<string, any>>({});
+    const [grammarIssues, setGrammarIssues] = useState<GrammarMatch[]>([]);
+    const [grammarCache, setGrammarCache] = useState<Record<string, GrammarMatch[]>>({});
     const queryClient = useQueryClient();
 
     const { data: grammarData } = useQuery({
@@ -32,7 +46,7 @@ export function useEbookGrammar({ isbn }: { isbn: string | undefined }) {
     }, [grammarData]);
 
     const saveGrammarMutation = useMutation({
-        mutationFn: ({ matches, cache }: { matches: any[]; cache?: Record<string, any> }) =>
+        mutationFn: ({ matches, cache }: { matches: GrammarMatch[]; cache?: Record<string, GrammarMatch[]> }) =>
             ebooksApi.saveGrammar(isbn!, matches, cache ?? {}),
         onSuccess: (_, { matches, cache }) => {
             if (cache) setGrammarCache(prev => ({ ...prev, ...cache }));
@@ -55,7 +69,7 @@ export function useEbookGrammar({ isbn }: { isbn: string | undefined }) {
     }, [grammarIssues, saveGrammarMutation]);
 
     const handleSaveGrammar = useCallback(
-        (matches: any[], cache?: Record<string, any>) => saveGrammarMutation.mutate({ matches, cache }),
+        (matches: GrammarMatch[], cache?: Record<string, GrammarMatch[]>) => saveGrammarMutation.mutate({ matches, cache }),
         [saveGrammarMutation]
     );
 
