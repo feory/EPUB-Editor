@@ -5,14 +5,17 @@ import { ebooksApi } from '../../../api/ebooks-api';
 // Forma "slim" produzida por processBatch (editorDom.ts, verificação LanguageTool) e por
 // spell.worker.ts (ortografia local, ainda não instanciado) — mesmo shape para os dois.
 export interface GrammarMatch {
-    offset: number;
-    length: number;
+    // Ausentes nas entradas de spell.worker.ts (ortografia por palavra, sem offset LT).
+    offset?: number;
+    length?: number;
     message: string;
     shortMessage?: string;
     replacements?: { value: string }[];
     context?: { text: string; offset: number; length: number };
     rule?: { id?: string; issueType?: string };
-    paragraphIndex: number;
+    // Ausente nas entradas em cache (chave é o hash do parágrafo, não o índice) — só as
+    // entradas "vivas" (grammarIssues) e as que já passaram por runGrammarCheck têm.
+    paragraphIndex?: number;
     word?: string;
 }
 

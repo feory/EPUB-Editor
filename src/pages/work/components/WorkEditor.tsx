@@ -618,7 +618,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const blocks = getContentBlocks(body);
 
             issues.forEach((issue, idx) => {
-                if (issue.word === undefined) return;
+                if (issue.word === undefined || issue.paragraphIndex === undefined) return;
                 const block = blocks[issue.paragraphIndex];
                 if (!block) return;
                 const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);

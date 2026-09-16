@@ -1,3 +1,5 @@
+import type { GrammarMatch } from '../pages/work/hooks/useEbookGrammar';
+
 let wordSet: Set<string> | null = null;
 
 async function initChecker() {
@@ -16,7 +18,7 @@ const WORD_RE = /[a-zA-ZÀ-ÿ]+(?:[-'][a-zA-ZÀ-ÿ]+)*/g;
 const ACRONYM_RE = /^[A-ZÁÉÍÓÚÀÈÌÒÙÂÊÎÔÛÃÕÇ]{2,}$/;
 
 function checkBlocks(blocks: string[]) {
-  const issues: any[] = [];
+  const issues: GrammarMatch[] = [];
 
   blocks.forEach((text, paragraphIndex) => {
     if (!text.trim()) return;

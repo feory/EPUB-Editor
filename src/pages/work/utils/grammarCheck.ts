@@ -1,9 +1,10 @@
 import { getContentBlocks, clearGrammarErrorsInBody, hashString, processBatch, type BatchMapEntry } from './editorDom';
+import type { GrammarMatch } from '../hooks/useEbookGrammar';
 
 export async function runGrammarCheck(
     body: HTMLElement,
-    grammarCache: Record<string, any> | undefined,
-    onGrammarCheck: ((matches: any[], cache?: Record<string, any>) => void) | undefined,
+    grammarCache: Record<string, GrammarMatch[]> | undefined,
+    onGrammarCheck: ((matches: GrammarMatch[], cache?: Record<string, GrammarMatch[]>) => void) | undefined,
     setProgress: (on: boolean) => void
 ) {
     clearGrammarErrorsInBody(body);
@@ -16,15 +17,15 @@ export async function runGrammarCheck(
     try {
         const baseUrl = import.meta.env.VITE_LANGUAGETOOL_URL ?? 'https://api.languagetool.org/v2/check';
         const currentCache = { ...(grammarCache || {}) };
-        const allMatches: any[] = [];
-        const newCache: Record<string, any> = {};
+        const allMatches: GrammarMatch[] = [];
+        const newCache: Record<string, GrammarMatch[]> = {};
         const paragraphsToCheck: { index: number; text: string; offset: number }[] = [];
 
         paragraphs.forEach((p, idx) => {
             const text = p.textContent || '';
             const hash = hashString(text);
             if (text.trim().length > 0 && currentCache[hash]) {
-                allMatches.push(...currentCache[hash].map((m: any) => ({ ...m, paragraphIndex: idx })));
+                allMatches.push(...currentCache[hash].map((m) => ({ ...m, paragraphIndex: idx })));
                 newCache[hash] = currentCache[hash];
             } else if (text.trim().length > 0) {
                 paragraphsToCheck.push({ index: idx, text, offset: 0 });

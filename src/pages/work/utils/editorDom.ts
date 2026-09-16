@@ -1,4 +1,19 @@
 import apiClient from '../../../api/client';
+import type { GrammarMatch } from '../hooks/useEbookGrammar';
+
+// Resposta crua do LanguageTool — só os campos que processBatch lê (o resto do payload
+// real tem mais campos, ex. rule.category/sentence, ignorados aqui). offset/length são
+// sempre devolvidos pelo LT (ao contrário de GrammarMatch, onde ficam opcionais por causa
+// das entradas de spell.worker.ts, que não têm).
+interface LanguageToolMatch {
+    offset: number;
+    length: number;
+    message: string;
+    shortMessage?: string;
+    replacements?: { value: string }[];
+    context?: { text: string; offset: number; length: number };
+    rule?: { id?: string; issueType?: string };
+}
 
 export function hashString(str: string): string {
     if (!str) return '0';
@@ -44,8 +59,8 @@ export async function processBatch(
     fullBatchText: string,
     map: BatchMapEntry[],
     url: string,
-    results: any[],
-    cache: Record<string, any>
+    results: GrammarMatch[],
+    cache: Record<string, GrammarMatch[]>
 ) {
     const params = new URLSearchParams();
     params.append('text', fullBatchText);
@@ -54,7 +69,7 @@ export async function processBatch(
     // Backend proxy (`/api/...`) requires auth — usar o apiClient para herdar o
     // Bearer token (interceptor) + refresh automático em 401; URL externa
     // (api.languagetool.org público) continua por fetch directo, sem auth.
-    let data: any;
+    let data: { matches?: LanguageToolMatch[] };
     if (url.startsWith('/api/')) {
         const resp = await apiClient.post(url.replace(/^\/api/, ''), params, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -69,7 +84,7 @@ export async function processBatch(
         if (!resp.ok) throw new Error(`API Error: ${resp.status}`);
         data = await resp.json();
     }
-    const matches: any[] = data.matches || [];
+    const matches: LanguageToolMatch[] = data.matches || [];
 
     let currentInBatchOffset = 0;
     map.forEach(p => {
@@ -77,7 +92,7 @@ export async function processBatch(
         const pEnd = pStart + p.text.length;
 
         const pMatches = matches
-            .filter((m: any) => {
+            .filter((m) => {
                 if (m.offset < pStart || m.offset >= pEnd) return false;
                 const matched = (m.context?.text ?? '').substring(
                     m.context?.offset ?? 0,
@@ -86,9 +101,9 @@ export async function processBatch(
                 if (matched.length >= 2 && /^[A-ZÁÉÍÓÚÀÈÌÒÙÂÊÎÔÛÃÕÇ0-9/]+$/.test(matched)) return false;
                 return true;
             })
-            .map((m: any) => ({ ...m, offset: m.offset - pStart }));
+            .map((m) => ({ ...m, offset: m.offset - pStart }));
 
-        const slimMatches = pMatches.map((m: any) => ({
+        const slimMatches: LanguageToolMatch[] = pMatches.map((m) => ({
             offset: m.offset,
             length: m.length,
             message: m.message,
@@ -99,7 +114,7 @@ export async function processBatch(
         }));
         const hash = hashString(p.text);
         cache[hash] = slimMatches;
-        results.push(...slimMatches.map((m: any) => ({ ...m, paragraphIndex: p.index })));
+        results.push(...slimMatches.map((m) => ({ ...m, paragraphIndex: p.index })));
         currentInBatchOffset += p.text.length + p.separatorLength;
     });
 }

@@ -1,4 +1,5 @@
 import apiClient, { getAccessToken, clientId } from './client';
+import type { GrammarMatch } from '../pages/work/hooks/useEbookGrammar';
 
 export interface PresenceStatus {
     holderId: string | null;
@@ -221,7 +222,7 @@ export const ebooksApi = {
             headers: { 'Content-Type': 'multipart/form-data' }
         }),
 
-    saveGrammar: (isbn: string, matches: any[], cache: Record<string, any> = {}) =>
+    saveGrammar: (isbn: string, matches: GrammarMatch[], cache: Record<string, GrammarMatch[]> = {}) =>
         apiClient.post(`/ebooks/${isbn}/grammar`, { matches, cache }),
     getGrammar: (isbn: string) => apiClient.get(`/ebooks/${isbn}/grammar`),
 

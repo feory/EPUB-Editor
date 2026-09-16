@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { X, Eraser, Check } from 'lucide-react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { PanelResizeHandle } from './PanelResizeHandle';
+import type { GrammarMatch } from '../hooks/useEbookGrammar';
 
 type FilterType = 'all' | 'spelling' | 'grammar';
 
@@ -9,7 +10,7 @@ type FilterType = 'all' | 'spelling' | 'grammar';
 const ListFooter = () => <div className="h-5" />;
 
 interface GrammarSidebarProps {
-  issues: any[];
+  issues: GrammarMatch[];
   onClose: () => void;
   onGoToIssue: (context: string, paragraphIndex: number) => void;
   onRecheck: () => void;
@@ -148,7 +149,7 @@ const GrammarSidebarComponent: React.FC<GrammarSidebarProps> = ({
                       ? 'border-primary ring-4 ring-primary/5 shadow-lg translate-x-[-8px]'
                       : 'border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300'
                 }`}
-                onClick={() => onGoToIssue(issue.context?.text || '', issue.paragraphIndex)}
+                onClick={() => { if (issue.paragraphIndex !== undefined) onGoToIssue(issue.context?.text || '', issue.paragraphIndex); }}
               >
                 <div className={`h-1 w-full ${isSpelling ? 'bg-rose-400' : 'bg-amber-400'}`}></div>
 
@@ -212,7 +213,7 @@ const GrammarSidebarComponent: React.FC<GrammarSidebarProps> = ({
                     {issue.replacements && issue.replacements.length > 0 && (
                         <div className="flex flex-wrap gap-2 items-center">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sugestões:</span>
-                            {issue.replacements.slice(0, 3).map((r: any, idx: number) => (
+                            {issue.replacements.slice(0, 3).map((r, idx: number) => (
                                 <button
                                     key={idx}
                                     onClick={(e) => { e.stopPropagation(); onApplySuggestion(originalIndex, r.value); }}
