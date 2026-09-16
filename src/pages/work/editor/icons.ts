@@ -22,5 +22,13 @@ export function registerEditorIcons(editor: TinyMCEEditor) {
         ['ps-union', '<svg width="24" height="24" viewBox="0 0 24 24"><rect x="4" y="4" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>'],
         ['ps-htmledit', '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 8l-4 4 4 4m6-8l4 4-4 4"/></svg>'],
         ['ps-vdots', '<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg>'],
+        // Substitui o ícone nativo do forecolor ("A" com barra) por uma esfera: a classe
+        // "tox-icon-text-color__color" é a mesma que o TinyMCE core repinta via setIconFill
+        // quando muda/aplica a cor — manter o nome exato para a lógica nativa continuar a funcionar.
+        ['text-color', '<svg width="24" height="24" viewBox="0 0 24 24">' +
+            '<rect class="tox-icon-text-color__color" x="5" y="5" width="14" height="14" rx="7" fill="#000000"/>' +
+            '<rect x="5" y="5" width="14" height="14" rx="7" fill="none" stroke="currentColor" stroke-opacity=".25"/>' +
+            '<ellipse cx="9" cy="9" rx="2.4" ry="1.6" fill="#fff" opacity=".35" transform="rotate(-35 9 9)"/>' +
+            '</svg>'],
     ] as const).forEach(([name, svg]) => editor.ui.registry.addIcon(name, svg));
 }
