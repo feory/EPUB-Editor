@@ -1,4 +1,4 @@
-import React, { useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
+import React, { useRef, forwardRef, useImperativeHandle, useEffect, useState } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import type { RawEditorOptions } from 'tinymce';
 import { Maximize2, FileText } from 'lucide-react';
@@ -17,6 +17,7 @@ import { editorFontCss } from '../utils/editorFonts';
 import { useBlockOverlays } from '../editor/useBlockOverlays';
 import { useImageCrop } from './images/useImageCrop';
 import { ImageCropModal } from './images/ImageCropModal';
+import { BoxStyleModal } from '../modals/BoxStyleModal';
 import { createEditorSetup } from '../editor/setup';
 import { buildContentStyle } from '../editor/contentStyles';
 import { EDITOR_PLUGINS, EDITOR_TOOLBAR, QUICKBARS_SELECTION_TOOLBAR, STYLE_FORMATS, TEXT_PATTERNS } from '../editor/config';
@@ -207,8 +208,9 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     activeChapterIndexRef.current = activeChapterIndex;
     const onLinkIndiceEntryRef = useRef(onLinkIndiceEntry);
     onLinkIndiceEntryRef.current = onLinkIndiceEntry;
-    const { getCurrentCss } = useStyles();
+    const { getCurrentCss, setCustomCss } = useStyles();
     const currentCss = getCurrentCss();
+    const [showBoxStyleModal, setShowBoxStyleModal] = useState(false);
     const imageCrop = useImageCrop(isbn ?? '', (imageId) => refreshImageInEditor(editorRef.current, imageId));
 
 
@@ -1063,7 +1065,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         toolbar_sticky_offset: 57, // altura da navbar da app (WorkToolbar), sem folga
                         // "imagecrop" à frente do default do TinyMCE (link linkchecker image editimage
                         // table spellchecker configurepermanentpen) — só acrescenta, não troca nada.
-                        contextmenu: 'imagecrop link linkchecker image editimage table spellchecker configurepermanentpen',
+                        contextmenu: 'imagecrop boxedit link linkchecker image editimage table spellchecker configurepermanentpen',
                         setup: createEditorSetup({
                             setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
@@ -1072,6 +1074,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
                             onAddComment,
+                            onEditBoxStyle: () => setShowBoxStyleModal(true),
                         }),
                         automatic_uploads: true,
                         paste_data_images: true,
@@ -1133,6 +1136,17 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     imageUrl={imageCrop.cropImage.url}
                     onSave={imageCrop.handleCropSave}
                     onCancel={imageCrop.handleCropCancel}
+                />
+            )}
+            {showBoxStyleModal && (
+                <BoxStyleModal
+                    css={currentCss}
+                    onSave={(newCss) => {
+                        setCustomCss(newCss);
+                        if (isbn) ebooksApi.saveStyle(isbn, newCss);
+                        setShowBoxStyleModal(false);
+                    }}
+                    onCancel={() => setShowBoxStyleModal(false)}
                 />
             )}
         </div>

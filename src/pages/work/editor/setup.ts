@@ -15,6 +15,7 @@ interface SetupDeps {
     openStyleMenu: (kind: 'para' | 'head') => void;
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
+    onEditBoxStyle: () => void;
     // Capítulos do livro + índice do capítulo aberto — via ref (setup() só corre 1x no mount,
     // ver comentário junto ao botão idxlinktarget) para ler sempre os valores mais recentes.
     chaptersRef: React.MutableRefObject<{ title: string; level: string }[]>;
@@ -31,7 +32,7 @@ interface SetupDeps {
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
     const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
-        chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment } = deps;
+        chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment, onEditBoxStyle } = deps;
 
     return (editor: Editor) => {
         editor.addCommand('mceChapterBreak', () => {
@@ -223,9 +224,10 @@ export function createEditorSetup(deps: SetupDeps) {
             items: 'imgalignleft imgaligncenter imgalignright',
         });
 
-        // Botão direito em cima de uma imagem → "Cortar imagem" (editor de corte, mesmo
-        // mecanismo da Galeria: grava sobre o mesmo data-image-id).
-        editor.ui.registry.addMenuItem('imagecrop', {
+        // Botão direito em cima de uma imagem → "Editar Imagem" (corte, mesmo mecanismo da
+        // Galeria: grava sobre o mesmo data-image-id). Grupo dinâmico (addContextMenu): só
+        // aparece quando o nó clicado é mesmo a imagem.
+        editor.ui.registry.addMenuItem('imagecrop-item', {
             text: 'Editar Imagem',
             icon: 'crop',
             onAction: () => {
@@ -233,6 +235,21 @@ export function createEditorSetup(deps: SetupDeps) {
                 const imageId = node?.nodeName === 'IMG' ? node.getAttribute('data-image-id') : null;
                 if (imageId) onCropImage(imageId);
             },
+        });
+        editor.ui.registry.addContextMenu('imagecrop', {
+            update: (element) => element.nodeName === 'IMG' ? ['imagecrop-item'] : [],
+        });
+
+        // Botão direito em cima de uma caixa (.box) → "Edição" (cor de fundo/contorno, sem CSS).
+        // Grupo dinâmico (addContextMenu) em vez de listar o item direto no `contextmenu`: só
+        // aparece quando o nó clicado está mesmo dentro de uma .box.
+        editor.ui.registry.addMenuItem('boxedit-item', {
+            text: 'Edição',
+            icon: 'ps-box',
+            onAction: () => onEditBoxStyle(),
+        });
+        editor.ui.registry.addContextMenu('boxedit', {
+            update: (element) => editor.dom.getParent(element, '.box') ? ['boxedit-item'] : [],
         });
 
         registerEditorIcons(editor);
