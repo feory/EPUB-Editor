@@ -115,19 +115,19 @@ export function CoverCropEditor({ imageUrl, onSave, onCancel, label = 'Ajuste a 
                 <span>{label}</span>
             </div>
 
-            <div className="relative bg-white rounded-xl overflow-hidden flex items-center justify-center p-4 min-h-[300px] md:min-h-[400px] xl:min-h-[500px]">
+            <div className="relative bg-white rounded-xl overflow-hidden flex items-center justify-center p-4 min-h-[220px] sm:min-h-[300px] md:min-h-[400px] xl:min-h-[500px]">
                 <ReactCrop
                     crop={crop}
                     onChange={(_, percentCrop) => { setCrop(percentCrop); setCompletedCrop(percentCrop); }}
                     onComplete={(_, percentCrop) => setCompletedCrop(percentCrop)}
-                    className="max-h-[380px] md:max-h-[480px] xl:max-h-[600px]"
+                    className="max-h-[55vh] sm:max-h-[380px] md:max-h-[480px] xl:max-h-[600px]"
                 >
                     <img
                         ref={imgRef}
                         src={imageUrl}
                         alt="Crop preview"
                         onLoad={onImageLoad}
-                        className="max-h-[380px] md:max-h-[480px] xl:max-h-[600px] max-w-full object-contain"
+                        className="max-h-[55vh] sm:max-h-[380px] md:max-h-[480px] xl:max-h-[600px] max-w-full object-contain"
                         crossOrigin="anonymous"
                     />
                 </ReactCrop>
