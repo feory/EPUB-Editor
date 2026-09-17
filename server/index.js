@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from 'fs';
 import { PORT, DATA_DIR, TEMP_DIR, ADMIN_EMAIL, ADMIN_PASSWORD } from './config.js';
-import { db, stmt, migrateGrammarToDb, purgeOldTrash } from './database.js';
+import { db, stmt, migrateGrammarToDb } from './database.js';
 import { corsHeaders, safeSegment } from './response.js';
 import { cleanupTempDir } from './temp-cleanup.js';
 import { requireAuth } from './middleware/auth.js';
@@ -19,6 +19,7 @@ import * as validation from './routes/validation.js';
 import * as logs from './routes/logs.js';
 import * as presence from './presence.js';
 import { startBackupScheduler, stopBackupScheduler } from './backup.js';
+import { startScheduledCleanup, stopScheduledCleanup } from './scheduled-cleanup.js';
 
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR);
 if (!existsSync(TEMP_DIR)) mkdirSync(TEMP_DIR);
@@ -31,11 +32,13 @@ const cleanupInterval = setInterval(() => {
 }, 30 * 60 * 1000);
 
 migrateGrammarToDb();
-purgeOldTrash();
 
 // Mirror para o B2 (rclone sync) segundo o horário guardado (separador Backup do Painel,
 // backup_schedule em settings — default "0 3 * * *" sem valor guardado) — ver server/backup.js.
 startBackupScheduler();
+// Limpeza automática de histórico + purga da Reciclagem, horário configurável (separador
+// Sistema do Painel, defaults "0 4 * * *"/"30 4 * * *") — ver server/scheduled-cleanup.js.
+startScheduledCleanup();
 
 async function seedAdmin() {
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD) return null;
@@ -129,6 +132,14 @@ export const server = Bun.serve({
 
       // Maintenance
       if (path === "/api/maintenance/cleanup-history" && method === "POST") return maintenance.cleanupHistory(user);
+      if (path === "/api/maintenance/cleanup-settings") {
+        if (method === "GET") return maintenance.getCleanupSettings(user);
+        if (method === "PUT") return maintenance.setCleanupSettings(req, user);
+      }
+      if (path === "/api/maintenance/trash-settings") {
+        if (method === "GET") return maintenance.getTrashSettings(user);
+        if (method === "PUT") return maintenance.setTrashSettings(req, user);
+      }
       if (path === "/api/maintenance/migrate-epubs"   && method === "POST") return maintenance.migrateEpubs(user);
       if (path === "/api/maintenance/disk-usage"      && method === "GET")  return maintenance.diskUsage(user);
       if (path === "/api/maintenance/presence"        && method === "GET")  return maintenance.getPresence(user);
@@ -252,6 +263,7 @@ function shutdown(signal) {
   console.log(`\n${signal} received. Shutting down gracefully...`);
   clearInterval(cleanupInterval);
   stopBackupScheduler();
+  stopScheduledCleanup();
   console.log('→ Cleanup interval cleared');
   server.stop();
   console.log('→ Server stopped accepting connections');

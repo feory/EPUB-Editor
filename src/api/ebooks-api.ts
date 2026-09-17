@@ -80,6 +80,20 @@ export interface BackupRun {
     summary: string | null;
 }
 
+export interface CleanupLastRun {
+    at: string;
+    status: 'success' | 'error';
+    deletedCount?: number;
+    sizeSavedMB?: string;
+    error?: string;
+}
+
+export interface CleanupSettings {
+    retentionDays: number;
+    schedule: string;
+    lastRun: CleanupLastRun | null;
+}
+
 export interface ActiveSession {
     isbn: string;
     title: string | null;
@@ -270,6 +284,12 @@ export const ebooksApi = {
 
     // Maintenance
     cleanupHistory: () => apiClient.post<{ deletedCount: number, sizeSavedMB: string }>('/maintenance/cleanup-history'),
+    getCleanupSettings: () => apiClient.get<CleanupSettings>('/maintenance/cleanup-settings'),
+    setCleanupSettings: (retentionDays: number, schedule: string) =>
+        apiClient.put<{ retentionDays: number, schedule: string }>('/maintenance/cleanup-settings', { retentionDays, schedule }),
+    getTrashSettings: () => apiClient.get<CleanupSettings>('/maintenance/trash-settings'),
+    setTrashSettings: (retentionDays: number, schedule: string) =>
+        apiClient.put<{ retentionDays: number, schedule: string }>('/maintenance/trash-settings', { retentionDays, schedule }),
     getDiskUsage: () => apiClient.get<DiskUsageResponse>('/maintenance/disk-usage'),
     purgeOrphan: (isbn: string) => apiClient.delete<{ message: string }>(`/maintenance/orphans/${isbn}`),
     getActiveSessions: () => apiClient.get<{ data: ActiveSession[] }>('/maintenance/presence'),

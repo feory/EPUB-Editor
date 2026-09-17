@@ -11,47 +11,82 @@ import { runAndLog, rescheduleBackup } from '../backup.js';
 import { parseCron } from '../cron-schedule.js';
 import * as presence from '../presence.js';
 import pkg from '../../package.json' with { type: 'json' };
+import {
+  runHistoryCleanup, cleanupRetentionDays, cleanupSchedule, rescheduleCleanup,
+  trashRetentionDays, trashSchedule, rescheduleTrashPurge,
+} from '../scheduled-cleanup.js';
 
-// Apaga, dentro de `dir`, os ficheiros que passam `filter` e têm mais de `limit` (mtime) —
-// preservando SEMPRE o mais recente. Devolve { count, bytes } apagados.
-async function purgeOldExceptNewest(dir, filter, limit) {
-  if (!existsSync(dir)) return { count: 0, bytes: 0 };
-  const files = (await readdir(dir)).filter(filter);
-  let newestPath = null, newestMtime = -1;
-  const entries = [];
-  for (const f of files) {
-    const p = join(dir, f);
-    const st = await stat(p);
-    entries.push({ p, st });
-    if (st.mtimeMs > newestMtime) { newestMtime = st.mtimeMs; newestPath = p; }
-  }
-  let count = 0, bytes = 0;
-  for (const { p, st } of entries) {
-    if (p === newestPath) continue; // manter sempre o mais recente
-    if (st.mtimeMs < limit) { bytes += st.size; await unlink(p); count++; }
-  }
-  return { count, bytes };
+function readLastRun(key) {
+  const row = stmt.getSetting.get(key);
+  return row?.value ? JSON.parse(row.value) : null;
 }
 
+// Botão manual "Limpar agora" (separador Sistema) — a corrida agendada é a automática
+// (scheduled-cleanup.js); esta não toca em `cleanup_last_run` para "Última execução
+// automática" no Painel não ficar enganadora quanto ao que a acionou.
 export async function cleanupHistory(user) {
   const adminErr = requireAdmin(user);
   if (adminErr) return adminErr;
-  const limit = Date.now() - 7 * 24 * 3600 * 1000;
-  let count = 0;
-  let totalBytes = 0;
-  const isbns = await readdir(DATA_DIR);
-  for (const isbn of isbns) {
-    const history = await purgeOldExceptNewest(
-      join(DATA_DIR, isbn, 'history'), f => f.startsWith('content_'), limit);
-    count += history.count; totalBytes += history.bytes;
-    // Versões antigas do EPUB exportado (Epub/ebook_<timestamp>.epub) — nunca o `<isbn>.epub`
-    // (ponteiro para a versão atual, sem prefixo ebook_, fica sempre fora deste filtro).
-    const epubs = await purgeOldExceptNewest(
-      join(DATA_DIR, isbn, 'Epub'), f => f.startsWith('ebook_') && f.endsWith('.epub'), limit);
-    count += epubs.count; totalBytes += epubs.bytes;
-  }
-  const sizeSavedMB = (totalBytes / 1024 / 1024).toFixed(2);
+  const { count, sizeSavedMB } = await runHistoryCleanup(cleanupRetentionDays());
   return Response.json({ message: 'Cleanup done', deletedCount: count, sizeSavedMB }, { headers: corsHeaders });
+}
+
+export async function getCleanupSettings(user) {
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+  return Response.json({
+    retentionDays: cleanupRetentionDays(),
+    schedule: cleanupSchedule(),
+    lastRun: readLastRun('cleanup_last_run'),
+  }, { headers: corsHeaders });
+}
+
+export async function setCleanupSettings(req, user) {
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+  const { retentionDays, schedule } = await req.json();
+  const n = Number(retentionDays);
+  if (!Number.isFinite(n) || n < 1 || n > 365) {
+    return Response.json({ error: 'retentionDays tem de ser um número entre 1 e 365.' }, { status: 400, headers: corsHeaders });
+  }
+  if (schedule?.trim()) {
+    try { parseCron(schedule); } catch (err) {
+      return Response.json({ error: `Cron inválido: ${err.message}` }, { status: 400, headers: corsHeaders });
+    }
+  }
+  stmt.setSetting.run('cleanup_retention_days', String(Math.round(n)));
+  stmt.setSetting.run('cleanup_schedule', schedule ?? '');
+  rescheduleCleanup();
+  return Response.json({ retentionDays: Math.round(n), schedule: cleanupSchedule() }, { headers: corsHeaders });
+}
+
+export async function getTrashSettings(user) {
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+  return Response.json({
+    retentionDays: trashRetentionDays(),
+    schedule: trashSchedule(),
+    lastRun: readLastRun('trash_purge_last_run'),
+  }, { headers: corsHeaders });
+}
+
+export async function setTrashSettings(req, user) {
+  const adminErr = requireAdmin(user);
+  if (adminErr) return adminErr;
+  const { retentionDays, schedule } = await req.json();
+  const n = Number(retentionDays);
+  if (!Number.isFinite(n) || n < 1 || n > 365) {
+    return Response.json({ error: 'retentionDays tem de ser um número entre 1 e 365.' }, { status: 400, headers: corsHeaders });
+  }
+  if (schedule?.trim()) {
+    try { parseCron(schedule); } catch (err) {
+      return Response.json({ error: `Cron inválido: ${err.message}` }, { status: 400, headers: corsHeaders });
+    }
+  }
+  stmt.setSetting.run('trash_retention_days', String(Math.round(n)));
+  stmt.setSetting.run('trash_schedule', schedule ?? '');
+  rescheduleTrashPurge();
+  return Response.json({ retentionDays: Math.round(n), schedule: trashSchedule() }, { headers: corsHeaders });
 }
 
 // Soma recursiva de bytes de uma pasta (não existia utilitário nenhum no código — mesmo

@@ -219,8 +219,10 @@ export function migrateGrammarToDb() {
   } catch {}
 }
 
-export function purgeOldTrash() {
-  const old = db.query("SELECT ebook_isbn FROM ebooks WHERE deleted_at IS NOT NULL AND deleted_at < datetime('now', '-30 days')").all();
+// `days` configurável (separador Sistema do Painel, ver server/scheduled-cleanup.js) — default
+// 30 mantém o comportamento de sempre para quem nunca mexeu na definição.
+export function purgeOldTrash(days = 30) {
+  const old = db.query("SELECT ebook_isbn FROM ebooks WHERE deleted_at IS NOT NULL AND deleted_at < datetime('now', ?)").all(`-${days} days`);
   for (const { ebook_isbn } of old) {
     stmt.hardDeleteEbook.run(ebook_isbn);
     stmt.grammarDeleteIsbn.run(ebook_isbn);
@@ -229,5 +231,6 @@ export function purgeOldTrash() {
     stmt.deleteCommentsByIsbn.run(ebook_isbn);
     try { rmSync(join(DATA_DIR, ebook_isbn), { recursive: true, force: true }); } catch {}
   }
-  if (old.length > 0) console.log(`Purged ${old.length} ebooks from trash (> 30 days)`);
+  if (old.length > 0) console.log(`Purged ${old.length} ebooks from trash (> ${days} days)`);
+  return old.length;
 }

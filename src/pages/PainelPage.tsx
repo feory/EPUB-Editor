@@ -6,7 +6,7 @@ import {
     ChevronLeft, Trash2, Loader2, AlertTriangle, Search, Check, X, CloudUpload,
     UserPlus, Shield, User, Eye, EyeOff, Pencil, Info,
 } from 'lucide-react';
-import { ebooksApi, type DiskUsageBook, type BackupRun } from '../api/ebooks-api';
+import { ebooksApi, type DiskUsageBook, type BackupRun, type CleanupSettings } from '../api/ebooks-api';
 import { authApi, type AuthUser } from '../api/auth-api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -211,6 +211,15 @@ function formatDateTime(iso: string | null) {
     return new Date(iso.replace(' ', 'T') + 'Z').toLocaleString('pt-PT');
 }
 
+// Registo de Backup: o resumo (run.summary) é o stdout CRU do rclone, com timestamp próprio
+// na hora do relógio do servidor (UTC no container) — converter só o cabeçalho para local
+// (formatDateTime) dava duas horas diferentes lado a lado no mesmo cartão (ex. "04:00:00" vs
+// "03:00:23" dentro do resumo). Mantém as duas na mesma base (UTC) para baterem certo.
+function formatDateTimeUTC(iso: string | null) {
+    if (!iso) return '—';
+    return new Date(iso.replace(' ', 'T') + 'Z').toLocaleString('pt-PT', { timeZone: 'UTC' }) + ' UTC';
+}
+
 function formatUptime(seconds: number) {
     const d = Math.floor(seconds / 86400);
     const h = Math.floor((seconds % 86400) / 3600);
@@ -315,7 +324,7 @@ function BackupTab() {
                                     {BACKUP_STATUS_LABEL[run.status]}
                                 </span>
                                 <span className="shrink-0 text-xs text-text-muted w-16">{run.source === 'manual' ? 'Manual' : 'Cron'}</span>
-                                <span className="shrink-0 text-xs text-text-muted w-40">{formatDateTime(run.started_at)}</span>
+                                <span className="shrink-0 text-xs text-text-muted w-44">{formatDateTimeUTC(run.started_at)}</span>
                                 <span className="min-w-0 flex-1 text-xs text-text-muted truncate" title={run.summary ?? ''}>{run.summary ?? '—'}</span>
                             </div>
                         ))}
@@ -430,10 +439,37 @@ function SystemHealthCard() {
     );
 }
 
-function SystemTab() {
+// Partilhado por CleanupCard/TrashCard — trash não tem sizeSavedMB (purgeOldTrash só conta
+// livros), por isso opcional.
+function formatLastRun(lastRun: CleanupSettings['lastRun'], noun: string) {
+    if (!lastRun) return 'Ainda sem execução automática.';
+    const when = new Date(lastRun.at).toLocaleString('pt-PT');
+    if (lastRun.status === 'error') return `${when} — falhou (${lastRun.error}).`;
+    const n = lastRun.deletedCount ?? 0;
+    const size = lastRun.sizeSavedMB ? ` (${lastRun.sizeSavedMB} MB)` : '';
+    return `${when} — ${n} ${noun}${n === 1 ? '' : 's'} removido${n === 1 ? '' : 's'}${size}.`;
+}
+
+function CleanupCard() {
     const { showNotification } = useNotification();
     const queryClient = useQueryClient();
     const [confirmCleanup, setConfirmCleanup] = useState(false);
+    const retentionInputRef = useRef<HTMLInputElement>(null);
+    const scheduleInputRef = useRef<HTMLInputElement>(null);
+
+    const { data: settings } = useQuery({
+        queryKey: ['cleanup-settings'],
+        queryFn: () => ebooksApi.getCleanupSettings().then(r => r.data),
+    });
+
+    const settingsMutation = useMutation({
+        mutationFn: ({ days, schedule }: { days: number, schedule: string }) => ebooksApi.setCleanupSettings(days, schedule),
+        onSuccess: () => {
+            showNotification('success', 'Definições guardadas.');
+            queryClient.invalidateQueries({ queryKey: ['cleanup-settings'] });
+        },
+        onError: (err: AxiosError<{ error: string }>) => showNotification('error', err?.response?.data?.error ?? 'Erro ao guardar.'),
+    });
 
     const cleanupMutation = useMutation({
         mutationFn: () => ebooksApi.cleanupHistory(),
@@ -445,12 +481,57 @@ function SystemTab() {
         onError: () => showNotification('error', 'Erro ao realizar a limpeza do histórico.'),
     });
 
+    const retentionDays = settings?.retentionDays ?? 7;
+    const schedule = settings?.schedule ?? '';
+
     return (
-        <>
-            <div className="flex justify-end">
+        <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-base font-semibold text-slate-700 cursor-help"
+                    title="Remove definitivamente rascunhos/exports antigos (guarda sempre o mais recente de cada livro).">
+                    Limpeza automática de histórico
+                </h2>
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <span className="text-xs text-text-muted">Manter últimos</span>
+                    <input
+                        key={`d${retentionDays}`}
+                        ref={retentionInputRef}
+                        type="number"
+                        min={1}
+                        max={365}
+                        defaultValue={retentionDays}
+                        className="w-16 h-9 px-2 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all text-center"
+                    />
+                    <span className="text-xs text-text-muted">dias, às</span>
+                    <input
+                        key={`s${schedule}`}
+                        ref={scheduleInputRef}
+                        type="text"
+                        defaultValue={schedule}
+                        placeholder="0 2 * * * (cron)"
+                        title='Expressão cron de 5 campos (minuto hora dia mês dia-semana), ex. "0 2 * * *" = todos os dias às 2h. Vazio = default.'
+                        className="w-36 h-9 px-2 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+                    />
+                    <button
+                        onClick={() => {
+                            const n = Number(retentionInputRef.current?.value);
+                            if (Number.isFinite(n) && n >= 1) settingsMutation.mutate({ days: n, schedule: scheduleInputRef.current?.value ?? '' });
+                        }}
+                        disabled={settingsMutation.isPending}
+                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-9 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50"
+                    >
+                        {settingsMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        Guardar
+                    </button>
+                </div>
+            </div>
+            <div className="px-6 py-4 flex items-center justify-between gap-4">
+                <span className="text-xs text-text-muted">
+                    Última execução automática: {formatLastRun(settings?.lastRun ?? null, 'ficheiro')}
+                </span>
                 {confirmCleanup ? (
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-text-muted">Remove definitivamente todos os rascunhos com +7 dias, de todos os livros. Não pode ser desfeito.</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs text-text-muted">Remove já rascunhos com +{retentionDays} dias. Não pode ser desfeito.</span>
                         <button
                             onClick={() => cleanupMutation.mutate()}
                             disabled={cleanupMutation.isPending}
@@ -470,18 +551,97 @@ function SystemTab() {
                 ) : (
                     <button
                         onClick={() => setConfirmCleanup(true)}
-                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm"
+                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm shrink-0"
                     >
                         <Trash2 size={14} />
-                        Limpar Histórico
+                        Limpar agora
                     </button>
                 )}
             </div>
+        </div>
+    );
+}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <SystemHealthCard />
+function TrashCard() {
+    const { showNotification } = useNotification();
+    const queryClient = useQueryClient();
+    const retentionInputRef = useRef<HTMLInputElement>(null);
+    const scheduleInputRef = useRef<HTMLInputElement>(null);
+
+    const { data: settings } = useQuery({
+        queryKey: ['trash-settings'],
+        queryFn: () => ebooksApi.getTrashSettings().then(r => r.data),
+    });
+
+    const settingsMutation = useMutation({
+        mutationFn: ({ days, schedule }: { days: number, schedule: string }) => ebooksApi.setTrashSettings(days, schedule),
+        onSuccess: () => {
+            showNotification('success', 'Definições guardadas.');
+            queryClient.invalidateQueries({ queryKey: ['trash-settings'] });
+        },
+        onError: (err: AxiosError<{ error: string }>) => showNotification('error', err?.response?.data?.error ?? 'Erro ao guardar.'),
+    });
+
+    const retentionDays = settings?.retentionDays ?? 30;
+    const schedule = settings?.schedule ?? '';
+
+    return (
+        <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-base font-semibold text-slate-700 cursor-help"
+                    title="Elimina definitivamente livros na Reciclagem há mais dias do que o definido abaixo.">
+                    Purga automática da Reciclagem
+                </h2>
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <span className="text-xs text-text-muted">Eliminar após</span>
+                    <input
+                        key={`d${retentionDays}`}
+                        ref={retentionInputRef}
+                        type="number"
+                        min={1}
+                        max={365}
+                        defaultValue={retentionDays}
+                        className="w-16 h-9 px-2 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all text-center"
+                    />
+                    <span className="text-xs text-text-muted">dias, às</span>
+                    <input
+                        key={`s${schedule}`}
+                        ref={scheduleInputRef}
+                        type="text"
+                        defaultValue={schedule}
+                        placeholder="30 2 * * * (cron)"
+                        title='Expressão cron de 5 campos (minuto hora dia mês dia-semana), ex. "30 2 * * *" = todos os dias às 2h30. Vazio = default.'
+                        className="w-36 h-9 px-2 rounded-lg border border-border bg-slate-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+                    />
+                    <button
+                        onClick={() => {
+                            const n = Number(retentionInputRef.current?.value);
+                            if (Number.isFinite(n) && n >= 1) settingsMutation.mutate({ days: n, schedule: scheduleInputRef.current?.value ?? '' });
+                        }}
+                        disabled={settingsMutation.isPending}
+                        className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-9 rounded-lg font-semibold text-sm transition-all shadow-sm disabled:opacity-50"
+                    >
+                        {settingsMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        Guardar
+                    </button>
+                </div>
             </div>
-        </>
+            <div className="px-6 py-4">
+                <span className="text-xs text-text-muted">
+                    Última execução automática: {formatLastRun(settings?.lastRun ?? null, 'livro')}
+                </span>
+            </div>
+        </div>
+    );
+}
+
+function SystemTab() {
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <SystemHealthCard />
+            <CleanupCard />
+            <TrashCard />
+        </div>
     );
 }
 
