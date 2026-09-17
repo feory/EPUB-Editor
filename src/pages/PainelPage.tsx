@@ -526,12 +526,14 @@ function CleanupCard() {
                 </div>
             </div>
             <div className="px-6 py-4 flex items-center justify-between gap-4">
-                <span className="text-xs text-text-muted">
-                    Última execução automática: {formatLastRun(settings?.lastRun ?? null, 'ficheiro')}
-                </span>
+                {!confirmCleanup && (
+                    <span className="text-xs text-text-muted">
+                        Última execução: {formatLastRun(settings?.lastRun ?? null, 'ficheiro')}
+                    </span>
+                )}
                 {confirmCleanup ? (
                     <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs text-text-muted">Remove já rascunhos com +{retentionDays} dias. Não pode ser desfeito.</span>
+                        <span className="text-xs text-text-muted">Não pode ser desfeito.</span>
                         <button
                             onClick={() => cleanupMutation.mutate()}
                             disabled={cleanupMutation.isPending}
@@ -628,7 +630,7 @@ function TrashCard() {
             </div>
             <div className="px-6 py-4">
                 <span className="text-xs text-text-muted">
-                    Última execução automática: {formatLastRun(settings?.lastRun ?? null, 'livro')}
+                    Última execução: {formatLastRun(settings?.lastRun ?? null, 'livro')}
                 </span>
             </div>
         </div>
@@ -639,8 +641,10 @@ function SystemTab() {
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <SystemHealthCard />
-            <CleanupCard />
-            <TrashCard />
+            <div className="flex flex-col gap-4">
+                <TrashCard />
+                <CleanupCard />
+            </div>
         </div>
     );
 }
