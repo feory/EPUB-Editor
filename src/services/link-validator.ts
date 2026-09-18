@@ -90,8 +90,19 @@ export function validateLinks(html: string): LinkReport {
     }
   }
 
-  // (2) URLs partidos no texto visível — manter o texto dos <a>, restantes tags viram espaço
-  const text = decodeSpaces(html.replace(/<a[^>]*>|<\/a>/gi, '').replace(/<[^>]+>/g, ' '));
+  // (2) URLs partidos no texto visível — manter o texto dos <a>, restantes tags viram espaço.
+  // Tags de BLOCO (fronteira de parágrafo real, ex. </p><p> entre uma nota e a seguinte) viram
+  // 2 espaços — scanUrl já trata "2+ espaços" como fronteira real (nunca interna), ao contrário
+  // de tags inline (1 espaço, ainda tolerado como quebra de extração a meio do URL). Sem isto,
+  // um URL de nota a terminar em "/" (STRUCT) antes da quebra de parágrafo "engolia" a 1ª
+  // palavra do parágrafo seguinte — falso positivo que o fixLinks (DOM real) nunca encontrava.
+  const BLOCK_TAG_RE = /<\/?(p|h[1-6]|li|ul|ol|div|br|table|tr|td|th|blockquote)\b[^>]*>/gi;
+  const text = decodeSpaces(
+    html
+      .replace(/<a[^>]*>|<\/a>/gi, '')
+      .replace(BLOCK_TAG_RE, '  ')
+      .replace(/<[^>]+>/g, ' ')
+  );
   const totalPlain = (text.match(/https?:|www\./gi) || []).length;
 
   for (const { start, end } of brokenUrlRanges(text)) {

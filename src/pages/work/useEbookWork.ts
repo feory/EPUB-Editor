@@ -375,15 +375,18 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     const handleFixLinks = useCallback(() => {
         const syncedHtml = chapterSync.getLatestHtmlContent();
         const { html: fixedHtml, fixed } = fixLinks(syncedHtml);
+        // Reanalisa sempre (mesmo sem nada corrigido) — um falso positivo da validação
+        // (heurística de texto) pode não ter contrapartida real para o fixLinks (DOM), e o
+        // painel ficava com os problemas antigos presos mesmo já não havendo nenhum.
+        const htmlToValidate = fixed > 0 ? fixedHtml : syncedHtml;
+        const report = validateLinks(htmlToValidate);
+        validation.setLinkValidation(report.issues.length > 0 ? report : null);
         if (fixed === 0 || fixedHtml === syncedHtml) {
             showNotification('info', 'Nenhum link para corrigir.');
             return;
         }
         commitHtml(fixedHtml);
         showNotification('success', `${fixed} ${fixed === 1 ? 'link corrigido' : 'links corrigidos'}.`);
-        // Validar de novo já com o conteúdo corrigido (síncrono — sem depender do debounce de sync).
-        const report = validateLinks(fixedHtml);
-        validation.setLinkValidation(report.issues.length > 0 ? report : null);
     }, [chapterSync, commitHtml, showNotification, validation]);
 
     // PDF carregado DEPOIS do import (o zip IDML não tinha PDF, ou o import é antigo) — gera a
