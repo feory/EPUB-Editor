@@ -94,6 +94,14 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
         return () => { cancelled = true; };
     }, [status, page, scale]);
 
+    // Confirma o nº digitado no campo "ir para página" — fora do intervalo/inválido reverte
+    // ao valor atual (o `key={page}` no input remonta-o com o defaultValue certo).
+    const commitPageInput = (input: HTMLInputElement) => {
+        const target = Math.round(Number(input.value));
+        if (Number.isFinite(target) && target >= 1 && target <= pageCount) goToPage(target);
+        else input.value = String(page);
+    };
+
     const zoomIn = () => setScale(s => Math.min(MAX_SCALE, +(s + SCALE_STEP).toFixed(2)));
     const zoomOut = () => setScale(s => Math.max(MIN_SCALE, +(s - SCALE_STEP).toFixed(2)));
 
@@ -184,13 +192,32 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
                     toolbar_sticky do editor, ver index.css). opacity-0 mantém pointer-events, por
                     isso o hover dispara mesmo invisível. */}
                 {status === 'ready' && (
-                    <div className="sticky bottom-0 left-0 right-0 pt-6 pb-3 flex items-center justify-center gap-3 bg-gradient-to-t from-white via-white/95 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300">
+                    // left-1/2 -translate-x-1/2 (não left-0 right-0): num sticky em fluxo normal
+                    // (não absolute), left+right em conflito anulam-se um ao outro — sem stretch
+                    // nem sticky horizontal, a barra ficava só centrada pelo items-center do pai
+                    // (posição estática) e fugia com o scroll lateral quando o canvas não cabe no
+                    // painel encolhido. left-1/2+translate fixa-a centrada no viewport visível.
+                    <div className="sticky bottom-0 left-1/2 -translate-x-1/2 pt-6 pb-3 flex items-center gap-3 bg-gradient-to-t from-white via-white/95 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300">
                         {pageCount > 1 && (
                             <>
                                 <button onClick={() => goToPage(Math.max(1, page - 1))} disabled={page <= 1} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors">
                                     <ChevronLeft size={16} />
                                 </button>
-                                <span className="text-xs font-semibold text-slate-600 tabular-nums">{page} / {pageCount}</span>
+                                <span className="flex items-center gap-1 text-xs font-semibold text-slate-600 tabular-nums">
+                                    <input
+                                        key={page}
+                                        type="number"
+                                        min={1}
+                                        max={pageCount}
+                                        defaultValue={page}
+                                        onFocus={(e) => e.currentTarget.select()}
+                                        onBlur={(e) => commitPageInput(e.currentTarget)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                        title="Ir para a página"
+                                        className="w-9 text-center bg-transparent border border-transparent hover:border-slate-200 focus:border-primary rounded outline-none tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                    />
+                                    / {pageCount}
+                                </span>
                                 <button onClick={() => goToPage(Math.min(pageCount, page + 1))} disabled={page >= pageCount} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors">
                                     <ChevronRight size={16} />
                                 </button>
