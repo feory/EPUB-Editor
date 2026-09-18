@@ -24,7 +24,7 @@ function sanitizeImportedHtml(html: string): string {
 // 'auto' = não emitir regra, deixar as heurísticas decidirem.
 export type DocxStyleTarget =
     | 'auto' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
-    | 'p' | 'p-indent' | 'p-center' | 'p-small' | 'p-bold' | 'p-italic' | 'p-bold-italic' | 'p-quote' | 'p-legendas' | 'footnote';
+    | 'p' | 'p-indent' | 'p-center' | 'p-small' | 'p-bold' | 'p-italic' | 'p-bold-italic' | 'p-quote' | 'p-legendas' | 'p-uppercase' | 'footnote';
 
 export interface DocxStyleInfo {
     styleId: string;   // w:styleId (chave das heurísticas)

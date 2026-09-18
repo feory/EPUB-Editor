@@ -151,6 +151,7 @@ const StyleEditorModalComponent: React.FC<StyleEditorModalProps> = ({ isbn, onCl
     <p class="p-bold">Parágrafo todo em negrito.</p>
     <p class="p-italic">Parágrafo todo em itálico.</p>
     <p class="p-bold-italic">Parágrafo todo em negrito + itálico.</p>
+    <p class="p-uppercase">Parágrafo todo em maiúsculas.</p>
     <p class="p-border-top">Parágrafo com borda no topo.</p>
     <p class="p-border-bottom">Parágrafo com borda em baixo.</p>
     <p class="p-border-sides">Parágrafo com bordas laterais.</p>

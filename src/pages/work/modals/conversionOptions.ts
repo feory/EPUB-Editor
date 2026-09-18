@@ -21,7 +21,7 @@ export const CONVERSION_OPTIONS: ConversionOption[] = [
     {
         key: 'topAfterBoldTop',
         label: 'Espaço no Parágrafo Seguinte',
-        description: 'O parágrafo imediatamente a seguir a um parágrafo negrito com espaço superior (p-bold p-top) também ganha esse espaço, se ainda não tiver.',
+        description: 'O parágrafo imediatamente a seguir a um parágrafo negrito, maiúsculas ou itálico com espaço superior (p-top) também ganha esse espaço, se ainda não tiver.',
     },
     {
         key: 'wrapBoldWithNext',

@@ -339,6 +339,8 @@ const INDENT_CONTROLLED_CLASSES = ['footnote', 'alinea', 'drop-cap', 'p-non-inde
 // Classes com semântica de indentação PRÓPRIA — não forçar non-indent nelas (ao contrário
 // de p-indent/p-non-indent, que o "sem indentação após negrito" pode sobrepor).
 const SPECIAL_INDENT_CLASSES = ['footnote', 'alinea', 'drop-cap', 'p-center', 'p-border-top', 'p-border-bottom', 'p-border-sides'];
+// Classes de "título/rótulo" — ver options.topAfterBoldTop (espaço herdado pelo parágrafo seguinte).
+const TITLE_LIKE_CLASSES = ['p-bold', 'p-uppercase', 'p-italic'];
 
 // True when every non-whitespace text node sits inside one of `tags` (ex. STRONG/B).
 function isFullyWrapped(p: HTMLParagraphElement, tags: string[]): boolean {
@@ -430,9 +432,11 @@ export function applyImportOptions(html: string, options: ImportOptions): string
       p.classList.add('p-indent');
     }
 
-    // "p-bold p-top" (título/rótulo com espaço acima) → o parágrafo seguinte herda o mesmo
-    // espaço, se ainda não tiver — evita o corpo colar-se logo a seguir ao título.
-    if (options.topAfterBoldTop && p.classList.contains('p-bold') && p.classList.contains('p-top')) {
+    // "p-bold/p-uppercase/p-italic p-top" (título/rótulo com espaço acima) → o parágrafo
+    // seguinte herda o mesmo espaço, se ainda não tiver — evita o corpo colar-se logo a
+    // seguir ao título, seja negrito, maiúsculas ou itálico.
+    const isTitleLikePara = TITLE_LIKE_CLASSES.some((cls) => p.classList.contains(cls));
+    if (options.topAfterBoldTop && isTitleLikePara && p.classList.contains('p-top')) {
       const next = p.nextElementSibling;
       if (next?.tagName === 'P' && !next.className.includes('chapter-break') && !next.classList.contains('footnote') && !next.classList.contains('p-top')) {
         next.classList.add('p-top');
@@ -704,7 +708,7 @@ export function cleanEditorDOM(body: HTMLElement): void {
   // Add alinea class to list-like paragraphs
   // Estilos de parágrafo explícitos (vindos do mapeamento de estilos no import) ganham
   // prioridade: se o <p> já tem um destes, NÃO se auto-deteta alínea (a escolha do utilizador vence).
-  const STYLED_CLASSES = ['p-indent', 'p-center', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-quote', 'p-legendas', 'drop-cap', 'footnote'];
+  const STYLED_CLASSES = ['p-indent', 'p-center', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-quote', 'p-legendas', 'drop-cap', 'footnote'];
   const allParagraphs = body.querySelectorAll('p');
   allParagraphs.forEach((p: HTMLParagraphElement) => {
     const text = (p.textContent || '').trim();

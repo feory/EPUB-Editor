@@ -106,6 +106,7 @@ export const EPUB_CSS = `
     .p-bold        { font-weight: bold !important; }
     .p-italic      { font-style: italic !important; }
     .p-bold-italic { font-weight: bold !important; font-style: italic !important; }
+    .p-uppercase   { text-transform: uppercase !important; }
     .p-asterisk    { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }
 
     /* === BORDAS === */
@@ -159,6 +160,9 @@ const exportCss = (css: string): string => {
     }
     if (!out.includes('.p-italic')) {
         out += '\n.p-bold { font-weight: bold !important; }\n.p-italic { font-style: italic !important; }\n.p-bold-italic { font-weight: bold !important; font-style: italic !important; }';
+    }
+    if (!out.includes('.p-uppercase')) {
+        out += '\n.p-uppercase { text-transform: uppercase !important; }';
     }
     if (!out.includes('.p-asterisk')) {
         out += '\n.p-asterisk { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }';

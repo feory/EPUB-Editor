@@ -178,6 +178,7 @@ export function createEditorSetup(deps: SetupDeps) {
             editor.formatter.register('p-bold', { selector: 'p,li', classes: 'p-bold' });
             editor.formatter.register('p-italic', { selector: 'p,li', classes: 'p-italic' });
             editor.formatter.register('p-bold-italic', { selector: 'p,li', classes: 'p-bold-italic' });
+            editor.formatter.register('p-uppercase', { selector: 'p,li', classes: 'p-uppercase' });
             editor.formatter.register('p-quote', { selector: 'p,li', classes: 'p-quote' });
             editor.formatter.register('p-asterisk', { selector: 'p,li', classes: 'p-asterisk' });
             editor.formatter.register('p-border-top', { selector: 'p,li', classes: 'p-border-top' });
@@ -346,7 +347,7 @@ export function createEditorSetup(deps: SetupDeps) {
         // ponytail: NodeChange é o choke point comum a todas as vias de conversão
         // (botões, menu "...", atalhos, markdown); estas classes nunca são legítimas num heading.
         const PARA_STYLE_CLASSES = [
-            'p-indent', 'p-top', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-quote', 'p-legendas',
+            'p-indent', 'p-top', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-quote', 'p-legendas',
             'p-non-indent', 'footnote', 'drop-cap', 'alinea',
             'p-border-top', 'p-border-bottom', 'p-border-sides',
         ];

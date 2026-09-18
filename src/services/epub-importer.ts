@@ -219,7 +219,7 @@ async function reverseImages(
 
 // Classes que a nova plataforma entende (passam intactas).
 const NEW_CLASSES = new Set([
-    'p-indent', 'p-non-indent', 'p-top', 'p-space', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic',
+    'p-indent', 'p-non-indent', 'p-top', 'p-space', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase',
     'p-center', 'p-quote', 'p-legendas', 'footnote', 'footnote-ref', 'drop-cap', 'alinea',
     'chapter-break', 'small-caps', 'pagebreak', 'p-border-top', 'p-border-bottom', 'p-border-sides',
     'img-left', 'img-center', 'img-right', 'underline',

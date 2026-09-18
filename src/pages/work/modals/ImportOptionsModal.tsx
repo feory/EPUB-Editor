@@ -42,6 +42,7 @@ const TARGET_OPTIONS: { value: DocxStyleTarget; label: string }[] = [
     { value: 'p-bold-italic', label: 'Negrito + Itálico' },
     { value: 'p-quote', label: 'Citação' },
     { value: 'p-legendas', label: 'Legenda' },
+    { value: 'p-uppercase', label: 'Maiúsculas' },
     { value: 'footnote', label: 'Nota de rodapé' },
 ];
 

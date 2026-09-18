@@ -63,6 +63,7 @@ export const DEFAULT_CSS = `
     .p-bold       { font-weight: bold !important; }
     .p-italic     { font-style: italic !important; }
     .p-bold-italic { font-weight: bold !important; font-style: italic !important; }
+    .p-uppercase  { text-transform: uppercase !important; }
     .p-asterisk   { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }
 
     /* === CAPITULAR === */
@@ -209,7 +210,21 @@ const MISSING_PARAGRAPH_STYLES = `    .p-bold       { font-weight: bold !importa
     .p-bold-italic { font-weight: bold !important; font-style: italic !important; }
 `;
 
-/** Insere estilos de parágrafo em falta no style.css guardado (livros anteriores a p-italic). */
+const MISSING_UPPERCASE_STYLE = `    .p-uppercase  { text-transform: uppercase !important; }
+`;
+
+function insertParagraphStyleRule(css: string, rule: string): string {
+  const marker = '/* === ESTILOS DE PARÁGRAFO === */';
+  const idx = css.indexOf(marker);
+  if (idx !== -1) {
+    const lineEnd = css.indexOf('\n', idx);
+    const insertAt = lineEnd === -1 ? css.length : lineEnd + 1;
+    return css.slice(0, insertAt) + rule + '\n' + css.slice(insertAt);
+  }
+  return `${css.trimEnd()}\n\n${rule}`;
+}
+
+/** Insere estilos de parágrafo em falta no style.css guardado (livros anteriores a p-italic/p-uppercase). */
 export function patchLoadedCss(css: string): string {
   // Marcador de capítulo: retirar o prefixo "Capítulo - " (livros antigos guardaram-no no CSS).
   css = css.replace(/content:\s*"Cap[íi]tulo - "\s+attr\(data-title\)/g, 'content: attr(data-title)');
@@ -218,15 +233,9 @@ export function patchLoadedCss(css: string): string {
   // os .ttf realmente estão servidos). Só troca ESTE ficheiro específico (não generaliza a outros
   // url("Fonts/…") que possam existir, ex. os do export EPUB).
   css = css.replace(/url\(["']?Fonts\/(CrimsonText-[\w]+\.ttf)["']?\)/g, 'url("/$1")');
-  if (css.includes('.p-italic')) return css;
-  const marker = '/* === ESTILOS DE PARÁGRAFO === */';
-  const idx = css.indexOf(marker);
-  if (idx !== -1) {
-    const lineEnd = css.indexOf('\n', idx);
-    const insertAt = lineEnd === -1 ? css.length : lineEnd + 1;
-    return css.slice(0, insertAt) + MISSING_PARAGRAPH_STYLES + '\n' + css.slice(insertAt);
-  }
-  return `${css.trimEnd()}\n\n${MISSING_PARAGRAPH_STYLES}`;
+  if (!css.includes('.p-italic')) css = insertParagraphStyleRule(css, MISSING_PARAGRAPH_STYLES);
+  if (!css.includes('.p-uppercase')) css = insertParagraphStyleRule(css, MISSING_UPPERCASE_STYLE);
+  return css;
 }
 
 interface StyleContextType {
