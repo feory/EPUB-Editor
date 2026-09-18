@@ -172,6 +172,21 @@ function styleName(attr: string | null): string {
     return (attr || '').split('/').pop() || '';
 }
 
+// Story não-threaded cujo estilo de título não bate com STRUCTURAL_STYLES (livros com
+// nomenclatura própria, ex. "TÍTULOS CAP" em vez de "CAPÍTULOS_TÍTULOS") mas cujo utilizador
+// já mapeou explicitamente esse estilo a um alvo real (h1/h2/…, não 'auto') no import — sinal
+// inequívoco de conteúdo narrativo, evita depender só do regex fixo. Sem isto, um capítulo de
+// 1 frame só (ex. "Agradecimentos") com esse estilo desaparecia silenciosamente do import.
+function hasUserMappedStyle(xml: string, mapping: DocxStyleMapping): boolean {
+    const re = /AppliedParagraphStyle="([^"]+)"/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(xml)) !== null) {
+        const entry = mapping[styleName(m[1])];
+        if (entry && entry.target !== 'auto') return true;
+    }
+    return false;
+}
+
 interface NoteCounter { n: number; star: number; defs: string[] }
 interface Segment { text: string; notes: string[]; raw?: string }
 
@@ -1028,7 +1043,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
                 if (html) parts.push(html);
                 continue;
             }
-            if (!threaded && !STRUCTURAL_STYLES.test(xml)) {
+            if (!threaded && !STRUCTURAL_STYLES.test(xml) && !hasUserMappedStyle(xml, mapping)) {
                 // Epígrafe/citação de abertura (story 1 frame com recuo de bloco).
                 if (isBlockQuoteStory(xml)) {
                     const html = renderStory(xml, counter, mapping);
