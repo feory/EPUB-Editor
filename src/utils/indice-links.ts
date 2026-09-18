@@ -1,7 +1,7 @@
 // Liga automaticamente as entradas do Índice do livro (página de conteúdo real, não o nav.xhtml
 // do EPUB) aos capítulos correspondentes — e também às sub-secções dentro de cada capítulo
-// (parágrafos "pseudo-heading" a negrito/itálico inteiro, classe `p-bold`/`p-italic`/
-// `p-bold-italic`, ex. "Introdução", "Conclusão" — repetem-se em vários capítulos, por isso só se procura dentro do capítulo a que
+// (parágrafos "pseudo-heading" a negrito/itálico/maiúsculas inteiro, classe `p-bold`/`p-italic`/
+// `p-bold-italic`/`p-uppercase`, ex. "Introdução", "Conclusão" — repetem-se em vários capítulos, por isso só se procura dentro do capítulo a que
 // a entrada pertence no Índice, nunca no livro inteiro). Opera sobre `parts: string[]` (mesma
 // forma que chapterSync.splitHtmlIntoParts()) — puro, sem DOM/pdfjs, testável com bun test.
 //
@@ -74,11 +74,11 @@ function headingPrefixLength(part: string): number {
     return h ? marker.raw.length + h[0].length : 0;
 }
 
-// Acha, dentro do conteúdo de UM capítulo, o 1º parágrafo p-bold/p-italic/p-bold-italic ainda não
-// usado cujo texto bata com `lineNorm`. `used` evita casar o mesmo parágrafo físico com duas
-// entradas diferentes do Índice.
+// Acha, dentro do conteúdo de UM capítulo, o 1º parágrafo p-bold/p-italic/p-bold-italic/p-uppercase
+// ainda não usado cujo texto bata com `lineNorm`. `used` evita casar o mesmo parágrafo físico com
+// duas entradas diferentes do Índice.
 function findSubHeading(partContent: string, lineNorm: string, used: Set<number>): { start: number; end: number; headingNorm: string } | null {
-    const re = /<p\b[^>]*\bclass="[^"]*\b(?:p-bold|p-italic|p-bold-italic)\b[^"]*"[^>]*>([\s\S]*?)<\/p>/gi;
+    const re = /<p\b[^>]*\bclass="[^"]*\b(?:p-bold|p-italic|p-bold-italic|p-uppercase)\b[^"]*"[^>]*>([\s\S]*?)<\/p>/gi;
     let m: RegExpExecArray | null;
     while ((m = re.exec(partContent)) !== null) {
         if (used.has(m.index)) continue;

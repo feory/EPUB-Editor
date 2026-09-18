@@ -107,6 +107,18 @@ test('linkIndiceEntries: sub-entrada liga ao parágrafo p-bold dentro do capítu
     expect(out[1]).toMatch(/<p class="p-bold">Conclusão<\/p><p class="chapter-anchor" id="idx-anchor-1-2">/);
 });
 
+test('linkIndiceEntries: sub-entrada liga ao parágrafo p-uppercase dentro do capítulo corrente', () => {
+    const parts = [
+        toc('<p>Um fantasma assombra o mundo . . . 358</p><p>INTRODUÇÃO . . . 359</p>'),
+        chapter('1', 'Um fantasma assombra o mundo',
+            '<p class="p-uppercase">INTRODUÇÃO</p><p>texto</p>'),
+    ];
+    const { parts: out, linked, anchored } = linkIndiceEntries(parts);
+    expect(linked).toBe(2); // capítulo + sub-entrada
+    expect(anchored).toBe(1);
+    expect(out[1]).toMatch(/<p class="p-uppercase">INTRODUÇÃO<\/p><p class="chapter-anchor" id="idx-anchor-1-1">/);
+});
+
 test('linkIndiceEntries: mesmo texto de sub-entrada ("Introdução") não cruza capítulos', () => {
     const parts = [
         toc('<p>Capítulo Um . . . 1</p><p>Introdução . . . 2</p><p>Capítulo Dois . . . 10</p><p>Introdução . . . 11</p>'),
