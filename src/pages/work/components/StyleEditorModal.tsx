@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { Save, Eye, EyeOff, ChevronRight, Search, X } from 'lucide-react';
+import { Save, Eye, EyeOff, ChevronRight, Search, X, AlertTriangle } from 'lucide-react';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
@@ -7,8 +7,68 @@ import { css } from '@codemirror/lang-css';
 import { EditorView } from '@codemirror/view';
 import type { EditorState } from '@codemirror/state';
 import { foldEffect, unfoldAll } from '@codemirror/language';
+import * as csstree from 'css-tree';
 import { useStyles } from '../../../context/StyleContext';
 import { ebooksApi } from '../../../api/ebooks-api';
+
+interface CssError {
+  line: number;
+  near: string;
+}
+
+// Propriedades não-standard usadas de propósito neste projeto (ver notas de Estilos/CLAUDE.md)
+// — a spec CSS não as conhece, o css-tree marcaria sempre "Unknown property" sem esta exceção.
+const NON_STANDARD_PROPERTIES = new Set(['adobe-hyphenate']); // hifenização específica de leitores EPUB (Adobe)
+
+// Validação real de CSS (css-tree — o motor por trás do stylelint/csso, já conhece toda a
+// gramática de valores da spec: propriedades existentes, unidades, cores, keywords válidas por
+// propriedade). Substitui o parser Lezer anterior, que só via sintaxe solta (chavetas/pontuação)
+// e nunca soube que "adding"/"1.1e"/"bluee" não são coisas reais — passavam sem aviso.
+function findCssErrors(cssText: string): CssError[] {
+  const byLine = new Map<number, CssError>();
+
+  // css-tree não recusa um bloco "{" nunca fechado (silenciosamente absorve até ao fim do
+  // ficheiro) — contagem simples de chavetas cobre esse buraco.
+  const openBraces = (cssText.match(/{/g) || []).length;
+  const closeBraces = (cssText.match(/}/g) || []).length;
+  if (openBraces !== closeBraces) {
+    const line = cssText.split('\n').length;
+    byLine.set(line, { line, near: openBraces > closeBraces ? 'chaveta "{" por fechar' : 'chaveta "}" a mais' });
+  }
+
+  const ast = csstree.parse(cssText, {
+    positions: true,
+    onParseError: (error) => {
+      if (!byLine.has(error.line)) byLine.set(error.line, { line: error.line, near: error.message });
+    },
+  });
+
+  csstree.walk(ast, {
+    visit: 'Declaration',
+    enter(node) {
+      if (NON_STANDARD_PROPERTIES.has(node.property.toLowerCase())) return;
+      // Direto dentro de uma at-rule (ex. @font-face src/font-family, sem regra aninhada) a
+      // gramática é de DESCRITOR, não de propriedade — matchDeclaration marcava sempre "src"
+      // como propriedade desconhecida. `this.rule` distingue de @keyframes (0% { cor: ... }):
+      // aí a declaração está dentro de uma Rule aninhada, é propriedade normal na mesma.
+      const result = this.atrule && !this.rule
+        ? csstree.lexer.matchAtruleDescriptor(this.atrule.name, node.property, node.value)
+        : csstree.lexer.matchDeclaration(node);
+      if (!result.error || !node.loc) return;
+      const line = node.loc.start.line;
+      if (byLine.has(line)) return;
+      // SyntaxReferenceError = propriedade/descritor desconhecido (mensagem já clara); qualquer
+      // outro erro (SyntaxMatchError) = valor inválido — a mensagem do css-tree vem com um
+      // diagrama multi-linha da gramática, substituído por algo legível.
+      const near = result.error.name === 'SyntaxReferenceError'
+        ? result.error.message
+        : `${node.property}: valor inválido "${csstree.generate(node.value).replace(/\s+/g, ' ').trim()}"`;
+      byLine.set(line, { line, near });
+    },
+  });
+
+  return [...byLine.values()].sort((a, b) => a.line - b.line);
+}
 
 interface StyleEditorModalProps {
   isbn: string;
@@ -69,6 +129,7 @@ const StyleEditorModalComponent: React.FC<StyleEditorModalProps> = ({ isbn, onCl
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [filterQuery, setFilterQuery] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [cssErrors, setCssErrors] = useState<CssError[]>([]);
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const filterQueryRef = useRef('');
   const filterRef = useRef<HTMLDivElement>(null);
@@ -107,6 +168,7 @@ const StyleEditorModalComponent: React.FC<StyleEditorModalProps> = ({ isbn, onCl
   const handleCssChange = useCallback((value: string) => {
     setLocalCss(value);
     setTempCssContext(value);
+    setCssErrors([]); // limpa erros da tentativa anterior — só reavalia no próximo Guardar
     // Reaplica o filtro (linhas podem ter mudado) sem depender de `filterQuery` — manteria
     // esta função instável e voltaria a partir o painel de busca.
     const view = cmRef.current?.view;
@@ -114,6 +176,12 @@ const StyleEditorModalComponent: React.FC<StyleEditorModalProps> = ({ isbn, onCl
   }, [setTempCssContext, applyLineFilter]);
 
   const handleSave = async () => {
+    const errors = findCssErrors(localCss);
+    if (errors.length > 0) {
+      setCssErrors(errors);
+      return; // não grava enquanto houver erro de sintaxe
+    }
+    setCssErrors([]);
     setCustomCss(localCss);
     setTempCssContext(null);
     await ebooksApi.saveStyle(isbn, localCss);
@@ -135,6 +203,19 @@ const StyleEditorModalComponent: React.FC<StyleEditorModalProps> = ({ isbn, onCl
     view.dispatch({
       selection: { anchor: line.from },
       effects: EditorView.scrollIntoView(line.from, { y: 'start', yMargin: 20 }),
+    });
+    view.focus();
+  }, []);
+
+  const jumpToLine = useCallback((lineNumber: number) => {
+    const view = cmRef.current?.view;
+    if (!view) return;
+    const doc = view.state.doc;
+    if (lineNumber > doc.lines) return;
+    const line = doc.line(lineNumber);
+    view.dispatch({
+      selection: { anchor: line.from },
+      effects: EditorView.scrollIntoView(line.from, { y: 'center', yMargin: 20 }),
     });
     view.focus();
   }, []);
@@ -180,6 +261,30 @@ const StyleEditorModalComponent: React.FC<StyleEditorModalProps> = ({ isbn, onCl
             <ModalCloseButton onClick={handleCancel} />
           </div>
         </div>
+
+        {/* Erros de sintaxe CSS — bloqueiam o Guardar até corrigidos */}
+        {cssErrors.length > 0 && (
+          <div className="px-6 pt-4 shrink-0">
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-2 text-rose-900 font-bold text-sm">
+                <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+                {cssErrors.length === 1 ? '1 erro de sintaxe CSS' : `${cssErrors.length} erros de sintaxe CSS`} — não gravado.
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {cssErrors.map((err) => (
+                  <button
+                    key={err.line}
+                    onClick={() => jumpToLine(err.line)}
+                    title={`Ir para a linha ${err.line}`}
+                    className="text-[11px] font-mono bg-white border border-rose-200 hover:border-rose-400 text-rose-700 px-2 py-1 rounded-lg transition-colors truncate max-w-[260px]"
+                  >
+                    Linha {err.line}: {err.near}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-hidden p-6 flex gap-4 min-h-0">
