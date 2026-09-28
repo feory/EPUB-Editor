@@ -65,6 +65,7 @@ export const EPUB_CSS = `
     img.img-center { display: block; float: none; margin: 1.5em auto; }
     img.img-left { float: left; margin: 0.5em 1.5em 0.5em 0; }
     img.img-right { float: right; margin: 0.5em 0 0.5em 1.5em; }
+    img.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }
 
     sup {
         font-size: 0.75em;
@@ -166,6 +167,9 @@ const exportCss = (css: string): string => {
     }
     if (!out.includes('.p-asterisk')) {
         out += '\n.p-asterisk { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }';
+    }
+    if (!out.includes('.img-inline')) {
+        out += '\nimg.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }';
     }
     if (!out.includes('.divider-full')) {
         // Livros antigos sem regra de `hr`: UA default do e-reader é ~100% largura,

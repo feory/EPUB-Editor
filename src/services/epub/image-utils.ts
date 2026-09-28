@@ -43,7 +43,7 @@ export const replaceImageUrlsInContent = (content: string, images: Map<string, B
         const filename = filenames.get(id);
         if (!filename) return tag;
         const clsMatch = tag.match(/class=["']([^"']*)["']/i);
-        const aligns = (clsMatch?.[1] || '').split(/\s+/).filter((c) => /^img-(left|right|center)$/.test(c));
+        const aligns = (clsMatch?.[1] || '').split(/\s+/).filter((c) => /^img-(left|right|center|inline)$/.test(c));
         const classAttr = aligns.length ? ` class="${aligns.join(' ')}"` : '';
         // Tamanho definido pelo resize do TinyMCE (setSizeProp: width como atributo HTML,
         // height como style inline) — preservar, senão o resize não sobrevive ao preview/export.

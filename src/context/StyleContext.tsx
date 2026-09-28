@@ -133,6 +133,7 @@ export const DEFAULT_CSS = `
     img.img-center { display: block; float: none; margin: 1.5em auto; }
     img.img-left { float: left; margin: 0.5em 1.5em 0.5em 0; }
     img.img-right { float: right; margin: 0.5em 0 0.5em 1.5em; }
+    img.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }
 
     /* === EDITOR (não exportado para EPUB) === */
     [data-mce-psactive] {
@@ -213,6 +214,9 @@ const MISSING_PARAGRAPH_STYLES = `    .p-bold       { font-weight: bold !importa
 const MISSING_UPPERCASE_STYLE = `    .p-uppercase  { text-transform: uppercase !important; }
 `;
 
+const MISSING_IMG_INLINE_STYLE = `    img.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }
+`;
+
 function insertParagraphStyleRule(css: string, rule: string): string {
   const marker = '/* === ESTILOS DE PARÁGRAFO === */';
   const idx = css.indexOf(marker);
@@ -235,6 +239,7 @@ export function patchLoadedCss(css: string): string {
   css = css.replace(/url\(["']?Fonts\/(CrimsonText-[\w]+\.ttf)["']?\)/g, 'url("/$1")');
   if (!css.includes('.p-italic')) css = insertParagraphStyleRule(css, MISSING_PARAGRAPH_STYLES);
   if (!css.includes('.p-uppercase')) css = insertParagraphStyleRule(css, MISSING_UPPERCASE_STYLE);
+  if (!css.includes('.img-inline')) css = insertParagraphStyleRule(css, MISSING_IMG_INLINE_STYLE);
   return css;
 }
 
