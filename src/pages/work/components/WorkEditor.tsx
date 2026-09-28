@@ -1016,7 +1016,12 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                                     if (!editor) return;
                                     const blobCache = editor.editorUpload.blobCache;
                                     const blobId = `blobid${Date.now()}`;
-                                    const blobInfo = blobCache.create(blobId, file, base64, file.name);
+                                    // 5º arg (filename) obrigatório: sem ele, o BlobInfo do TinyMCE
+                                    // sintetiza "nome + '.' + ext" a partir do 4º (name), duplicando
+                                    // a extensão ("reproduce.png" → "reproduce.png.png") — o imageId
+                                    // que sai daí nunca bate com o ficheiro realmente guardado no
+                                    // servidor, e a imagem fica com erro na Galeria.
+                                    const blobInfo = blobCache.create(blobId, file, base64, file.name, file.name);
                                     blobCache.add(blobInfo);
                                     callback(blobInfo.blobUri(), { title: file.name });
                                 };

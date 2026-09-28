@@ -87,7 +87,9 @@ export function createEditorSetup(deps: SetupDeps) {
                 reader.onload = () => {
                     const base64 = (reader.result as string).split(',')[1];
                     const blobId = `blobid${Date.now()}${Math.round(Math.random() * 1e6)}`;
-                    const blobInfo = blobCache.create(blobId, file, base64, file.name);
+                    // 5º arg (filename) obrigatório — ver comentário equivalente em WorkEditor.tsx
+                    // (file_picker_callback): sem ele o TinyMCE duplica a extensão do ficheiro.
+                    const blobInfo = blobCache.create(blobId, file, base64, file.name, file.name);
                     blobCache.add(blobInfo);
                     editor.insertContent(`<img src="${blobInfo.blobUri()}" alt="${file.name}" />`);
                 };
