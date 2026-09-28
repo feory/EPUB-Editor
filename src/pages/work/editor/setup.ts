@@ -189,6 +189,10 @@ export function createEditorSetup(deps: SetupDeps) {
             // <u> é o que o import de EPUB já produz (reverseUnderline), consistente e sem CSS.
             editor.formatter.register('underline', { inline: 'u' });
             editor.formatter.register('small-caps', { inline: 'span', classes: 'small-caps' });
+            // Reusa a classe do formato de parágrafo p-uppercase (CSS já existe, sem seletor de
+            // tag — ver StyleContext.tsx) num <span> inline, para poder aplicar-se a uma SELEÇÃO
+            // dentro de um título (p-uppercase de bloco é removido de headings — ver PARA_STYLE_CLASSES).
+            editor.formatter.register('uppercase', { inline: 'span', classes: 'p-uppercase' });
             editor.formatter.register('box', { block: 'div', classes: 'box', wrapper: true });
         });
 
@@ -262,6 +266,7 @@ export function createEditorSetup(deps: SetupDeps) {
             ['pstop', 'p-top', 'ps-top', 'Espaçamento no Topo'],
             ['psspace', 'p-space', 'ps-space', 'Espaço Extra'],
             ['psquote', 'p-quote', 'ps-quote', 'Citação'],
+            ['psuppercase', 'p-uppercase', 'ps-uppercase', 'Maiúsculas'],
             ['psh1', 'h1', 'ps-h1', 'Título 1'],
             ['psh2', 'h2', 'ps-h2', 'Título 2'],
             ['psh3', 'h3', 'ps-h3', 'Título 3'],
@@ -569,7 +574,7 @@ export function createEditorSetup(deps: SetupDeps) {
             },
             position: 'node',
             scope: 'node',
-            items: 'psmorepara pscombopara blockalignmenu psdefault psindent pstop psspace psquote idxlinktarget edithtml',
+            items: 'psmorepara pscombopara blockalignmenu psdefault psindent pstop psspace psquote psuppercase idxlinktarget edithtml',
         });
         // Em título: "Mais estilos" (⋮) no canto esquerdo, alinhamento logo à direita, depois estilos inline.
         editor.ui.registry.addContextToolbar('headingstyles', {
@@ -610,6 +615,16 @@ export function createEditorSetup(deps: SetupDeps) {
             },
             onSetup: (api) => {
                 editor.formatter.formatChanged('small-caps', (active) => api.setActive(active));
+                return () => {};
+            },
+        });
+
+        editor.ui.registry.addToggleButton('uppercase', {
+            icon: 'ps-uppercase',
+            tooltip: 'Maiúsculas',
+            onAction: () => editor.formatter.toggle('uppercase'),
+            onSetup: (api) => {
+                editor.formatter.formatChanged('uppercase', (active) => api.setActive(active));
                 return () => {};
             },
         });

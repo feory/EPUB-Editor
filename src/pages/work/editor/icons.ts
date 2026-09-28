@@ -13,6 +13,7 @@ export function registerEditorIcons(editor: TinyMCEEditor) {
         ['ps-small', '<svg width="24" height="24" viewBox="0 0 24 24"><text x="12" y="18" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="14" fill="currentColor">a</text></svg>'],
         ['ps-bold', '<svg width="24" height="24" viewBox="0 0 24 24"><text x="12" y="18" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="16" fill="currentColor">B</text></svg>'],
         ['ps-quote', '<svg width="24" height="24" viewBox="0 0 24 24"><rect x="3" y="4" width="3" height="16" rx="1.5" fill="currentColor"/><path fill="currentColor" d="M9 7h11v2H9zm0 4h11v2H9zm0 4h8v2H9z"/></svg>'],
+        ['ps-uppercase', txtIcon('AA', 11)],
         ['ps-h1', txtIcon('H1')],
         ['ps-h2', txtIcon('H2')],
         ['ps-h3', txtIcon('H3')],
