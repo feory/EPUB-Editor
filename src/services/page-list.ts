@@ -43,7 +43,7 @@ export async function pdfToJpeg(data: ArrayBuffer, scale = 2): Promise<Blob> {
 
 // Normaliza para casar PDF↔editor apesar de espaçamento/hifenização/pontuação diferentes:
 // minúsculas, só letras (incl. acentuadas) e dígitos.
-function normalize(s: string): string {
+export function normalize(s: string): string {
     return s.toLowerCase().replace(/[^0-9a-zà-öø-ÿ]/g, '');
 }
 
@@ -136,6 +136,50 @@ export async function extractPdfPageAnchors(data: ArrayBuffer): Promise<PageAnch
         }
     }
     return anchors;
+}
+
+// Mapa folio→página física do PDF (1-based) — mesma deteção de zona (rodapé/cabeçalho) de
+// extractPdfPageAnchors, para código que precisa de saber EM QUE página do ficheiro está um
+// folio (ex. placeFiguresByPosition em idml-figures.ts, que recebe o folio via Page/Name do
+// spread do IDML e precisa de abrir a página certa do PDF de impressão).
+export async function mapFolioToPdfPage(data: ArrayBuffer): Promise<Map<number, number>> {
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const pages: { vpH: number; items: { str: string; transform: number[] }[] }[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const vpH = page.getViewport({ scale: 1 }).height;
+        const items = (await page.getTextContent()).items as { str: string; transform: number[] }[];
+        pages.push({ vpH, items });
+    }
+    const bottomFolios = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'bottom'));
+    const topFolios = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'top'));
+    const rawFolios = monotonicScore(topFolios) > monotonicScore(bottomFolios) ? topFolios : bottomFolios;
+    const folios = fillFolioGaps(rawFolios);
+    const map = new Map<number, number>();
+    folios.forEach((f, idx) => { if (f !== null) map.set(f, idx + 1); });
+    return map;
+}
+
+// Linhas de texto (y + texto normalizado) de cada página do PDF, topo→baixo — mesma extração de
+// verifyBlankSpacing, partilhada com placeFiguresByPosition (idml-figures.ts), que procura a
+// maior quebra vertical entre linhas para localizar uma figura sem legenda/nº na página.
+export async function buildPdfLines(data: ArrayBuffer): Promise<{ y: number; text: string }[][]> {
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const pages: { y: number; text: string }[][] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const items = (await page.getTextContent()).items as { str: string; transform: number[] }[];
+        const lineMap = new Map<number, { x: number; str: string }[]>();
+        for (const it of items) {
+            if (!it.str || !it.str.trim()) continue;
+            const y = Math.round(it.transform[5]);
+            (lineMap.get(y) ?? lineMap.set(y, []).get(y)!).push({ x: it.transform[4], str: it.str });
+        }
+        const lines = [...lineMap.entries()].sort((a, b) => b[0] - a[0])
+            .map(([y, parts]) => ({ y, text: normalize(parts.sort((a, b) => a.x - b.x).map(p => p.str).join('')) }));
+        pages.push(lines);
+    }
+    return pages;
 }
 
 export interface ChapterAnchor { title: string; anchor: string }
@@ -250,21 +294,7 @@ export async function verifyBlankSpacing(html: string, data?: ArrayBuffer): Prom
         return doc.body.innerHTML;
     }
 
-    const pdf = await pdfjsLib.getDocument({ data }).promise;
-    const pages: { y: number; text: string }[][] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const items = (await page.getTextContent()).items as { str: string; transform: number[] }[];
-        const lineMap = new Map<number, { x: number; str: string }[]>();
-        for (const it of items) {
-            if (!it.str || !it.str.trim()) continue;
-            const y = Math.round(it.transform[5]);
-            (lineMap.get(y) ?? lineMap.set(y, []).get(y)!).push({ x: it.transform[4], str: it.str });
-        }
-        const lines = [...lineMap.entries()].sort((a, b) => b[0] - a[0])
-            .map(([y, parts]) => ({ y, text: normalize(parts.sort((a, b) => a.x - b.x).map(p => p.str).join('')) }));
-        pages.push(lines);
-    }
+    const pages = await buildPdfLines(data);
 
     for (const el of candidates) {
         el.removeAttribute('data-blank-top');

@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../utils/format';
 import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings, verifyBlankSpacing, getPdfPageCount } from './page-list';
-import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures, toRasterName } from './idml-figures';
+import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures, placeFiguresByPosition, toRasterName } from './idml-figures';
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from './document-importer';
 
 const RASTER_RE = /\.(jpe?g|png|gif|tiff?|webp)$/i;
@@ -1149,7 +1149,20 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     const numberedRes = placeNumberedFigures(html, [...images.keys()].filter(id => !usedIds.has(id)));
     html = numberedRes.html;
 
-    return { html, images, pageBreaks, figuresPlaced: figRes.placed + inlineRes.placed + numberedRes.placed, printPdf: pdf };
+    // Última tentativa: vinhetas puramente decorativas, sem legenda nem nº (ex. "Scribble3.eps"
+    // em "Cai neve no Diabo") — posição pela maior quebra vertical entre linhas na página impressa
+    // (folio do spread, ver pageHint em buildFigures); requer PDF de impressão.
+    let positionRes = { placed: 0 };
+    if (pdf) {
+        const usedIds2 = new Set([...html.matchAll(/data-image-id="([^"]+)"/g)].map(m => m[1]));
+        const unplaced = figs.filter(f => f.imageId && !f.label && f.pageHint?.length && !usedIds2.has(f.imageId));
+        if (unplaced.length > 0) {
+            positionRes = await placeFiguresByPosition(html, unplaced, pdf.slice(0));
+            html = positionRes.html;
+        }
+    }
+
+    return { html, images, pageBreaks, figuresPlaced: figRes.placed + inlineRes.placed + numberedRes.placed + positionRes.placed, printPdf: pdf };
 }
 
 // Sugestão de destino por nome de estilo IDML (espelha o STYLE_MAP); 'auto' = usar o

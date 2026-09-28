@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../utils/format';
+import { buildPdfLines, mapFolioToPdfPage, normalize as normalizeForMatch } from './page-list';
 
 /**
  * Reconstrução de figuras no import IDML+PDF: cada imagem da Links/ é colocada no editor como
@@ -18,6 +19,8 @@ export interface Figure {
     label?: { kind: FigureKind; num: string }; // string: "2.1" não cabe em number sem colidir com "2.10"
     captionLines: string[];                // legenda + fonte + notas (cada uma um <p>); [0] = legenda
     captionSpacing?: string;               // classe p-top/p-bottom para captionLines[0] (DETECT_SPACING)
+    pageHint?: number[];                   // folio(s) (Page/Name) do spread onde a imagem vive — só
+                                            // usado por placeFiguresByPosition (vinhetas sem legenda/nº)
 }
 
 // separadores de linha do InDesign → espaço
@@ -158,6 +161,9 @@ export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promi
         const imgs = [...sx.matchAll(/LinkResourceURI="([^"]*)"/g)]
             .map(mm => decodeURIComponent(mm[1].split('/').pop() || ''))
             .filter(n => RASTER.test(n) || CONVERTIBLE.test(n));
+        // folio(s) das páginas deste spread (Page/Name) — âncora de posição para
+        // placeFiguresByPosition, quando a imagem não tem legenda/nº reconhecível.
+        const pageHint = [...sx.matchAll(/<Page\b[^>]*\bName="(\d+)"/g)].map(mm => parseInt(mm[1], 10));
         // legendas (legenda/fonte/notas) das stories nesta spread — para casar com as IMAGENS
         // (imagem e legenda vivem em frames/stories DIFERENTES na mesma spread).
         const storyIds = [...new Set([...sx.matchAll(/ParentStory="([^"]+)"/g)].map(mm => mm[1]))];
@@ -178,7 +184,7 @@ export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promi
             // sempre, em vez da legenda da imagem desta spread especificamente.
             const fileNum = img.match(/(\d+(?:\.\d+)?)/)?.[1];
             const imgCap = (fileNum && figCaps.find(c => normalizeNum(c.label!.num) === normalizeNum(fileNum))) || figCaps[0];
-            figures.push({ imageId, label: imgCap?.label, captionLines: imgCap ? [imgCap.text, ...extras] : [], captionSpacing: imgCap?.spacingCls });
+            figures.push({ imageId, label: imgCap?.label, captionLines: imgCap ? [imgCap.text, ...extras] : [], captionSpacing: imgCap?.spacingCls, pageHint });
         }
         // figuras TABELA (Quadro): tabela e legenda vivem na MESMA story (confirmado na prática —
         // duas tabelas de stories diferentes podem partilhar uma spread, e casar pela spread
@@ -343,5 +349,114 @@ export function placeInlineFigures(html: string, imageIds: string[]): { html: st
     const remainingIds = ids.filter(id => !used.has(id));
     for (let i = 0; i < unmatched.length && i < remainingIds.length; i++) place(unmatched[i], remainingIds[i]);
 
+    return { html: doc.body.innerHTML, placed };
+}
+
+const POS_MIN_ANCHOR = 15;   // mesmo mínimo de extractPdfPageAnchors (page-list.ts)
+const POS_GAP_FACTOR = 3;    // quebra tem de ser bem maior que entrelinha normal — corpo de
+                              // imagem, não um mero espaçamento de parágrafo (ver verifyBlankSpacing)
+
+function anchorBefore(lines: { text: string }[], endIdx: number, minLen: number): string {
+    let j = endIdx, s = lines[endIdx]?.text || '';
+    while (s.length < minLen && j > 0) { j--; s = lines[j].text + s; }
+    return s;
+}
+function anchorAfter(lines: { text: string }[], startIdx: number, minLen: number): string {
+    let j = startIdx, s = lines[startIdx]?.text || '';
+    while (s.length < minLen && j < lines.length - 1) { j++; s += lines[j].text; }
+    return s;
+}
+
+// Índice da linha a seguir à maior quebra vertical entre linhas consecutivas da página (onde uma
+// imagem sem legenda empurra o texto) — só conta se for bem maior que a entrelinha normal da
+// página (POS_GAP_FACTOR×, mais exigente que o 1.4× de verifyBlankSpacing: aqui é preciso
+// distinguir o CORPO de uma imagem de um mero espaçamento de parágrafo).
+function biggestGap(lines: { y: number }[]): number | null {
+    if (lines.length < 2) return null;
+    const gaps: number[] = [];
+    let maxGap = -Infinity, maxIdx = -1;
+    for (let k = 1; k < lines.length; k++) {
+        const g = lines[k - 1].y - lines[k].y;
+        gaps.push(g);
+        if (g > maxGap) { maxGap = g; maxIdx = k; }
+    }
+    const normal = gaps.filter(g => g > 0 && g < 40).sort((a, b) => a - b);
+    const normalGap = normal.length ? normal[Math.floor(normal.length / 2)] : 0;
+    if (maxIdx < 0 || normalGap <= 0 || maxGap < normalGap * POS_GAP_FACTOR) return null;
+    return maxIdx;
+}
+
+/**
+ * Última tentativa para figuras SEM legenda nem nº reconhecível — vinhetas puramente decorativas
+ * (ex. "Scribble3.eps" em "Cai neve no Diabo": um desenho embutido a meio de um poema, sem
+ * legenda nem referência textual, só identificável pela posição na página impressa). Usa
+ * `pageHint` (folio do spread, ver buildFigures) para localizar a página no PDF de impressão e
+ * a MAIOR quebra vertical entre linhas nessa página (biggestGap) — o ponto onde a imagem empurra
+ * o texto — como âncora de posição: concatena as linhas imediatamente antes/depois da quebra
+ * (anchorBefore/anchorAfter) até atingir um tamanho fiável e localiza esse texto no corpo já
+ * exportado para inserir a imagem exatamente ali.
+ * Só apanha imagens que criam uma quebra CLARAMENTE maior que a entrelinha normal — uma vinheta
+ * pequena ao lado de uma linha de texto (sem empurrar linhas) não é detetada e fica só na galeria.
+ */
+export async function placeFiguresByPosition(html: string, figures: Figure[], pdfData: ArrayBuffer): Promise<{ html: string; placed: number }> {
+    const candidates = figures.filter(f => f.imageId && f.pageHint && f.pageHint.length > 0);
+    if (candidates.length === 0) return { html, placed: 0 };
+
+    const folioToPage = await mapFolioToPdfPage(pdfData.slice(0));
+    const pdfLines = await buildPdfLines(pdfData.slice(0));
+
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    let placed = 0;
+    for (const fig of candidates) {
+        let anchor: { before: string; after: string } | null = null;
+        for (const folio of fig.pageHint!) {
+            const pdfPageIndex = folioToPage.get(folio);
+            if (!pdfPageIndex) continue;
+            const lines = pdfLines[pdfPageIndex - 1];
+            const gapIdx = biggestGap(lines);
+            if (gapIdx === null) continue;
+            const before = anchorBefore(lines, gapIdx - 1, POS_MIN_ANCHOR);
+            const after = anchorAfter(lines, gapIdx, POS_MIN_ANCHOR);
+            if (before.length >= POS_MIN_ANCHOR || after.length >= POS_MIN_ANCHOR) { anchor = { before, after }; break; }
+        }
+        if (!anchor) continue;
+
+        // achatar texto do corpo (mesma técnica de insertPageBreaksInSegment/insertChapterHeadings
+        // em page-list.ts) — refeito a cada figura colocada, pois a inserção anterior mudou o DOM.
+        const nodes: Text[] = [];
+        const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
+        let flat = '';
+        const map: { node: Text; offset: number }[] = [];
+        for (const node of nodes) {
+            const raw = node.textContent ?? '';
+            for (let k = 0; k < raw.length; k++) {
+                const nc = normalizeForMatch(raw[k]);
+                if (!nc) continue;
+                flat += nc;
+                map.push({ node, offset: k });
+            }
+        }
+
+        let insertPos = -1;
+        if (anchor.before.length >= POS_MIN_ANCHOR) {
+            const pos = flat.indexOf(anchor.before);
+            if (pos >= 0) insertPos = pos + anchor.before.length;
+        }
+        if (insertPos < 0 && anchor.after.length >= POS_MIN_ANCHOR) {
+            const pos = flat.indexOf(anchor.after);
+            if (pos >= 0) insertPos = pos;
+        }
+        if (insertPos < 0 || insertPos >= map.length) continue;
+
+        const { node, offset } = map[insertPos];
+        const after = node.splitText(offset);
+        const img = doc.createElement('img');
+        img.setAttribute('data-image-id', fig.imageId!);
+        img.setAttribute('src', 'placeholder');
+        img.setAttribute('alt', '');
+        after.parentNode!.insertBefore(img, after);
+        placed++;
+    }
     return { html: doc.body.innerHTML, placed };
 }
