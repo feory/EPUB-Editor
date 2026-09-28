@@ -257,15 +257,15 @@ function resolveFillColor(colorRef: string | null, tintAttr: string | null): str
 // Recuo de parágrafo (LeftIndent/FirstLineIndent, em PONTOS) definido no estilo de parágrafo
 // (Resources/Styles.xml). Honrado como margin-left + text-indent (hanging quando First<0).
 // ponytail: pt→em com divisor fixo 12 (corpo não tem PointSize fiável nos runs); afinar se preciso.
-let PARA_INDENTS = new Map<string, { left: number; first: number; fontStyle?: string; spaceBefore: number; spaceAfter: number }>();
+let PARA_INDENTS = new Map<string, { left: number; first: number; fontStyle?: string; cap?: string; spaceBefore: number; spaceAfter: number }>();
 
 // Ativado via opções de importação (checkbox só aparece se scanIdmlStyles detetar espaçamento
 // no ficheiro) — a maioria dos livros não precisa, cada estilo já define o seu via CSS.
 let DETECT_SPACING = false;
 
-async function scanParaIndents(zip: JSZip): Promise<Map<string, { left: number; first: number; fontStyle?: string; spaceBefore: number; spaceAfter: number }>> {
+async function scanParaIndents(zip: JSZip): Promise<Map<string, { left: number; first: number; fontStyle?: string; cap?: string; spaceBefore: number; spaceAfter: number }>> {
     const xml = await zip.file('Resources/Styles.xml')?.async('string') ?? '';
-    const map = new Map<string, { left: number; first: number; fontStyle?: string; spaceBefore: number; spaceAfter: number }>();
+    const map = new Map<string, { left: number; first: number; fontStyle?: string; cap?: string; spaceBefore: number; spaceAfter: number }>();
     for (const m of xml.matchAll(/<ParagraphStyle\b([^>]*)>/g)) {
         const self = /\bSelf="([^"]*)"/.exec(m[1])?.[1];
         if (!self) continue;
@@ -274,10 +274,14 @@ async function scanParaIndents(zip: JSZip): Promise<Map<string, { left: number; 
         // FontStyle no estilo de PARÁGRAFO (ex. Num2 Bold) → herdado pelos runs sem override
         // próprio (o marcador "a)"/"i)" das alíneas; o corpo tem FontStyle="Roman" explícito).
         const fontStyle = /\bFontStyle="([^"]*)"/.exec(m[1])?.[1];
+        // Capitalization também pode vir definida no ESTILO DE PARÁGRAFO (não só no run/estilo de
+        // carácter, ver CHAR_STYLES) — ex. um título "CAD AUT_TIT" com Capitalization="SmallCaps"
+        // na própria definição do ParagraphStyle; sem este fallback saía em minúsculas.
+        const cap = /\bCapitalization="([^"]*)"/.exec(m[1])?.[1];
         // Espaço antes/depois do parágrafo, em pontos (SpaceBefore/SpaceAfter do InDesign).
         const spaceBefore = parseFloat(/\bSpaceBefore="([^"]*)"/.exec(m[1])?.[1] || '0') || 0;
         const spaceAfter = parseFloat(/\bSpaceAfter="([^"]*)"/.exec(m[1])?.[1] || '0') || 0;
-        if (left || first || fontStyle || spaceBefore || spaceAfter) map.set(self, { left, first, fontStyle, spaceBefore, spaceAfter });
+        if (left || first || fontStyle || cap || spaceBefore || spaceAfter) map.set(self, { left, first, fontStyle, cap, spaceBefore, spaceAfter });
     }
     return map;
 }
@@ -366,6 +370,9 @@ function renderPsr(psr: Element, counter: NoteCounter): Segment[] {
     // que não definem FontStyle próprio nem via estilo de carácter (ex. marcador "a)" das alíneas
     // num parágrafo Num2 Bold; o corpo, com FontStyle="Roman" explícito, mantém-se roman).
     const paraFS = PARA_INDENTS.get(psr.getAttribute('AppliedParagraphStyle') || '')?.fontStyle || '';
+    // Idem para Capitalization definida no ESTILO DE PARÁGRAFO (ex. "CAD AUT_TIT" com
+    // Capitalization="SmallCaps" na própria definição, não no run nem no estilo de carácter).
+    const paraCap = PARA_INDENTS.get(psr.getAttribute('AppliedParagraphStyle') || '')?.cap || '';
 
     // Processa os filhos de um CharacterStyleRange (ou de um container como HyperlinkTextSource)
     // recursivamente. Os atributos de formatação (fs/cap/pos) vêm do CharacterStyleRange pai.
@@ -468,7 +475,7 @@ function renderPsr(psr: Element, counter: NoteCounter): Segment[] {
             const fs = csr.getAttribute('FontStyle') || acsDef?.fontStyle || paraFS || '';
             // Capitalization do InDesign: SmallCaps (numerais romanos "século xx", "capítulo iv")
             // → <span class="small-caps">; AllCaps → maiúsculas. Sem isto sairiam minúsculos.
-            const cap = csr.getAttribute('Capitalization') || acsDef?.cap || '';
+            const cap = csr.getAttribute('Capitalization') || acsDef?.cap || paraCap || '';
             // Position do InDesign: Superscript (ordinais "6.º"/"n.º", o "o" elevado) → <sup>,
             // Subscript → <sub>. Atributo direto do run (ex. ×5732 em "Direito das Migrações")
             // ou herdado do estilo de carácter. As notas (<Footnote>) têm o seu próprio <sup>.
@@ -561,6 +568,8 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
     if (!story) return '';
     const out: string[] = [];
     let pendingLabel = ''; // nº de capítulo/parte à espera do título seguinte
+    let pendingLabelTag: string = 'h1'; // tag do próprio rótulo (h1/h2/…) — usado se ficar sem título
+    let pendingLabelClass = ''; // classes do próprio rótulo (p-center/p-top/…) — idem
     // Dentro de um capítulo "Índice"/"Índice remissivo": abre por título heurístico (abaixo) OU,
     // aqui, quando o 1º parágrafo não-vazio da story É literalmente "índice"/"índice remissivo" —
     // cobre o caso (este livro) em que esse título não tem Justification/PointSize inline
@@ -586,7 +595,7 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
 
         if (rawMap === 'merge') {
             const text = segs.map(s => s.text).join(' ').trim();
-            if (text) pendingLabel = text;
+            if (text) { pendingLabel = text; pendingLabelTag = 'h1'; pendingLabelClass = ''; }
             continue;
         }
 
@@ -646,6 +655,8 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
             // duas heading NÃO relacionadas, ex. divisória de Parte + 1º capítulo).
             if (/^(cap[íi]tulo|parte)?\s*\d{1,3}\.?$/i.test(body) && segs.every(s => s.notes.length === 0)) {
                 pendingLabel = body;
+                pendingLabelTag = tag; // preserva o alvo escolhido pelo utilizador (h1/h2/…) para quando ficar sem título a seguir
+                pendingLabelClass = baseClasses.join(' '); // idem para as classes (p-center/p-top/…)
                 continue;
             }
             if (pendingLabel) { body = `${pendingLabel}<br>${body}`; pendingLabel = ''; }
@@ -669,7 +680,20 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
         // Corpo normal a seguir → quebra a sequência de headings, EXCETO se for só uma linha em
         // branco (espaçamento visual entre nº e título, ex. "Capítulo 1." <linha vazia> "Título"
         // — layout comum, não é conteúdo real); a sequência mantém-se para ainda fundir o título.
-        if (!segs.every(s => !s.text && !s.raw && s.notes.length === 0)) lastHeadingStyle = null;
+        const isBlankOnly = segs.every(s => !s.text && !s.raw && s.notes.length === 0);
+        if (!isBlankOnly) {
+            lastHeadingStyle = null;
+            // Rótulo pendente (nº de capítulo/parte sem título próprio a seguir — ex. livros onde
+            // o capítulo É só o número, corpo vem logo a seguir) nunca aparece: sem isto ficava à
+            // espera indefinidamente do PRÓXIMO heading (por vezes muitos parágrafos de corpo
+            // depois), fundindo-se com o título de uma secção totalmente não relacionada (ex.
+            // interlúdio "Caderno da Autora") e apagando o capítulo numerado do import.
+            if (pendingLabel) {
+                const attr = pendingLabelClass ? ` class="${pendingLabelClass}"` : '';
+                out.push(`<${pendingLabelTag}${attr}>${pendingLabel}</${pendingLabelTag}>`);
+                pendingLabel = '';
+            }
+        }
         for (const seg of segs) {
             if (seg.raw) { out.push(seg.raw); continue; } // tabela — já é HTML de bloco, não envolver em <tag>
             if (!seg.text && seg.notes.length === 0) {
@@ -701,7 +725,10 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
             for (const def of seg.notes) out.push(def);
         }
     }
-    if (pendingLabel) out.push(`<h1>${pendingLabel}</h1>`);
+    if (pendingLabel) {
+        const attr = pendingLabelClass ? ` class="${pendingLabelClass}"` : '';
+        out.push(`<${pendingLabelTag}${attr}>${pendingLabel}</${pendingLabelTag}>`);
+    }
     return out.join('\n');
 }
 
