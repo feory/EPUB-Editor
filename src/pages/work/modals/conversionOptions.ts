@@ -16,7 +16,7 @@ export const CONVERSION_OPTIONS: ConversionOption[] = [
     {
         key: 'noIndentAfterBold',
         label: 'Sem Indentação no 1º Parágrafo',
-        description: 'O parágrafo imediatamente a seguir a um parágrafo totalmente a negrito fica sem indentação.',
+        description: 'O parágrafo imediatamente a seguir a um parágrafo totalmente a negrito ou itálico fica sem indentação.',
     },
     {
         key: 'topAfterBoldTop',

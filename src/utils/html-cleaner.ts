@@ -407,6 +407,7 @@ export function applyImportOptions(html: string, options: ImportOptions): string
   const paragraphs = Array.from(doc.body.querySelectorAll('p'));
   const needsBold = options.topOnBoldParagraphs || options.noIndentAfterBold || options.wrapBoldWithNext;
   const boldParagraphs = needsBold ? new Set(paragraphs.filter(isFullyBoldParagraph)) : new Set<HTMLParagraphElement>();
+  const italicParagraphs = options.noIndentAfterBold ? new Set(paragraphs.filter(isFullyItalicParagraph)) : new Set<HTMLParagraphElement>();
 
   // Negrito = negrito inline (isFullyBoldParagraph) OU estilo de parágrafo p-bold
   // (negrito via classe, vindo do mapeamento de estilos Word — sem <strong> inline).
@@ -416,7 +417,9 @@ export function applyImportOptions(html: string, options: ImportOptions): string
   paragraphs.forEach((p) => {
     if (p.className.includes('chapter-break')) return; // structural marker — never indented
     const prev = p.previousElementSibling;
-    const afterBold = options.noIndentAfterBold && prev?.tagName === 'P' && isBoldPara(prev);
+    // Itálico (inline ou classe p-italic) conta como título/rótulo tal como o negrito.
+    const isItalicPara = (el: Element) => italicParagraphs.has(el as HTMLParagraphElement) || el.classList.contains('p-italic') || el.classList.contains('p-bold-italic');
+    const afterBold = options.noIndentAfterBold && prev?.tagName === 'P' && (isBoldPara(prev) || isItalicPara(prev));
     // isBoldPara (não só o set) → apanha também os já convertidos em classe p-bold pelo cleanEditorHtml
     const boldTop = options.topOnBoldParagraphs && !p.classList.contains('footnote') && isBoldPara(p);
 
