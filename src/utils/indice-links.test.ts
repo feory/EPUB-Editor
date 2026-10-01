@@ -269,3 +269,44 @@ test('linkOneIndiceEntry: pIndex ou capítulos fora de alcance devolve ok:false 
     const r2 = linkOneIndiceEntry(parts, 0, 0, 9); // capítulo alvo inexistente
     expect(r2.ok).toBe(false);
 });
+
+test('linkIndiceEntries: sub-secção com o mesmo título de um capítulo posterior não salta o ponteiro', () => {
+    const parts = [
+        toc('<p>Capítulo Um</p><p>Conclusão 20</p><p>Capítulo Dois</p><p>Conclusão 90</p>'),
+        chapter('1', 'Capítulo Um', '<p class="p-bold">Conclusão</p>'),
+        chapter('2', 'Capítulo Dois'),
+        chapter('3', 'Conclusão'),
+    ];
+    const { parts: out, linked } = linkIndiceEntries(parts);
+    expect(linked).toBe(4);
+    expect(out[0]).toContain('data-target="idx-anchor-2"'); // Capítulo Dois ainda ligado
+    expect(out[0]).toContain('data-target="idx-anchor-3"'); // Conclusão final → capítulo
+});
+
+test('linkIndiceEntries: título partido em 2 linhas não rouba o pseudo-heading da sub-secção homónima', () => {
+    const parts = [
+        toc('<p>Capítulo 2</p><p>O fim do reformismo 51</p><p>O fim do reformismo 69</p>'),
+        chapter('2', 'Capítulo 2 O fim do reformismo', '<p class="p-bold">O fim do reformismo</p>'),
+    ];
+    const { parts: out, linked } = linkIndiceEntries(parts);
+    expect(linked).toBe(3);
+    expect(out[0]).toContain('data-target="idx-anchor-1-1"');
+});
+
+test('linkIndiceEntries: nº de página separado por &nbsp; também sai do texto', () => {
+    const parts = [
+        toc('<p>Capítulo Um</p><p class="x">Direitos da natureza 544&nbsp;</p>'),
+        chapter('1', 'Capítulo Um', '<p class="p-bold-italic">Direitos da natureza</p>'),
+    ];
+    const { parts: out } = linkIndiceEntries(parts);
+    expect(out[0]).toContain('>Direitos da natureza</span>');
+});
+
+test('linkIndiceEntries: nº de página depois de uma tag que fecha ("</strong>317") sai e a tag fica', () => {
+    const parts = [
+        toc('<p>Capítulo Um</p><p><strong>Direitos da natureza </strong>317</p>'),
+        chapter('1', 'Capítulo Um', '<p class="p-bold-italic">Direitos da natureza</p>'),
+    ];
+    const { parts: out } = linkIndiceEntries(parts);
+    expect(out[0]).toContain('<strong>Direitos da natureza</strong></span>');
+});

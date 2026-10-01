@@ -28,7 +28,10 @@ const MIN_TITLE = 3; // mesma guarda de extractChapterAnchors (page-list.ts)
 // capítulo; sem uso depois de ligado, por isso sai também do texto visível. Tira só o último
 // grupo de dígitos precedido de espaço (fim de string, sem tags a seguir).
 function stripTrailingPageNum(s: string): string {
-    return s.replace(/\s+\d+\s*$/, '');
+    // O espaço antes do nº pode estar DENTRO de uma tag que fecha ("…indígenas </strong>317") —
+    // a tag de fecho é mantida ($1$2), só o espaço+número saem.
+    const WS = '(?:\\s|&nbsp;)';
+    return s.replace(new RegExp(`(?:${WS}+((?:<\\/\\w+>)*)|((?:<\\/\\w+>)+)${WS}+)${WS}*\\d+${WS}*$`), '$1$2'); // &nbsp; chega como entidade, \\s não a apanha
 }
 
 // Casa nos dois sentidos: uma entrada do Índice pode ser mais longa que o título (prefixo
@@ -122,6 +125,10 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
     const subAnchorsByChapter = new Map<number, { pos: number; id: string }[]>();
     const usedSubHeadings = new Map<number, Set<number>>(); // capítulo → offsets de pseudo-heading já usados
     let currentChapter: (typeof targets)[number] | null = null;
+    // Título composto partido em 2 linhas do Índice ("Capítulo 2" / "O fim do …? 51"): a linha
+    // SEGUINTE a um match parcial ainda é o capítulo, não uma sub-secção (que, com o mesmo texto,
+    // roubaria o pseudo-heading à entrada real da sub-secção, ex. "O fim do …?" repetido no corpo).
+    let titleContinuation = false;
     // títulos repetidos entre atos/partes (ex. "Cena 1" em Ato I e Ato II) — busca do topo tem de
     // avançar SÓ para a frente pela ordem física do livro, senão toda a entrada repetida do
     // Índice ligava sempre ao 1º capítulo com esse título.
@@ -144,11 +151,19 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
                 break;
             }
         }
+        // Alvo de topo SALTADO (não é o próximo esperado) mas a linha também é uma sub-secção do
+        // capítulo corrente (ex. "Conclusão" do Cap. 1 vs. capítulo final "Conclusão"): é a
+        // sub-secção — senão o ponteiro saltava para o fim e o resto do Índice ficava por ligar.
+        if (topTarget && currentChapter && topTargetIdx > topSearchFrom &&
+            findSubHeading(parts[currentChapter.i], lineNorm, usedSubHeadings.get(currentChapter.i) ?? new Set<number>())) {
+            topTarget = undefined;
+        }
         if (topTarget) {
             // Só avança o ponteiro quando a linha do Índice cobre o título inteiro. Uma linha mais
             // curta (título composto partido em duas linhas, ex. "PARTE III" / "ECOLOGIAS...")
             // ainda deixa o mesmo capítulo elegível para a linha seguinte.
             if (lineNorm.length >= topTargetNorm.length) topSearchFrom = topTargetIdx + 1;
+            else titleContinuation = true;
             currentChapter = topTarget;
             anchoredChapters.add(topTarget.i);
             linked++;
@@ -157,8 +172,17 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
             // uma entrada já ligada, sem nº de página — ex. "Cena 1"), NÃO mexe:
             // stripTrailingPageNum não distingue nº de página de nº que faça parte do próprio
             // título, e comia-o numa 2ª execução ("Cena 1" → "Cena").
-            const text = lineNorm === normalizeText(topTarget.title) ? inner : stripTrailingPageNum(inner);
+            // Linha mais curta que o título (1ª metade de um título partido, "Capítulo 2") nunca
+            // leva strip — o dígito final é do título, não um nº de página.
+            const text = lineNorm.length <= topTargetNorm.length ? inner : stripTrailingPageNum(inner);
             return `<p${attrs}><span class="idx-link" data-target="idx-anchor-${topTarget.i}">${text}</span></p>`;
+        }
+
+        const continuing = titleContinuation;
+        titleContinuation = false;
+        if (continuing && currentChapter && titlesMatch(normalizeText(stripTrailingPageNum(flattenHeadingText(inner))), normalizeText(currentChapter.title))) {
+            linked++;
+            return `<p${attrs}><span class="idx-link" data-target="idx-anchor-${currentChapter.i}">${stripTrailingPageNum(inner)}</span></p>`;
         }
 
         // 2. sub-entrada — só procura DENTRO do capítulo corrente (mesmo texto repete-se entre capítulos)
