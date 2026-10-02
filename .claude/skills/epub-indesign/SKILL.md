@@ -37,7 +37,7 @@ Traduz para o **vocabulário e valores do editor** (livro igual aos da app; barr
 | `estilos-base.json` | Decisões da casa por `tag.classe` (sem maiúsculas), antes da heurística |
 | `tests/` | `bun test ./.claude/skills/epub-indesign/tests/` (o `./` é preciso: bun ignora pastas com ponto). `translate` (regras), `editor` (inclui `DEFAULT_CSS` real), `titles`, `commands` (livro inteiro com `makeEpub` em memória). Caso novo = teste novo |
 
-CSS de saída = `DEFAULT_CSS` (`src/context/StyleContext.tsx`, sem editor-only nem `@font-face`) + `extras` do mapa (raro).
+CSS de saída = `DEFAULT_CSS` (`src/context/StyleContext.tsx`, sem editor-only nem `@font-face`).
 
 ## Tradução automática (CSS resolvido: estilo + overrides + `#id`, shorthands expandidos)
 
@@ -56,7 +56,7 @@ Exceções: notas e tabelas sem classes; `p-legendas` tira `p-small`/`p-bottom`/
 
 ## Mapa
 
-`{ "extras": "", "classes": { "p.X": { "target", "origem", "count", "sample", "css" } } }`
+`{ "classes": { "p.X": { "target", "origem", "count", "sample", "css" } } }`
 
 - **`p.X`**: `h1` capítulo (`<h1>` seguidos → `A<br/>B`) · `h2` sub-capítulo (só se o TOC tiver) · `h3` subtítulo · classes do editor (ex. `p-legendas`) substituem só a forma (alinea/quote/small/legendas) · `""` automático · título sem letras/números (`*`) → `p-asterisk`.
 - **`span.X`**: `i b u sup sub small-caps drop-cap` (combináveis), só com efeito real no CSS ("Superscript" sem elevação ≠ `<sup>`); resto desembrulhado.

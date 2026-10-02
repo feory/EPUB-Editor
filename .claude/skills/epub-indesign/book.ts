@@ -8,9 +8,7 @@ import JSZip from 'jszip';
 import { Window } from 'happy-dom';
 import { fontEm, type Props } from './translate';
 
-// Propriedades sem efeito em leitores EPUB / específicas do InDesign
-const JUNK = /^(-epub-|-webkit-|-moz-|adobe-|orphans$|widows$|page-break-|break-)/;
-export const SOFT_HYPHEN = /\u00AD|&#173;|&#xad;|&shy;/gi; // hífenes discricionários do InDesign (paginação impressa)
+const SOFT_HYPHEN = /\u00AD|&#173;|&#xad;|&shy;/gi; // hífenes discricionários do InDesign (paginação impressa)
 
 const win = new Window();
 export const parseXml = (s: string) => new win.DOMParser().parseFromString(s, 'application/xhtml+xml') as unknown as Document;
@@ -18,7 +16,7 @@ export const serialize = (n: Node) => new win.XMLSerializer().serializeToString(
 
 export type Resolve = (tag: string, classes: string[], inline?: string, id?: string) => Props;
 // raw = XHTML original (para o que precisa do texto tal e qual); doc = parseado sem hífenes discricionários
-export type BookDocument = { href: string; raw: string; doc: Document };
+type BookDocument = { href: string; raw: string; doc: Document };
 
 // ---------- pacote ----------
 async function openPackage(bytes: Uint8Array) {
@@ -117,9 +115,6 @@ function cascade(css: string) {
     };
 }
 
-// -epub-hyphens é o que os leitores usam para hifenizar → passa a `hyphens` (standard), não é lixo
-export const clean = (p: Props): Props => Object.fromEntries(Object.entries(p)
-    .map(([k, v]) => k === '-epub-hyphens' ? ['hyphens', v] : [k, v]).filter(([k]) => !JUNK.test(k)));
 
 // Corpo do texto corrente (em): o font-size resolvido de <p> com mais texto no livro
 function bodySizeOf(documents: BookDocument[], resolve: Resolve) {
@@ -165,4 +160,3 @@ export async function openBook(bytes: Uint8Array) {
         bodySize: bodySizeOf(documents, resolve), referencedIds, frontMatter: frontMatterOf(documents),
     };
 }
-export type Book = Awaited<ReturnType<typeof openBook>>;

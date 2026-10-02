@@ -6,7 +6,7 @@
 // EPUBs mínimos construídos em memória.
 import JSZip from 'jszip';
 import { posix } from 'node:path';
-import { clean, openBook, serialize, type Resolve } from './book';
+import { openBook, serialize, type Resolve } from './book';
 import { indesignTitle } from './titles';
 import { editorVocabulary } from './editor';
 import { intentOf, isBold, isItalic, preservedOf, translateParagraph, translateSpan, type Props } from './translate';
@@ -14,9 +14,10 @@ import { intentOf, isBold, isItalic, preservedOf, translateParagraph, translateS
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
 const EPUB_NS = 'http://www.idpf.org/2007/ops';
 const BLOCK_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
-export type MapEntry = { target: string; origem?: string; count?: number; sample?: string; css?: string };
-export type BookMap = { extras: string; classes: Record<string, MapEntry> };
+type MapEntry = { target: string; origem?: string; count?: number; sample?: string; css?: string };
+export type BookMap = { classes: Record<string, MapEntry> };
 
+// só valores em `em` (ex. 1.5em); % e px de overrides do InDesign não contam como corpo de título
 const em = (v?: string) => {
     const m = v?.match(/^(-?[\d.]+)(em)?$/);
     return m ? parseFloat(m[1]) : 0;
@@ -80,7 +81,7 @@ export async function analyzeBook(bytes: Uint8Array, opts: { baseStyles: Record<
             count, sample, css: cssSummary(p),
         };
     }
-    return { map: { extras: prev?.extras ?? '', classes } as BookMap, bodySize: base };
+    return { map: { classes } as BookMap, bodySize: base };
 }
 
 // ---------- convert ----------
@@ -152,7 +153,7 @@ function convertBody(doc: Document, map: BookMap, resolve: Resolve, base: number
     const own = new Map<Element, { tokens: string[]; full: Props; own: Props }>();
     for (const el of Array.from(body.querySelectorAll('*'))) {
         const tokens = (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean);
-        const full = clean(resolve(el.localName, tokens, el.getAttribute('style') ?? '', el.getAttribute('id') ?? ''));
+        const full = resolve(el.localName, tokens, el.getAttribute('style') ?? '', el.getAttribute('id') ?? '');
         const baseP = resolve(el.localName, []);
         own.set(el, { tokens, full, own: Object.fromEntries(Object.entries(full).filter(([k, v]) => baseP[k] !== v)) });
     }
@@ -272,7 +273,7 @@ ${parts.join('\n')}
 `;
 }
 
-export type ConvertReport = {
+type ConvertReport = {
     documents: number; notes: number; bodySize: number;
     missing: string[];                                                 // classes do livro que faltam no mapa
     styles: { original: string; count: number; editor: [string, number][] }[]; // estilo original → estilo do editor (ordenado)
@@ -306,7 +307,7 @@ export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: st
         const front = frontMatter.has(item.href);
         const hasImg = !!doc.querySelector('body img');
         const hadHeading = Array.from(doc.querySelectorAll('body p[class]')).some(p => (p.getAttribute('class') ?? '')
-            .split(/\s+/).some(c => /^h[1-6]$/.test((map.classes[`p.${c}`]?.target ?? '').split(/\s+/).find(x => /^h/.test(x)) ?? '')));
+            .split(/\s+/).some(c => /(^|\s)h[1-6](\s|$)/.test(map.classes[`p.${c}`]?.target ?? '')));
         notes += convertBody(doc, map, resolve, base, front, vocabulary, referenced, missing, used);
         // <title> = nome do capítulo no editor; política do InDesign em titles.ts
         const titleEl = doc.querySelector('title');
@@ -318,11 +319,10 @@ export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: st
         zip.file(path, renderXhtml(doc, cssRel(item.href)));
     }
 
-    // CSS = o do editor (+ extras do mapa, se houver)
-    const style = [editorCss, map.extras.trim()].filter(Boolean).join('\n\n') + '\n';
+    const style = editorCss + '\n'; // CSS = o do editor
 
     // OPF: tira o CSS (e fontes) antigos, junta o style.css; nav fora do spine
-    let opf = await zip.file(opfPath)!.async('text');
+    let opf = book.opf;
     for (const i of items.filter(i => i.type === 'text/css' || /font|opentype|truetype|woff/i.test(i.type))) {
         opf = opf.replace(i.raw, '').replace(/\n\s*\n/g, '\n');
         zip.remove(opfDir + i.href);
@@ -380,8 +380,8 @@ async function blocks(bytes: Uint8Array, opt: boolean) {
     return { out, allText, imgs, pages, notes, documents, css };
 }
 
-export type IntentDiff = { original: string; prop: string; want: string; got: string; optimized: string; count: number; example: string };
-export type VerifyReport = {
+type IntentDiff = { original: string; prop: string; want: string; got: string; optimized: string; count: number; example: string };
+type VerifyReport = {
     paired: number; unpaired: number;
     diffs: IntentDiff[];                                               // ordenadas por nº de ocorrências
     text: { ok: boolean; length: number; at: number; original: string; optimized: string };

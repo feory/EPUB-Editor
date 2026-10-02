@@ -14,7 +14,6 @@ p.NOTAS { font-size: 0.75em; }
 span.Subido { vertical-align: super; }`;
 
 const MAP: BookMap = {
-    extras: '',
     classes: {
         'p.TXT': { target: '' }, 'p.ABERTURA': { target: 'h1' }, 'p.NOTAS': { target: '' }, 'span.Subido': { target: 'sup' },
     },
