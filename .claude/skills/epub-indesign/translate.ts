@@ -11,7 +11,7 @@ export type Props = Record<string, string>;
 
 export type Intent = {
     align: 'left' | 'center' | 'right' | 'justify';
-    indent: 'none' | 'first' | 'hanging-short' | 'hanging-long';
+    indent: 'none' | 'first' | 'hanging';   // hanging = recuo pendente longo (alíneas); curto conta como 'none'
     block: boolean;                 // bloco recolhido (margem esquerda ≥ 1em, sem recuo pendente)
     above: 'none' | 'top' | 'space';
     below: boolean;
@@ -28,9 +28,9 @@ export type ParagraphContext = {
     vocabulary: Set<string>;        // classes do editor (editorVocabulary do CSS do editor)
 };
 type BlockTag = 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
-export type ParagraphResult = { remove: true } | { tag: BlockTag; classes: string[]; align?: 'left' | 'right' };
+type ParagraphResult = { remove: true } | { tag: BlockTag; classes: string[]; align?: 'left' | 'right' };
 
-export type SpanResult = { remove: true } | { wraps: string[]; classes: string[] };
+type SpanResult = { remove: true } | { wraps: string[]; classes: string[] };
 
 // "Forma" do parágrafo: o que uma classe forçada no mapa substitui (p-indent combina com p-quote)
 const SHAPE = new Set(['alinea', 'p-quote', 'p-small', 'p-legendas']);
@@ -62,7 +62,7 @@ export function intentOf(p: Props, bodySize: number): Intent {
     return {
         align,
         // recuo pendente: longo = alíneas/listas; curto (ex. bibliografia) = parágrafo normal
-        indent: indent > 0.05 ? 'first' : indent < -0.05 ? (ml >= 1.5 ? 'hanging-long' : 'hanging-short') : 'none',
+        indent: indent > 0.05 ? 'first' : indent < -0.05 && ml >= 1.5 ? 'hanging' : 'none',
         block: indent >= -0.05 && ml >= 1,
         above: mt >= 2.5 ? 'space' : mt >= 0.5 ? 'top' : 'none',
         below: mb >= 0.5,
@@ -85,7 +85,7 @@ function editorClasses(i: Intent): string[] {
     const cls: string[] = [];
     if (i.align === 'center') cls.push('p-center');
     else if (i.indent === 'first') cls.push('p-indent');
-    if (i.indent === 'hanging-long') cls.push('alinea');
+    if (i.indent === 'hanging') cls.push('alinea');
     else if (i.block) cls.push('p-quote');
     if (i.above === 'space') cls.push('p-space'); else if (i.above === 'top') cls.push('p-top');
     if (i.below) cls.push('p-bottom');
