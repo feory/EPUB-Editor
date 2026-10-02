@@ -38,9 +38,11 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
 
 ## 3. Ficheiros
 
-- `optimize.ts` — script (`analyze` | `convert` | `verify`), correr da raiz do projeto. Só I/O,
-  estrutura do DOM (notas, quebras, contentores, `<h1>` fundidos), títulos dos capítulos e o pacote
-  de saída.
+- `optimize.ts` — **só a CLI** (`analyze` | `convert` | `verify`), correr da raiz do projeto: lê/escreve
+  ficheiros (EPUB, mapa, `estilos-base.json`, `DEFAULT_CSS` da app) e imprime os relatórios.
+- `commands.ts` — os três comandos sem disco nem consola: `analyzeBook(bytes, { baseStyles, previousMap })`,
+  `convertBook(bytes, map, editorCss)`, `verifyBook(originalBytes, optimizedBytes)`. Aqui vive a
+  estrutura do DOM (notas, quebras, contentores, `<h1>` fundidos), os títulos dos capítulos e o pacote de saída.
 - `book.ts` — livro InDesign aberto **uma vez**: `openBook(bytes)` → pacote (OPF, manifest), cascata do
   CSS original (`resolve`), documentos do spine parseados, e os factos partilhados pelos três comandos:
   `bodySize` (corpo do texto corrente), `referencedIds` (âncoras a manter), `frontMatter` (páginas
@@ -48,8 +50,11 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
 - `translate.ts` — module da Translation, sem I/O nem DOM: `intentOf`, `translateParagraph`,
   `translateSpan`, `preservedOf` (campos que o `verify` compara). **Toda a regra de tradução e todos
   os limiares vivem aqui** — o `convert` aplica e o `verify` compara com o mesmo module.
-- `translate.test.ts` — casos reais (`bun test ./.claude/skills/epub-indesign/translate.test.ts`;
-  com `./`, o bun ignora pastas com ponto num filtro). Caso novo de tradução = teste novo aqui.
+- Testes — `bun test ./.claude/skills/epub-indesign/` (com `./`: o bun ignora pastas com ponto num filtro):
+  - `translate.test.ts` — regras de tradução (caso novo de tradução = teste novo aqui);
+  - `commands.test.ts` — livro inteiro: EPUBs mínimos "à InDesign" feitos em memória (`makeEpub`) →
+    `convertBook`/`verifyBook` (notas, quebras, Rosto/Ficha Técnica, `<h1>` fundidos, contentores,
+    `verify` a apanhar texto perdido). Caso novo de estrutura = teste novo aqui.
 - `estilos-base.json` — decisões da casa por nome de estilo (`tag.classe`, sem distinção de
   maiúsculas), aplicadas a todos os livros antes da heurística.
 - `<dir>/mapas/<livro>.json` — mapa do livro (gerado pelo `analyze`, revisto à mão).
@@ -72,7 +77,7 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
    - `classes: só do editor ✓`.
 5. **Importar** na HomePage do editor e confirmar a Estrutura (capítulos).
 6. Decisões recorrentes → `estilos-base.json`.
-7. Ao mudar `translate.ts`: correr os testes e reconverter os livros; o `verify` tem de continuar limpo.
+7. Ao mudar `translate.ts` ou `commands.ts`: correr os testes e reconverter os livros; o `verify` tem de continuar limpo.
 
 ## 5. Tradução automática dos parágrafos (`translate.ts`)
 
