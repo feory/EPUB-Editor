@@ -25,16 +25,13 @@ export type ParagraphContext = {
     where: 'body' | 'note' | 'table';
     frontMatter: boolean;           // página antes do Índice: não há capítulos
     text: string;                   // texto do parágrafo (para reconhecer separadores *)
+    vocabulary: Set<string>;        // classes do editor (editorVocabulary do CSS do editor)
 };
 type BlockTag = 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
 export type ParagraphResult = { remove: true } | { tag: BlockTag; classes: string[]; align?: 'left' | 'right' };
 
 export type SpanResult = { remove: true } | { wraps: string[]; classes: string[] };
 
-// Classes de parágrafo do editor (barra de estilos + DEFAULT_CSS)
-export const EDITOR_CLASSES = new Set(['p-indent', 'p-top', 'p-space', 'p-bottom', 'p-center', 'p-small', 'p-legendas',
-    'p-quote', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-asterisk', 'p-border-top', 'p-border-bottom',
-    'p-border-sides', 'alinea', 'drop-cap', 'box']);
 // "Forma" do parágrafo: o que uma classe forçada no mapa substitui (p-indent combina com p-quote)
 const SHAPE = new Set(['alinea', 'p-quote', 'p-small', 'p-legendas']);
 const INLINE_WRAPS = ['b', 'i', 'u', 'sup', 'sub']; // ordem de aninhamento (exterior → interior)
@@ -112,7 +109,7 @@ export function translateParagraph(intent: Intent, ctx: ParagraphContext): Parag
     if (asHeading && !/[\p{L}\p{N}]/u.test(ctx.text) && ctx.text.trim()) return { tag: 'p', classes: ['p-asterisk'] };
     const heading = ctx.frontMatter ? undefined : asHeading; // antes do Índice (rosto/ficha) não há capítulos
     const auto = editorClasses(intent);
-    const forced = targets.filter(t => EDITOR_CLASSES.has(t));
+    const forced = targets.filter(t => ctx.vocabulary.has(t)); // classes do editor forçadas no mapa
     let classes: string[];
     if (ctx.where !== 'body') classes = [];                              // notas e tabelas: estilo do editor
     else if (heading) classes = auto.filter(c => c === 'p-center');      // títulos: só o alinhamento

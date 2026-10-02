@@ -47,6 +47,9 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
   CSS original (`resolve`), documentos do spine parseados, e os factos partilhados pelos três comandos:
   `bodySize` (corpo do texto corrente), `referencedIds` (âncoras a manter), `frontMatter` (páginas
   antes do Índice). Factos calculados ao abrir, antes de o `convert` alterar os documentos.
+- `editor.ts` — vocabulário do editor: `editorVocabulary(css)` = classes definidas no CSS do editor.
+  O `convert` usa-o (a partir do `DEFAULT_CSS`) para validar as classes forçadas no mapa; o `verify` lê-o
+  do `style.css` do próprio EPUB optimizado. Sem listas de classes à mão — classe nova no editor vale logo.
 - `titles.ts` — política de títulos do InDesign (`indesignTitle`: Ficha Técnica, Rosto); usa a regra
   genérica da app `chapterTitleOf` (`src/utils/chapter-title.ts`) para "isto não é um título".
 - `translate.ts` — module da Translation, sem I/O nem DOM: `intentOf`, `translateParagraph`,
@@ -54,6 +57,7 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
   os limiares vivem aqui** — o `convert` aplica e o `verify` compara com o mesmo module.
 - Testes — `bun test ./.claude/skills/epub-indesign/` (com `./`: o bun ignora pastas com ponto num filtro):
   - `translate.test.ts` — regras de tradução (caso novo de tradução = teste novo aqui);
+  - `editor.test.ts` — vocabulário (inclui confirmar que o `DEFAULT_CSS` real tem as classes que a tradução emite);
   - `titles.test.ts` — política de títulos (Ficha Técnica, Rosto, dedicatórias, sem título);
   - `commands.test.ts` — livro inteiro: EPUBs mínimos "à InDesign" feitos em memória (`makeEpub`) →
     `convertBook`/`verifyBook` (notas, quebras, Rosto/Ficha Técnica, `<h1>` fundidos, contentores,

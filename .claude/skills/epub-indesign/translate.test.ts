@@ -3,7 +3,10 @@
 import { test, expect } from 'bun:test';
 import { intentOf, preservedOf, translateParagraph, translateSpan, type Props } from './translate';
 
-const body = { where: 'body' as const, frontMatter: false, text: 'texto' };
+// vocabulário do editor (na conversão vem do CSS do editor via editorVocabulary)
+const vocabulary = new Set(['p-indent', 'p-top', 'p-space', 'p-bottom', 'p-center', 'p-small', 'p-legendas', 'p-quote',
+    'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-asterisk', 'alinea']);
+const body = { where: 'body' as const, frontMatter: false, text: 'texto', vocabulary };
 const para = (props: Props, targets: string[] = [], ctx: Partial<typeof body> = {}) =>
     translateParagraph(intentOf({ 'text-align': 'justify', ...props }, 1), { ...body, ...ctx, targets });
 

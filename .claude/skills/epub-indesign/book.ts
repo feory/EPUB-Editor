@@ -1,7 +1,7 @@
 // Livro InDesign aberto UMA vez: pacote (OPF, manifest, spine), cascata do CSS original, documentos do
 // spine parseados, e os factos derivados que o analyze, o convert e o verify partilham.
 //
-//   openBook(bytes) → { zip, opfPath, opfDir, opf, items, documents, resolve, bodySize, referencedIds, frontMatter }
+//   openBook(bytes) → { zip, opfPath, opfDir, opf, items, documents, resolve, css, bodySize, referencedIds, frontMatter }
 //
 // Os factos são calculados ao abrir — ANTES de o convert alterar os documentos no sítio.
 import JSZip from 'jszip';
@@ -161,7 +161,7 @@ export async function openBook(bytes: Uint8Array) {
         for (const m of (await f.async('text')).matchAll(/(?:href|src)="[^"#]*#([^"]+)"/g)) referencedIds.add(m[1]);
     }
     return {
-        zip, opfPath, opfDir, opf, items, documents, resolve,
+        zip, opfPath, opfDir, opf, items, documents, resolve, css,
         bodySize: bodySizeOf(documents, resolve), referencedIds, frontMatter: frontMatterOf(documents),
     };
 }

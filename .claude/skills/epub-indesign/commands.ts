@@ -8,7 +8,8 @@ import JSZip from 'jszip';
 import { posix } from 'node:path';
 import { clean, openBook, serialize, type Resolve } from './book';
 import { indesignTitle } from './titles';
-import { EDITOR_CLASSES, intentOf, isBold, isItalic, preservedOf, translateParagraph, translateSpan, type Props } from './translate';
+import { editorVocabulary } from './editor';
+import { intentOf, isBold, isItalic, preservedOf, translateParagraph, translateSpan, type Props } from './translate';
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
 const EPUB_NS = 'http://www.idpf.org/2007/ops';
@@ -132,7 +133,7 @@ function convertFootnotes(doc: Document, body: Element): number {
     return notes;
 }
 
-function convertBody(doc: Document, map: BookMap, resolve: Resolve, base: number, front: boolean,
+function convertBody(doc: Document, map: BookMap, resolve: Resolve, base: number, front: boolean, vocabulary: Set<string>,
     referenced: Set<string>, missing: Set<string>, used: Map<string, Map<string, number>>) {
     const body = doc.querySelector('body')!;
     const notes = convertFootnotes(doc, body);
@@ -167,7 +168,7 @@ function convertBody(doc: Document, map: BookMap, resolve: Resolve, base: number
             const r = translateParagraph(intentOf(info.full, base), {
                 targets: info.tokens.map(t => targetOf(`${tag}.${t}`)),
                 where: el.closest('aside') ? 'note' : el.closest('td, th') ? 'table' : 'body',
-                frontMatter: front, text: el.textContent ?? '',
+                frontMatter: front, text: el.textContent ?? '', vocabulary,
             });
             if ('remove' in r) { el.remove(); continue; }
             if (r.classes.length) el.setAttribute('class', r.classes.join(' ')); else el.removeAttribute('class');
@@ -282,6 +283,7 @@ export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: st
     const book = await openBook(bytes);
     const { zip, opfPath, opfDir, items, resolve, bodySize: base, referencedIds: referenced, frontMatter } = book;
     const docs = new Map(book.documents.map(d => [d.href, d.doc]));
+    const vocabulary = editorVocabulary(editorCss);
 
     const STYLE_HREF = 'css/style.css';
     const cssRel = (docHref: string) => posix.relative(posix.dirname(docHref), STYLE_HREF) || STYLE_HREF;
@@ -305,7 +307,7 @@ export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: st
         const hasImg = !!doc.querySelector('body img');
         const hadHeading = Array.from(doc.querySelectorAll('body p[class]')).some(p => (p.getAttribute('class') ?? '')
             .split(/\s+/).some(c => /^h[1-6]$/.test((map.classes[`p.${c}`]?.target ?? '').split(/\s+/).find(x => /^h/.test(x)) ?? '')));
-        notes += convertBody(doc, map, resolve, base, front, referenced, missing, used);
+        notes += convertBody(doc, map, resolve, base, front, vocabulary, referenced, missing, used);
         // <title> = nome do capítulo no editor; política do InDesign em titles.ts
         const titleEl = doc.querySelector('title');
         if (titleEl) {
@@ -356,7 +358,7 @@ export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: st
 type Preserved = ReturnType<typeof preservedOf>;
 
 async function blocks(bytes: Uint8Array, opt: boolean) {
-    const { documents, resolve } = await openBook(bytes);
+    const { documents, resolve, css } = await openBook(bytes);
     const out: { key: string; text: string; v: Preserved; empty: boolean; skip: boolean }[] = [];
     let allText = '', imgs = 0, pages = 0, notes = 0;
     for (const { doc } of documents) {
@@ -375,7 +377,7 @@ async function blocks(bytes: Uint8Array, opt: boolean) {
             out.push({ key: `${el.localName}.${classes.join('.')}`, text, empty: !text && !el.querySelector('img'), v, skip });
         }
     }
-    return { out, allText, imgs, pages, notes, documents };
+    return { out, allText, imgs, pages, notes, documents, css };
 }
 
 export type IntentDiff = { original: string; prop: string; want: string; got: string; optimized: string; count: number; example: string };
@@ -416,10 +418,12 @@ export async function verifyBook(originalBytes: Uint8Array, optimizedBytes: Uint
         }
     }
     const at = [...O.allText].findIndex((ch, i) => ch !== P.allText[i]);
+    // classes no resultado que não estão definidas no próprio CSS (do editor) do EPUB optimizado
+    const vocabulary = editorVocabulary(P.css);
     const foreign = new Set<string>();
     for (const { raw } of P.documents) {
         for (const m of raw.matchAll(/class="([^"]*)"/g)) for (const c of m[1].split(/\s+/)) {
-            if (c && !EDITOR_CLASSES.has(c) && !['footnote', 'footnotes-section', 'small-caps', 'pagebreak'].includes(c)) foreign.add(c);
+            if (c && !vocabulary.has(c)) foreign.add(c);
         }
     }
     return {
