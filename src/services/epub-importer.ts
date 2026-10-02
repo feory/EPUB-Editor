@@ -64,58 +64,6 @@ function resolvePath(baseDir: string, href: string): string {
     return out.join('/');
 }
 
-// nav.xhtml (preferido) ou toc.ncx → href-do-ficheiro (sem âncora) → título.
-async function buildNavTitles(
-    zip: JSZip, opfDir: string, opf: Document, manifest: Map<string, string>,
-): Promise<Map<string, string>> {
-    const titles = new Map<string, string>();
-    const add = (href: string | null, title: string) => {
-        if (!href || !title.trim()) return;
-        const file = href.split('#')[0];
-        if (!titles.has(file)) titles.set(file, title.trim());
-    };
-
-    // nav.xhtml: item do manifest com properties="nav"
-    let navHref: string | null = null;
-    for (const item of Array.from(opf.getElementsByTagName('item'))) {
-        if ((item.getAttribute('properties') || '').split(/\s+/).includes('nav')) {
-            navHref = item.getAttribute('href');
-            break;
-        }
-    }
-    if (navHref) {
-        const navXml = await zip.file(resolvePath(opfDir, navHref))?.async('text');
-        if (navXml) {
-            const navDoc = new DOMParser().parseFromString(navXml, 'text/html');
-            navDoc.querySelectorAll('nav a[href]').forEach(a =>
-                add(a.getAttribute('href'), a.textContent || ''));
-            if (titles.size > 0) return titles;
-        }
-    }
-
-    // Fallback: toc.ncx (media-type application/x-dtbncx+xml)
-    let ncxHref: string | null = null;
-    for (const item of Array.from(opf.getElementsByTagName('item'))) {
-        if (item.getAttribute('media-type') === 'application/x-dtbncx+xml') {
-            ncxHref = item.getAttribute('href');
-            break;
-        }
-    }
-    if (ncxHref) {
-        const ncxXml = await zip.file(resolvePath(opfDir, ncxHref))?.async('text');
-        if (ncxXml) {
-            const ncx = new DOMParser().parseFromString(ncxXml, 'application/xml');
-            for (const np of Array.from(ncx.getElementsByTagName('navPoint'))) {
-                const text = np.getElementsByTagName('text')[0]?.textContent || '';
-                const src = np.getElementsByTagName('content')[0]?.getAttribute('src');
-                add(src, text);
-            }
-        }
-    }
-    return titles;
-    void manifest;
-}
-
 // <section epub:type> wrappers → desembrulhar (manter filhos).
 function unwrapSections(body: HTMLElement) {
     for (const sec of Array.from(body.querySelectorAll('section'))) {
@@ -134,7 +82,9 @@ function reverseFootnotes(body: HTMLElement) {
         const a = sup.querySelector('a');
         if (a && (a.getAttribute('epub:type') === 'noteref' || a.getAttribute('role') === 'doc-noteref')) {
             sup.removeAttribute('id');
+            const trailing = (sup.textContent || '').match(/\s+$/)?.[0]; // espaço dentro do <sup> (InDesign) → fora
             sup.textContent = a.textContent || '';
+            if (trailing) sup.after(trailing);
         }
     });
     // Separador das notas
@@ -147,13 +97,21 @@ function reverseFootnotes(body: HTMLElement) {
     // Definições: <aside class="footnote"> → <p class="footnote">
     body.querySelectorAll('aside.footnote').forEach(aside => {
         aside.querySelectorAll('a[role="doc-backlink"]').forEach(a => {
+            const sup = a.closest('sup');
+            if (sup) { // <sup>N</sup> simples (linkFootnotes); espaço que vinha dentro do <sup> passa para fora
+                const trailing = (sup.textContent || '').match(/\s+$/)?.[0];
+                sup.textContent = a.textContent || '';
+                if (trailing) sup.after(trailing);
+                return;
+            }
             while (a.firstChild) a.parentNode!.insertBefore(a.firstChild, a);
             a.remove();
         });
-        const innerP = aside.querySelector(':scope > p');
+        // Nota com vários parágrafos (EPUB do InDesign) → um só <p> com <br>; antes só o 1º entrava.
+        const innerPs = Array.from(aside.querySelectorAll(':scope > p'));
         const p = document.createElement('p');
         p.className = 'footnote';
-        p.innerHTML = innerP ? innerP.innerHTML : aside.innerHTML;
+        p.innerHTML = innerPs.length ? innerPs.map(x => x.innerHTML).join('<br>') : aside.innerHTML;
         aside.replaceWith(p);
     });
     // Definições já como <p class="footnote"> (outros caminhos): só limpar backlink
@@ -416,7 +374,6 @@ export async function scanEpubClasses(file: File): Promise<{ legacy: boolean; cl
 export async function extractEpub(file: File, mapping?: Record<string, string>): Promise<ExtractedDocument> {
     const { zip, opfDir, opfXml, opf, manifest, spineHrefs } = await openEpub(file);
 
-    const navTitles = await buildNavTitles(zip, opfDir, opf, manifest);
 
     // Capa (separada do livro) → não entra na galeria. <meta name="cover"> ou item cover-image.
     const skipIds = new Set<string>();
@@ -459,10 +416,13 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
 
         let content = body.innerHTML.trim();
         if (!content) continue;
-        // Reconstruir título de quebra (export próprio remove o heading do corpo; título vive no nav)
+        // Reconstruir título de quebra (export próprio remove o heading do corpo). Título = <title> do
+        // ficheiro — nunca o nav (no InDesign traz o page-list → capítulos "1", "161"…); sem texto (ou só o nome
+        // do ficheiro) → sem título, junta ao capítulo anterior.
         if (!isLegacy && !/^<h[12][\s>]/i.test(content)) {
-            const title = navTitles.get(href.split('#')[0]);
-            if (title) content = `<h2 class="chapter-break">${escapeHtml(title)}</h2>\n` + content;
+            const title = (doc.querySelector('title')?.textContent || '').trim();
+            const fileName = href.split('/').pop()!.replace(/\.x?html?$/i, ''); // InDesign: sem título → nome do ficheiro
+            if (/[\p{L}\p{N}]/u.test(title) && title !== fileName) content = `<h2 class="chapter-break">${escapeHtml(title)}</h2>\n` + content;
         }
         bodies.push(content);
     }

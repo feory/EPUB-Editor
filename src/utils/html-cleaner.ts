@@ -26,7 +26,9 @@ export const HR_DATA_TITLE_PATTERN = /data-title=["']([^"']+)["']/i;
 
 // Flatten heading inner HTML to plain title text (<br>→space, strip tags, collapse).
 export function flattenHeadingText(inner: string): string {
-    return inner.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    return inner
+        .replace(/\(?\s*<sup\b[^>]*>\s*(?:<a\b[^>]*>)?\s*[\d*]+\s*(?:<\/a>)?\s*<\/sup>\s*\)?/gi, '') // chamada de nota — "(143)" — não entra no nome
+        .replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 }
 const escapeAttr = (s: string) => s.replace(/"/g, '&quot;');
 
