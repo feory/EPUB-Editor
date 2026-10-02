@@ -12,11 +12,11 @@ import JSZip from 'jszip';
 import { Window } from 'happy-dom';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join, posix } from 'node:path';
+import { EDITOR_CLASSES, fontEm, intentOf, isBold, isItalic, preservedOf, translateParagraph, translateSpan, type Props } from './translate';
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
 const EPUB_NS = 'http://www.idpf.org/2007/ops';
 const BLOCK_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
-const INLINE_WRAPS = ['b', 'i', 'u', 'sup', 'sub']; // ordem de aninhamento (exterior → interior)
 // Propriedades sem efeito em leitores EPUB / específicas do InDesign
 const JUNK = /^(-epub-|-webkit-|-moz-|adobe-|orphans$|widows$|page-break-|break-)/;
 const SOFT_HYPHEN = /\u00AD|&#173;|&#xad;|&shy;/gi; // hífenes discricionários do InDesign (paginação impressa)
@@ -25,7 +25,6 @@ const win = new Window();
 const parseXml = (s: string) => new win.DOMParser().parseFromString(s, 'application/xhtml+xml') as unknown as Document;
 const serialize = (n: Node) => new win.XMLSerializer().serializeToString(n as never);
 
-type Props = Record<string, string>;
 type MapEntry = { target: string; origem?: string; count?: number; sample?: string; css?: string };
 type BookMap = { extras: string; classes: Record<string, MapEntry> };
 
@@ -133,8 +132,6 @@ const em = (v?: string) => {
     const m = v?.match(/^(-?[\d.]+)(em)?$/);
     return m ? parseFloat(m[1]) : 0;
 };
-const isBold = (p: Props) => /bold/.test(p['font-weight'] ?? '') || parseInt(p['font-weight'] ?? '0') >= 600;
-const isItalic = (p: Props) => /italic|oblique/.test(p['font-style'] ?? '');
 
 // Semântica sugerida (as classes do editor saem do CSS no convert; aqui só títulos/legendas/spans).
 // ponytail: limiares simples; o mapa revisto e estilos-base.json é que mandam.
@@ -224,52 +221,6 @@ function editorCss(): string {
     return css.replace(/@font-face\s*\{[^}]*\}/g, '').replace(/^ {4}/gm, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-// Classes de parágrafo do editor (barra de estilos + DEFAULT_CSS)
-const EDITOR_CLASSES = new Set(['p-indent', 'p-top', 'p-space', 'p-bottom', 'p-center', 'p-small', 'p-legendas',
-    'p-quote', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-asterisk', 'p-border-top', 'p-border-bottom',
-    'p-border-sides', 'alinea', 'drop-cap', 'box']);
-
-const SHAPE = new Set(['alinea', 'p-quote', 'p-small', 'p-legendas']); // p-indent combina com p-quote
-const fontEm = (p: Props) => {
-    const v = p['font-size'] ?? '1em';
-    if (v.endsWith('%')) return parseFloat(v) / 100;
-    if (v.endsWith('px')) return parseFloat(v) / 16;
-    return parseFloat(v) || 1;
-};
-// comprimento em `em` do próprio elemento (px convertidos com o corpo do elemento)
-const lenEm = (v: string | undefined, p: Props) => {
-    if (!v || v === 'auto' || v.endsWith('%')) return 0;
-    if (v.endsWith('px')) return parseFloat(v) / (16 * fontEm(p));
-    return parseFloat(v) || 0;
-};
-const alignOf = (p: Props) => {
-    const a = p['text-align'] ?? 'start';
-    return a === 'start' || a === 'left' ? 'left' : a === 'end' ? 'right' : a;
-};
-
-// Propriedades resolvidas de um parágrafo do InDesign → classes do editor (valores do editor).
-// `base` = corpo do texto corrente do livro (em). ponytail: limiares fixos; o mapa pode forçar classes.
-function editorBlock(p: Props, base: number) {
-    const cls: string[] = [];
-    const align = alignOf(p), indent = lenEm(p['text-indent'], p);
-    const mt = lenEm(p['margin-top'], p), mb = lenEm(p['margin-bottom'], p), ml = lenEm(p['margin-left'], p);
-    if (align === 'center') cls.push('p-center');
-    else if (indent > 0.05) cls.push('p-indent');
-    if (indent < -0.05) { if (ml >= 1.5) cls.push('alinea'); }    // recuo pendente: alíneas/listas; curto (bibliografia) = normal
-    else if (ml >= 1) cls.push('p-quote');                         // bloco recolhido (citação)
-    if (mt >= 2.5) cls.push('p-space'); else if (mt >= 0.5) cls.push('p-top');
-    if (mb >= 0.5) cls.push('p-bottom');
-    if (isBold(p) && isItalic(p)) cls.push('p-bold-italic');
-    else if (isBold(p)) cls.push('p-bold');
-    else if (isItalic(p)) cls.push('p-italic');
-    if (p['text-transform'] === 'uppercase') cls.push('p-uppercase');
-    if (!cls.includes('p-quote') && fontEm(p) / base < 0.95) cls.push('p-small');
-    if (/solid|double|dashed|dotted/.test(p['border-top-style'] ?? '')) cls.push('p-border-top');
-    if (/solid|double|dashed|dotted/.test(p['border-bottom-style'] ?? '')) cls.push('p-border-bottom');
-    // direita/esquerda: como o editor grava os botões de alinhamento (style inline); justificado = padrão
-    return { cls, align: align === 'right' || align === 'left' ? align : '' };
-}
-
 function moveChildren(from: Element, to: Node) {
     while (from.firstChild) to.appendChild(from.firstChild);
 }
@@ -351,44 +302,23 @@ function convertBody(doc: Document, map: BookMap, resolve: ReturnType<typeof cas
         if (tag === 'aside' || (tag === 'div' && el.getAttribute('class') === 'footnotes-section')) continue; // nossos
 
         if (BLOCK_TAGS.has(tag)) {
-            const targets = info.tokens.map(t => targetOf(`${tag}.${t}`)).flatMap(t => t.split(/\s+/)).filter(Boolean);
-            if (targets.includes('__remove__')) { el.remove(); continue; }
-            // "título" sem letras nem números (ex. "*" num estilo de abertura) = separador do editor, não capítulo
-            const asHeading = targets.find(t => /^h[1-6]$/.test(t));
-            const sep = !!asHeading && !/[\p{L}\p{N}]/u.test(el.textContent ?? '') && !!(el.textContent ?? '').trim();
-            const heading = sep || front ? undefined : asHeading; // antes do Índice (rosto/ficha) não há capítulos
-            if (sep) { el.setAttribute('class', 'p-asterisk'); note(`${tag}.${info.tokens.join('.')}`, 'p.p-asterisk'); continue; }
-            const forced = targets.filter(t => EDITOR_CLASSES.has(t));
-            const auto = editorBlock(info.full, base);
-            let cls: string[];
-            if (el.closest('aside, td, th')) cls = [];                       // notas e tabelas: estilo do editor
-            else if (heading) cls = auto.cls.filter(c => c === 'p-center'); // títulos: só o alinhamento
-            // classes forçadas no mapa substituem só a "forma" (recuo/citação/legenda/corpo); espaços,
-            // alinhamento e peso continuam a vir do CSS original
-            else cls = forced.length ? [...new Set([...auto.cls.filter(c => !SHAPE.has(c)), ...forced])] : auto.cls;
-            if (cls.includes('p-legendas')) cls = cls.filter(c => !['p-small', 'p-bottom', 'p-indent'].includes(c));
-            if (cls.length) el.setAttribute('class', cls.join(' ')); else el.removeAttribute('class');
-            if (auto.align && !el.closest('aside, td, th') && !(heading && auto.align === 'left')) {
-                el.setAttribute('style', `text-align: ${auto.align};`);
-            }
-            note(`${tag}.${info.tokens.join('.')}`, `${heading ?? 'p'}${cls.length ? '.' + cls.join('.') : ''}${el.getAttribute('style') ? ` [${auto.align}]` : ''}`);
-            if (heading && heading !== tag) rename(el, heading);
+            const r = translateParagraph(intentOf(info.full, base), {
+                targets: info.tokens.map(t => targetOf(`${tag}.${t}`)),
+                where: el.closest('aside') ? 'note' : el.closest('td, th') ? 'table' : 'body',
+                frontMatter: front, text: el.textContent ?? '',
+            });
+            if ('remove' in r) { el.remove(); continue; }
+            if (r.classes.length) el.setAttribute('class', r.classes.join(' ')); else el.removeAttribute('class');
+            if (r.align) el.setAttribute('style', `text-align: ${r.align};`);
+            note(`${tag}.${info.tokens.join('.')}`, `${r.tag}${r.classes.length ? '.' + r.classes.join('.') : ''}${r.align ? ` [${r.align}]` : ''}`);
+            if (r.tag !== tag) rename(el, r.tag);
             continue;
         }
 
         if (tag === 'span') {
-            const targets = info.tokens.map(t => targetOf(`span.${t}`)).flatMap(t => t.split(/\s+/)).filter(Boolean);
-            if (targets.includes('__remove__')) { el.remove(); continue; }
-            // semântica só se o efeito existir no CSS original (estilo "Superscript" sem elevação ≠ <sup>)
-            const o = info.own;
-            const real: Record<string, boolean> = {
-                b: isBold(o), i: isItalic(o), u: /underline/.test(o['text-decoration'] ?? ''),
-                sup: /super/.test(o['vertical-align'] ?? ''), sub: /^sub$/.test(o['vertical-align'] ?? ''),
-                'small-caps': /small-caps/.test(o['font-variant'] ?? ''), 'drop-cap': true,
-            };
-            const sem = targets.filter(t => real[t]);
-            const wraps = INLINE_WRAPS.filter(w => sem.includes(w));
-            const spanCls = sem.filter(t => t === 'small-caps' || t === 'drop-cap');
+            const r = translateSpan(info.own, info.tokens.map(t => targetOf(`span.${t}`)));
+            if ('remove' in r) { el.remove(); continue; }
+            const { wraps, classes: spanCls } = r;
             el.removeAttribute('class');
             if (spanCls.length) el.setAttribute('class', spanCls.join(' '));
             if (wraps.length) {
@@ -596,20 +526,13 @@ async function convert(epubPath: string) {
 const sum = (m: Map<string, number>) => [...m.values()].reduce((s, n) => s + n, 0);
 
 // ---------- verify: original × optimizado (estrutura e intenção, com os valores do editor) ----------
-type Intent = { align: string; indent: boolean; above: boolean; below: boolean; bold: boolean; italic: boolean; upper: boolean };
-function intent(p: Props, opt: boolean): Intent {
-    const align = alignOf(p);
-    return {
-        align, indent: align !== 'center' && lenEm(p['text-indent'], p) > 0.05,
-        above: lenEm(p['margin-top'], p) >= (opt ? 0.3 : 0.5), below: lenEm(p['margin-bottom'], p) >= (opt ? 0.3 : 0.5),
-        bold: isBold(p), italic: isItalic(p), upper: p['text-transform'] === 'uppercase',
-    };
-}
+// Mesma leitura de intenção que o convert (translate.ts), nos dois lados; só os campos preservados contam.
+type Preserved = ReturnType<typeof preservedOf>;
 
 async function blocks(path: string, opt: boolean) {
     const { zip, opfDir, content, css } = await openEpub(path);
     const resolve = cascade(css);
-    const out: { key: string; text: string; v: Intent; empty: boolean; skip: boolean }[] = [];
+    const out: { key: string; text: string; v: Preserved; empty: boolean; skip: boolean }[] = [];
     let allText = '', imgs = 0, pages = 0, notes = 0;
     for (const item of content) {
         const doc = parseXml((await zip.file(opfDir + item.href)!.async('text')).replace(SOFT_HYPHEN, ''));
@@ -621,7 +544,8 @@ async function blocks(path: string, opt: boolean) {
         for (const el of Array.from(body.querySelectorAll('body p, body h1, body h2, body h3, body h4, body h5, body h6'))) {
             const classes = (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean);
             const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
-            const v = intent(resolve(el.localName, classes, el.getAttribute('style') ?? ''), opt);
+            // corpo do texto não é comparado → bodySize 1 chega
+            const v = preservedOf(intentOf(resolve(el.localName, classes, el.getAttribute('style') ?? ''), 1));
             // notas, tabelas e títulos seguem o estilo do editor — só o texto conta
             const skip = !!el.closest(opt ? 'aside, td, th' : 'li, td, th') || /^h[1-6]$/.test(el.localName);
             out.push({ key: `${el.localName}.${classes.join('.')}`, text, empty: !text && !el.querySelector('img'), v, skip });
@@ -650,7 +574,7 @@ async function verify(epubPath: string) {
         pendingAbove = false;
         if (o.skip || b.skip) continue;
         const want = { ...o.v, above: o.v.above || above };
-        for (const prop of Object.keys(want) as (keyof Intent)[]) {
+        for (const prop of Object.keys(want) as (keyof Preserved)[]) {
             if (want[prop] === b.v[prop]) continue;
             if (prop === 'below' && /p-legendas/.test(b.key)) continue; // espaço abaixo faz parte do estilo Legenda do editor
             const label = `${o.key.padEnd(34)} ${prop.padEnd(7)} ${String(want[prop]).padStart(7)} → ${String(b.v[prop]).padEnd(7)} (${b.key})`;

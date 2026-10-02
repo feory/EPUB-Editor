@@ -14,6 +14,16 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
 - Problemas do InDesign que resolve: nomes de estilo diferentes por livro (`TXT`, `TEXTO`,
   `CharOverride-7`, `_idGenParaOverride-1`…), `<div>` de layout, notas em formato próprio, CSS enorme.
 
+## Glossário
+
+- **Map** (mapa do livro): `mapas/<livro>.json` — o que o CSS não diz (títulos, semântica dos spans,
+  classes forçadas, `__remove__`); revisto à mão.
+- **Intent** (intenção de parágrafo): o que o original quer — alinhamento, tipo de recuo, bloco
+  recolhido, espaço acima/abaixo, corpo pequeno, negrito/itálico, maiúsculas, filetes. `intentOf()`.
+- **Translation** (tradução): Intent + Map + contexto → tag, classes do editor e alinhamento.
+  `translateParagraph()` / `translateSpan()`.
+- **Front matter**: páginas antes do Índice (rosto, ficha técnica) — não criam capítulos.
+
 ## 2. Regras de ouro
 
 - **Em caso de dúvida, PERGUNTAR** ao utilizador (AskUserQuestion, com amostras e sugestão
@@ -28,7 +38,13 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
 
 ## 3. Ficheiros
 
-- `optimize.ts` — script (`analyze` | `convert` | `verify`), correr da raiz do projeto.
+- `optimize.ts` — script (`analyze` | `convert` | `verify`), correr da raiz do projeto. Só I/O,
+  estrutura do DOM (notas, quebras, contentores, `<h1>` fundidos) e títulos dos capítulos.
+- `translate.ts` — module da Translation, sem I/O nem DOM: `intentOf`, `translateParagraph`,
+  `translateSpan`, `preservedOf` (campos que o `verify` compara). **Toda a regra de tradução e todos
+  os limiares vivem aqui** — o `convert` aplica e o `verify` compara com o mesmo module.
+- `translate.test.ts` — casos reais (`bun test ./.claude/skills/epub-indesign/translate.test.ts`;
+  com `./`, o bun ignora pastas com ponto num filtro). Caso novo de tradução = teste novo aqui.
 - `estilos-base.json` — decisões da casa por nome de estilo (`tag.classe`, sem distinção de
   maiúsculas), aplicadas a todos os livros antes da heurística.
 - `<dir>/mapas/<livro>.json` — mapa do livro (gerado pelo `analyze`, revisto à mão).
@@ -51,8 +67,9 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
    - `classes: só do editor ✓`.
 5. **Importar** na HomePage do editor e confirmar a Estrutura (capítulos).
 6. Decisões recorrentes → `estilos-base.json`.
+7. Ao mudar `translate.ts`: correr os testes e reconverter os livros; o `verify` tem de continuar limpo.
 
-## 5. Tradução automática dos parágrafos
+## 5. Tradução automática dos parágrafos (`translate.ts`)
 
 A partir do CSS original resolvido (estilo + overrides + `#id`; shorthands como `margin` expandidos).
 
