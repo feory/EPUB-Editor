@@ -5,6 +5,7 @@
 import { test, expect, beforeAll } from 'bun:test';
 import { Window } from 'happy-dom';
 import { buildSections } from './chapters';
+import { insertChapterMarkers } from '../../utils/html-cleaner';
 
 // decodeHtmlEntities (html-utils.ts) usa DOMParser global — não existe fora do browser.
 beforeAll(() => {
@@ -68,4 +69,9 @@ test('buildSections: notas de rodapé relocadas para footnotes-section no fim da
 test('buildSections: sem marcadores → secção única a partir do conteúdo', () => {
     const sections = buildSections('<p>sem marcadores</p>');
     expect(sections).toEqual([{ title: 'Secção 1', content: '<p>sem marcadores</p>', level: 'h1', parentIdx: -1, childIndices: [] }]);
+});
+
+test('buildSections: chamada de nota no heading não entra no título do capítulo', () => {
+    const sections = buildSections(insertChapterMarkers('<h1>SEGUNDA PARTE<br>O VIAJANTE E A SUA SOMBRA(<sup>143</sup>)</h1><p>corpo</p>'));
+    expect(sections[0].title).toBe('SEGUNDA PARTE O VIAJANTE E A SUA SOMBRA');
 });
