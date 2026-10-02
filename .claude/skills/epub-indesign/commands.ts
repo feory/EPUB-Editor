@@ -5,8 +5,9 @@
 // A CLI (optimize.ts) é só um adapter: lê/escreve ficheiros e imprime. Os testes (commands.test.ts) usam
 // EPUBs mínimos construídos em memória.
 import JSZip from 'jszip';
-import { basename, posix } from 'node:path';
+import { posix } from 'node:path';
 import { clean, openBook, serialize, type Resolve } from './book';
+import { indesignTitle } from './titles';
 import { EDITOR_CLASSES, intentOf, isBold, isItalic, preservedOf, translateParagraph, translateSpan, type Props } from './translate';
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -305,19 +306,13 @@ export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: st
         const hadHeading = Array.from(doc.querySelectorAll('body p[class]')).some(p => (p.getAttribute('class') ?? '')
             .split(/\s+/).some(c => /^h[1-6]$/.test((map.classes[`p.${c}`]?.target ?? '').split(/\s+/).find(x => /^h/.test(x)) ?? '')));
         notes += convertBody(doc, map, resolve, base, front, referenced, missing, used);
-        // <title> é o nome do capítulo no editor. O InDesign deixa títulos falsos (rótulo "Título original:",
-        // vazio, nome do ficheiro, título do livro). Decisões do utilizador:
-        //  - ficha técnica (©/ISBN/Título original) com título falso, ou antes do Índice → "Ficha Técnica"
-        //  - antes do Índice, com títulos/imagem → "Rosto"; texto simples (dedicatória) mantém;
-        //    título = nome do ficheiro → sem título (página de imagem junta-se à anterior)
-        //  - depois do Índice, rótulo copiado da ficha → "Rosto"
+        // <title> = nome do capítulo no editor; política do InDesign em titles.ts
         const titleEl = doc.querySelector('title');
-        const t = (titleEl?.textContent ?? '').trim();
-        const label = /:$/.test(t) || /^t[íi]tulo( original)?$/i.test(t);
-        const noTitle = !t || t === basename(item.href).replace(/\.x?html?$/i, ''); // fica sem título (junta ao anterior)
-        const ficha = /©|ISBN|Dep[óo]sito legal|T[íi]tulo original/i.test(doc.querySelector('body')!.textContent ?? '');
-        if (titleEl && ficha && (label || noTitle || front)) titleEl.textContent = 'Ficha Técnica';
-        else if (titleEl && !noTitle && (label || (front && (hadHeading || hasImg)))) titleEl.textContent = 'Rosto';
+        if (titleEl) {
+            const title = indesignTitle({ title: titleEl.textContent ?? '', href: item.href,
+                bodyText: doc.querySelector('body')!.textContent ?? '', frontMatter: front, hasImage: hasImg, hasHeading: hadHeading });
+            if (title !== titleEl.textContent) titleEl.textContent = title;
+        }
         zip.file(path, renderXhtml(doc, cssRel(item.href)));
     }
 

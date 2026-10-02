@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import type { ExtractedDocument } from './document-importer';
 import { toNCName } from './epub/image-utils';
+import { chapterTitleOf } from '../utils/chapter-title';
 
 export interface EpubMetadata {
     ebook_isbn: string;
@@ -420,9 +421,8 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
         // ficheiro — nunca o nav (no InDesign traz o page-list → capítulos "1", "161"…); sem texto (ou só o nome
         // do ficheiro) → sem título, junta ao capítulo anterior.
         if (!isLegacy && !/^<h[12][\s>]/i.test(content)) {
-            const title = (doc.querySelector('title')?.textContent || '').trim();
-            const fileName = href.split('/').pop()!.replace(/\.x?html?$/i, ''); // InDesign: sem título → nome do ficheiro
-            if (/[\p{L}\p{N}]/u.test(title) && title !== fileName) content = `<h2 class="chapter-break">${escapeHtml(title)}</h2>\n` + content;
+            const title = chapterTitleOf(doc.querySelector('title')?.textContent || '', href);
+            if (title) content = `<h2 class="chapter-break">${escapeHtml(title)}</h2>\n` + content;
         }
         bodies.push(content);
     }

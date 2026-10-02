@@ -47,11 +47,14 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
   CSS original (`resolve`), documentos do spine parseados, e os factos partilhados pelos três comandos:
   `bodySize` (corpo do texto corrente), `referencedIds` (âncoras a manter), `frontMatter` (páginas
   antes do Índice). Factos calculados ao abrir, antes de o `convert` alterar os documentos.
+- `titles.ts` — política de títulos do InDesign (`indesignTitle`: Ficha Técnica, Rosto); usa a regra
+  genérica da app `chapterTitleOf` (`src/utils/chapter-title.ts`) para "isto não é um título".
 - `translate.ts` — module da Translation, sem I/O nem DOM: `intentOf`, `translateParagraph`,
   `translateSpan`, `preservedOf` (campos que o `verify` compara). **Toda a regra de tradução e todos
   os limiares vivem aqui** — o `convert` aplica e o `verify` compara com o mesmo module.
 - Testes — `bun test ./.claude/skills/epub-indesign/` (com `./`: o bun ignora pastas com ponto num filtro):
   - `translate.test.ts` — regras de tradução (caso novo de tradução = teste novo aqui);
+  - `titles.test.ts` — política de títulos (Ficha Técnica, Rosto, dedicatórias, sem título);
   - `commands.test.ts` — livro inteiro: EPUBs mínimos "à InDesign" feitos em memória (`makeEpub`) →
     `convertBook`/`verifyBook` (notas, quebras, Rosto/Ficha Técnica, `<h1>` fundidos, contentores,
     `verify` a apanhar texto perdido). Caso novo de estrutura = teste novo aqui.
@@ -144,8 +147,9 @@ A partir do CSS original resolvido (estilo + overrides + `#id`; shorthands como 
 
 - No editor, o nome de cada capítulo vem **só do `<title>`** do ficheiro — nunca do nav/page-list
   (no InDesign o nav traz a lista de páginas → capítulos "1", "161"…).
-- `<title>` vazio ou igual ao nome do ficheiro (o InDesign põe-no quando não há título) → sem título;
-  o ficheiro junta-se ao capítulo anterior.
+- `<title>` vazio, sem letras/números, ou igual ao nome do ficheiro (o InDesign põe-no quando não há
+  título) → sem título; o ficheiro junta-se ao capítulo anterior. Regra única da app:
+  `chapterTitleOf` em `src/utils/chapter-title.ts` (importador e skill usam a mesma).
 - Chamadas de nota não entram no nome ("SOMBRA(143)" → "SOMBRA").
 - Correções feitas pelo `convert`:
   - conteúdo de ficha técnica (©, ISBN, "Título original") com título falso, ou antes do Índice
@@ -181,6 +185,8 @@ A partir do CSS original resolvido (estilo + overrides + `#id`; shorthands como 
 
 ## 10. Dependências na app (já feitas)
 
-- `src/services/epub-importer.ts`: títulos dos capítulos a partir do `<title>`; notas com vários
+- `src/utils/chapter-title.ts` (`chapterTitleOf`): o que é e não é um título de capítulo — usado pelo
+  importador e pelo `titles.ts` do skill.
+- `src/services/epub-importer.ts`: títulos dos capítulos a partir do `<title>` (via `chapterTitleOf`); notas com vários
   parágrafos inteiras; espaço dentro do `<sup>` da nota preservado.
 - `src/utils/html-cleaner.ts` (`flattenHeadingText`): chamadas de nota fora do nome do capítulo.
