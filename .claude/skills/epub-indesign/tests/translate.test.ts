@@ -1,12 +1,12 @@
 // Casos reais encontrados ao converter os 15 EPUBs do InDesign (ver SKILL.md).
-// Correr: bun test ./.claude/skills/epub-indesign/translate.test.ts  (com ./ — o bun ignora pastas com ponto num filtro)
+// Correr: bun test ./.claude/skills/epub-indesign/tests/  (com ./ — o bun ignora pastas com ponto num filtro)
 import { test, expect } from 'bun:test';
-import { intentOf, preservedOf, translateParagraph, translateSpan, type Props } from './translate';
+import { intentOf, preservedOf, translateParagraph, translateSpan, type ParagraphContext, type Props } from '../translate';
 
 // vocabulário do editor (na conversão vem do CSS do editor via editorVocabulary)
 const vocabulary = new Set(['p-indent', 'p-top', 'p-space', 'p-bottom', 'p-center', 'p-small', 'p-legendas', 'p-quote',
     'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-asterisk', 'alinea']);
-const body = { where: 'body' as const, frontMatter: false, text: 'texto', vocabulary };
+const body: Omit<ParagraphContext, 'targets'> = { where: 'body', frontMatter: false, text: 'texto', vocabulary };
 const para = (props: Props, targets: string[] = [], ctx: Partial<typeof body> = {}) =>
     translateParagraph(intentOf({ 'text-align': 'justify', ...props }, 1), { ...body, ...ctx, targets });
 

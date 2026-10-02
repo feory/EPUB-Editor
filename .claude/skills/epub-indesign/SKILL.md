@@ -55,7 +55,7 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
 - `translate.ts` — module da Translation, sem I/O nem DOM: `intentOf`, `translateParagraph`,
   `translateSpan`, `preservedOf` (campos que o `verify` compara). **Toda a regra de tradução e todos
   os limiares vivem aqui** — o `convert` aplica e o `verify` compara com o mesmo module.
-- Testes — `bun test ./.claude/skills/epub-indesign/` (com `./`: o bun ignora pastas com ponto num filtro):
+- Testes, todos em `tests/` — `bun test ./.claude/skills/epub-indesign/tests/` (com `./`: o bun ignora pastas com ponto num filtro):
   - `translate.test.ts` — regras de tradução (caso novo de tradução = teste novo aqui);
   - `editor.test.ts` — vocabulário (inclui confirmar que o `DEFAULT_CSS` real tem as classes que a tradução emite);
   - `titles.test.ts` — política de títulos (Ficha Técnica, Rosto, dedicatórias, sem título);

@@ -1,7 +1,7 @@
 // Política de títulos do InDesign — casos reais dos 15 EPUBs.
-// Correr: bun test ./.claude/skills/epub-indesign/
+// Correr: bun test ./.claude/skills/epub-indesign/tests/
 import { test, expect } from 'bun:test';
-import { indesignTitle, type TitlePage } from './titles';
+import { indesignTitle, type TitlePage } from '../titles';
 
 const page = (p: Partial<TitlePage>): TitlePage =>
     ({ title: '', href: 'OEBPS/x.xhtml', bodyText: '', frontMatter: false, hasImage: false, hasHeading: false, ...p });

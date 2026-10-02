@@ -1,9 +1,9 @@
 // Testes de livro inteiro: EPUBs mínimos "à InDesign" construídos em memória → convertBook / verifyBook.
-// Correr: bun test ./.claude/skills/epub-indesign/commands.test.ts  (com ./ — o bun ignora pastas com ponto num filtro)
+// Correr: bun test ./.claude/skills/epub-indesign/tests/  (com ./ — o bun ignora pastas com ponto num filtro)
 import { test, expect } from 'bun:test';
 import JSZip from 'jszip';
-import { parseXml } from './book';
-import { convertBook, verifyBook, type BookMap } from './commands';
+import { parseXml } from '../book';
+import { convertBook, verifyBook, type BookMap } from '../commands';
 
 type Doc = { href: string; title: string; body: string };
 
