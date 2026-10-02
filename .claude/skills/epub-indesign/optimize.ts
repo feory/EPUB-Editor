@@ -9,125 +9,17 @@
 //   bun .claude/skills/epub-indesign/optimize.ts verify  <livro.epub>  → texto/estrutura/intenção original × optimizado
 // O mapa decide a semântica (títulos, itálico…) e pode forçar classes do editor; ver SKILL.md.
 import JSZip from 'jszip';
-import { Window } from 'happy-dom';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join, posix } from 'node:path';
-import { EDITOR_CLASSES, fontEm, intentOf, isBold, isItalic, preservedOf, translateParagraph, translateSpan, type Props } from './translate';
+import { clean, openBook, serialize, type Resolve } from './book';
+import { EDITOR_CLASSES, intentOf, isBold, isItalic, preservedOf, translateParagraph, translateSpan, type Props } from './translate';
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
 const EPUB_NS = 'http://www.idpf.org/2007/ops';
 const BLOCK_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
-// Propriedades sem efeito em leitores EPUB / específicas do InDesign
-const JUNK = /^(-epub-|-webkit-|-moz-|adobe-|orphans$|widows$|page-break-|break-)/;
-const SOFT_HYPHEN = /\u00AD|&#173;|&#xad;|&shy;/gi; // hífenes discricionários do InDesign (paginação impressa)
-
-const win = new Window();
-const parseXml = (s: string) => new win.DOMParser().parseFromString(s, 'application/xhtml+xml') as unknown as Document;
-const serialize = (n: Node) => new win.XMLSerializer().serializeToString(n as never);
-
 type MapEntry = { target: string; origem?: string; count?: number; sample?: string; css?: string };
 type BookMap = { extras: string; classes: Record<string, MapEntry> };
 
-// ---------- EPUB ----------
-async function openEpub(path: string) {
-    const zip = await JSZip.loadAsync(readFileSync(path));
-    const container = await zip.file('META-INF/container.xml')!.async('text');
-    const opfPath = container.match(/full-path="([^"]+)"/)![1];
-    const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
-    const opf = await zip.file(opfPath)!.async('text');
-    const items = [...opf.matchAll(/<item\b[^>]*>/g)].map(m => ({
-        raw: m[0],
-        id: m[0].match(/\bid="([^"]+)"/)?.[1] ?? '',
-        href: decodeURIComponent(m[0].match(/\bhref="([^"]+)"/)?.[1] ?? ''),
-        type: m[0].match(/media-type="([^"]+)"/)?.[1] ?? '',
-        props: m[0].match(/properties="([^"]+)"/)?.[1] ?? '',
-    }));
-    const byId = new Map(items.map(i => [i.id, i]));
-    const spine = [...opf.matchAll(/<itemref\b[^>]*idref="([^"]+)"/g)].map(m => byId.get(m[1])!).filter(Boolean);
-    // Conteúdo = spine sem nav nem capa (essas só têm o link do CSS trocado).
-    const content = spine.filter(i => !i.props.includes('nav') && !/cover/i.test(i.id + i.href));
-    let css = '';
-    for (const i of items.filter(i => i.type === 'text/css')) css += await zip.file(opfDir + i.href)!.async('text') + '\n';
-    return { zip, opfPath, opfDir, opf, items, content, css };
-}
-
-// ---------- CSS ----------
-const cssRules = (css: string) => [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^}]*)\}/g)]
-    .map(m => ({ sel: m[1].trim(), body: m[2] }));
-function declarations(body: string) {
-    const props: Props = {}, imp = new Set<string>();
-    for (const d of body.split(';')) {
-        const i = d.indexOf(':');
-        if (i <= 0) continue;
-        const k = d.slice(0, i).trim().toLowerCase();
-        let v = d.slice(i + 1).trim();
-        const important = /!important/.test(v);
-        v = v.replace(/\s*!important/, '');
-        // shorthands → longhands, senão `margin:0` (reset do InDesign) e `margin-top:100px` coexistem
-        // como chaves diferentes e a ordem decide mal
-        for (const [lk, lv] of Object.entries(expand(k, v))) {
-            props[lk] = lv;
-            if (important) imp.add(lk);
-        }
-    }
-    return { props, imp };
-}
-const SIDES = ['top', 'right', 'bottom', 'left'];
-function expand(k: string, v: string): Props {
-    const four = (vals: string[]) => [vals[0], vals[1] ?? vals[0], vals[2] ?? vals[0], vals[3] ?? vals[1] ?? vals[0]];
-    if (k === 'margin' || k === 'padding') {
-        const vals = four(v.split(/\s+/));
-        return Object.fromEntries(SIDES.map((s, i) => [`${k}-${s}`, vals[i]]));
-    }
-    const bm = k.match(/^border-(width|style|color)$/);
-    if (bm) {
-        const vals = four(v.split(/\s+/));
-        return Object.fromEntries(SIDES.map((s, i) => [`border-${s}-${bm[1]}`, vals[i]]));
-    }
-    const bs = k.match(/^border(?:-(top|right|bottom|left))?$/);
-    if (bs) { // border: 1px solid #000 → por lado
-        const parts = v.split(/\s+/), out: Props = {};
-        const width = parts.find(p => /^(\d|thin|medium|thick)/.test(p)) ?? 'medium';
-        const style = parts.find(p => /^(none|hidden|dotted|dashed|solid|double|groove|ridge|inset|outset)$/.test(p)) ?? 'none';
-        const color = parts.find(p => p !== width && p !== style) ?? 'currentcolor';
-        for (const s of bs[1] ? [bs[1]] : SIDES) Object.assign(out, { [`border-${s}-width`]: width, [`border-${s}-style`]: style, [`border-${s}-color`]: color });
-        return out;
-    }
-    return { [k]: v };
-}
-
-// Cascata simplificada (selectores `tag`, `.c`, `tag.c`, listas com vírgula; !important; style inline).
-// Chega para o CSS plano do InDesign e para o EPUB_CSS; ignora descendentes/pseudo-classes.
-function cascade(css: string) {
-    type Rule = { tag: string; cls: string; id: string; spec: number; order: number; props: Props; imp: Set<string> };
-    const rules: Rule[] = [];
-    let order = 0;
-    const NAME = '([^\\s.,:#>+~\\[\\]]+)'; // nomes com acentos (Dedicatória)
-    for (const { sel, body } of cssRules(css)) {
-        if (sel.startsWith('@')) continue;
-        const { props, imp } = declarations(body);
-        for (const s of sel.split(',')) {
-            // tag | .c | tag.c | #id | tag#id  (o InDesign dá tamanhos de imagens/caixas por #_idContainerNNN)
-            const sm = s.trim().match(new RegExp(`^([a-z0-9]*)(?:\\.${NAME})?(?:#${NAME})?$`, 'i'));
-            if (!sm || (!sm[1] && !sm[2] && !sm[3])) continue;
-            const tag = sm[1].toLowerCase(), cls = sm[2] ?? '', id = sm[3] ?? '';
-            rules.push({ tag, cls, id, spec: (tag ? 1 : 0) + (cls ? 10 : 0) + (id ? 100 : 0), order: order++, props, imp });
-        }
-    }
-    return (tag: string, classes: string[], inline = '', id = ''): Props => {
-        const hits = rules.filter(r => (!r.tag || r.tag === tag) && (!r.cls || classes.includes(r.cls)) && (!r.id || r.id === id))
-            .sort((a, b) => a.spec - b.spec || a.order - b.order);
-        const out: Props = {};
-        for (const r of hits) Object.assign(out, r.props);
-        Object.assign(out, declarations(inline).props);
-        for (const r of hits) for (const k of r.imp) out[k] = r.props[k];
-        return out;
-    };
-}
-
-// -epub-hyphens é o que os leitores usam para hifenizar → passa a `hyphens` (standard), não é lixo
-const clean = (p: Props): Props => Object.fromEntries(Object.entries(p)
-    .map(([k, v]) => k === '-epub-hyphens' ? ['hyphens', v] : [k, v]).filter(([k]) => !JUNK.test(k)));
 const em = (v?: string) => {
     const m = v?.match(/^(-?[\d.]+)(em)?$/);
     return m ? parseFloat(m[1]) : 0;
@@ -161,29 +53,23 @@ const cssSummary = (p: Props) => RELEVANT.filter(k => p[k] && !/^(normal|none|0|
 
 // ---------- analyze ----------
 async function analyze(epubPath: string) {
-    const { zip, opfDir, content, css } = await openEpub(epubPath);
-    const resolve = cascade(css);
+    const { documents, resolve, bodySize: base } = await openBook(readFileSync(epubPath));
     const basePath = join(import.meta.dir, 'estilos-base.json');
     const baseMap: Record<string, string> = existsSync(basePath) ? JSON.parse(readFileSync(basePath, 'utf8')) : {};
     const baseLookup = new Map(Object.entries(baseMap).map(([k, v]) => [k.toLowerCase(), v]));
 
-    const found = new Map<string, { count: number; chars: number; sample: string }>();
-    for (const item of content) {
-        const doc = parseXml(await zip.file(opfDir + item.href)!.async('text'));
+    const found = new Map<string, { count: number; sample: string }>();
+    for (const { doc } of documents) {
         for (const el of Array.from(doc.querySelectorAll('p[class], span[class]'))) {
             for (const t of el.getAttribute('class')!.split(/\s+/).filter(Boolean)) {
                 const key = `${el.localName}.${t}`;
-                const e = found.get(key) ?? { count: 0, chars: 0, sample: '' };
+                const e = found.get(key) ?? { count: 0, sample: '' };
                 e.count++;
-                e.chars += (el.textContent ?? '').length;
                 if (!e.sample) e.sample = (el.textContent ?? '').trim().slice(0, 70);
                 found.set(key, e);
             }
         }
     }
-    // font-size base = classe de <p> com mais texto (o corpo do livro)
-    const topP = [...found].filter(([k]) => k.startsWith('p.')).sort((a, b) => b[1].chars - a[1].chars)[0];
-    const base = em(topP ? resolve('p', [topP[0].slice(2)])['font-size'] : '') || 1;
 
     const mapPath = mapPathFor(epubPath);
     const prev: BookMap | null = existsSync(mapPath) ? JSON.parse(readFileSync(mapPath, 'utf8')) : null;
@@ -270,7 +156,7 @@ function convertFootnotes(doc: Document, body: Element): number {
     return notes;
 }
 
-function convertBody(doc: Document, map: BookMap, resolve: ReturnType<typeof cascade>, base: number, front: boolean,
+function convertBody(doc: Document, map: BookMap, resolve: Resolve, base: number, front: boolean,
     referenced: Set<string>, missing: Set<string>, used: Map<string, Map<string, number>>) {
     const body = doc.querySelector('body')!;
     const notes = convertFootnotes(doc, body);
@@ -409,56 +295,25 @@ ${parts.join('\n')}
 `;
 }
 
-// Corpo do texto corrente (em): o font-size de <p> com mais texto no livro
-async function bodySize(zip: JSZip, opfDir: string, content: { href: string }[], resolve: ReturnType<typeof cascade>) {
-    const chars = new Map<number, number>();
-    for (const item of content) {
-        const doc = parseXml((await zip.file(opfDir + item.href)!.async('text')).replace(SOFT_HYPHEN, ''));
-        for (const p of Array.from(doc.querySelectorAll('body p'))) {
-            const s = fontEm(resolve('p', (p.getAttribute('class') ?? '').split(/\s+/).filter(Boolean)));
-            chars.set(s, (chars.get(s) ?? 0) + (p.textContent ?? '').length);
-        }
-    }
-    return [...chars].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 1;
-}
-
 async function convert(epubPath: string) {
     const mapPath = mapPathFor(epubPath);
     if (!existsSync(mapPath)) throw new Error(`Falta o mapa ${mapPath} — correr "analyze" primeiro.`);
     const map: BookMap = JSON.parse(readFileSync(mapPath, 'utf8'));
-    const { zip, opfPath, opfDir, items, content, css } = await openEpub(epubPath);
-    const resolve = cascade(css);
-    const base = await bodySize(zip, opfDir, content, resolve);
-
-    // ids referenciados por links (nav, ncx, índice remissivo…) — as âncoras desses ficam.
-    const referenced = new Set<string>();
-    for (const f of Object.values(zip.files)) {
-        if (!/\.(xhtml|html|ncx)$/i.test(f.name)) continue;
-        for (const m of (await f.async('text')).matchAll(/(?:href|src)="[^"#]*#([^"]+)"/g)) referenced.add(m[1]);
-    }
-
-    // Páginas antes do Índice (rosto, ficha técnica…) — só se o livro tiver Índice
-    const frontMatter = new Set<string>();
-    for (const item of content) {
-        const t = await zip.file(opfDir + item.href)!.async('text');
-        const title = (t.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? '').trim();
-        const first = (t.split(/<body[^>]*>/)[1] ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-        if (/^[íi]ndice$/i.test(title) || /^[íi]ndice\b/i.test(first)) break;
-        frontMatter.add(item.href);
-    }
-    if (frontMatter.size === content.length) frontMatter.clear(); // sem Índice → regra não se aplica
+    const book = await openBook(readFileSync(epubPath));
+    const { zip, opfPath, opfDir, items, resolve, bodySize: base, referencedIds: referenced, frontMatter } = book;
+    const docs = new Map(book.documents.map(d => [d.href, d.doc]));
 
     const STYLE_HREF = 'css/style.css';
     const cssRel = (docHref: string) => posix.relative(posix.dirname(docHref), STYLE_HREF) || STYLE_HREF;
     const missing = new Set<string>();
     const used = new Map<string, Map<string, number>>();
     let notes = 0;
-    const contentHrefs = new Set(content.map(i => i.href));
 
     for (const item of items.filter(i => i.type === 'application/xhtml+xml')) {
         const path = opfDir + item.href;
-        const text = await zip.file(path)!.async('text');
-        if (!contentHrefs.has(item.href)) {
+        const doc = docs.get(item.href);
+        if (!doc) {
+            const text = await zip.file(path)!.async('text');
             // nav/capa: só troca o(s) stylesheet(s) pelo novo
             const replaced = text.replace(/<link\b[^>]*rel="stylesheet"[^>]*\/?>\s*/g, '');
             zip.file(path, /<link\b[^>]*rel="stylesheet"/.test(text)
@@ -466,7 +321,6 @@ async function convert(epubPath: string) {
                 : text);
             continue;
         }
-        const doc = parseXml(text.replace(SOFT_HYPHEN, '')); // hífenes discricionários do InDesign (paginação impressa)
         const front = frontMatter.has(item.href);
         const hasImg = !!doc.querySelector('body img');
         const hadHeading = Array.from(doc.querySelectorAll('body p[class]')).some(p => (p.getAttribute('class') ?? '')
@@ -516,7 +370,7 @@ async function convert(epubPath: string) {
     writeFileSync(outPath, await out.generateAsync({ type: 'uint8array', compression: 'DEFLATE', mimeType: 'application/epub+zip' }));
 
     console.log(`✓ ${outPath}`);
-    console.log(`  ${content.length} documentos, ${notes} notas convertidas, corpo do texto ${base}em`);
+    console.log(`  ${book.documents.length} documentos, ${notes} notas convertidas, corpo do texto ${base}em`);
     if (missing.size) console.log(`  ⚠ classes fora do mapa (correr analyze): ${[...missing].join(', ')}`);
     console.log('\n  Estilo original → estilo do editor');
     for (const [orig, outs] of [...used].sort((a, b) => sum(b[1]) - sum(a[1]))) {
@@ -530,12 +384,10 @@ const sum = (m: Map<string, number>) => [...m.values()].reduce((s, n) => s + n, 
 type Preserved = ReturnType<typeof preservedOf>;
 
 async function blocks(path: string, opt: boolean) {
-    const { zip, opfDir, content, css } = await openEpub(path);
-    const resolve = cascade(css);
+    const { documents, resolve } = await openBook(readFileSync(path));
     const out: { key: string; text: string; v: Preserved; empty: boolean; skip: boolean }[] = [];
     let allText = '', imgs = 0, pages = 0, notes = 0;
-    for (const item of content) {
-        const doc = parseXml((await zip.file(opfDir + item.href)!.async('text')).replace(SOFT_HYPHEN, ''));
+    for (const { doc } of documents) {
         const body = doc.querySelector('body')!;
         allText += (body.textContent ?? '').replace(/\s+/g, '');
         imgs += body.querySelectorAll('img').length;
@@ -551,7 +403,7 @@ async function blocks(path: string, opt: boolean) {
             out.push({ key: `${el.localName}.${classes.join('.')}`, text, empty: !text && !el.querySelector('img'), v, skip });
         }
     }
-    return { out, allText, imgs, pages, notes };
+    return { out, allText, imgs, pages, notes, documents };
 }
 
 async function verify(epubPath: string) {
@@ -593,11 +445,9 @@ async function verify(epubPath: string) {
     const ok = (a: number, b: number) => `${a} → ${b}${a === b ? ' ✓' : ' ⚠'}`;
     console.log(`  imagens ${ok(O.imgs, P.imgs)} · quebras de página ${ok(O.pages, P.pages)} · notas ${ok(O.notes, P.notes)}`);
     // só classes do editor no resultado
-    const zipP = (await openEpub(optPath));
     const foreign = new Set<string>();
-    for (const item of zipP.content) {
-        const t = await zipP.zip.file(zipP.opfDir + item.href)!.async('text');
-        for (const m of t.matchAll(/class="([^"]*)"/g)) for (const c of m[1].split(/\s+/)) {
+    for (const { raw } of P.documents) {
+        for (const m of raw.matchAll(/class="([^"]*)"/g)) for (const c of m[1].split(/\s+/)) {
             if (c && !EDITOR_CLASSES.has(c) && !['footnote', 'footnotes-section', 'small-caps', 'pagebreak'].includes(c)) foreign.add(c);
         }
     }

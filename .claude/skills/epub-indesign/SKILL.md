@@ -39,7 +39,12 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
 ## 3. Ficheiros
 
 - `optimize.ts` — script (`analyze` | `convert` | `verify`), correr da raiz do projeto. Só I/O,
-  estrutura do DOM (notas, quebras, contentores, `<h1>` fundidos) e títulos dos capítulos.
+  estrutura do DOM (notas, quebras, contentores, `<h1>` fundidos), títulos dos capítulos e o pacote
+  de saída.
+- `book.ts` — livro InDesign aberto **uma vez**: `openBook(bytes)` → pacote (OPF, manifest), cascata do
+  CSS original (`resolve`), documentos do spine parseados, e os factos partilhados pelos três comandos:
+  `bodySize` (corpo do texto corrente), `referencedIds` (âncoras a manter), `frontMatter` (páginas
+  antes do Índice). Factos calculados ao abrir, antes de o `convert` alterar os documentos.
 - `translate.ts` — module da Translation, sem I/O nem DOM: `intentOf`, `translateParagraph`,
   `translateSpan`, `preservedOf` (campos que o `verify` compara). **Toda a regra de tradução e todos
   os limiares vivem aqui** — o `convert` aplica e o `verify` compara com o mesmo module.
