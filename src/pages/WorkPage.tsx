@@ -189,13 +189,14 @@ export function WorkPage() {
 
   // Auto-open validation sidebar when results arrive; close it when they clear
   // (e.g. another validator returns no errors) so the reserved space is released.
+  const { openPanel, closeAllPanels } = sidebars;
   useEffect(() => {
     if (work.validationResults || work.footnoteValidation || work.linkValidation) {
-      sidebars.openPanel('validation');
+      openPanel('validation');
     } else {
-      sidebars.setShowValidationSidebar(false);
+      closeAllPanels(); // = setShowValidationSidebar(false)
     }
-  }, [work.validationResults, work.footnoteValidation, work.linkValidation]);
+  }, [work.validationResults, work.footnoteValidation, work.linkValidation, openPanel, closeAllPanels]);
 
   // Grammar highlights
   useEffect(() => {
@@ -208,13 +209,15 @@ export function WorkPage() {
       // Reset legítimo da seleção local ao fechar a sidebar de gramática (sincroniza com o toggle externo).
       setSelectedGrammarIndex(null);
     }
+    // grammarFilter fora de propósito: mudar o filtro só refiltra (efeito abaixo), não re-destaca tudo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [work.grammarIssues, sidebars.showGrammarSidebar, work.activeChapterIndex]);
 
   useEffect(() => {
     if (editorRef.current && sidebars.showGrammarSidebar) {
       editorRef.current.filterGrammarHighlights(grammarFilter);
     }
-  }, [grammarFilter]);
+  }, [grammarFilter, sidebars.showGrammarSidebar]);
 
   // Abrir um painel lateral (gramática/validação/galeria) esconde os painéis de diff.
   const closeDiffSidebar = diff.closeDiffSidebar;
@@ -227,7 +230,6 @@ export function WorkPage() {
   }, [sidebars.activePanel, closeDiffSidebar, closeVersionDiff]);
 
   // Inverso: abrir a comparação (diff de ficheiro ou de versões) fecha os painéis laterais.
-  const closeAllPanels = sidebars.closeAllPanels;
   useEffect(() => {
     if (diff.showDiffSidebar || work.versionDiff.open) closeAllPanels();
   }, [diff.showDiffSidebar, work.versionDiff.open, closeAllPanels]);

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { generateEpub, generateEpubBlob } from '../../../services/export/epub-service';
+import type { NotificationType } from '../../../context/NotificationContext';
 
 interface EbookMeta {
     title?: string;
@@ -19,7 +20,7 @@ interface UseEbookExportOptions {
     ebook: EbookMeta | undefined;
     getSyncedHtmlContent: () => string;
     customCss: string;
-    showNotification: (type: string, message: string) => void;
+    showNotification: (type: NotificationType, message: string) => void;
 }
 
 export function useEbookExport({

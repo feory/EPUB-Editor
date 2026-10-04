@@ -85,11 +85,9 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
             if (cancelled) return;
             const viewport = pdfPage.getViewport({ scale });
             const canvas = canvasRef.current!;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-            await pdfPage.render({ canvasContext: ctx, viewport }).promise;
+            await pdfPage.render({ canvas, viewport }).promise;
         })();
         return () => { cancelled = true; };
     }, [status, page, scale]);

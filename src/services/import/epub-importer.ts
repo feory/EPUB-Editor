@@ -33,7 +33,7 @@ const decodeEntities = (s: string) =>
         .replace(/&amp;/g, '&');
 
 // Metadados Dublin Core do OPF → campos do Ebook. Regex tolerante a prefixo de namespace.
-function parseOpfMetadata(opfXml: string, fallbackIsbn: string): EpubMetadata {
+export function parseOpfMetadata(opfXml: string, fallbackIsbn: string): EpubMetadata {
     const grab = (tag: string) => {
         const m = opfXml.match(new RegExp(`<dc:${tag}\\b[^>]*>([\\s\\S]*?)</dc:${tag}>`, 'i'));
         return m ? decodeEntities(m[1].trim()) : '';
@@ -114,7 +114,7 @@ function reverseFootnotes(body: HTMLElement) {
         });
         // Nota com vários parágrafos (EPUB do InDesign) → um só <p> com <br>; antes só o 1º entrava.
         const innerPs = Array.from(aside.querySelectorAll(':scope > p'));
-        const p = document.createElement('p');
+        const p = body.ownerDocument.createElement('p');
         p.className = 'footnote';
         p.innerHTML = innerPs.length ? innerPs.map(x => x.innerHTML).join('<br>') : aside.innerHTML;
         aside.replaceWith(p);
@@ -131,7 +131,7 @@ function reversePagebreaks(body: HTMLElement) {
     body.querySelectorAll('span').forEach(span => {
         if (span.getAttribute('epub:type') !== 'pagebreak' && span.getAttribute('role') !== 'doc-pagebreak') return;
         const page = span.getAttribute('aria-label') || (span.getAttribute('id') || '').replace(/^page-/, '');
-        const repl = document.createElement('span');
+        const repl = body.ownerDocument.createElement('span');
         repl.className = 'pagebreak';
         if (page) repl.setAttribute('data-page', page);
         span.replaceWith(repl);
@@ -143,7 +143,7 @@ function reversePagebreaks(body: HTMLElement) {
 // leitores EPUB tratam do sublinhado sozinhos, sem precisar de CSS nenhum.
 function reverseUnderline(body: HTMLElement) {
     body.querySelectorAll('span.underline').forEach(span => {
-        const u = document.createElement('u');
+        const u = body.ownerDocument.createElement('u');
         u.innerHTML = span.innerHTML;
         span.replaceWith(u);
     });
@@ -153,16 +153,17 @@ const MAX_IMAGE_BYTES = 2_000_000; // = limite do servidor (server/routes/images
 
 // <img src="Images/{id}.ext"> → <img data-image-id="{id}" src="placeholder">; recolhe o blob.
 // `skipIds` = imagens a NÃO colocar na galeria (capa — é separada). Imagens > 2MB são saltadas
-// (o upload em lote do useEbookImport daria 413).
+// (o upload em lote do useEbookImport daria 413). Devolve true se retirou a capa.
 async function reverseImages(
     body: HTMLElement, zip: JSZip, docDir: string, images: Map<string, Blob>, skipIds: Set<string>,
-) {
+): Promise<boolean> {
+    let removedCover = false;
     for (const img of Array.from(body.querySelectorAll('img'))) {
         const src = img.getAttribute('src') || '';
         const m = src.match(/([^/]+)\.([A-Za-z0-9]+)$/);
         if (!m) continue;
         const [, rawId, ext] = m;
-        if (skipIds.has(rawId)) { img.remove(); continue; } // capa → fora da galeria
+        if (skipIds.has(rawId)) { img.remove(); removedCover = true; continue; } // capa → fora da galeria
         const id = toNCName(rawId); // id vira atributo XML "id" (NCName) no OPF (ex.: "001.png")
         if (!images.has(id)) {
             const entry = zip.file(resolvePath(docDir, src));
@@ -175,6 +176,7 @@ async function reverseImages(
         img.setAttribute('data-image-id', id);
         img.setAttribute('src', 'placeholder');
     }
+    return removedCover;
 }
 
 // === Adaptação de EPUBs de plataformas ANTIGAS (classes/estrutura diferentes) =================
@@ -427,9 +429,7 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
         }
         reversePagebreaks(body);
         reverseUnderline(body);
-        const hadCover = Array.from(body.querySelectorAll('img'))
-            .some(img => skipIds.has(img.getAttribute('src')?.match(/([^/]+)\.[A-Za-z0-9]+$/)?.[1] ?? ''));
-        await reverseImages(body, zip, docDir, images, skipIds);
+        const hadCover = await reverseImages(body, zip, docDir, images, skipIds);
 
         let content = body.innerHTML.trim();
         if (!content) continue;

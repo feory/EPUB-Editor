@@ -7,11 +7,12 @@ import { cleanEditorHtml, applyImportOptions, prependFichaTecnica } from '../../
 import type { ImportOptions } from '../../../utils/html-cleaner';
 import type { ImageSettings } from '../../../components/MarginPreview';
 import { uploadExtractedImages } from '../../../services/import/extracted-images';
+import type { NotificationType } from '../../../context/NotificationContext';
 
 interface UseEbookImportOptions {
     isbn: string | undefined;
     onImport: (html: string) => void;
-    showNotification: (type: string, message: string) => void;
+    showNotification: (type: NotificationType, message: string) => void;
 }
 
 export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImportOptions) {

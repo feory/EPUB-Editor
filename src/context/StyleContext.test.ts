@@ -11,7 +11,8 @@ test('patchLoadedCss: caminho relativo antigo da fonte Crimson Text vira absolut
 });
 
 test('patchLoadedCss: caminho já absoluto fica inalterado (idempotente)', () => {
-    // .p-italic presente só para isolar do patch de "estilos de parágrafo em falta" (não é o alvo deste teste)
-    const css = '.p-italic {} @font-face { font-family: "Crimson Text"; src: url("/CrimsonText-Regular.ttf"); }';
-    expect(patchLoadedCss(css)).toBe(css);
+    // compara com a 1.ª passagem (não com o original): os patches de "estilos em falta" acrescentam regras
+    const once = patchLoadedCss('@font-face { font-family: "Crimson Text"; src: url("/CrimsonText-Regular.ttf"); }');
+    expect(once).toContain('url("/CrimsonText-Regular.ttf")');
+    expect(patchLoadedCss(once)).toBe(once);
 });

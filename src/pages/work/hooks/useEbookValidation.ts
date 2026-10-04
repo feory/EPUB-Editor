@@ -6,6 +6,7 @@ import { generateEpubBlob } from '../../../services/export/epub-service';
 import { validateFootnotes, type ValidationReport } from '../../../services/validation/footnote-validator';
 import { validateLinks, type LinkReport } from '../../../services/validation/link-validator';
 import type { BookMetadata } from '../../../services/export/epub-service';
+import type { NotificationType } from '../../../context/NotificationContext';
 
 type ValidationConfig = {
     type: 'footnotes' | 'epub' | 'accessibility' | 'links';
@@ -22,7 +23,7 @@ interface UseEbookValidationOptions {
     getSyncedHtmlContent: () => string;
     prepareEpubAssets: (html: string) => Promise<{ metadata: BookMetadata; imageMap: Map<string, Blob>; coverBlob: Blob | null }>;
     customCss: string;
-    showNotification: (type: string, message: string, duration?: number) => string;
+    showNotification: (type: NotificationType, message: string, duration?: number) => string;
     hideNotification: (id: string) => void;
 }
 
@@ -78,7 +79,7 @@ export function useEbookValidation({
                     if (validationData.valid) {
                         showNotification('info', config.validMessage(totalIssues));
                     } else {
-                        showNotification('warning', config.warningMessage(validationData.errors.length));
+                        showNotification('error', config.warningMessage(validationData.errors.length));
                     }
                 }
             } else if (config.type === 'links') {

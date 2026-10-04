@@ -5,13 +5,14 @@ import type { QueryClient } from '@tanstack/react-query';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { decompressHtml } from '../../../utils/compression';
 import type { ContentAction } from './contentReducer';
+import type { NotificationType } from '../../../context/NotificationContext';
 
 interface UseEbookHistoryOptions {
     isbn: string | undefined;
     dispatch: React.Dispatch<ContentAction>;
     queryClient: QueryClient;
     skipSyncRef: React.MutableRefObject<boolean>;
-    showNotification: (type: string, message: string) => void;
+    showNotification: (type: NotificationType, message: string) => void;
 }
 
 export function useEbookHistory({

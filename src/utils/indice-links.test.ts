@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import { linkIndiceEntries, linkOneIndiceEntry } from './indice-links';
 
 const toc = (body: string) => `<p class="chapter-break-h1" data-title="Índice"></p><h1>Índice</h1>${body}`;
-const chapter = (n: string, title: string, body = '<p>corpo</p>') =>
+const chapter = (_n: string, title: string, body = '<p>corpo</p>') =>
     `<p class="chapter-break-h1" data-title="${title}"></p><h1>${title}</h1>${body}`;
 
 test('linkIndiceEntries: match direto liga entrada ao capítulo', () => {

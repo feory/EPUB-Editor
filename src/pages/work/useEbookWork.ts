@@ -106,6 +106,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // Autosave every 5 minutes via stable refs
     // Gravar usa SEMPRE o getter "latest" (inclui a edição ainda presa no debounce) — não o
     // getSyncedHtmlContent, que só vê o que já passou pelo reducer.
+    const { getLatestHtmlContent } = chapterSync;
     const getSyncedRef = useRef(chapterSync.getLatestHtmlContent);
     const saveMutRef = useRef(saveMutation);
     useEffect(() => {
@@ -451,9 +452,9 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         saveContent: useCallback(
             () => {
                 if (readOnly) return; // modo leitura: nunca grava
-                saveMutation.mutate({ content: chapterSync.getLatestHtmlContent(), showNotif: true });
+                saveMutation.mutate({ content: getLatestHtmlContent(), showNotif: true });
             },
-            [saveMutation, chapterSync.getLatestHtmlContent, readOnly]
+            [saveMutation, getLatestHtmlContent, readOnly]
         ),
         // Mesmo padrão silencioso de moveChapters/deleteChapterPart/createChapter (showNotif
         // omitido) — para mutações estruturais que persistem de imediato sem ser o botão
@@ -461,9 +462,9 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         saveContentSilently: useCallback(
             () => {
                 if (readOnly) return;
-                saveMutation.mutate({ content: chapterSync.getLatestHtmlContent() });
+                saveMutation.mutate({ content: getLatestHtmlContent() });
             },
-            [saveMutation, chapterSync.getLatestHtmlContent, readOnly]
+            [saveMutation, getLatestHtmlContent, readOnly]
         ),
 
         showHistory: history.isHistoryOpen,
