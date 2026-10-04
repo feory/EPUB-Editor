@@ -4,7 +4,7 @@ import { test, expect } from 'bun:test';
 import '../happy-dom';
 import JSZip from 'jszip';
 import { parseXml } from '../book';
-import { analyzeBook, convertBook, verifyBook, type BookMap } from '../commands';
+import { analyzeBook, convertBook, decisionsOf, verifyBook, type BookMap } from '../commands';
 
 type Doc = { href: string; title: string; body: string };
 
@@ -166,7 +166,24 @@ test('EPUB já optimizado: optimizar de novo não muda nada (não perde capítul
     const { bytes: twice, report } = await convertBook(once, { classes: {} }, EDITOR_CSS);
     expect(report.alreadyOptimized).toBe(true);
     expect(twice).toEqual(once); // tal e qual
-    const { alreadyOptimized } = await analyzeBook(once, { baseStyles: {}, previousMap: null });
+    const { alreadyOptimized } = await analyzeBook(once, { baseStyles: {}, fileName: 'livro.epub', loadDecisions: async () => null });
     expect(alreadyOptimized).toBe(true);
-    expect((await analyzeBook(epub, { baseStyles: {}, previousMap: null })).alreadyOptimized).toBe(false);
+    expect((await analyzeBook(epub, { baseStyles: {}, fileName: 'livro.epub', loadDecisions: async () => null })).alreadyOptimized).toBe(false);
+});
+
+test('Decisões do livro: carregadas pelo ISBN, vencem a casa; só o que difere da sugestão é guardado', async () => {
+    const epub = await makeEpub([{ href: 'c1.xhtml', title: 'Um', body:
+        '<p class="ABERTURA">Capítulo 1</p><p class="SUB">Uma secção</p><p class="TXT">texto</p>' }]);
+    const asked: string[] = [];
+    const { map, isbn } = await analyzeBook(epub, {
+        baseStyles: { 'p.SUB': 'h3' },
+        fileName: '9789720000001.epub', // OPF sem dc:identifier → ISBN do nome do ficheiro
+        loadDecisions: async i => { asked.push(i); return { classes: { 'p.SUB': { target: 'p-bold' } } }; },
+    });
+    expect([isbn, asked]).toEqual(['9789720000001', ['9789720000001']]);
+    expect(map.classes['p.SUB']).toMatchObject({ target: 'p-bold', origem: 'revisto', suggested: 'h3' });
+    expect(decisionsOf(map).classes).toEqual({ 'p.SUB': { target: 'p-bold', origem: 'revisto', sample: 'Uma secção' } });
+    // voltar à sugestão no modal apaga a decisão
+    map.classes['p.SUB'].target = 'h3';
+    expect(decisionsOf(map).classes).toEqual({});
 });

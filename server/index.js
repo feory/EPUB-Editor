@@ -12,6 +12,7 @@ import * as grammar from './routes/grammar.js';
 import * as comments from './routes/comments.js';
 import * as epub from './routes/epub.js';
 import * as images from './routes/images.js';
+import * as indesignMaps from './routes/indesign-maps.js';
 import * as printPdf from './routes/print-pdf.js';
 import * as trash from './routes/trash.js';
 import * as maintenance from './routes/maintenance.js';
@@ -153,6 +154,14 @@ export const server = Bun.serve({
         if (method === "PUT") return maintenance.setBackupSchedule(req, user);
       }
       if (path === "/api/languagetool/check"          && method === "POST") return maintenance.languageTool(req);
+
+      // Decisões do livro (Importação InDesign) — globais, antes de o ebook existir (sem ownership check)
+      if (path.startsWith("/api/indesign-maps/")) {
+        const isbn = path.split('/')[3];
+        if (!safeSegment(isbn)) return new Response("Not Found", { status: 404, headers: corsHeaders });
+        if (method === "GET") return indesignMaps.getDecisions(isbn);
+        if (method === "PUT") return indesignMaps.saveDecisions(req, isbn);
+      }
 
       // Per-ebook routes
       if (path.startsWith("/api/ebooks/")) {

@@ -7,19 +7,19 @@ description: Optimiza EPUBs exportados do Adobe InDesign para os ESTILOS DO EDIT
 
 Traduz para o **vocabulário e valores do editor** (livro igual aos da app; barra de estilos reconhece), mantendo a **intenção** do original, não os valores. Resolve: estilos com nomes diferentes por livro (`TXT`, `CharOverride-7`, `_idGen…`), `<div>` de layout, notas próprias, CSS enorme.
 
-**Glossário** — **Map**: `mapas/<livro>.json`, o que o CSS não diz (títulos, spans, classes forçadas, `__remove__`), revisto à mão · **Intent**: o que o parágrafo quer (alinhamento, recuo, bloco, espaços, corpo, negrito/itálico, maiúsculas, filetes) · **Translation**: Intent + Map + contexto → tag + classes + alinhamento · **Front matter**: páginas antes do Índice (não criam capítulos).
+**Glossário** — **Map**: o que o CSS não diz (títulos, spans, classes forçadas, `__remove__`) = sugestão (regras da casa + heurística) com as Decisões do livro por cima · **Decisões do livro**: `data/indesign-maps/<isbn>.json`, só os estilos cujo alvo difere da sugestão; uma fonte para a app e a CLI · **Intent**: o que o parágrafo quer (alinhamento, recuo, bloco, espaços, corpo, negrito/itálico, maiúsculas, filetes) · **Translation**: Intent + Map + contexto → tag + classes + alinhamento · **Front matter**: páginas antes do Índice (não criam capítulos).
 
 ## Regras de ouro
 
 - **Dúvida → PERGUNTAR** (AskUserQuestion, amostras + recomendação) antes de converter: `h1` com muitas ocorrências (ou `h3`?), `<title>` estranhos, citação/alínea/legenda, `__remove__` (sempre).
-- Resposta → mapa com `"origem": "revisto"`; regra da casa → também `estilos-base.json`.
+- Resposta do livro → Decisões do livro (`data/indesign-maps/<isbn>.json`, à mão ou no modal da app); regra da casa → `estilos-base.json`. Precedência: livro > casa > heurística.
 - Nunca editar o `.epub` original (saída em `<dir>/optimizados/`). `verify` obrigatório.
 
 ## Fluxo (da raiz do projeto)
 
-1. `bun .claude/skills/epub-indesign/optimize.ts analyze <livro.epub>` → cria/atualiza o mapa (contagem, sugestão, origem `base`/`css`/`revisto`, CSS); `revisto` nunca é sobrescrito.
-2. Rever o mapa (checklist) e perguntar dúvidas.
-3. `… convert <livro.epub>` → relatório "Estilo original → estilo do editor"; `⚠ classes fora do mapa` → `analyze` de novo.
+1. `bun .claude/skills/epub-indesign/optimize.ts analyze <livro.epub>` → mostra o mapa (contagem, alvo, origem `base`/`css`/`revisto`, CSS) e o caminho das Decisões do livro. Não grava nada.
+2. Rever o mapa (checklist), perguntar dúvidas, gravar as respostas nas Decisões do livro (`{ "classes": { "p.X": { "target": "h3" } } }`).
+3. `… convert <livro.epub>` → refaz a análise com as decisões e converte; relatório "Estilo original → estilo do editor".
 4. `… verify <livro.epub>` → `0 diferenças de intenção` (alinhamento, recuo, espaço acima/abaixo, negrito, itálico, maiúsculas), `texto ✓`, imagens/quebras/notas `✓`, `classes: só do editor ✓`.
 5. Importar na HomePage e confirmar a Estrutura. Decisões recorrentes → `estilos-base.json`.
 6. Mudou algo em `src/services/indesign/` → `bun test src/services/indesign` + reconverter; `verify` limpo (vale para a app e para a CLI).
@@ -30,14 +30,15 @@ O código vive na **app** (`src/services/indesign/`) e é o mesmo da **Importaç
 
 | Ficheiro (`src/services/indesign/`) | Papel |
 |---|---|
-| `commands.ts` | `analyzeBook(bytes, {baseStyles, previousMap})`, `convertBook(bytes, map, editorCss)`, `verifyBook(orig, opt)` — sem disco/consola; estrutura do DOM, títulos, pacote de saída |
+| `commands.ts` | `analyzeBook(bytes, {baseStyles, fileName, loadDecisions})` (→ `map`, `isbn`), `decisionsOf(map)` (o que guardar), `convertBook(bytes, map, editorCss)`, `verifyBook(orig, opt)` — sem disco/consola; estrutura do DOM, títulos, pacote de saída |
 | `book.ts` | `openBook(bytes)` abre 1×: OPF, cascata do CSS original (`resolve`), documentos, `css`, `bodySize`, `referencedIds`, `frontMatter`. DOM = `DOMParser`/`XMLSerializer` globais (browser; no bun via `happy-dom.ts`) |
 | `translate.ts` | `intentOf`, `translateParagraph`, `translateSpan`, `preservedOf` — **toda a regra e limiares**; convert aplica, verify compara |
 | `titles.ts` | `indesignTitle` (Ficha Técnica, Rosto); usa `chapterTitleOf` (`src/utils/chapter-title.ts`) |
 | `editor.ts` | `editorVocabulary(css)` (classes do editor, sem listas à mão), `editorExportCss(DEFAULT_CSS)` (CSS de saída) |
 | `estilos-base.json` | Decisões da casa por `tag.classe` (sem maiúsculas), antes da heurística |
 | `tests/` | `bun test src/services/indesign` — `translate`, `editor` (inclui `DEFAULT_CSS` real), `titles`, `commands` (livro inteiro com `makeEpub` em memória). Caso novo = teste novo |
-| `.claude/skills/epub-indesign/optimize.ts` | Só CLI: lê/escreve (EPUB, mapa), imprime |
+| `.claude/skills/epub-indesign/optimize.ts` | Só CLI: lê EPUB + Decisões do livro, escreve `optimizados/`, imprime |
+| `server/routes/indesign-maps.js` | `GET/PUT /api/indesign-maps/<isbn>` — as Decisões do livro para a app (globais, sobrevivem a apagar o ebook) |
 
 CSS de saída = `editorExportCss(DEFAULT_CSS)` (sem editor-only nem `@font-face`).
 
@@ -62,14 +63,14 @@ Exceções: notas e tabelas sem classes; `p-legendas` tira `p-small`/`p-bottom`/
 
 ## Mapa
 
-`{ "classes": { "p.X": { "target", "origem", "count", "sample", "css" } } }`
+`{ "classes": { "p.X": { "target", "origem", "count", "sample", "css", "suggested" } } }` (Decisões do livro: só `target` conta)
 
 - **`p.X`**: `h1` capítulo (`<h1>` seguidos → `A<br/>B`) · `h2` sub-capítulo (só se o TOC tiver) · `h3` subtítulo · classes do editor (ex. `p-legendas`) substituem só a forma (alinea/quote/small/legendas) · `""` automático · título sem letras/números (`*`) → `p-asterisk`.
 - **`span.X`**: `i b u sup sub small-caps drop-cap` (combináveis), só com efeito real no CSS ("Superscript" sem elevação ≠ `<sup>`); resto desembrulhado.
 - **`__remove__`**: apaga elemento **e conteúdo**; só lixo comprovado, confirmado.
 - **Sugestões**: corpo ≥ 1.6× → `h1`; ≥ 1.1× ou nome título/subt/sub → `h3`; "legenda" → `p-legendas`; spans pelo CSS.
 - **Checklist**: `h1` só para títulos do TOC original (números de aforismos, rosto, autor, "FIM" → `""`/`h3`; centenas de `h1` = erro) · subtítulos `h3` · legendas `p-legendas` · citações `p-quote` · rever o relatório do convert.
-- **Decididos** (reaplicar se o mapa se perder): `9789724429861` `SUBT-TULOS-CENTRADOS` = `h3` · `9789724429885` `subtitulos` = `p-bold` (h3 logo após h1 → Ace `heading-order`) · `9789724429557` `ABERTURA` = `h3` (cada poema continua capítulo pelo `<title>` do ficheiro) · `9789899336186` `CAD-AUT_TIT` = `h1`, `Tit2` = `""` · `9789724429823` `Autor_inicio` = `""`, `Titulo-Tabela` = `p-legendas` · `Rosto-*`, `nome-do-autor`, `nome-autor`, `FIM` = parágrafo · `Recolhido*` = `p-quote` · `LEGENDAS*` = `p-legendas` · `Capitular` = `drop-cap`.
+- **Decididos**: por livro → `data/indesign-maps/<isbn>.json`; da casa → `estilos-base.json`. Não duplicar aqui.
 
 ## Títulos dos capítulos
 

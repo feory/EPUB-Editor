@@ -4,10 +4,11 @@
 // DEFAULT_CSS do StyleContext), escolhidas a partir do CSS original (estilo + overrides); alinhamento à
 // direita/esquerda como o editor o grava (style inline). Tira o lixo do InDesign e converte notas/quebras
 // de página para o modelo da app.
-//   bun .claude/skills/epub-indesign/optimize.ts analyze <livro.epub>  → <dir>/mapas/<livro>.json
+//   bun .claude/skills/epub-indesign/optimize.ts analyze <livro.epub>  → mapa sugerido (+ Decisões do livro)
 //   bun .claude/skills/epub-indesign/optimize.ts convert <livro.epub>  → <dir>/optimizados/<livro>.epub
 //   bun .claude/skills/epub-indesign/optimize.ts verify  <livro.epub>  → texto/estrutura/intenção original × optimizado
-// O mapa decide a semântica (títulos, itálico…) e pode forçar classes do editor; ver SKILL.md.
+// Decisões do livro = data/indesign-maps/<isbn>.json — o MESMO ficheiro que a Importação InDesign da app lê e
+// grava (editar à mão: { "classes": { "p.X": { "target": "h3" } } }). Ver SKILL.md.
 //
 // Este ficheiro é só a CLI (adapter): lê/escreve ficheiros e imprime. A lógica é a da app
 // (src/services/indesign/), a mesma da "Importação InDesign" da página inicial.
@@ -15,22 +16,26 @@ import '../../../src/services/indesign/happy-dom'; // DOMParser/XMLSerializer no
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { DEFAULT_CSS } from '../../../src/context/StyleContext';
-import { analyzeBook, convertBook, verifyBook, type BookMap } from './commands';
+import { analyzeBook, convertBook, verifyBook } from './commands';
 import { editorExportCss } from './editor';
 
-const mapPathFor = (epub: string) => join(dirname(epub), 'mapas', basename(epub, '.epub') + '.json');
+const DECISIONS_DIR = join(import.meta.dir, '../../../data/indesign-maps');
+const decisionsPath = (isbn: string) => join(DECISIONS_DIR, `${isbn}.json`);
 const optimizedPathFor = (epub: string) => join(dirname(epub), 'optimizados', basename(epub));
 
-async function analyze(epubPath: string) {
+// mapa = sugestão (casa + heurística) com as Decisões do livro por cima
+function analyzeFile(epubPath: string) {
     const basePath = join(import.meta.dir, 'estilos-base.json');
-    const mapPath = mapPathFor(epubPath);
-    const { map, bodySize, alreadyOptimized } = await analyzeBook(readFileSync(epubPath), {
+    return analyzeBook(readFileSync(epubPath), {
         baseStyles: existsSync(basePath) ? JSON.parse(readFileSync(basePath, 'utf8')) : {},
-        previousMap: existsSync(mapPath) ? JSON.parse(readFileSync(mapPath, 'utf8')) : null,
+        fileName: basename(epubPath),
+        loadDecisions: async isbn => existsSync(decisionsPath(isbn)) ? JSON.parse(readFileSync(decisionsPath(isbn), 'utf8')) : null,
     });
-    mkdirSync(dirname(mapPath), { recursive: true });
-    writeFileSync(mapPath, JSON.stringify(map, null, 2) + '\n');
-    console.log(`Mapa: ${mapPath}  (texto base ${bodySize}em)\n`);
+}
+
+async function analyze(epubPath: string) {
+    const { map, isbn, bodySize, alreadyOptimized } = await analyzeFile(epubPath);
+    console.log(`Decisões do livro: ${decisionsPath(isbn)}${existsSync(decisionsPath(isbn)) ? '' : ' (ainda não há)'}  (texto base ${bodySize}em)\n`);
     if (alreadyOptimized) console.log('  ℹ EPUB já optimizado (formato da app) — o convert copia-o sem alterações.\n');
     for (const [k, e] of Object.entries(map.classes)) {
         console.log(`${String(e.count).padStart(6)}  ${k.padEnd(36)} → ${(e.target || '∅').padEnd(14)} [${e.origem}] ${e.css}`);
@@ -38,9 +43,7 @@ async function analyze(epubPath: string) {
 }
 
 async function convert(epubPath: string) {
-    const mapPath = mapPathFor(epubPath);
-    if (!existsSync(mapPath)) throw new Error(`Falta o mapa ${mapPath} — correr "analyze" primeiro.`);
-    const map: BookMap = JSON.parse(readFileSync(mapPath, 'utf8'));
+    const { map } = await analyzeFile(epubPath);
     const { bytes, report } = await convertBook(readFileSync(epubPath), map, editorExportCss(DEFAULT_CSS));
     const outPath = optimizedPathFor(epubPath);
     mkdirSync(dirname(outPath), { recursive: true });

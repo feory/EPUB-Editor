@@ -181,6 +181,12 @@ export const ebooksApi = {
 
     deleteCover: (isbn: string) => apiClient.delete(`/ebooks/${isbn}/cover`),
 
+    // Decisões do livro da Importação InDesign (data/indesign-maps/<isbn>.json; existem antes do ebook)
+    getIndesignDecisions: (isbn: string) =>
+        apiClient.get<{ classes: Record<string, { target: string }> }>(`/indesign-maps/${isbn}`).then(r => r.data),
+    saveIndesignDecisions: (isbn: string, decisions: { classes: Record<string, unknown> }) =>
+        apiClient.put(`/indesign-maps/${isbn}`, decisions),
+
     // Content management
     getContent: (isbn: string, filename?: string) =>
         apiClient.get<{ content: string }>(`/ebooks/${isbn}/content`, {
