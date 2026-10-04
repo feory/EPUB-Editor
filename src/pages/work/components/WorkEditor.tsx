@@ -1,4 +1,4 @@
-import React, { useRef, forwardRef, useImperativeHandle, useEffect, useState } from 'react';
+import React, { useRef, forwardRef, useImperativeHandle, useEffect, useState, useCallback } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import type { RawEditorOptions } from 'tinymce';
 import { Maximize2, FileText } from 'lucide-react';
@@ -202,7 +202,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     // como pelo onInit (garante o CSS logo no arranque de CADA montagem nova do editor; se só
     // dependesse da useEffect, sair/voltar a entrar num projeto com o MESMO currentCss de antes
     // não disparava re-render — o iframe novo ficava sem nenhum estilo).
-    const applyCustomStyles = (editor: TinyMCEEditor) => {
+    const applyCustomStyles = useCallback((editor: TinyMCEEditor) => {
         const editorDoc = editor.getDoc();
         if (!editorDoc) return;
         let styleElement = editorDoc.getElementById('custom-editor-styles') as HTMLStyleElement;
@@ -212,13 +212,13 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             editorDoc.head.appendChild(styleElement);
         }
         styleElement.textContent = currentCss + editorFontCss(editorFont, editorFontSize);
-    };
+    }, [currentCss, editorFont, editorFontSize]);
 
     useEffect(() => {
         const editor = editorRef.current;
         if (!editor) return;
         applyCustomStyles(editor);
-    }, [currentCss, editorFont, editorFontSize]);
+    }, [applyCustomStyles]);
 
     useEffect(() => {
         const editor = editorRef.current;
