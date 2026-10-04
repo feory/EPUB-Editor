@@ -64,7 +64,7 @@ export function intentOf(p: Props, bodySize: number): Intent {
         // recuo pendente: longo = alíneas/listas; curto (ex. bibliografia) = parágrafo normal
         indent: indent > 0.05 ? 'first' : indent < -0.05 && ml >= 1.5 ? 'hanging' : 'none',
         block: indent >= -0.05 && ml >= 1,
-        above: mt >= 2.5 ? 'space' : mt >= 0.5 ? 'top' : 'none',
+        above: mt >= 3 ? 'space' : mt >= 0.5 ? 'top' : 'none',
         below: mb >= 0.5,
         small: fontEm(p) / bodySize < 0.95,
         bold: isBold(p), italic: isItalic(p), upper: p['text-transform'] === 'uppercase',

@@ -33,8 +33,9 @@ test('alíneas (recuo pendente longo) → alinea', () => {
     expect(para({ 'text-indent': '-0.917em', 'margin-left': '2.167em' })).toEqual({ tag: 'p', classes: ['alinea'] });
 });
 
-test('espaço acima: ≥ 0.5em p-top, ≥ 2.5em p-space; px convertidos pelo corpo', () => {
+test('espaço acima: ≥ 0.5em p-top, ≥ 3em p-space; px convertidos pelo corpo', () => {
     expect(para({ 'margin-top': '1.25em' })).toEqual({ tag: 'p', classes: ['p-top'] });
+    expect(para({ 'margin-top': '2.5em' })).toEqual({ tag: 'p', classes: ['p-top'] });
     expect(para({ 'margin-top': '100px' })).toEqual({ tag: 'p', classes: ['p-space'] });
     expect(para({ 'margin-top': '0.3em' })).toEqual({ tag: 'p', classes: [] });
 });
