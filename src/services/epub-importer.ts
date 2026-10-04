@@ -376,7 +376,8 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
     const { zip, opfDir, opfXml, opf, manifest, spineHrefs } = await openEpub(file);
 
 
-    // Capa (separada do livro) → não entra na galeria. <meta name="cover"> ou item cover-image.
+    // Capa (separada do livro) → não entra na galeria; devolvida à parte para ficar como capa do ebook.
+    // <meta name="cover"> ou item cover-image; sem nada declarado → 1.ª imagem da página de capa do spine.
     const skipIds = new Set<string>();
     const metaCover = Array.from(opf.getElementsByTagName('meta'))
         .find(mt => mt.getAttribute('name') === 'cover')?.getAttribute('content');
@@ -384,9 +385,18 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
     if (!coverHref) coverHref = Array.from(opf.getElementsByTagName('item'))
         .find(it => (it.getAttribute('properties') || '').split(/\s+/).includes('cover-image'))
         ?.getAttribute('href') || undefined;
-    if (coverHref) {
-        const cm = coverHref.match(/([^/]+)\.[A-Za-z0-9]+$/);
+    let coverPath = coverHref ? resolvePath(opfDir, coverHref) : undefined;
+    if (!coverPath) {
+        const coverPage = spineHrefs.find(h => /(^|\/)(cover|capa)[^/]*\.x?html?$/i.test(h));
+        const src = coverPage && (await zip.file(resolvePath(opfDir, coverPage))?.async('text'))?.match(/<img\b[^>]*\bsrc="([^"]+)"/i)?.[1];
+        if (coverPage && src) coverPath = resolvePath(opfDir + coverPage.slice(0, coverPage.lastIndexOf('/') + 1), src);
+    }
+    let cover: Blob | undefined;
+    if (coverPath) {
+        const cm = coverPath.match(/([^/]+)\.([A-Za-z0-9]+)$/);
         if (cm) skipIds.add(cm[1]);
+        const data = await zip.file(coverPath)?.async('arraybuffer');
+        if (data && cm) cover = new Blob([data], { type: MIME_BY_EXT[cm[2].toLowerCase()] || 'image/jpeg' });
     }
 
     // EPUB de plataforma ANTIGA? (não usa OEBPS/*.xhtml). Se sim, adaptar classes/estrutura/notas.
@@ -432,5 +442,5 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
 
     const fallbackIsbn = file.name.replace(/\.epub$/i, '');
     const metadata = parseOpfMetadata(opfXml, fallbackIsbn);
-    return { html, images, metadata };
+    return { html, images, metadata, cover };
 }
