@@ -460,12 +460,19 @@ export function createEditorSetup(deps: SetupDeps) {
             // TinyMCE clonar o data-mce-psactive para os <p> criados — uma só ref não os apanha
             editor.dom.select('[data-mce-psactive]').forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-psactive', null));
             // Só marcar com foco real — colocação programática do cursor (entrada/troca de capítulo) não conta
+            let marked = false;
             if (editor.hasFocus()) {
                 const block = blockOf(editor.selection.getNode());
                 if (block && block !== hiddenBlock && block !== editor.getBody()) {
                     editor.dom.setAttrib(block, 'data-mce-psactive', '1');
+                    marked = true;
                 }
             }
+            // "Há bloco ativo" para o CSS do "+" (contentStyles.ts) — classe em vez de
+            // body:has([data-mce-psactive]): com milhares de blocos o :has era reavaliado a cada
+            // nó inserido/removido (ex. previews do dropdown de estilos: ~1,4s → ~25ms).
+            // toggle com force não mexe no DOM se o estado não mudou.
+            editor.getBody().classList.toggle('ps-has-active', marked);
             refreshEmptyMarker();
         });
         editor.on('input', refreshEmptyMarker); // ao escrever/apagar, atualizar o placeholder
@@ -647,32 +654,26 @@ export function createEditorSetup(deps: SetupDeps) {
             },
         });
 
-        // Combobox de estilo de parágrafo — redundante de propósito com os botões psX (acesso
-        // rápido sem procurar o botão certo). Texto mostra o estilo ATIVO; formatChanged (não
-        // NodeChange cru) só reavalia quando um destes formatos MUDA mesmo, em vez de escanear
-        // os 8 formatos a cada NodeChange (cursor, clique, tecla — dispara constantemente).
+        // Botão (ícone ¶) de estilo de parágrafo — redundante de propósito com os botões psX (acesso
+        // rápido sem procurar o botão certo). Ícone em vez do texto do estilo ativo: mini-menu mais
+        // estreito; o estilo ativo vê-se pelo visto no menu (match lido só ao abrir).
         editor.ui.registry.addMenuButton('pscombopara', {
-            text: 'Padrão',
-            fetch: (callback) => callback(PARAGRAPH_QUICK_STYLES.map(([format, label]) => ({
-                type: 'menuitem',
-                text: label,
-                onAction: () => {
-                    editor.formatter.toggle(format);
-                    editor.dispatch('Change');
-                    editor.nodeChanged();
-                },
-            }))),
-            onSetup: (api) => {
-                const labelFor = () => {
-                    const active = PARAGRAPH_QUICK_STYLES.find(([format]) => editor.formatter.match(format));
-                    return active ? active[1] : 'Padrão';
-                };
-                api.setText(labelFor());
-                const { unbind } = editor.formatter.formatChanged(
-                    PARAGRAPH_QUICK_STYLES.map(([format]) => format).join(','),
-                    () => api.setText(labelFor()),
-                );
-                return unbind;
+            icon: 'paragraph',
+            tooltip: 'Estilo do parágrafo',
+            fetch: (callback) => {
+                // 'p' casa com QUALQUER <p> → "Padrão" só marcado quando nenhum outro estilo está.
+                const active = new Set(PARAGRAPH_QUICK_STYLES.map(([f]) => f).filter((f) => f !== 'p' && editor.formatter.match(f)));
+                if (!active.size) active.add('p');
+                callback(PARAGRAPH_QUICK_STYLES.map(([format, label]) => ({
+                    type: 'togglemenuitem',
+                    text: label,
+                    active: active.has(format),
+                    onAction: () => {
+                        editor.formatter.toggle(format);
+                        editor.dispatch('Change');
+                        editor.nodeChanged();
+                    },
+                })));
             },
         });
         // Alinhamento agrupado num único dropdown (esquerda/centro/direita)

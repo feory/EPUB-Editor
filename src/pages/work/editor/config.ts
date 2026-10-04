@@ -76,7 +76,7 @@ const OTHER_STYLES = [
 export const MORE_STYLES_PARA: ReadonlyArray<readonly [string, string]> = [...HEADING_STYLES, ...OTHER_STYLES];
 export const MORE_STYLES_HEAD: ReadonlyArray<readonly [string, string]> = [...PARAGRAPH_STYLES, ...OTHER_STYLES];
 
-// Combobox "Estilo" do mini-menu de parágrafo (ver mini-menu 'parastyles' em setup.ts) — subconjunto
+// Botão ¶ "Estilo do parágrafo" do mini-menu (ver mini-menu 'parastyles' em setup.ts) — subconjunto
 // reordenado de PARAGRAPH_STYLES (labels vêm de lá, fonte única).
 const QUICK_STYLE_ORDER = ['p', 'p-indent', 'p-small', 'p-legendas', 'p-bold', 'p-italic', 'p-bold-italic', 'p-quote'] as const;
 export const PARAGRAPH_QUICK_STYLES: ReadonlyArray<readonly [string, string]> =

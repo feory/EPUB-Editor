@@ -31,30 +31,6 @@ function chromeBounds(editor: TinyMCEEditor): { minTop: number; maxBottom: numbe
 }
 
 /**
- * Geometria pura por trás do "+"/pega: qual bloco está sob o rato (ou perto o suficiente,
- * dentro de `band` px). Blocos em ordem de documento → bottom cresce monotonicamente, por
- * isso para assim que ultrapassa a zona do rato (evita varrer o livro inteiro). Não sai no
- * 1º match: com blocos curtos/próximos vários podem servir a mesma zona — fica sempre com o
- * mais próximo (bottom maior, ainda dentro da banda). Extraído de evalAddBtn/evalGrip
- * (useBlockOverlays) para ser testável sem DOM real (happy-dom não calcula layout).
- */
-export function findHitBlock<T>(
-    blocks: Iterable<T>,
-    getBottom: (b: T) => number,
-    mouseY: number,
-    band: number,
-    isEligible: (b: T) => boolean,
-): T | null {
-    let hit: T | null = null;
-    for (const b of blocks) {
-        const bottom = getBottom(b);
-        if (bottom > mouseY + band) break;
-        if (bottom >= mouseY - band && mouseY >= bottom - 2 && isEligible(b)) hit = b;
-    }
-    return hit;
-}
-
-/**
  * Geometria pura por trás do reposicionamento do mini-menu (forcePopAbove): decide se cabe
  * ACIMA do bloco, senão ABAIXO, senão esconde (null). Preferência por cima; ambos os lados
  * medidos dentro da área visível do iframe (`iframeTop`/`iframeHeight`), nunca da janela.
@@ -64,9 +40,12 @@ export function placePopover(
     popHeight: number, iframeTop: number, iframeHeight: number,
 ): { top: number; side: 'top' | 'bottom' } | null {
     if (!blockVisible) return null;
-    const desiredTop = blockTop - popHeight - 8;
+    // Encostado à linha da borda (anel 4px fora da caixa do bloco), sem folga.
+    const desiredTop = blockTop - popHeight - 4;
     if (desiredTop >= iframeTop + 4) return { top: desiredTop, side: 'top' };
-    const desiredBottom = blockBottom + 8;
+    // Por baixo, também encostado à linha da borda. O "+" (centro da borda) só fica tapado em
+    // blocos estreitos: o menu está alinhado à esquerda e acaba antes do centro nos normais.
+    const desiredBottom = blockBottom + 4;
     if (desiredBottom + popHeight <= iframeTop + iframeHeight - 4) return { top: desiredBottom, side: 'bottom' };
     return null;
 }
@@ -92,18 +71,15 @@ export interface BlockOverlaysOptions {
  */
 export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor | null>, options: BlockOverlaysOptions) {
     const { activeChapterIndex, onCountInWholeBook = noop0, onReplaceInWholeBook = noop0, readOnly, wholeBookLoaded, chapterLabel } = options;
-    // Botão "+" flutuante: posição (viewport) + bloco-âncora do parágrafo/título com foco.
-    const [addBtnPos, setAddBtnPos] = useState<Pos | null>(null);
-    const [addBtnFading, setAddBtnFading] = useState(false); // fade-out suave do "+"
-    const addBtnPosRef = useRef<Pos | null>(null); // espelho p/ evitar re-render em mousemove
-    const addBtnBlockRef = useRef<HTMLElement | null>(null);
-    const addBtnFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Pega de arrastar (gutter esquerdo): visível enquanto o bloco está ativo (selecionado), independente do rato.
     const [gripPos, setGripPos] = useState<Pos | null>(null);
     const [gripFading, setGripFading] = useState(false); // fade-out suave durante o scroll
     const gripPosRef = useRef<Pos | null>(null);
     const gripBlockRef = useRef<HTMLElement | null>(null);
-    const clearGrip = () => { gripPosRef.current = null; gripBlockRef.current = null; setGripFading(false); setGripPos(null); };
+    // Rato em cima da pega (mover) → mini-menu de bloco escondido; ao sair volta (como a toolbar).
+    // Limpo também quando a pega desmonta (sem mouseleave ficaria preso → mini-menu sempre oculto).
+    const gripHoveredRef = useRef(false);
+    const clearGrip = () => { gripHoveredRef.current = false; gripPosRef.current = null; gripBlockRef.current = null; setGripFading(false); setGripPos(null); };
     const [gripMenu, setGripMenu] = useState<Pos | null>(null); // menu ao clicar na pega
     // "Mais estilos" (mini-menu ⋮): overlay React em 2 colunas, ancorado ao pop do mini-menu.
     const [styleMenu, setStyleMenu] = useState<{ top: number; left: number; kind: 'para' | 'head' } | null>(null);
@@ -225,7 +201,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     // Contagem/substituição do mini find/replace da caixa de edição de HTML (BlockOverlays) —
     // lógica de âmbito (documento/capítulo, isolar segmento, delegar p/ livro inteiro fora da
     // DOM) vive em book-find-replace.ts. useCallback: identidade estável entre renders
-    // (addBtnPos/gripPos mudam a cada mousemove no editor) — sem isto, o useEffect de contagem
+    // (gripPos muda a cada mousemove no editor) — sem isto, o useEffect de contagem
     // debounced em BlockOverlays reiniciava o temporizador a cada movimento do rato com o
     // painel aberto.
     const countInDocument = useCallback((find: string, scope: 'chapter' | 'document'): number =>
@@ -276,53 +252,26 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         editor.nodeChanged();
     };
 
-    // Esconder o "+" quando o rato sai do editor (sem mousemove não haveria reavaliação → ficaria preso).
-    // Grace de 120ms para o utilizador conseguir chegar ao botão (que fica fora do iframe).
-    const addBtnHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const cancelAddBtnHide = () => {
-        if (addBtnHideTimerRef.current) { clearTimeout(addBtnHideTimerRef.current); addBtnHideTimerRef.current = null; }
-    };
-    const cancelAddBtnFade = () => { if (addBtnFadeTimerRef.current) { clearTimeout(addBtnFadeTimerRef.current); addBtnFadeTimerRef.current = null; } };
-    const clearAddBtn = () => {
-        if (plusMenuOpenRef.current) return; // menu de inserção aberto → manter o "+" visível
-        cancelAddBtnHide();
-        cancelAddBtnFade();
-        addBtnPosRef.current = null;
-        addBtnBlockRef.current = null;
-        setAddBtnFading(false);
-        setAddBtnPos(null);
-    };
-    // Esconder o "+" com fade-out (opacidade → 0, depois desmonta) para um desaparecimento suave.
-    const fadeOutAddBtn = () => {
-        if (plusMenuOpenRef.current) return; // menu aberto → manter visível
-        if (!addBtnPosRef.current) return;   // nada montado
-        setAddBtnFading(true);
-        if (addBtnFadeTimerRef.current) return; // já a desaparecer
-        addBtnFadeTimerRef.current = setTimeout(() => {
-            addBtnFadeTimerRef.current = null;
-            addBtnPosRef.current = null; addBtnBlockRef.current = null;
-            setAddBtnFading(false); setAddBtnPos(null);
-        }, 340);
-    };
-
     // Botão "+" → abre um menu de inserção; escolher insere um novo bloco a seguir ao bloco-âncora.
     const [plusMenu, setPlusMenu] = useState<Pos | null>(null);
-    const plusMenuOpenRef = useRef(false); // com menu aberto, o "+" não pode ser escondido
-    const plusBlockRef = useRef<HTMLElement | null>(null); // âncora fixa (não é limpa pelo timer de esconder)
+    const plusMenuOpenRef = useRef(false); // menu aberto → pega/mini-menu escondidos
+    const plusBlockRef = useRef<HTMLElement | null>(null); // bloco-âncora do menu
     const closePlusMenu = () => {
         plusMenuOpenRef.current = false;
+        plusBlockRef.current?.removeAttribute('data-mce-plusopen');
         setPlusMenu(null);
         editorRef.current?.nodeChanged(); // reavalia mini-menu + grip (voltam a aparecer)
     };
-    const openPlusMenu = (e: React.MouseEvent) => {
-        cancelAddBtnHide();
+    // Chamado pelo clique no "+" (CSS ::after do bloco, ver contentStyles.ts); pos em coords da viewport.
+    const openPlusMenu = (block: HTMLElement, pos: Pos) => {
         plusMenuOpenRef.current = true;
-        plusBlockRef.current = addBtnBlockRef.current;
+        plusBlockRef.current = block;
+        block.setAttribute('data-mce-plusopen', '1'); // mantém o "+" visível sem :hover (rato vai para o menu)
         clearGrip(); // esconder a pega enquanto o menu está aberto
         // esconder o mini-menu de bloco (context toolbar) enquanto o menu está aberto
         const pop = document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
         if (pop) pop.style.visibility = 'hidden';
-        setPlusMenu({ top: e.clientY - 8, left: e.clientX }); // acima do "+"
+        setPlusMenu(pos); // acima do "+"
     };
     const plusAction = (type: string) => {
         closePlusMenu();
@@ -360,11 +309,23 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
 
     // Arrastar o bloco ativo para outro sítio (pega estilo Notion).
     const dragBlockRef = useRef<HTMLElement | null>(null);
+    const popEl = () => document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
+    const onGripEnter = () => {
+        gripHoveredRef.current = true;
+        const pop = popEl();
+        if (pop) pop.style.visibility = 'hidden';
+    };
+    const onGripLeave = () => {
+        gripHoveredRef.current = false;
+        if (dragBlockRef.current) return; // a arrastar: o fim do arrasto (nodeChanged) repõe-no
+        const pop = popEl();
+        if (pop) pop.style.visibility = '';
+        editorRef.current?.nodeChanged();
+    };
     const dropTargetRef = useRef<{ block: HTMLElement; pos: 'before' | 'after' } | null>(null);
     const [dropLine, setDropLine] = useState<{ top: number; left: number; width: number } | null>(null);
     const startBlockDrag = (e: React.MouseEvent) => {
         e.preventDefault();
-        cancelAddBtnHide();
         const editor = editorRef.current;
         const block = gripBlockRef.current;
         if (!editor || !block) return;
@@ -419,7 +380,6 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                     editor.nodeChanged(); // reavaliar posição da pega/"+" no novo sítio
                 }
             }
-            addBtnPosRef.current = null; addBtnBlockRef.current = null; setAddBtnPos(null); // esconder o "+" após mover
         };
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
@@ -430,60 +390,56 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         editor: TinyMCEEditor,
         { blockOf, getHiddenBlock }: { blockOf: (n: Node | null) => Element | null; getHiddenBlock: () => Element | null },
     ) => {
-        // Botão "+" flutuante na aresta inferior do bloco ATIVO (o que tem a borda preta).
-        // Só aparece se o rato estiver ABAIXO da linha da borda inferior desse bloco; senão oculto.
         const isPlusBlock = (block: HTMLElement | null): block is HTMLElement =>
             !!block && block !== editor.getBody() && /^(P|H[1-6])$/.test(block.nodeName)
             && !/\bchapter-break/.test(block.className);
         // Rato por cima da toolbar (sticky ou não) → mini-menu de bloco escondido (ver forcePopAbove).
         let toolbarHovered = false;
-        const hideAddBtn = () => fadeOutAddBtn(); // esconder com fade-out suave
-        const placeAddBtn = (block: HTMLElement, br: DOMRect, ir: DOMRect) => {
-            cancelAddBtnFade(); setAddBtnFading(false); // reaparece opaco
-            // -10 = centrar o botão (20px) no ponto; sem utilitários -translate para não
-            // colidir com a animação de entrada (que também usa transform).
-            const posTop = ir.top + br.bottom - 10;
-            // Clamp à janela: scroll de contentor externo pode pôr o bloco fora de vista.
-            if (posTop < 0 || posTop > window.innerHeight) { hideAddBtn(); return; }
-            addBtnBlockRef.current = block;
-            const pos = { top: posTop, left: ir.left + br.left + br.width / 2 - 10 };
-            const prev = addBtnPosRef.current;
-            if (prev && Math.abs(prev.top - pos.top) < 0.5 && Math.abs(prev.left - pos.left) < 0.5) return;
-            addBtnPosRef.current = pos;
-            setAddBtnPos(pos);
-        };
         let lastMouseY = -1; // Y do rato em coords do iframe (-1 = desconhecido)
         let lastMouseX = -1; // X do rato em coords do iframe
-        // Zona clicável abaixo da borda para alcançar o "+" (px em coords do iframe).
-        const PLUS_BAND = 40;
         // Zona à esquerda da aresta do bloco onde a pega aparece.
         const GRIP_BAND = 36;
-        const evalAddBtn = () => {
-            // Segue o rato dentro do bloco ATIVO (foco + data-mce-psactive); com um bloco ativo,
-            // o "+" nunca salta para outro parágrafo só por o rato passar por cima dele.
-            const iframe = iframeOf(editor);
-            if (!iframe) { hideAddBtn(); return; }
-            if (lastMouseY < 0) { hideAddBtn(); return; } // rato nunca visto neste iframe
-            const ir = iframe.getBoundingClientRect();
-            const activeBlock = blockOf(editor.selection.getNode()) as HTMLElement | null;
-            let block: HTMLElement | null = null;
-            if (activeBlock && isPlusBlock(activeBlock) && activeBlock !== getHiddenBlock()) {
-                const bottom = activeBlock.getBoundingClientRect().bottom;
-                if (bottom >= lastMouseY - PLUS_BAND && lastMouseY >= bottom - 2) block = activeBlock;
-            } else {
-                // Sem bloco ativo (ainda nenhum clicado nesta sessão): segue o rato como antes.
-                const siblings: HTMLElement[] = [];
-                for (let b = editor.getBody().firstElementChild as HTMLElement | null; b; b = b.nextElementSibling as HTMLElement | null) siblings.push(b);
-                block = findHitBlock(siblings, (b) => b.getBoundingClientRect().bottom, lastMouseY, PLUS_BAND,
-                    (b) => isPlusBlock(b) && b !== getHiddenBlock());
-            }
-            if (!block) { hideAddBtn(); return; }
-            const br = block.getBoundingClientRect();
-            // Fora da área visível do editor → esconder (o "+" fixo sobreporia toolbar/navbar).
-            if (br.bottom < 0 || br.bottom > ir.height) { hideAddBtn(); return; }
-            placeAddBtn(block, br, ir);
+        editor.on('mousemove', (e: MouseEvent) => { lastMouseX = e.clientX; lastMouseY = e.clientY; evalGrip(); });
+        // Botão "+": desenhado só em CSS (::after do bloco sob o rato, ver contentStyles.ts).
+        // Pseudo-elementos não recebem eventos → o clique chega ao próprio bloco e é reconhecido
+        // pela posição (círculo de 20px centrado na borda inferior).
+        editor.on('PreInit', () => editor.serializer.addTempAttr('data-mce-plusopen'));
+        // Centro do círculo = fim do conteúdo + --plus-dy (mesma conta do CSS).
+        const plusCenterY = (block: HTMLElement) => {
+            const cs = getComputedStyle(block);
+            return block.getBoundingClientRect().bottom - parseFloat(cs.paddingBottom) + (parseFloat(cs.getPropertyValue('--plus-dy')) || 0);
         };
-        editor.on('mousemove', (e: MouseEvent) => { lastMouseX = e.clientX; lastMouseY = e.clientY; evalAddBtn(); evalGrip(); });
+        // O 'click' que se segue ao mousedown no "+" contaria como "2.º clique no mesmo bloco"
+        // (setup.ts → hiddenBlock) e tirava o anel ao parágrafo; engolido antes de lá chegar.
+        let swallowClick = false;
+        editor.on('click', (e: MouseEvent) => {
+            if (!swallowClick) return;
+            swallowClick = false;
+            e.stopImmediatePropagation();
+        }, true);
+        editor.on('mousedown', (e: MouseEvent) => {
+            swallowClick = false;
+            const block = e.target as HTMLElement;
+            if (e.button !== 0 || editor.mode.isReadOnly() || block.parentNode !== editor.getBody() || !isPlusBlock(block)) return;
+            const br = block.getBoundingClientRect();
+            if (Math.abs(e.clientX - (br.left + br.width / 2)) > 11 || Math.abs(e.clientY - plusCenterY(block)) > 11) return;
+            // Com outro bloco ativo o "+" deste está escondido (CSS) → clique normal.
+            const active = editor.getBody().querySelector('[data-mce-psactive]');
+            if (active && active !== block) return;
+            const iframe = iframeOf(editor);
+            if (!iframe) return;
+            e.preventDefault(); // não deixar o browser mover o cursor nem tirar o foco
+            swallowClick = true;
+            // O parágrafo do "+" fica (ou passa a ser) o bloco ativo, com anel, enquanto o menu está aberto.
+            if (blockOf(editor.selection.getNode()) !== block) {
+                editor.selection.select(block, true);
+                editor.selection.collapse(false);
+            }
+            editor.focus();
+            editor.nodeChanged(); // síncrono: aplica data-mce-psactive → --plus-dy já conta abaixo
+            const ir = iframe.getBoundingClientRect();
+            openPlusMenu(block, { top: ir.top + plusCenterY(block) - 10, left: ir.left + br.left + br.width / 2 });
+        });
         // Hover sobre uma divisória → controlo Pequena/Larga.
         editor.on('mousemove', (e: MouseEvent) => {
             const t = e.target as HTMLElement;
@@ -497,10 +453,6 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                 setHrCtl({ top: ir.top + r.top + r.height / 2, left: ir.left + r.left + r.width / 2 });
             } else if (hrRef.current) { hrRef.current = null; setHrCtl(null); }
         });
-        // Só mousemove: o "+" segue o RATO (não a seleção), logo reavaliar a cada tecla
-        // ('input'/'NodeChange') repetia a mesma conta com o rato parado — era o custo
-        // dominante a escrever em documentos grandes.
-        editor.on('blur', hideAddBtn);
 
         // Pega de arrastar no gutter esquerdo — visível quando o rato está no limite esquerdo do bloco ATIVO.
         // Esconde com fade-out (opacidade → 0, depois desmonta) para um desaparecimento suave.
@@ -549,10 +501,23 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         // Mini-bar (context toolbar) só na parte superior: o TinyMCE 8 auto-flipa
         // norte/sul e não expõe knob para fixar. Reposicionamos o pop para cima do
         // bloco depois de o tema o posicionar, via observer da aux dos popups inline.
+        // Última posição (coords da janela) em que NÓS pusemos o mini-menu — base para deslocar
+        // os dropdowns abertos dele (¶, alinhamento), que o TinyMCE posiciona à parte e não
+        // acompanham quando o menu se move no scroll. Não usar a posição atual do pop: o TinyMCE
+        // pode tê-lo acabado de pôr noutro sítio (centro) antes da nossa correção.
+        let lastPopPos: { top: number; left: number } | null = null;
+        const shiftOpenMenus = (dx: number, dy: number) => {
+            if (!dx && !dy) return;
+            document.querySelectorAll<HTMLElement>('.tox-tinymce-aux .tox-menu').forEach((m) => {
+                if (m.style.top) m.style.top = parseFloat(m.style.top) + dy + 'px';
+                if (m.style.bottom) m.style.bottom = parseFloat(m.style.bottom) - dy + 'px';
+                if (m.style.left) m.style.left = parseFloat(m.style.left) + dx + 'px';
+            });
+        };
         const forcePopAbove = () => {
             const pop = document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
             if (!pop || !pop.offsetHeight) return; // ausente/escondido pelo TinyMCE
-            if (toolbarHovered) { pop.style.visibility = 'hidden'; return; } // rato na toolbar → esconde bubble e mini-menu por igual
+            if (toolbarHovered || gripHoveredRef.current) { pop.style.visibility = 'hidden'; return; } // rato na toolbar/pega → esconde bubble e mini-menu por igual
             if (!editor.selection.isCollapsed()) return; // seleção de texto → é o bubble, não mexer
             if (plusMenuOpenRef.current) { pop.style.visibility = 'hidden'; return; } // menu de inserção aberto
             // blockOf não inclui 'li' (grip/+ não se estendem a listas, ver parastyles em
@@ -570,28 +535,62 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const blockTop = ir.top + br.top;
             const blockBottom = ir.top + br.bottom;
             const blockVisible = br.top < ir.height && br.bottom > 0;
-            // Reposiciona para um lado só se ainda não lá está — set incondicional de style.top
-            // faria o auxObserver (attributeFilter 'style') disparar em loop, visto como o
-            // mini-menu a "cair"/tremer em vez de ficar fixo.
-            const placeAt = (desired: number, alreadyThere: boolean, removeClass: string, addClass: string) => {
+            // Coords da janela → style.top/left, que são relativos ao contentor posicionado
+            // (.tox-tinymce-aux, no fim da página) — sem converter o menu saía do ecrã.
+            const parentRect = (pop.offsetParent as HTMLElement | null)?.getBoundingClientRect();
+            const placeAt = (desired: number, removeClass: string, addClass: string) => {
                 pop.style.visibility = '';
-                if (!alreadyThere) {
-                    pop.style.top = desired + 'px';
+                // Posição EXATA (o TinyMCE põe-no com a folga da seta, ou por DENTRO do bloco) — mas
+                // só escreve se ainda não lá está: set incondicional de style.top faria o auxObserver
+                // (attributeFilter 'style') disparar em loop, visto como o mini-menu a "cair"/tremer.
+                // Compara com o DESTINO (style.top), não com a posição no ecrã: a meio de uma
+                // animação do TinyMCE esta ainda mostra o sítio antigo e a correção não acontecia.
+                const top = desired - (parentRect?.top ?? 0);
+                if (Math.abs(parseFloat(pop.style.top) - top) >= 0.5 || Number.isNaN(parseFloat(pop.style.top))) {
+                    pop.style.top = top + 'px';
                     pop.classList.remove(removeClass);
                     pop.classList.add(addClass);
                 }
+                // Alinhado à ESQUERDA, encostado à linha da borda (anel 4px fora da caixa do bloco).
+                const viewLeft = ir.left + br.left - 4;
+                // Só se o dropdown aberto for DESTE menu (botão expandido nele): os da barra principal
+                // (ex. "Padrão" → Parágrafos) também são .tox-menu no aux e seriam atirados para longe.
+                if (lastPopPos && pop.querySelector('.tox-tbtn[aria-expanded="true"]')) {
+                    shiftOpenMenus(viewLeft - lastPopPos.left, desired - lastPopPos.top);
+                }
+                lastPopPos = { top: desired, left: viewLeft };
+                const left = viewLeft - (parentRect?.left ?? 0);
+                if (Math.abs(parseFloat(pop.style.left) - left) >= 0.5 || Number.isNaN(parseFloat(pop.style.left))) {
+                    pop.style.left = left + 'px';
+                }
             };
+            // O TinyMCE ancora por `bottom`/`right` em certos layouts: deixados junto com o nosso
+            // top/left, o menu ficava ESMAGADO entre os dois (altura a encolher a cada correção
+            // até 0, por cima da 1.ª linha do bloco). Limpar ANTES de medir a altura.
+            pop.style.bottom = '';
+            pop.style.right = '';
             // Preferência: em cima; sem espaço, em baixo; sem espaço em lado nenhum, esconder.
             const placed = placePopover(blockTop, blockBottom, blockVisible, pop.offsetHeight, ir.top, ir.height);
             if (placed?.side === 'top') {
-                placeAt(placed.top, pop.getBoundingClientRect().top < blockTop, 'tox-pop--top', 'tox-pop--bottom');
+                placeAt(placed.top, 'tox-pop--top', 'tox-pop--bottom');
                 return;
             }
             if (placed?.side === 'bottom') {
-                placeAt(placed.top, pop.getBoundingClientRect().top >= blockBottom, 'tox-pop--bottom', 'tox-pop--top');
+                placeAt(placed.top, 'tox-pop--bottom', 'tox-pop--top');
                 return;
             }
             pop.style.visibility = 'hidden'; // não cabe em lado nenhum → esconder
+            // ...e fechar um dropdown dele que esteja aberto (ficaria a flutuar sozinho): o
+            // TinyMCE não expõe "fechar"; o 2.º clique no próprio botão faz toggle.
+            const openBtn = pop.querySelector('.tox-tbtn[aria-expanded="true"]') as HTMLElement | null;
+            if (openBtn) {
+                openBtn.click();
+                // O foco estava no dropdown: sem o devolver ao editor, o TinyMCE (focusout) fechava
+                // o mini-menu de vez e não voltava ao regressar ao bloco. preventScroll: não saltar
+                // para o cursor (o bloco está fora de vista).
+                editor.getBody().focus({ preventScroll: true });
+            }
+            lastPopPos = null;
         };
         const auxObserver = new MutationObserver(forcePopAbove);
 
@@ -607,32 +606,12 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             if (gripScrollTimer) clearTimeout(gripScrollTimer);
             gripScrollTimer = setTimeout(() => { setGripFading(false); evalGrip(); }, 150);
         };
-        // No scroll o "+" fica COLADO à borda inferior do bloco (segue-a), sem reavaliar o gate
-        // do rato — assim não pisca nem se descola. Só esconde se o bloco sair da vista.
-        const repositionAddBtn = () => {
-            const block = addBtnBlockRef.current;
-            if (!block || !addBtnPosRef.current) return; // "+" não mostrado
-            const iframe = iframeOf(editor);
-            if (!iframe) return;
-            const ir = iframe.getBoundingClientRect();
-            const br = block.getBoundingClientRect();
-            if (br.bottom < 0 || br.bottom > ir.height) { hideAddBtn(); return; } // fora da vista
-            const posTop = ir.top + br.bottom - 10;
-            if (posTop < 0 || posTop > window.innerHeight) { hideAddBtn(); return; } // fora da janela
-            const pos = { top: posTop, left: ir.left + br.left + br.width / 2 - 10 };
-            addBtnPosRef.current = pos; setAddBtnPos(pos);
-        };
-        const onScroll = () => { closeMenuIfOpen(); gripOnScroll(); repositionAddBtn(); if (htmlBlockRef.current) repositionHtmlEdit(); };
-        const evalOverlays = () => { closeMenuIfOpen(); evalAddBtn(); gripOnScroll(); if (htmlBlockRef.current) repositionHtmlEdit(); };
+        const onScroll = () => { closeMenuIfOpen(); gripOnScroll(); forcePopAbove(); if (htmlBlockRef.current) repositionHtmlEdit(); };
+        const evalOverlays = () => { closeMenuIfOpen(); gripOnScroll(); if (htmlBlockRef.current) repositionHtmlEdit(); };
         editor.on('init', () => {
             editor.getWin().addEventListener('scroll', onScroll, { passive: true });
             window.addEventListener('scroll', onScroll, true);
             window.addEventListener('resize', evalOverlays);
-            // Rato sai do editor → esconder (com grace p/ alcançar o botão); volta a entrar → cancelar.
-            editor.getBody().addEventListener('mouseleave', () => {
-                addBtnHideTimerRef.current = setTimeout(fadeOutAddBtn, 120);
-            });
-            editor.getBody().addEventListener('mouseenter', cancelAddBtnHide);
             // Toolbar por cima do editor: rato em cima dela esconde o mini-menu de bloco
             // (fica por baixo, sobreposto); ao sair, volta a aparecer. toolbarHovered lido
             // por forcePopAbove (senão o MutationObserver do aux desfazia o hide sozinho —
@@ -672,10 +651,10 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
 
     const internal: BlockOverlaysInternal = {
-        addBtnPos, addBtnFading, plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
+        plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
         htmlTextareaRef, styleMenu,
-        openPlusMenu, closePlusMenu, plusAction, cancelAddBtnHide, clearAddBtn,
-        startBlockDrag, moveBlock, setGripMenu, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
+        closePlusMenu, plusAction,
+        startBlockDrag, moveBlock, setGripMenu, onGripEnter, onGripLeave, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
         startHtmlEdit, openStyleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument,
         onHtmlEditCloseRef,
     };

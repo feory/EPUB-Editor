@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-    Plus, GripVertical, ChevronUp, ChevronDown, Pilcrow, Heading1, Heading2, Heading3, Quote, Type,
+    GripVertical, ChevronUp, ChevronDown, Pilcrow, Heading1, Heading2, Heading3, Quote, Type,
     StickyNote, Image as ImageIcon, Copy, Trash2, Minus, X, Save, BookMarked, Replace,
 } from 'lucide-react';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
@@ -11,8 +11,6 @@ type Pos = { top: number; left: number };
 // Único sítio que define esta forma — useBlockOverlays deriva o seu "internal" bag daqui
 // via Omit (as 3 últimas são as únicas que atravessam para fora do subsistema de overlays).
 export interface BlockOverlaysProps {
-    addBtnPos: Pos | null;
-    addBtnFading: boolean;
     plusMenu: Pos | null;
     gripPos: Pos | null;
     gripFading: boolean;
@@ -23,12 +21,11 @@ export interface BlockOverlaysProps {
     dropLine: { top: number; left: number; width: number } | null;
     htmlTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
     styleMenu: { top: number; left: number; kind: 'para' | 'head' } | null;
-    openPlusMenu: (e: React.MouseEvent) => void;
     closePlusMenu: () => void;
     plusAction: (type: string) => void;
-    cancelAddBtnHide: () => void;
-    clearAddBtn: () => void;
     startBlockDrag: (e: React.MouseEvent) => void;
+    onGripEnter: () => void;
+    onGripLeave: () => void;
     moveBlock: (dir: 'up' | 'down') => void;
     setGripMenu: React.Dispatch<React.SetStateAction<Pos | null>>;
     gripAction: (action: string) => void;
@@ -52,9 +49,9 @@ type Props = BlockOverlaysProps;
 
 /** Overlays estilo Notion renderizados FORA do iframe (posição fixed em coords da viewport). */
 export function BlockOverlays({
-    addBtnPos, addBtnFading, plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
-    htmlTextareaRef, openPlusMenu, closePlusMenu, plusAction, cancelAddBtnHide, clearAddBtn,
-    startBlockDrag, moveBlock, setGripMenu, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
+    plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
+    htmlTextareaRef, closePlusMenu, plusAction,
+    startBlockDrag, moveBlock, setGripMenu, onGripEnter, onGripLeave, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
     styleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument, onHtmlEditCloseRef, wholeBookLoaded, chapterLabel, readOnly,
 }: Props) {
     // Substituição em todo o HTML do documento (não só o bloco aberto) — mini find/replace
@@ -117,23 +114,10 @@ export function BlockOverlays({
 
     return (
         <>
-            {addBtnPos && !readOnly && (
-                <button
-                    type="button"
-                    title="Adicionar parágrafo"
-                    onMouseDown={(e) => e.preventDefault()} // manter foco no editor (evita blur→esconder)
-                    onMouseEnter={cancelAddBtnHide} // rato no botão → não esconder
-                    onMouseLeave={clearAddBtn}      // saiu do botão → esconder
-                    onClick={openPlusMenu}
-                    style={{ position: 'fixed', top: addBtnPos.top, left: addBtnPos.left, zIndex: 100, opacity: addBtnFading ? 0 : 1 }}
-                    className="add-para-pop flex items-center justify-center w-5 h-5 rounded-full bg-white hover:bg-slate-100 text-slate-700 shadow-md border border-slate-200 transition-opacity duration-300 ease-out"
-                >
-                    <Plus size={12} />
-                </button>
-            )}
             {plusMenu && (
                 <>
-                    <div className="fixed inset-0 z-[110]" onMouseDown={closePlusMenu} />
+                    {/* preventDefault: o editor não perde o foco → o parágrafo continua selecionado */}
+                    <div className="fixed inset-0 z-[110]" onMouseDown={(e) => { e.preventDefault(); closePlusMenu(); }} />
                     <div
                         style={{ position: 'fixed', top: plusMenu.top - 10, left: plusMenu.left, transform: 'translate(-50%, -100%)', zIndex: 111 }}
                         className="w-64 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
@@ -163,6 +147,8 @@ export function BlockOverlays({
             {gripPos && !readOnly && (
                 <div
                     style={{ position: 'fixed', top: gripPos.top, left: gripPos.left, zIndex: 100, opacity: gripFading ? 0 : 1 }}
+                    onMouseEnter={onGripEnter}
+                    onMouseLeave={onGripLeave}
                     className="add-para-pop flex flex-col items-center w-5 rounded-md bg-white text-slate-700 shadow-md border border-slate-200 overflow-hidden transition-opacity duration-300 ease-out"
                 >
                     <button
