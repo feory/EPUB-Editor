@@ -72,7 +72,7 @@ export const cleanHtmlForXhtml = (html: string): string => {
     cleaned = cleanEpubHtml(cleaned);
 
     return cleaned
-        .replace(/<(br|hr|img|col|wbr)\b([^>]*)>/gi, (_match, tag, attrs) => {
+        .replace(/<(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)\b([^>]*)>/gi, (_match, tag, attrs) => {
             const cleanAttrs = attrs.trim().replace(/\/$/, '').trim();
             const result = `<${tag.toLowerCase()}${cleanAttrs ? ' ' + cleanAttrs : ''} />`;
             return result.replace(/\s+\/>$/, ' />');
