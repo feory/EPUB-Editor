@@ -4,6 +4,7 @@ import { countInBook, replaceInBook } from './book-find-replace';
 import { BlockOverlays, type BlockOverlaysProps } from './overlays/BlockOverlays';
 import { attachMiniMenu, type MiniMenu } from './miniMenu';
 import { editBlocks } from './blockEdit';
+import type { ActiveBlock } from './activeBlock';
 
 // As únicas 3 que atravessam para fora do subsistema (WorkEditor/setup.ts); tudo o resto em
 // BlockOverlaysProps só alimenta o render interno — ver useBlockOverlays() no fim do ficheiro.
@@ -363,10 +364,10 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         document.addEventListener('mouseup', onUp);
     };
 
-    // Instala a reação ao editor (chamado pelo setup, depois de definir blockOf/hiddenBlock).
+    // Instala a reação ao editor (chamado pelo setup, com blockOf e o bloco ativo — activeBlock.ts).
     const wireEditor = (
         editor: TinyMCEEditor,
-        { blockOf, getHiddenBlock }: { blockOf: (n: Node | null) => Element | null; getHiddenBlock: () => Element | null },
+        { blockOf, activeBlock }: { blockOf: (n: Node | null) => Element | null; activeBlock: ActiveBlock },
     ) => {
         const isPlusBlock = (block: HTMLElement | null): block is HTMLElement =>
             !!block && block !== editor.getBody() && /^(P|H[1-6])$/.test(block.nodeName)
@@ -387,7 +388,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             return block.getBoundingClientRect().bottom - parseFloat(cs.paddingBottom) + (parseFloat(cs.getPropertyValue('--plus-dy')) || 0);
         };
         // O 'click' que se segue ao mousedown no "+" contaria como "2.º clique no mesmo bloco"
-        // (setup.ts → hiddenBlock) e tirava o anel ao parágrafo; engolido antes de lá chegar.
+        // (activeBlock.ts → recolhido) e tirava o anel ao parágrafo; engolido antes de lá chegar.
         let swallowClick = false;
         editor.on('click', (e: MouseEvent) => {
             if (!swallowClick) return;
@@ -401,7 +402,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const br = block.getBoundingClientRect();
             if (Math.abs(e.clientX - (br.left + br.width / 2)) > 11 || Math.abs(e.clientY - plusCenterY(block)) > 11) return;
             // Com outro bloco ativo o "+" deste está escondido (CSS) → clique normal.
-            const active = editor.getBody().querySelector('[data-mce-psactive]');
+            const active = activeBlock.current();
             if (active && active !== block) return;
             const iframe = iframeOf(editor);
             if (!iframe) return;
@@ -445,8 +446,8 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const evalGrip = () => {
             if (plusMenuOpenRef.current) { fadeOutGrip(); return; } // menu de inserção aberto → sem pega
             if (!editor.hasFocus()) { fadeOutGrip(); return; }
-            const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
-            if (!isPlusBlock(block) || block === getHiddenBlock()) { fadeOutGrip(); return; }
+            const block = activeBlock.current();
+            if (!isPlusBlock(block)) { fadeOutGrip(); return; }
             const iframe = iframeOf(editor);
             if (!iframe) { fadeOutGrip(); return; }
             const ir = iframe.getBoundingClientRect();

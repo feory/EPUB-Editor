@@ -5,6 +5,7 @@ import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
 import type { TinyMCEEditor } from './types';
 import { editBlocks } from './blockEdit';
+import { attachActiveBlock, type ActiveBlock } from './activeBlock';
 
 interface SetupDeps {
     setHtmlContent: (content: string) => void;
@@ -26,7 +27,7 @@ interface SetupDeps {
     onLinkIndiceEntryRef: React.MutableRefObject<((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void) | undefined>;
     wireOverlays: (
         editor: TinyMCEEditor,
-        ctx: { blockOf: (n: Node | null) => Element | null; getHiddenBlock: () => Element | null },
+        ctx: { blockOf: (n: Node | null) => Element | null; activeBlock: ActiveBlock },
     ) => void;
 }
 
@@ -422,32 +423,16 @@ export function createEditorSetup(deps: SetupDeps) {
             });
         });
 
-        // Segundo clique no mesmo bloco oculta o mini-menu (toggle)
-        let hiddenBlock: Element | null = null;
-        let prevBlock: Element | null = null;
         const blockOf = (node: Node | null) =>
             node ? (editor.dom.getParent(node, 'p,h1,h2,h3,h4,h5,h6') as Element | null) : null;
-        editor.on('click', (e: MouseEvent) => {
-            const block = blockOf(e.target as Node);
-            if (block && block === prevBlock) {
-                // Mesmo bloco: alternar visibilidade. Seleção não se move → forçar reavaliação.
-                hiddenBlock = hiddenBlock === block ? null : block;
-                editor.nodeChanged();
-            } else {
-                hiddenBlock = null; // bloco novo: o NodeChange natural do clique já reavalia
-            }
-            prevBlock = block;
-        });
+        // Bloco ativo (anel, "+", pega; recolhido pelo 2.º clique) — activeBlock.ts.
+        const activeBlock = attachActiveBlock(editor, { blockOf });
 
-        // Contorno do bloco ativo: marcador de UI puro `data-mce-psactive`.
-        // addTempAttr → o serializer nunca o emite (getContent/autosave/EPUB saem limpos).
+        // Marcadores de UI puros: o serializer nunca os emite (getContent/autosave/EPUB saem limpos).
         editor.on('PreInit', () => {
-            editor.serializer.addTempAttr('data-mce-psactive');
             editor.serializer.addTempAttr('data-mce-empty'); // placeholder de bloco vazio (nunca exporta)
             editor.serializer.addTempAttr('data-mce-htmledit'); // bloco escondido durante edição de HTML inline
         });
-        // Limpa qualquer marcador stale no DOM após o load inicial (uma vez).
-        editor.on('init', () => editor.dom.select('[data-mce-psactive]').forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-psactive', null)));
         // Placeholder: marca o <p> vazio focado (CSS mostra "Escreve algo…" via ::before).
         const refreshEmptyMarker = () => {
             editor.dom.select('[data-mce-empty]').forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-empty', null));
@@ -458,26 +443,7 @@ export function createEditorSetup(deps: SetupDeps) {
                 editor.dom.setAttrib(block, 'data-mce-empty', '1');
             }
         };
-        editor.on('NodeChange', () => {
-            // Limpar TODOS os marcadores: Enter no início de um bloco marcado faz o
-            // TinyMCE clonar o data-mce-psactive para os <p> criados — uma só ref não os apanha
-            editor.dom.select('[data-mce-psactive]').forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-psactive', null));
-            // Só marcar com foco real — colocação programática do cursor (entrada/troca de capítulo) não conta
-            let marked = false;
-            if (editor.hasFocus()) {
-                const block = blockOf(editor.selection.getNode());
-                if (block && block !== hiddenBlock && block !== editor.getBody()) {
-                    editor.dom.setAttrib(block, 'data-mce-psactive', '1');
-                    marked = true;
-                }
-            }
-            // "Há bloco ativo" para o CSS do "+" (contentStyles.ts) — classe em vez de
-            // body:has([data-mce-psactive]): com milhares de blocos o :has era reavaliado a cada
-            // nó inserido/removido (ex. previews do dropdown de estilos: ~1,4s → ~25ms).
-            // toggle com force não mexe no DOM se o estado não mudou.
-            editor.getBody().classList.toggle('ps-has-active', marked);
-            refreshEmptyMarker();
-        });
+        editor.on('NodeChange', refreshEmptyMarker);
         editor.on('input', refreshEmptyMarker); // ao escrever/apagar, atualizar o placeholder
 
         // Converter parágrafo→título remove os estilos de parágrafo associados.
@@ -695,7 +661,7 @@ export function createEditorSetup(deps: SetupDeps) {
             // próprio em vez de alargar blockOf), para dar acesso a p-top/p-quote/etc. em bullets.
             predicate: (node: Node) => {
                 const block = blockOf(node) || editor.dom.getParent(node, 'li');
-                return !!block && (block.nodeName === 'P' || block.nodeName === 'LI') && block !== hiddenBlock && editor.selection.isCollapsed();
+                return !!block && (block.nodeName === 'P' || block.nodeName === 'LI') && !activeBlock.isCollapsed(block) && editor.selection.isCollapsed();
             },
             position: 'node',
             scope: 'node',
@@ -705,7 +671,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addContextToolbar('headingstyles', {
             predicate: (node: Node) => {
                 const block = blockOf(node);
-                return !!block && /^H[1-6]$/.test(block.nodeName) && block !== hiddenBlock && editor.selection.isCollapsed();
+                return !!block && /^H[1-6]$/.test(block.nodeName) && !activeBlock.isCollapsed(block) && editor.selection.isCollapsed();
             },
             position: 'node',
             scope: 'node',
@@ -824,6 +790,6 @@ export function createEditorSetup(deps: SetupDeps) {
         });
 
         // Overlays estilo Notion (fora do iframe): instalar reação ao editor.
-        wireOverlays(editor, { blockOf, getHiddenBlock: () => hiddenBlock });
+        wireOverlays(editor, { blockOf, activeBlock });
     };
 }
