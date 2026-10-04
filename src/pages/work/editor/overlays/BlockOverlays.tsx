@@ -21,7 +21,7 @@ export interface BlockOverlaysProps {
     htmlEdit: string | null;
     htmlEditPos: { top: number; left: number; width: number; height: number; maxHeight: number; visible: boolean } | null;
     dropLine: { top: number; left: number; width: number } | null;
-    htmlTextareaRef: React.RefObject<HTMLTextAreaElement>;
+    htmlTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
     styleMenu: { top: number; left: number; kind: 'para' | 'head' } | null;
     openPlusMenu: (e: React.MouseEvent) => void;
     closePlusMenu: () => void;

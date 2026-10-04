@@ -1152,7 +1152,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     // Última tentativa: vinhetas puramente decorativas, sem legenda nem nº (ex. "Scribble3.eps"
     // em "Cai neve no Diabo") — posição pela maior quebra vertical entre linhas na página impressa
     // (folio do spread, ver pageHint em buildFigures); requer PDF de impressão.
-    let positionRes = { placed: 0 };
+    let positionRes: { html: string; placed: number } = { html, placed: 0 };
     if (pdf) {
         const usedIds2 = new Set([...html.matchAll(/data-image-id="([^"]+)"/g)].map(m => m[1]));
         const unplaced = figs.filter(f => f.imageId && !f.label && f.pageHint?.length && !usedIds2.has(f.imageId));

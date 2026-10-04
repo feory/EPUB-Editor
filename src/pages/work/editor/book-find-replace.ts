@@ -71,7 +71,7 @@ export function replaceInBook(
     const anchorHtml = scope === 'chapter' && activeChapterIndex === -1 && anchorBlock
         ? editor.dom.getOuterHTML(anchorBlock) : null;
     const segments = anchorHtml ? editor.getContent().split(CHAPTER_SPLIT_PATTERN) : null;
-    const segIndex = segments ? segments.findIndex(s => s.includes(anchorHtml!)) : -1;
+    const segIndex = segments ? segments.findIndex((s: string) => s.includes(anchorHtml!)) : -1;
     if (segments && segIndex !== -1) {
         const count = countOccurrences(segments[segIndex], find);
         if (count === 0) return 0;

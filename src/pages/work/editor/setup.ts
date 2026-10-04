@@ -258,7 +258,7 @@ export function createEditorSetup(deps: SetupDeps) {
             },
         });
         editor.ui.registry.addContextToolbar('imagealign', {
-            predicate: (node: HTMLElement) => node.nodeName === 'IMG',
+            predicate: (node: Element) => node.nodeName === 'IMG',
             position: 'node',
             scope: 'node',
             items: 'imgalignleft imgaligncenter imgalignright imgaligninline imgvoffset',
@@ -631,7 +631,7 @@ export function createEditorSetup(deps: SetupDeps) {
                         onAction: () => {
                             const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
                             if (!block || block.nodeName !== 'P') return;
-                            const pIndex = Array.from(editor.getBody().children as HTMLElement[])
+                            const pIndex = (Array.from(editor.getBody().children) as HTMLElement[])
                                 .filter((el) => el.nodeName === 'P').indexOf(block);
                             if (pIndex === -1) return;
                             onLinkIndiceEntryRef.current?.(pIndex, own, i);

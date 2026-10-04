@@ -156,7 +156,7 @@ export function HomePage() {
             // "Importação forçada" (checkbox do modal): importa, mas deixa o aviso do que falhou
             if (problems.length) showNotification('error', `Importado com erros na verificação: ${listed}`, 10000);
             if (warnings.length) showNotification('success', `Optimizado com ${warnings.map(w => w.message).join(' · ')}.`, 6000);
-            const file = new File([bytes], indesign.file.name, { type: 'application/epub+zip' });
+            const file = new File([bytes as Uint8Array<ArrayBuffer>], indesign.file.name, { type: 'application/epub+zip' });
             setIndesign(null);
             importEpubMutation.mutate({ file });
         } catch {
@@ -429,7 +429,7 @@ export function HomePage() {
                                         searchSlot={searchControl}
                                         ebooks={inProgressEbooks}
                                         onNavigate={(isbn) => navigate(`/work/${isbn}`)}
-                                        onOpenMetadata={(e, ebook) => { setSelectedEbook(ebook); setShowMetadataModal(true); }}
+                                        onOpenMetadata={(_e, ebook) => { setSelectedEbook(ebook); setShowMetadataModal(true); }}
                                         onOpenCover={openCoverModal}
                                         onComplete={toggleStatus}
                                         onShare={openShareModal}
@@ -443,7 +443,7 @@ export function HomePage() {
                                     <EbookGrid
                                         ebooks={inProgressEbooks}
                                         onNavigate={(isbn) => navigate(`/work/${isbn}`)}
-                                        onOpenMetadata={(e, ebook) => { setSelectedEbook(ebook); setShowMetadataModal(true); }}
+                                        onOpenMetadata={(_e, ebook) => { setSelectedEbook(ebook); setShowMetadataModal(true); }}
                                         onOpenCover={openCoverModal}
                                         onComplete={toggleStatus}
                                         onShare={openShareModal}

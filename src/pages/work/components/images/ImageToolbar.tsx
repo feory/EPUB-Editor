@@ -9,14 +9,14 @@ interface ImageToolbarProps {
     onFilterChange: (f: 'all' | 'used' | 'unused') => void;
     activeDropdown: 'filter' | 'export' | null;
     onToggleDropdown: (d: 'filter' | 'export') => void;
-    filterMenuRef: React.RefObject<HTMLDivElement>;
-    exportMenuRef: React.RefObject<HTMLDivElement>;
+    filterMenuRef: React.RefObject<HTMLDivElement | null>;
+    exportMenuRef: React.RefObject<HTMLDivElement | null>;
     searchExpanded: boolean;
     onSearchExpand: () => void;
     searchQuery: string;
     onSearchChange: (v: string) => void;
     onSearchClose: () => void;
-    searchInputRef: React.RefObject<HTMLInputElement>;
+    searchInputRef: React.RefObject<HTMLInputElement | null>;
     isUploading: boolean;
     isExporting: boolean;
     onFileUpload: (files: FileList | null) => void;

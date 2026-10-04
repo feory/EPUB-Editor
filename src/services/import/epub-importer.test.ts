@@ -22,7 +22,7 @@ async function makeEpub(opts: { declareCover: boolean }) {
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Livro</dc:title><dc:identifier>9789720000000</dc:identifier>${opts.declareCover ? '<meta name="cover" content="capa"/>' : ''}</metadata>
 <manifest><item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/><item id="capa" href="image/capa.jpg" media-type="image/jpeg"/><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/></manifest>
 <spine><itemref idref="cover" linear="no"/><itemref idref="c1"/></spine></package>`);
-    return new File([await zip.generateAsync({ type: 'uint8array' })], 'livro.epub');
+    return new File([await zip.generateAsync({ type: 'arraybuffer' })], 'livro.epub');
 }
 
 test('extractEpub devolve a capa declarada no OPF (meta name="cover") e não a põe na galeria', async () => {
