@@ -111,11 +111,14 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         // Estilos de parágrafo (p-bold, p-indent, ...) são formatos de SELECTOR ('p,li') — não
         // casam num bloco ainda h1/h2/h3, por isso o toggle não fazia nada (só "Padrão" convertia
         // a tag). Ao vir de um título, converte primeiro para <p> antes de aplicar a classe.
-        if (!/^(h1|h2|h3|p)$/.test(format)) {
-            const block = editor.selection.getNode()?.closest?.('h1,h2,h3');
-            if (block) editor.execCommand('FormatBlock', false, 'p');
-        }
-        editor.formatter.toggle(format); // h1-3 sincroniza o marcador de capítulo via FormatApply/FormatRemove
+        // transact: formatter.toggle sozinho não cria passo de undo (Ctrl+Z não o revertia).
+        editor.undoManager.transact(() => {
+            if (!/^(h1|h2|h3|p)$/.test(format)) {
+                const block = editor.selection.getNode()?.closest?.('h1,h2,h3');
+                if (block) editor.execCommand('FormatBlock', false, 'p');
+            }
+            editor.formatter.toggle(format); // h1-3 sincroniza o marcador de capítulo via FormatApply/FormatRemove
+        });
         editor.dispatch('Change');
         editor.nodeChanged();
     };
@@ -125,7 +128,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const setHrWidth = (full: boolean) => {
         const editor = editorRef.current; const hr = hrRef.current;
         if (!editor || !hr) return;
-        if (full) editor.dom.addClass(hr, 'divider-full'); else editor.dom.removeClass(hr, 'divider-full');
+        editor.undoManager.transact(() => {
+            if (full) editor.dom.addClass(hr, 'divider-full'); else editor.dom.removeClass(hr, 'divider-full');
+        });
         editor.dispatch('Change');
         // reposicionar o controlo (a largura mudou)
         const iframe = iframeOf(editor);
@@ -238,15 +243,17 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const body = editor.getBody();
         let top = block;
         while (top.parentElement && top.parentElement !== body) top = top.parentElement;
-        if (action === 'duplicate') {
-            top.parentNode?.insertBefore(top.cloneNode(true), top.nextSibling);
-        } else if (action === 'delete') {
-            top.remove();
-        } else {
-            editor.selection.select(block); editor.selection.collapse(true);
-            if (/^h[123]$/.test(action) || action === 'p') editor.execCommand('FormatBlock', false, action);
-            else editor.formatter.apply(action);
-        }
+        editor.undoManager.transact(() => { // escritas diretas/formatter: sem isto, sem passo de undo
+            if (action === 'duplicate') {
+                top.parentNode?.insertBefore(top.cloneNode(true), top.nextSibling);
+            } else if (action === 'delete') {
+                top.remove();
+            } else {
+                editor.selection.select(block); editor.selection.collapse(true);
+                if (/^h[123]$/.test(action) || action === 'p') editor.execCommand('FormatBlock', false, action);
+                else editor.formatter.apply(action);
+            }
+        });
         editor.focus();
         editor.dispatch('Change');
         editor.nodeChanged();
@@ -295,14 +302,17 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             editor.execCommand('mceChapterBreak');
             return;
         }
-        const p = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
-        block.parentNode.insertBefore(p, block.nextSibling);
-        editor.selection.setCursorLocation(p, 0);
-        editor.focus();
-        // Reusa comandos/formats existentes (FormatBlock h1-3 dispara syncChapterMarker).
-        if (/^h[123]$/.test(type)) editor.execCommand('FormatBlock', false, type);
-        else if (type === 'image') editor.execCommand('mceImage');
-        else if (type !== 'p') editor.formatter.apply(type);
+        const parent = block.parentNode;
+        editor.undoManager.transact(() => { // bloco novo + estilo = um passo de undo
+            const p = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
+            parent.insertBefore(p, block.nextSibling);
+            editor.selection.setCursorLocation(p, 0);
+            editor.focus();
+            // Reusa comandos/formats existentes (FormatBlock h1-3 dispara syncChapterMarker).
+            if (/^h[123]$/.test(type)) editor.execCommand('FormatBlock', false, type);
+            else if (type !== 'p' && type !== 'image') editor.formatter.apply(type);
+        });
+        if (type === 'image') editor.execCommand('mceImage'); // abre diálogo: fora do transact
         editor.dispatch('Change');
         editor.nodeChanged();
     };

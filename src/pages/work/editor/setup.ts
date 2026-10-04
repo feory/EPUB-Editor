@@ -35,6 +35,10 @@ export function createEditorSetup(deps: SetupDeps) {
         chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment, onEditBoxStyle } = deps;
 
     return (editor: Editor) => {
+        // formatter.apply/toggle/remove e escritas diretas no DOM NÃO criam passo de undo (só o
+        // execCommand cria) — sem isto, Ctrl+Z não revertia um estilo aplicado (ficava, ou ia
+        // junto com a escrita anterior). transact: um passo de undo por ação.
+        const undoable = (fn: () => void) => () => { editor.undoManager.transact(fn); };
         editor.addCommand('mceChapterBreak', () => {
             const bookmark = editor.selection.getBookmark(2, true);
             editor.windowManager.open({
@@ -162,8 +166,8 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.addShortcut('meta+p,ctrl+p', 'Parágrafo Padrão', () => editor.execCommand('FormatBlock', false, 'p'));
         // formatter.apply() sozinho não dispara 'Change' — sem isto o React nunca sincroniza
         // a classe aplicada, perdida ao gravar (mesmo motivo de editor.dispatch('Change') em styleAction).
-        editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', () => { editor.formatter.toggle('p-indent'); editor.dispatch('Change'); editor.nodeChanged(); });
-        editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', () => { editor.formatter.toggle('p-top'); editor.dispatch('Change'); editor.nodeChanged(); });
+        editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', undoable(() => { editor.formatter.toggle('p-indent'); editor.dispatch('Change'); editor.nodeChanged(); }));
+        editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', undoable(() => { editor.formatter.toggle('p-top'); editor.dispatch('Change'); editor.nodeChanged(); }));
 
         editor.on('init', () => {
             // selector (não block): aplica a classe ao bloco existente sem lhe trocar a tag —
@@ -397,12 +401,12 @@ export function createEditorSetup(deps: SetupDeps) {
             editor.ui.registry.addToggleButton(name, {
                 icon,
                 tooltip,
-                onAction: () => {
+                onAction: undoable(() => {
                     editor.formatter.toggle(format);
                     if (/^h[123]$/.test(format)) syncChapterMarker();
                     editor.dispatch('Change'); // sem isto o React não sincroniza a classe aplicada
                     editor.nodeChanged();
-                },
+                }),
                 onSetup: (api) => {
                     editor.formatter.formatChanged(format, (active) => api.setActive(active));
                     return () => {};
@@ -555,13 +559,15 @@ export function createEditorSetup(deps: SetupDeps) {
                     .map((i) => ({ type: 'autocompleteitem' as const, value: i.value, text: i.text, icon: i.icon })),
             ),
             onAction: (api: { hide: () => void }, rng: Range, value: string) => {
-                editor.selection.setRng(rng);
-                editor.execCommand('Delete'); // remove o "/pattern"
                 api.hide();
-                if (/^h[123]$/.test(value) || value === 'p') editor.execCommand('FormatBlock', false, value);
-                else if (value === 'image') editor.execCommand('mceImage');
-                else if (value === 'hr') editor.execCommand('mceInsertContent', false, '<hr>');
-                else editor.formatter.apply(value); // p-quote, p-small, footnote
+                undoable(() => { // apagar o "/pattern" + aplicar = um só passo de undo
+                    editor.selection.setRng(rng);
+                    editor.execCommand('Delete'); // remove o "/pattern"
+                    if (/^h[123]$/.test(value) || value === 'p') editor.execCommand('FormatBlock', false, value);
+                    else if (value === 'image') editor.execCommand('mceImage');
+                    else if (value === 'hr') editor.execCommand('mceInsertContent', false, '<hr>');
+                    else editor.formatter.apply(value); // p-quote, p-small, footnote
+                })();
                 editor.focus();
             },
         });
@@ -668,11 +674,11 @@ export function createEditorSetup(deps: SetupDeps) {
                     type: 'togglemenuitem',
                     text: label,
                     active: active.has(format),
-                    onAction: () => {
+                    onAction: undoable(() => {
                         editor.formatter.toggle(format);
                         editor.dispatch('Change');
                         editor.nodeChanged();
-                    },
+                    }),
                 })));
             },
         });
@@ -714,7 +720,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addToggleButton('smalltext', {
             icon: 'ps-smalltext',
             tooltip: 'Texto Pequeno (small)',
-            onAction: () => editor.formatter.toggle('small-text'),
+            onAction: undoable(() => editor.formatter.toggle('small-text')),
             onSetup: (api) => {
                 editor.formatter.formatChanged('small-text', (active) => api.setActive(active));
                 return () => {};
@@ -724,7 +730,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addToggleButton('smallcaps', {
             icon: 'ps-smallcaps',
             tooltip: 'Versaletes (small-caps)',
-            onAction: () => {
+            onAction: undoable(() => {
                 if (editor.formatter.match('small-caps')) {
                     editor.formatter.remove('small-caps');
                     return;
@@ -736,7 +742,7 @@ export function createEditorSetup(deps: SetupDeps) {
                 }
                 const cased = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
                 editor.selection.setContent(`<span class="small-caps">${editor.dom.encode(cased)}</span>`);
-            },
+            }),
             onSetup: (api) => {
                 editor.formatter.formatChanged('small-caps', (active) => api.setActive(active));
                 return () => {};
@@ -746,7 +752,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addToggleButton('uppercase', {
             icon: 'ps-uppercase',
             tooltip: 'Maiúsculas',
-            onAction: () => editor.formatter.toggle('uppercase'),
+            onAction: undoable(() => editor.formatter.toggle('uppercase')),
             onSetup: (api) => {
                 editor.formatter.formatChanged('uppercase', (active) => api.setActive(active));
                 return () => {};
@@ -756,7 +762,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addToggleButton('box', {
             icon: 'ps-box',
             tooltip: 'Envolver em caixa com borda',
-            onAction: () => {
+            onAction: undoable(() => {
                 const selectedNode = editor.selection.getNode();
                 const existingBox = editor.dom.getParent(selectedNode, '.box') as HTMLElement | null;
                 if (existingBox) {
@@ -768,7 +774,7 @@ export function createEditorSetup(deps: SetupDeps) {
                     }
                 }
                 editor.dispatch('Change');
-            },
+            }),
             onSetup: (api) => {
                 const handler = () => {
                     const node = editor.selection.getNode();
@@ -782,7 +788,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addToggleButton('noBreak', {
             icon: 'ps-union',
             tooltip: 'União entre título e o parágrafo',
-            onAction: () => {
+            onAction: undoable(() => {
                 // Wrap manual (igual ao botão "box") em vez de editor.formatter.apply: o
                 // formatter nativo do TinyMCE, ao abranger seleção com vários <p>, funde-os
                 // num só bloco em vez de os envolver preservando cada um.
@@ -797,7 +803,7 @@ export function createEditorSetup(deps: SetupDeps) {
                     }
                 }
                 editor.dispatch('Change');
-            },
+            }),
             onSetup: (api) => {
                 const handler = () => {
                     const node = editor.selection.getNode();
