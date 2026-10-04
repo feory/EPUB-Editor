@@ -4,7 +4,7 @@ import { test, expect } from 'bun:test';
 import '../happy-dom';
 import JSZip from 'jszip';
 import { parseXml } from '../book';
-import { convertBook, verifyBook, type BookMap } from '../commands';
+import { analyzeBook, convertBook, verifyBook, type BookMap } from '../commands';
 
 type Doc = { href: string; title: string; body: string };
 
@@ -154,4 +154,19 @@ test('verify: EPUB já optimizado (notas no formato da app) conta as notas do or
     const once = (await convert(epub)).bytes;          // já no formato da app (aside.footnote)
     const twice = (await convert(once)).bytes;         // escolher um EPUB já optimizado na Importação InDesign
     expect((await verifyBook(once, twice)).notes).toEqual([1, 1]);
+});
+
+test('EPUB já optimizado: optimizar de novo não muda nada (não perde capítulos nem subtítulos)', async () => {
+    const epub = await makeEpub([{ href: 'c1.xhtml', title: 'Um', body:
+        '<p class="ABERTURA">Capítulo 1</p><p class="SUB">Uma secção</p><p class="TXT">texto</p>' }]);
+    const map: BookMap = { classes: { ...MAP.classes, 'p.SUB': { target: 'h3' } } };
+    const once = (await convertBook(epub, map, EDITOR_CSS)).bytes;
+    const doc1 = await readDoc(once, 'c1.xhtml');
+    expect([doc1.querySelectorAll('h1').length, doc1.querySelectorAll('h3').length]).toEqual([1, 1]);
+    const { bytes: twice, report } = await convertBook(once, { classes: {} }, EDITOR_CSS);
+    expect(report.alreadyOptimized).toBe(true);
+    expect(twice).toEqual(once); // tal e qual
+    const { alreadyOptimized } = await analyzeBook(once, { baseStyles: {}, previousMap: null });
+    expect(alreadyOptimized).toBe(true);
+    expect((await analyzeBook(epub, { baseStyles: {}, previousMap: null })).alreadyOptimized).toBe(false);
 });

@@ -151,7 +151,13 @@ export function HomePage() {
         setIndesignBusy(true);
         try {
             const bytes = new Uint8Array(await file.arrayBuffer());
-            const { map } = await analyzeBook(bytes, { baseStyles, previousMap: null });
+            const { map, alreadyOptimized } = await analyzeBook(bytes, { baseStyles, previousMap: null });
+            // já no formato da app (ex. ficheiro de optimizados/): nada a decidir nem a optimizar → importa direto
+            if (alreadyOptimized) {
+                showNotification('success', 'EPUB já optimizado — importado sem alterações.', 4000);
+                importEpubMutation.mutate({ file });
+                return;
+            }
             setIndesign({ file, bytes, map });
         } catch {
             showNotification('error', 'Não foi possível ler o EPUB do InDesign.');

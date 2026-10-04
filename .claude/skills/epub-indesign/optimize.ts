@@ -24,13 +24,14 @@ const optimizedPathFor = (epub: string) => join(dirname(epub), 'optimizados', ba
 async function analyze(epubPath: string) {
     const basePath = join(import.meta.dir, 'estilos-base.json');
     const mapPath = mapPathFor(epubPath);
-    const { map, bodySize } = await analyzeBook(readFileSync(epubPath), {
+    const { map, bodySize, alreadyOptimized } = await analyzeBook(readFileSync(epubPath), {
         baseStyles: existsSync(basePath) ? JSON.parse(readFileSync(basePath, 'utf8')) : {},
         previousMap: existsSync(mapPath) ? JSON.parse(readFileSync(mapPath, 'utf8')) : null,
     });
     mkdirSync(dirname(mapPath), { recursive: true });
     writeFileSync(mapPath, JSON.stringify(map, null, 2) + '\n');
     console.log(`Mapa: ${mapPath}  (texto base ${bodySize}em)\n`);
+    if (alreadyOptimized) console.log('  ℹ EPUB já optimizado (formato da app) — o convert copia-o sem alterações.\n');
     for (const [k, e] of Object.entries(map.classes)) {
         console.log(`${String(e.count).padStart(6)}  ${k.padEnd(36)} → ${(e.target || '∅').padEnd(14)} [${e.origem}] ${e.css}`);
     }
@@ -46,6 +47,7 @@ async function convert(epubPath: string) {
     writeFileSync(outPath, bytes);
 
     console.log(`✓ ${outPath}`);
+    if (report.alreadyOptimized) { console.log('  ℹ EPUB já optimizado (formato da app) — copiado sem alterações'); return; }
     console.log(`  ${report.documents} documentos, ${report.notes} notas convertidas, corpo do texto ${report.bodySize}em`);
     if (report.missing.length) console.log(`  ⚠ classes fora do mapa (correr analyze): ${report.missing.join(', ')}`);
     console.log('\n  Estilo original → estilo do editor');

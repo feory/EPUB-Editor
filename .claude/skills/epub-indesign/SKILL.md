@@ -41,6 +41,10 @@ O código vive na **app** (`src/services/indesign/`) e é o mesmo da **Importaç
 
 CSS de saída = `editorExportCss(DEFAULT_CSS)` (sem editor-only nem `@font-face`).
 
+## EPUB já optimizado
+
+Se o EPUB já está no formato da app (CSS = o do editor e todas as classes do texto existem nele — ex. um ficheiro de `optimizados/`), o `analyze` avisa (`alreadyOptimized`) e o `convert` devolve-o **tal e qual** (optimizar de novo perdia os `h1`/`h3`). Na app, a Importação InDesign importa-o logo, sem o modal. Original ou já optimizado: os dois entram pela Importação InDesign.
+
 ## Tradução automática (CSS resolvido: estilo + overrides + `#id`, shorthands expandidos)
 
 | Original | Editor |

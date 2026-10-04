@@ -51,8 +51,19 @@ const cssSummary = (p: Props) => RELEVANT.filter(k => p[k] && !/^(normal|none|0|
 
 // ---------- analyze ----------
 // baseStyles = estilos-base.json (decisões da casa); previousMap = mapa já existente (entradas "revisto" ficam).
+// EPUB já no formato da app (ex. já optimizado): o CSS do próprio EPUB é o do editor e todas as classes do
+// texto existem nele. Não há nada a traduzir — e traduzir de novo estragava os títulos (h1/h3 já não têm o
+// estilo do InDesign de onde a regra os deduz), por isso o convert devolve o EPUB tal e qual.
+function isAlreadyOptimized(book: Awaited<ReturnType<typeof openBook>>) {
+    const vocabulary = editorVocabulary(book.css);
+    if (!vocabulary.has('p-indent')) return false; // CSS não é o do editor
+    return book.documents.every(({ doc }) => Array.from(doc.querySelectorAll('body [class]'))
+        .every(el => (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean).every(c => vocabulary.has(c))));
+}
+
 export async function analyzeBook(bytes: Uint8Array, opts: { baseStyles: Record<string, string>; previousMap: BookMap | null }) {
-    const { documents, resolve, bodySize: base } = await openBook(bytes);
+    const book = await openBook(bytes);
+    const { documents, resolve, bodySize: base } = book;
     const baseLookup = new Map(Object.entries(opts.baseStyles).map(([k, v]) => [k.toLowerCase(), v]));
 
     const found = new Map<string, { count: number; sample: string }>();
@@ -81,7 +92,7 @@ export async function analyzeBook(bytes: Uint8Array, opts: { baseStyles: Record<
             count, sample, css: cssSummary(p),
         };
     }
-    return { map: { classes } as BookMap, bodySize: base };
+    return { map: { classes } as BookMap, bodySize: base, alreadyOptimized: isAlreadyOptimized(book) };
 }
 
 // ---------- convert ----------
@@ -275,6 +286,7 @@ ${parts.join('\n')}
 
 type ConvertReport = {
     documents: number; notes: number; bodySize: number;
+    alreadyOptimized: boolean;                                         // EPUB já no formato da app → devolvido tal e qual
     missing: string[];                                                 // classes do livro que faltam no mapa
     styles: { original: string; count: number; editor: [string, number][] }[]; // estilo original → estilo do editor (ordenado)
 };
@@ -282,6 +294,9 @@ type ConvertReport = {
 // editorCss = CSS do editor (a CLI lê o DEFAULT_CSS da app; os testes passam um mínimo).
 export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: string): Promise<{ bytes: Uint8Array; report: ConvertReport }> {
     const book = await openBook(bytes);
+    if (isAlreadyOptimized(book)) {
+        return { bytes, report: { documents: book.documents.length, notes: 0, bodySize: book.bodySize, alreadyOptimized: true, missing: [], styles: [] } };
+    }
     const { zip, opfPath, opfDir, items, resolve, bodySize: base, referencedIds: referenced, frontMatter } = book;
     const docs = new Map(book.documents.map(d => [d.href, d.doc]));
     const vocabulary = editorVocabulary(editorCss);
@@ -352,7 +367,7 @@ export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: st
     return {
         bytes: await out.generateAsync({ type: 'uint8array', compression: 'DEFLATE', mimeType: 'application/epub+zip' }),
         report: {
-            documents: book.documents.length, notes, bodySize: base, missing: [...missing],
+            documents: book.documents.length, notes, bodySize: base, alreadyOptimized: false, missing: [...missing],
             styles: [...used].sort((a, b) => sum(b[1]) - sum(a[1])).map(([original, outs]) => ({
                 original, count: sum(outs), editor: [...outs].sort((a, b) => b[1] - a[1]),
             })),
