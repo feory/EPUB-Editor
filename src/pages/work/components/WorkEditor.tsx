@@ -475,7 +475,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             if (out.length === 0) return;
             editBlocks(editor, () => {
                 if (useSelection) editor.selection.setContent(out.join(''));
-                else editor.setContent(out.join(''));
+                else editor.setContent(out.join(''), { keepUndo: true }); // reversível (setup.ts: SetContent)
             });
         },
 
@@ -536,7 +536,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             if (out.length === 0) return;
             editBlocks(editor, () => {
                 if (useSelection) editor.selection.setContent(out.join(''));
-                else editor.setContent(out.join(''));
+                else editor.setContent(out.join(''), { keepUndo: true }); // reversível (setup.ts: SetContent)
             });
         },
 
@@ -548,7 +548,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             let result = applyImportOptions(html, options);
             if (options.convertListsToDialogue) result = convertListsToDialogue(result);
             if (result === html) return;
-            editBlocks(editor, () => editor.setContent(result));
+            editBlocks(editor, () => editor.setContent(result, { keepUndo: true })); // reversível (setup.ts: SetContent)
         },
 
         filterGrammarHighlights: (filter: 'all' | 'spelling' | 'grammar') => {
