@@ -1,23 +1,21 @@
 // Os três comandos do skill, sem disco nem consola: dados entram, dados saem.
-//   analyzeBook(bytes, { baseStyles, fileName, loadDecisions }) → { map, isbn, bodySize, alreadyOptimized }
-//   decisionsOf(map)                                 → BookMap só com o que o utilizador decidiu
+//   analyzeBook(bytes, { baseStyles })              → { map, bodySize, alreadyOptimized }
 //   convertBook(bytes, map, editorCss)              → { bytes, report }
 //   verifyBook(originalBytes, optimizedBytes)       → VerifyReport
+//   optimizeBook(bytes, map, editorCss)             → convert + verify + política: { bytes, report, verify, problems, warnings }
 // Adapters: a importação InDesign da app (HomePage) e a CLI do skill (.claude/skills/epub-indesign/optimize.ts).
 // Os testes (tests/commands.test.ts) usam EPUBs mínimos construídos em memória.
 import JSZip from 'jszip';
 import { openBook, serialize, type Resolve } from './book';
 import { indesignTitle } from './titles';
 import { chapterTitleOf } from '../../utils/chapter-title';
-import { opfIsbn } from '../epub-importer';
 import { editorVocabulary } from './editor';
 import { intentOf, isBold, isItalic, preservedOf, translateParagraph, translateSpan, type Props } from './translate';
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
 const EPUB_NS = 'http://www.idpf.org/2007/ops';
 const BLOCK_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
-// suggested = o que a casa/heurística daria sem as Decisões do livro (decisionsOf compara com isto)
-type MapEntry = { target: string; origem?: string; count?: number; sample?: string; css?: string; suggested?: string };
+type MapEntry = { target: string; origem?: string; count?: number; sample?: string; css?: string };
 export type BookMap = { classes: Record<string, MapEntry> };
 
 // só valores em `em` (ex. 1.5em); % e px de overrides do InDesign não contam como corpo de título
@@ -53,8 +51,8 @@ const cssSummary = (p: Props) => RELEVANT.filter(k => p[k] && !/^(normal|none|0|
     .map(k => `${k}:${p[k]}`).join('; ');
 
 // ---------- analyze ----------
-// Precedência: Decisões do livro > baseStyles (estilos-base.json, regras da casa) > heurística do CSS.
-// loadDecisions(isbn) = Decisões do livro guardadas (servidor na app, data/indesign-maps/ na CLI).
+// baseStyles = estilos-base.json (regras da casa), antes da heurística do CSS. O que o livro precisar a mais
+// decide-se no modal da importação (não é guardado: cada livro é importado uma vez).
 // EPUB já no formato da app (ex. já optimizado): o CSS do próprio EPUB é o do editor e todas as classes do
 // texto existem nele. Não há nada a traduzir — e traduzir de novo estragava os títulos (h1/h3 já não têm o
 // estilo do InDesign de onde a regra os deduz), por isso o convert devolve o EPUB tal e qual.
@@ -65,14 +63,8 @@ function isAlreadyOptimized(book: Awaited<ReturnType<typeof openBook>>) {
         .every(el => (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean).every(c => vocabulary.has(c))));
 }
 
-export async function analyzeBook(bytes: Uint8Array, opts: {
-    baseStyles: Record<string, string>;
-    fileName: string;
-    loadDecisions: (isbn: string) => Promise<BookMap | null>;
-}) {
+export async function analyzeBook(bytes: Uint8Array, opts: { baseStyles: Record<string, string> }) {
     const book = await openBook(bytes);
-    const isbn = opfIsbn(book.opf, opts.fileName.replace(/\.epub$/i, ''));
-    const decisions = await opts.loadDecisions(isbn);
     const { documents, resolve, bodySize: base } = book;
     const baseLookup = new Map(Object.entries(opts.baseStyles).map(([k, v]) => [k.toLowerCase(), v]));
 
@@ -94,25 +86,13 @@ export async function analyzeBook(bytes: Uint8Array, opts: {
         const [tag, cls] = [key.slice(0, key.indexOf('.')), key.slice(key.indexOf('.') + 1)];
         const p = resolve(tag, [cls]);
         const fromBase = baseLookup.get(key.toLowerCase());
-        const decided = decisions?.classes[key]?.target;
-        const suggested = fromBase ?? suggest(tag, cls, p, base);
         classes[key] = {
-            target: decided ?? suggested,
-            origem: decided !== undefined ? 'revisto' : fromBase !== undefined ? 'base' : 'css',
-            count, sample, css: cssSummary(p), suggested,
+            target: fromBase ?? suggest(tag, cls, p, base),
+            origem: fromBase !== undefined ? 'base' : 'css',
+            count, sample, css: cssSummary(p),
         };
     }
-    return { map: { classes } as BookMap, isbn, bodySize: base, alreadyOptimized: isAlreadyOptimized(book) };
-}
-
-// Decisões do livro a guardar: só os estilos cujo alvo difere da sugestão — voltar à sugestão apaga a decisão,
-// e o que não foi tocado continua a seguir as regras da casa/heurística (melhorias futuras chegam-lhe).
-export function decisionsOf(map: BookMap): BookMap {
-    return {
-        classes: Object.fromEntries(Object.entries(map.classes)
-            .filter(([, e]) => e.suggested !== undefined && e.target !== e.suggested)
-            .map(([k, e]) => [k, { target: e.target, origem: 'revisto', sample: e.sample }])),
-    };
+    return { map: { classes } as BookMap, bodySize: base, alreadyOptimized: isAlreadyOptimized(book) };
 }
 
 // ---------- convert ----------
@@ -478,4 +458,29 @@ export async function verifyBook(originalBytes: Uint8Array, optimizedBytes: Uint
         },
         images: [O.imgs, P.imgs], pages: [O.pages, P.pages], notes: [O.notes, P.notes], foreignClasses: [...foreign],
     };
+}
+
+// ---------- optimize (convert + verify + política) ----------
+// Política da verificação, igual para a app e a CLI: perder conteúdo (texto, imagens, quebras de página, notas)
+// é PROBLEMA (bloqueia, salvo Importação forçada); diferenças de intenção e classes fora do editor são AVISOS.
+// EPUB já optimizado: o convert devolve-o tal e qual → nada a verificar.
+export type Problem = { kind: 'text' | 'images' | 'pages' | 'notes'; message: string };
+export type Warning = { kind: 'intent' | 'classes'; message: string };
+
+export async function optimizeBook(bytes: Uint8Array, map: BookMap, editorCss: string) {
+    const { bytes: out, report } = await convertBook(bytes, map, editorCss);
+    if (report.alreadyOptimized) return { bytes: out, report, verify: null, problems: [] as Problem[], warnings: [] as Warning[] };
+    const v = await verifyBook(bytes, out);
+    const lost = (kind: Problem['kind'], label: string, [a, b]: [number, number]): Problem[] =>
+        a === b ? [] : [{ kind, message: `${label} ${a} → ${b}` }];
+    const problems: Problem[] = [
+        ...(v.text.ok ? [] : [{ kind: 'text' as const, message: `texto diferente na posição ${v.text.at} («${v.text.original}» → «${v.text.optimized}»)` }]),
+        ...lost('images', 'imagens', v.images), ...lost('pages', 'quebras de página', v.pages), ...lost('notes', 'notas', v.notes),
+    ];
+    const diffs = v.diffs.reduce((n, d) => n + d.count, 0);
+    const warnings: Warning[] = [
+        ...(diffs ? [{ kind: 'intent' as const, message: `${diffs} diferença(s) de formatação face ao original (alinhamento, recuo, espaço, negrito, itálico…) — confirmar no editor` }] : []),
+        ...(v.foreignClasses.length ? [{ kind: 'classes' as const, message: `classes fora do editor: ${v.foreignClasses.join(', ')}` }] : []),
+    ];
+    return { bytes: out, report, verify: v, problems, warnings };
 }

@@ -31,13 +31,6 @@ const decodeEntities = (s: string) =>
         .replace(/&#39;|&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
         .replace(/&amp;/g, '&');
 
-// ISBN do ebook: dc:identifier do OPF, senão o fallback (nome do ficheiro). Partilhado com a Importação
-// InDesign (chave das Decisões do livro) — tem de dar o mesmo ISBN que o ebook criado.
-export function opfIsbn(opfXml: string, fallback: string): string {
-    const m = opfXml.match(/<dc:identifier\b[^>]*>([\s\S]*?)<\/dc:identifier>/i);
-    return (m?.[1].match(/[\d-]{8,}/)?.[0] || fallback).trim();
-}
-
 // Metadados Dublin Core do OPF → campos do Ebook. Regex tolerante a prefixo de namespace.
 function parseOpfMetadata(opfXml: string, fallbackIsbn: string): EpubMetadata {
     const grab = (tag: string) => {
@@ -47,7 +40,7 @@ function parseOpfMetadata(opfXml: string, fallbackIsbn: string): EpubMetadata {
     const grabAll = (tag: string) =>
         Array.from(opfXml.matchAll(new RegExp(`<dc:${tag}\\b[^>]*>([\\s\\S]*?)</dc:${tag}>`, 'gi')))
             .map(m => decodeEntities(m[1].trim())).filter(Boolean);
-    const isbn = opfIsbn(opfXml, fallbackIsbn);
+    const isbn = (grab('identifier').match(/[\d-]{8,}/)?.[0] || fallbackIsbn).trim();
     const date = grab('date').slice(0, 10);
     return {
         ebook_isbn: isbn,
