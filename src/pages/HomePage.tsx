@@ -137,7 +137,7 @@ export function HomePage() {
             // O servidor exige title+author não-vazios; fallback quando o OPF não os traz.
             const title = metadata?.title || file.name.replace(/\.epub$/i, '');
             const author = metadata?.author || '—';
-            await ebooksApi.create({ ebook_isbn: isbn, physical_isbn: '', title, author });
+            await ebooksApi.create({ ebook_isbn: isbn, physical_isbn: metadata?.physical_isbn || '', title, author });
             // Capa do EPUB → capa do ebook (lista/grelha). Falhar a capa nunca bloqueia a importação.
             if (cover) {
                 try {
@@ -151,7 +151,7 @@ export function HomePage() {
             if (metadata) await ebooksApi.updateMetadata(isbn, {
                 title, author, description: metadata.description,
                 publisher: metadata.publisher, language: metadata.language, subjects: metadata.subjects,
-                pub_date: metadata.pub_date, physical_isbn: '',
+                pub_date: metadata.pub_date, physical_isbn: metadata.physical_isbn || '',
             });
             return isbn;
         },
