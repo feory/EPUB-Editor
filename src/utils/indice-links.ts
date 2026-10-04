@@ -7,7 +7,7 @@
 //
 // Os dois marcadores usados (`idx-link`, `chapter-anchor`) nunca são `<a>`: cleanHtml() apaga
 // qualquer `<a>` em cada load/save/export (regex `links`), por isso um link real morreria na
-// próxima gravação. Só viram `<a href>` no export (ver src/services/epub/index-links.ts).
+// próxima gravação. Só viram `<a href>` no export (ver src/services/export/epub/index-links.ts).
 
 import { classifyChapterPart, matchChapterMarkerElement, flattenHeadingText } from './html-cleaner';
 import { decodeEntities } from './entities';
@@ -43,7 +43,7 @@ function titlesMatch(lineNorm: string, titleNorm: string): boolean {
         (lineNorm.includes(titleNorm) || titleNorm.includes(lineNorm));
 }
 
-// Cópia deliberada de tocKeywords (src/services/pdf/heuristics.ts, módulo só de import de PDF) —
+// Cópia deliberada de tocKeywords (src/services/import/pdf/heuristics.ts, módulo só de import de PDF) —
 // match ANCORADO à string inteira, nunca confunde com "Índice Remissivo" (feature não
 // relacionada, já servida por src/utils/index-cleaner.ts).
 const TOC_TITLE = /^(índice|indice|sumário|sumario|conteúdo|conteudo|table of contents|contents)$/i;

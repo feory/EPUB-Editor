@@ -132,5 +132,5 @@ CSS resolvido (estilo + overrides + `#id`, shorthands expandidos):
 
 ## Dependências na app
 - `src/utils/chapter-title.ts` — `chapterTitleOf`.
-- `src/services/epub-importer.ts` — títulos do `<title>`, notas com vários parágrafos, espaço no `<sup>` da nota.
+- `src/services/import/epub-importer.ts` — títulos do `<title>`, notas com vários parágrafos, espaço no `<sup>` da nota.
 - `src/utils/html-cleaner.ts` — `flattenHeadingText` sem chamadas de nota.

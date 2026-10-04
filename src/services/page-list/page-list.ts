@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import { fillFolioGaps } from './page-list-folio';
-import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from './page-list-marker';
-import { CHAPTER_SPLIT_PATTERN } from '../utils/html-cleaner';
+import { fillFolioGaps } from './folio';
+import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from './marker';
+import { CHAPTER_SPLIT_PATTERN } from '../../utils/html-cleaner';
 
 // Worker partilhado com o pdf-service (já configurado lá); reconfigurar é idempotente.
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -140,7 +140,7 @@ export async function extractPdfPageAnchors(data: ArrayBuffer): Promise<PageAnch
 
 // Mapa folio→página física do PDF (1-based) — mesma deteção de zona (rodapé/cabeçalho) de
 // extractPdfPageAnchors, para código que precisa de saber EM QUE página do ficheiro está um
-// folio (ex. placeFiguresByPosition em idml-figures.ts, que recebe o folio via Page/Name do
+// folio (ex. placeFiguresByPosition em idml/figures.ts, que recebe o folio via Page/Name do
 // spread do IDML e precisa de abrir a página certa do PDF de impressão).
 export async function mapFolioToPdfPage(data: ArrayBuffer): Promise<Map<number, number>> {
     const pdf = await pdfjsLib.getDocument({ data }).promise;
@@ -161,7 +161,7 @@ export async function mapFolioToPdfPage(data: ArrayBuffer): Promise<Map<number, 
 }
 
 // Linhas de texto (y + texto normalizado) de cada página do PDF, topo→baixo — mesma extração de
-// verifyBlankSpacing, partilhada com placeFiguresByPosition (idml-figures.ts), que procura a
+// verifyBlankSpacing, partilhada com placeFiguresByPosition (idml/figures.ts), que procura a
 // maior quebra vertical entre linhas para localizar uma figura sem legenda/nº na página.
 export async function buildPdfLines(data: ArrayBuffer): Promise<{ y: number; text: string }[][]> {
     const pdf = await pdfjsLib.getDocument({ data }).promise;

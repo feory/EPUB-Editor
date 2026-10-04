@@ -1,5 +1,5 @@
 import type { TextItem, Span, ProcessedParagraph, PdfPage } from './types';
-import { decodeEntities } from '../../utils/entities';
+import { decodeEntities } from '../../../utils/entities';
 
 /**
  * Heuristics to detect styles and structures in text items

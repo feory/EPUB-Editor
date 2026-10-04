@@ -3,7 +3,7 @@ import { CheckCircle2, AlertCircle } from 'lucide-react';
 import type { ValidationResult } from '../../../api/ebooks-api';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
-import type { ValidationReport } from '../../../services/footnote-validator';
+import type { ValidationReport } from '../../../services/validation/footnote-validator';
 import { ValidationContent } from '../components/ValidationContent';
 
 interface ValidationModalProps {

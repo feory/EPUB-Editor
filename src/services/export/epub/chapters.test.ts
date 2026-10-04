@@ -5,7 +5,7 @@
 import { test, expect, beforeAll } from 'bun:test';
 import { Window } from 'happy-dom';
 import { buildSections } from './chapters';
-import { insertChapterMarkers } from '../../utils/html-cleaner';
+import { insertChapterMarkers } from '../../../utils/html-cleaner';
 
 // decodeHtmlEntities (html-utils.ts) usa DOMParser global — não existe fora do browser.
 beforeAll(() => {

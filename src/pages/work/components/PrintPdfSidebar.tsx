@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, FileText, ChevronLeft, ChevronRight, Loader2, Upload, ZoomIn, ZoomOut } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { extractPdfPageAnchors } from '../../../services/page-list';
-import type { PageAnchor } from '../../../services/page-list';
+import { extractPdfPageAnchors } from '../../../services/page-list/page-list';
+import type { PageAnchor } from '../../../services/page-list/page-list';
 import { PanelResizeHandle } from './PanelResizeHandle';
 
 interface PrintPdfSidebarProps {

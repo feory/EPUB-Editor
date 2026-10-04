@@ -4,7 +4,7 @@
 // que secção cada id caiu. Puro (sem DOM/JSZip) — testável com bun test.
 
 import type { Section } from './types';
-import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from '../page-list-marker';
+import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from '../../page-list/marker';
 
 const ID_PATTERN = /\bid="([^"]+)"/g;
 

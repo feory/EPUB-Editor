@@ -1,5 +1,5 @@
-// Forma HTML do marcador de page-list do editor — único dono, para page-list.ts
-// (stripPageBreaks/convertPageBreaks) e src/services/epub/index-links.ts (idx-link do Índice
+// Forma HTML do marcador de page-list do editor — único dono, para page-list/page-list.ts
+// (stripPageBreaks/convertPageBreaks) e src/services/export/epub/index-links.ts (idx-link do Índice
 // Remissivo precisa de saber que id um data-page vai ganhar ANTES de convertPageBreaks lho
 // atribuir, ver buildIdToSectionMap) nunca terem cópias divergentes. Módulo à parte (sem
 // import nenhum) para não arrastar o pdfjs-dist de page-list.ts para quem só precisa do

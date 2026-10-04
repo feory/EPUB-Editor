@@ -1,13 +1,13 @@
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { ebooksApi } from '../api/ebooks-api';
-import { linkFootnotes } from './pdf/post-processor';
+import { ebooksApi } from '../../api/ebooks-api';
+import { linkFootnotes } from '../import/pdf/post-processor';
 import { cleanHtmlForXhtml } from './epub/html-utils';
 import { removeInaccessibleColors, removeInaccessibleCssColors } from './epub/color-utils';
 import { replaceImageUrlsInContent, stripPlaceholderImages, addImagesToArchive } from './epub/image-utils';
 import { buildSections } from './epub/chapters';
 import { generateNavXhtml, generatePageListXhtml, generateContentOpf, generateTocNcx, type CoverAssets } from './epub/assets';
-import { convertPageBreaks } from './page-list';
+import { convertPageBreaks } from '../page-list/page-list';
 import { buildIdToSectionMap, convertIndexLinks } from './epub/index-links';
 import { prepareTextForXml } from './epub/html-utils';
 

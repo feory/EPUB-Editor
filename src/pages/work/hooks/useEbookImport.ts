@@ -1,12 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { extractHtmlFromPdf } from '../../../services/pdf-service';
-import { extractDocument } from '../../../services/document-importer';
-import type { DocxStyleMapping } from '../../../services/document-importer';
+import { extractHtmlFromPdf } from '../../../services/import/pdf/pdf-service';
+import { extractDocument } from '../../../services/import/document-importer';
+import type { DocxStyleMapping } from '../../../services/import/document-importer';
 import { cleanEditorHtml, applyImportOptions, prependFichaTecnica } from '../../../utils/html-cleaner';
 import type { ImportOptions } from '../../../utils/html-cleaner';
 import type { ImageSettings } from '../../../components/MarginPreview';
-import { uploadExtractedImages } from '../../../services/extracted-images';
+import { uploadExtractedImages } from '../../../services/import/extracted-images';
 
 interface UseEbookImportOptions {
     isbn: string | undefined;

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { generateEpub, generateEpubBlob } from '../../../services/epub-service';
+import { generateEpub, generateEpubBlob } from '../../../services/export/epub-service';
 
 interface EbookMeta {
     title?: string;

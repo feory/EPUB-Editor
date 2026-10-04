@@ -127,7 +127,7 @@ export function cleanIndexText(raw: string): string[] {
 
 // Embrulha cada número de uma lista de páginas (ex. ", 34, 56" ou ", 34–36") num
 // <span class="idx-link" data-target="page-N"> — só vira <a href> real no export do EPUB (ver
-// src/services/epub/index-links.ts), apontando para o marcador de page-list dessa página; sem
+// src/services/export/epub/index-links.ts), apontando para o marcador de page-list dessa página; sem
 // marcador correspondente no livro, o export desembrulha para texto simples (nunca gera link
 // morto). Reusado por WorkEditor.tsx (linkIndexPagesSelection) — único sítio a saber a forma
 // do idx-link.

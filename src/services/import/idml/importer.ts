@@ -1,8 +1,8 @@
 import JSZip from 'jszip';
-import { sanitizeImageFilename } from '../utils/format';
-import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings, verifyBlankSpacing, getPdfPageCount } from './page-list';
-import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures, placeFiguresByPosition, toRasterName } from './idml-figures';
-import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from './document-importer';
+import { sanitizeImageFilename } from '../../../utils/format';
+import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings, verifyBlankSpacing, getPdfPageCount } from '../../page-list/page-list';
+import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures, placeFiguresByPosition, toRasterName } from './figures';
+import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from '../document-importer';
 
 const RASTER_RE = /\.(jpe?g|png|gif|tiff?|webp)$/i;
 const CONVERTIBLE_RE = /\.(pdf|eps|psd)$/i;
