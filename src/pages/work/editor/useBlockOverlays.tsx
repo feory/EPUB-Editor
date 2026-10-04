@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TinyMCEEditor } from './types';
 import { countInBook, replaceInBook } from './book-find-replace';
 import { BlockOverlays, type BlockOverlaysProps } from './overlays/BlockOverlays';
+import { attachMiniMenu, type MiniMenu } from './miniMenu';
 
 // As únicas 3 que atravessam para fora do subsistema (WorkEditor/setup.ts); tudo o resto em
 // BlockOverlaysProps só alimenta o render interno — ver useBlockOverlays() no fim do ficheiro.
@@ -30,26 +31,6 @@ function chromeBounds(editor: TinyMCEEditor): { minTop: number; maxBottom: numbe
     return { minTop, maxBottom };
 }
 
-/**
- * Geometria pura por trás do reposicionamento do mini-menu (forcePopAbove): decide se cabe
- * ACIMA do bloco, senão ABAIXO, senão esconde (null). Preferência por cima; ambos os lados
- * medidos dentro da área visível do iframe (`iframeTop`/`iframeHeight`), nunca da janela.
- */
-export function placePopover(
-    blockTop: number, blockBottom: number, blockVisible: boolean,
-    popHeight: number, iframeTop: number, iframeHeight: number,
-): { top: number; side: 'top' | 'bottom' } | null {
-    if (!blockVisible) return null;
-    // Encostado à linha da borda (anel 4px fora da caixa do bloco), sem folga.
-    const desiredTop = blockTop - popHeight - 4;
-    if (desiredTop >= iframeTop + 4) return { top: desiredTop, side: 'top' };
-    // Por baixo, também encostado à linha da borda. O "+" (centro da borda) só fica tapado em
-    // blocos estreitos: o menu está alinhado à esquerda e acaba antes do centro nos normais.
-    const desiredBottom = blockBottom + 4;
-    if (desiredBottom + popHeight <= iframeTop + iframeHeight - 4) return { top: desiredBottom, side: 'bottom' };
-    return null;
-}
-
 export interface BlockOverlaysOptions {
     activeChapterIndex: number;
     // Substituição em todo o LIVRO mesmo com só um capítulo carregado no editor — sem isto
@@ -76,10 +57,10 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const [gripFading, setGripFading] = useState(false); // fade-out suave durante o scroll
     const gripPosRef = useRef<Pos | null>(null);
     const gripBlockRef = useRef<HTMLElement | null>(null);
-    // Rato em cima da pega (mover) → mini-menu de bloco escondido; ao sair volta (como a toolbar).
-    // Limpo também quando a pega desmonta (sem mouseleave ficaria preso → mini-menu sempre oculto).
-    const gripHoveredRef = useRef(false);
-    const clearGrip = () => { gripHoveredRef.current = false; gripPosRef.current = null; gripBlockRef.current = null; setGripFading(false); setGripPos(null); };
+    // Mini-menu (miniMenu.ts): o único que mexe no pop; aqui só se pede para o esconder.
+    const miniMenuRef = useRef<MiniMenu | null>(null);
+    // Pega a desmontar com o rato em cima (sem mouseleave) não pode deixar o mini-menu preso.
+    const clearGrip = () => { miniMenuRef.current?.suppress('grip', false); gripPosRef.current = null; gripBlockRef.current = null; setGripFading(false); setGripPos(null); };
     const [gripMenu, setGripMenu] = useState<Pos | null>(null); // menu ao clicar na pega
     // "Mais estilos" (mini-menu ⋮): overlay React em 2 colunas, ancorado ao pop do mini-menu.
     const [styleMenu, setStyleMenu] = useState<{ top: number; left: number; kind: 'para' | 'head' } | null>(null);
@@ -265,6 +246,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const plusBlockRef = useRef<HTMLElement | null>(null); // bloco-âncora do menu
     const closePlusMenu = () => {
         plusMenuOpenRef.current = false;
+        miniMenuRef.current?.suppress('plusMenu', false);
         plusBlockRef.current?.removeAttribute('data-mce-plusopen');
         setPlusMenu(null);
         editorRef.current?.nodeChanged(); // reavalia mini-menu + grip (voltam a aparecer)
@@ -275,9 +257,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         plusBlockRef.current = block;
         block.setAttribute('data-mce-plusopen', '1'); // mantém o "+" visível sem :hover (rato vai para o menu)
         clearGrip(); // esconder a pega enquanto o menu está aberto
-        // esconder o mini-menu de bloco (context toolbar) enquanto o menu está aberto
-        const pop = document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
-        if (pop) pop.style.visibility = 'hidden';
+        miniMenuRef.current?.suppress('plusMenu', true);
         setPlusMenu(pos); // acima do "+"
     };
     const plusAction = (type: string) => {
@@ -319,19 +299,10 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
 
     // Arrastar o bloco ativo para outro sítio (pega estilo Notion).
     const dragBlockRef = useRef<HTMLElement | null>(null);
-    const popEl = () => document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
-    const onGripEnter = () => {
-        gripHoveredRef.current = true;
-        const pop = popEl();
-        if (pop) pop.style.visibility = 'hidden';
-    };
-    const onGripLeave = () => {
-        gripHoveredRef.current = false;
-        if (dragBlockRef.current) return; // a arrastar: o fim do arrasto (nodeChanged) repõe-no
-        const pop = popEl();
-        if (pop) pop.style.visibility = '';
-        editorRef.current?.nodeChanged();
-    };
+    // Rato em cima da pega → mini-menu escondido. A arrastar, sair da pega não o repõe: só o
+    // fim do arrasto (onUp).
+    const onGripEnter = () => miniMenuRef.current?.suppress('grip', true);
+    const onGripLeave = () => { if (!dragBlockRef.current) miniMenuRef.current?.suppress('grip', false); };
     const dropTargetRef = useRef<{ block: HTMLElement; pos: 'before' | 'after' } | null>(null);
     const [dropLine, setDropLine] = useState<{ top: number; left: number; width: number } | null>(null);
     const startBlockDrag = (e: React.MouseEvent) => {
@@ -380,6 +351,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const drag = dragBlockRef.current;
             const tgt = dropTargetRef.current;
             dragBlockRef.current = null; dropTargetRef.current = null;
+            miniMenuRef.current?.suppress('grip', false); // ver onGripLeave
             if (drag && tgt && tgt.block !== drag && drag.parentNode) {
                 const ref = tgt.pos === 'before' ? tgt.block : tgt.block.nextSibling;
                 if (ref !== drag) {
@@ -403,8 +375,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const isPlusBlock = (block: HTMLElement | null): block is HTMLElement =>
             !!block && block !== editor.getBody() && /^(P|H[1-6])$/.test(block.nodeName)
             && !/\bchapter-break/.test(block.className);
-        // Rato por cima da toolbar (sticky ou não) → mini-menu de bloco escondido (ver forcePopAbove).
-        let toolbarHovered = false;
+        miniMenuRef.current = attachMiniMenu(editor, { blockOf });
         let lastMouseY = -1; // Y do rato em coords do iframe (-1 = desconhecido)
         let lastMouseX = -1; // X do rato em coords do iframe
         // Zona à esquerda da aresta do bloco onde a pega aparece.
@@ -508,116 +479,6 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         // Editar HTML inline aberto + clique noutro bloco → fechar (descarta a edição).
         editor.on('mousedown', () => { if (htmlBlockRef.current) endHtmlEdit(); });
 
-        // Mini-bar (context toolbar) só na parte superior: o TinyMCE 8 auto-flipa
-        // norte/sul e não expõe knob para fixar. Reposicionamos o pop para cima do
-        // bloco depois de o tema o posicionar, via observer da aux dos popups inline.
-        // Última posição (coords da janela) em que NÓS pusemos o mini-menu — base para deslocar
-        // os dropdowns abertos dele (¶, alinhamento), que o TinyMCE posiciona à parte e não
-        // acompanham quando o menu se move no scroll. Não usar a posição atual do pop: o TinyMCE
-        // pode tê-lo acabado de pôr noutro sítio (centro) antes da nossa correção.
-        let lastPopPos: { top: number; left: number } | null = null;
-        const shiftOpenMenus = (dx: number, dy: number) => {
-            if (!dx && !dy) return;
-            document.querySelectorAll<HTMLElement>('.tox-tinymce-aux .tox-menu').forEach((m) => {
-                if (m.style.top) m.style.top = parseFloat(m.style.top) + dy + 'px';
-                if (m.style.bottom) m.style.bottom = parseFloat(m.style.bottom) - dy + 'px';
-                if (m.style.left) m.style.left = parseFloat(m.style.left) + dx + 'px';
-            });
-        };
-        const forcePopAbove = () => {
-            placePop();
-            // As escritas acima geram mutações no aux; descartá-las para o observer só reagir ao
-            // TinyMCE — nenhuma correção nossa pode disparar outra (ciclo → separador bloqueado).
-            auxObserver.takeRecords();
-        };
-        const placePop = () => {
-            const pop = document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
-            if (!pop || !pop.offsetHeight) return; // ausente/escondido pelo TinyMCE
-            if (toolbarHovered || gripHoveredRef.current) { pop.style.visibility = 'hidden'; return; } // rato na toolbar/pega → esconde bubble e mini-menu por igual
-            if (!editor.selection.isCollapsed()) return; // seleção de texto → é o bubble, não mexer
-            if (plusMenuOpenRef.current) { pop.style.visibility = 'hidden'; return; } // menu de inserção aberto
-            // blockOf não inclui 'li' (grip/+ não se estendem a listas, ver parastyles em
-            // setup.ts) — fallback próprio, senão o mini-menu de estilos num bullet nunca
-            // passava daqui: ficava com a visibility que o TinyMCE lhe deu por defeito (às
-            // vezes hidden), só revelada indiretamente ao passar o rato pela toolbar (que
-            // repõe visibility='' sem depender deste gate).
-            const selNode = editor.selection.getNode();
-            const block = (blockOf(selNode) || editor.dom.getParent(selNode, 'li')) as HTMLElement | null;
-            if (!block || !/^(P|H[1-6]|LI)$/.test(block.nodeName)) return;
-            const iframe = iframeOf(editor);
-            if (!iframe) return;
-            const ir = iframe.getBoundingClientRect();
-            const br = block.getBoundingClientRect();
-            const blockTop = ir.top + br.top;
-            const blockBottom = ir.top + br.bottom;
-            const blockVisible = br.top < ir.height && br.bottom > 0;
-            // Coords da janela → style.top/left, que são relativos ao contentor posicionado
-            // (.tox-tinymce-aux, no fim da página) — sem converter o menu saía do ecrã.
-            const parentRect = (pop.offsetParent as HTMLElement | null)?.getBoundingClientRect();
-            const placeAt = (desired: number, removeClass: string, addClass: string) => {
-                pop.style.visibility = '';
-                // Posição EXATA (o TinyMCE põe-no com a folga da seta, ou por DENTRO do bloco) — mas
-                // só escreve se ainda não lá está: set incondicional de style.top faria o auxObserver
-                // (attributeFilter 'style') disparar em loop, visto como o mini-menu a "cair"/tremer.
-                // Compara com o DESTINO (style.top), não com a posição no ecrã: a meio de uma
-                // animação do TinyMCE esta ainda mostra o sítio antigo e a correção não acontecia.
-                const top = desired - (parentRect?.top ?? 0);
-                if (Math.abs(parseFloat(pop.style.top) - top) >= 0.5 || Number.isNaN(parseFloat(pop.style.top))) {
-                    pop.style.top = top + 'px';
-                    pop.classList.remove(removeClass);
-                    pop.classList.add(addClass);
-                }
-                // Alinhado à ESQUERDA, encostado à linha da borda (anel 4px fora da caixa do bloco).
-                // Clamp à direita: em editores estreitos o menu (~450px) sairia do ecrã. Limite pelo
-                // CONTENTOR (aux) e não pela janela: o pop absoluto encolhe ao espaço até à direita do
-                // contentor — com a janela (mais larga, scrollbar) encolhia, a largura medida mudava e
-                // cada correção empurrava-o outra vez → ciclo infinito (separador bloqueado).
-                const maxLeft = (parentRect ? parentRect.right : window.innerWidth) - pop.offsetWidth - 4;
-                const viewLeft = Math.max(4, Math.min(ir.left + br.left - 4, maxLeft));
-                // Só se o dropdown aberto for DESTE menu (botão expandido nele): os da barra principal
-                // (ex. "Padrão" → Parágrafos) também são .tox-menu no aux e seriam atirados para longe.
-                if (lastPopPos && pop.querySelector('.tox-tbtn[aria-expanded="true"]')) {
-                    shiftOpenMenus(viewLeft - lastPopPos.left, desired - lastPopPos.top);
-                }
-                lastPopPos = { top: desired, left: viewLeft };
-                const left = viewLeft - (parentRect?.left ?? 0);
-                if (Math.abs(parseFloat(pop.style.left) - left) >= 0.5 || Number.isNaN(parseFloat(pop.style.left))) {
-                    pop.style.left = left + 'px';
-                }
-            };
-            // O TinyMCE ancora por `bottom`/`right` em certos layouts: deixados junto com o nosso
-            // top/left, o menu ficava ESMAGADO entre os dois (altura a encolher a cada correção
-            // até 0, por cima da 1.ª linha do bloco). Limpar ANTES de medir a altura.
-            pop.style.bottom = '';
-            pop.style.right = '';
-            // Medir com o pop à esquerda do contentor: perto da direita encolhe ao espaço que sobra
-            // (botões em coluna) e a largura/altura medidas saíam erradas. Sem paint pelo meio.
-            pop.style.left = '0px';
-            // Preferência: em cima; sem espaço, em baixo; sem espaço em lado nenhum, esconder.
-            const placed = placePopover(blockTop, blockBottom, blockVisible, pop.offsetHeight, ir.top, ir.height);
-            if (placed?.side === 'top') {
-                placeAt(placed.top, 'tox-pop--top', 'tox-pop--bottom');
-                return;
-            }
-            if (placed?.side === 'bottom') {
-                placeAt(placed.top, 'tox-pop--bottom', 'tox-pop--top');
-                return;
-            }
-            pop.style.visibility = 'hidden'; // não cabe em lado nenhum → esconder
-            // ...e fechar um dropdown dele que esteja aberto (ficaria a flutuar sozinho): o
-            // TinyMCE não expõe "fechar"; o 2.º clique no próprio botão faz toggle.
-            const openBtn = pop.querySelector('.tox-tbtn[aria-expanded="true"]') as HTMLElement | null;
-            if (openBtn) {
-                openBtn.click();
-                // O foco estava no dropdown: sem o devolver ao editor, o TinyMCE (focusout) fechava
-                // o mini-menu de vez e não voltava ao regressar ao bloco. preventScroll: não saltar
-                // para o cursor (o bloco está fora de vista).
-                editor.getBody().focus({ preventScroll: true });
-            }
-            lastPopPos = null;
-        };
-        const auxObserver = new MutationObserver(forcePopAbove);
-        const editorResizeObserver = new ResizeObserver(() => forcePopAbove());
 
         // Scroll de contentor EXTERNO (fora do iframe) / resize da janela: reavaliar ambos os overlays.
         // Capture=true apanha scroll de qualquer ancestral com overflow. Removido no 'remove'.
@@ -631,51 +492,17 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             if (gripScrollTimer) clearTimeout(gripScrollTimer);
             gripScrollTimer = setTimeout(() => { setGripFading(false); evalGrip(); }, 150);
         };
-        const onScroll = () => { closeMenuIfOpen(); gripOnScroll(); forcePopAbove(); if (htmlBlockRef.current) repositionHtmlEdit(); };
+        const onScroll = () => { closeMenuIfOpen(); gripOnScroll(); if (htmlBlockRef.current) repositionHtmlEdit(); };
         const evalOverlays = () => { closeMenuIfOpen(); gripOnScroll(); if (htmlBlockRef.current) repositionHtmlEdit(); };
         editor.on('init', () => {
             editor.getWin().addEventListener('scroll', onScroll, { passive: true });
             window.addEventListener('scroll', onScroll, true);
             window.addEventListener('resize', evalOverlays);
-            // Editor muda de posição/largura sem resize da janela (ex. barra lateral recolhida):
-            // sem isto o mini-menu ficava no sítio antigo até ao próximo clique/tecla.
-            editorResizeObserver.observe(editor.getContainer());
-            // Toolbar por cima do editor: rato em cima dela esconde o mini-menu de bloco
-            // (fica por baixo, sobreposto); ao sair, volta a aparecer. toolbarHovered lido
-            // por forcePopAbove (senão o MutationObserver do aux desfazia o hide sozinho —
-            // a própria mutação de visibility disparava forcePopAbove, que a repunha 'visible').
-            // Retry: .tox-editor-header pode não existir ainda no exato instante do 'init'
-            // (mesma razão do retry do aux abaixo).
-            const attachHeaderHover = () => {
-                const header = editor.getContainer()?.querySelector('.tox-editor-header') as HTMLElement | null;
-                if (!header) return false;
-                header.addEventListener('mouseenter', () => { toolbarHovered = true; forcePopAbove(); });
-                header.addEventListener('mouseleave', () => {
-                    toolbarHovered = false;
-                    // Bubble de seleção: forcePopAbove nem chega a mexer (isCollapsed()===false
-                    // devolve cedo) — repor visibility diretamente, não confiar só no NodeChange
-                    // (o relaunch do context toolbar do TinyMCE nem sempre redispara com o pop
-                    // ainda presente no DOM, só escondido).
-                    const pop = document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
-                    if (pop) pop.style.visibility = '';
-                    editor.nodeChanged();
-                });
-                return true;
-            };
-            if (!attachHeaderHover()) setTimeout(attachHeaderHover, 0);
-            const attach = () => {
-                const aux = document.querySelector('.tox-tinymce-aux');
-                if (aux) { auxObserver.observe(aux, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] }); return true; }
-                return false;
-            };
-            if (!attach()) setTimeout(attach, 0);
         });
         editor.on('remove', () => {
             editor.getWin()?.removeEventListener('scroll', onScroll);
             window.removeEventListener('scroll', onScroll, true);
             window.removeEventListener('resize', evalOverlays);
-            editorResizeObserver.disconnect();
-            auxObserver.disconnect();
         });
     };
 
