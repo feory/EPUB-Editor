@@ -4,6 +4,7 @@ import { isIndiceChapterTitle } from '../../../utils/indice-links';
 import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
 import type { TinyMCEEditor } from './types';
+import { editBlocks } from './blockEdit';
 
 interface SetupDeps {
     setHtmlContent: (content: string) => void;
@@ -35,10 +36,8 @@ export function createEditorSetup(deps: SetupDeps) {
         chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment, onEditBoxStyle } = deps;
 
     return (editor: Editor) => {
-        // formatter.apply/toggle/remove e escritas diretas no DOM NÃO criam passo de undo (só o
-        // execCommand cria) — sem isto, Ctrl+Z não revertia um estilo aplicado (ficava, ou ia
-        // junto com a escrita anterior). transact: um passo de undo por ação.
-        const undoable = (fn: () => void) => () => { editor.undoManager.transact(fn); };
+        // Ação de menu/atalho como edição de bloco (blockEdit.ts): passo de undo + change + nodeChanged.
+        const undoable = (fn: () => void) => () => editBlocks(editor, fn);
         editor.addCommand('mceChapterBreak', () => {
             const bookmark = editor.selection.getBookmark(2, true);
             editor.windowManager.open({
@@ -166,8 +165,8 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.addShortcut('meta+p,ctrl+p', 'Parágrafo Padrão', () => editor.execCommand('FormatBlock', false, 'p'));
         // formatter.apply() sozinho não dispara 'Change' — sem isto o React nunca sincroniza
         // a classe aplicada, perdida ao gravar (mesmo motivo de editor.dispatch('Change') em styleAction).
-        editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', undoable(() => { editor.formatter.toggle('p-indent'); editor.dispatch('Change'); editor.nodeChanged(); }));
-        editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', undoable(() => { editor.formatter.toggle('p-top'); editor.dispatch('Change'); editor.nodeChanged(); }));
+        editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', undoable(() => editor.formatter.toggle('p-indent')));
+        editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', undoable(() => editor.formatter.toggle('p-top')));
 
         editor.on('init', () => {
             // selector (não block): aplica a classe ao bloco existente sem lhe trocar a tag —
@@ -404,8 +403,6 @@ export function createEditorSetup(deps: SetupDeps) {
                 onAction: undoable(() => {
                     editor.formatter.toggle(format);
                     if (/^h[123]$/.test(format)) syncChapterMarker();
-                    editor.dispatch('Change'); // sem isto o React não sincroniza a classe aplicada
-                    editor.nodeChanged();
                 }),
                 onSetup: (api) => {
                     editor.formatter.formatChanged(format, (active) => api.setActive(active));
@@ -674,11 +671,7 @@ export function createEditorSetup(deps: SetupDeps) {
                     type: 'togglemenuitem',
                     text: label,
                     active: active.has(format),
-                    onAction: undoable(() => {
-                        editor.formatter.toggle(format);
-                        editor.dispatch('Change');
-                        editor.nodeChanged();
-                    }),
+                    onAction: undoable(() => editor.formatter.toggle(format)),
                 })));
             },
         });
@@ -773,7 +766,6 @@ export function createEditorSetup(deps: SetupDeps) {
                         editor.selection.setContent(`<div class="box">${html}</div>`);
                     }
                 }
-                editor.dispatch('Change');
             }),
             onSetup: (api) => {
                 const handler = () => {
@@ -802,7 +794,6 @@ export function createEditorSetup(deps: SetupDeps) {
                         editor.selection.setContent(`<div class="noBreak">${html}</div>`);
                     }
                 }
-                editor.dispatch('Change');
             }),
             onSetup: (api) => {
                 const handler = () => {

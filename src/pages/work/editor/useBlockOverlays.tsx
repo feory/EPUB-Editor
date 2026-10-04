@@ -3,6 +3,7 @@ import type { TinyMCEEditor } from './types';
 import { countInBook, replaceInBook } from './book-find-replace';
 import { BlockOverlays, type BlockOverlaysProps } from './overlays/BlockOverlays';
 import { attachMiniMenu, type MiniMenu } from './miniMenu';
+import { editBlocks } from './blockEdit';
 
 // As únicas 3 que atravessam para fora do subsistema (WorkEditor/setup.ts); tudo o resto em
 // BlockOverlaysProps só alimenta o render interno — ver useBlockOverlays() no fim do ficheiro.
@@ -92,16 +93,13 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         // Estilos de parágrafo (p-bold, p-indent, ...) são formatos de SELECTOR ('p,li') — não
         // casam num bloco ainda h1/h2/h3, por isso o toggle não fazia nada (só "Padrão" convertia
         // a tag). Ao vir de um título, converte primeiro para <p> antes de aplicar a classe.
-        // transact: formatter.toggle sozinho não cria passo de undo (Ctrl+Z não o revertia).
-        editor.undoManager.transact(() => {
+        editBlocks(editor, () => {
             if (!/^(h1|h2|h3|p)$/.test(format)) {
                 const block = editor.selection.getNode()?.closest?.('h1,h2,h3');
                 if (block) editor.execCommand('FormatBlock', false, 'p');
             }
             editor.formatter.toggle(format); // h1-3 sincroniza o marcador de capítulo via FormatApply/FormatRemove
         });
-        editor.dispatch('Change');
-        editor.nodeChanged();
     };
     // Controlo de largura da divisória ao passar o rato sobre um <hr>.
     const [hrCtl, setHrCtl] = useState<Pos | null>(null);
@@ -109,10 +107,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const setHrWidth = (full: boolean) => {
         const editor = editorRef.current; const hr = hrRef.current;
         if (!editor || !hr) return;
-        editor.undoManager.transact(() => {
+        editBlocks(editor, () => {
             if (full) editor.dom.addClass(hr, 'divider-full'); else editor.dom.removeClass(hr, 'divider-full');
         });
-        editor.dispatch('Change');
         // reposicionar o controlo (a largura mudou)
         const iframe = iframeOf(editor);
         if (iframe) { const ir = iframe.getBoundingClientRect(); const r = hr.getBoundingClientRect();
@@ -224,7 +221,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const body = editor.getBody();
         let top = block;
         while (top.parentElement && top.parentElement !== body) top = top.parentElement;
-        editor.undoManager.transact(() => { // escritas diretas/formatter: sem isto, sem passo de undo
+        editBlocks(editor, () => {
             if (action === 'duplicate') {
                 top.parentNode?.insertBefore(top.cloneNode(true), top.nextSibling);
             } else if (action === 'delete') {
@@ -234,10 +231,8 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                 if (/^h[123]$/.test(action) || action === 'p') editor.execCommand('FormatBlock', false, action);
                 else editor.formatter.apply(action);
             }
+            editor.focus(); // antes do nodeChanged: o anel do bloco ativo só se aplica com foco
         });
-        editor.focus();
-        editor.dispatch('Change');
-        editor.nodeChanged();
     };
 
     // Botão "+" → abre um menu de inserção; escolher insere um novo bloco a seguir ao bloco-âncora.
@@ -283,7 +278,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             return;
         }
         const parent = block.parentNode;
-        editor.undoManager.transact(() => { // bloco novo + estilo = um passo de undo
+        editBlocks(editor, () => { // bloco novo + estilo = um passo de undo
             const p = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
             parent.insertBefore(p, block.nextSibling);
             editor.selection.setCursorLocation(p, 0);
@@ -292,9 +287,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             if (/^h[123]$/.test(type)) editor.execCommand('FormatBlock', false, type);
             else if (type !== 'p' && type !== 'image') editor.formatter.apply(type);
         });
-        if (type === 'image') editor.execCommand('mceImage'); // abre diálogo: fora do transact
-        editor.dispatch('Change');
-        editor.nodeChanged();
+        if (type === 'image') editor.execCommand('mceImage'); // abre diálogo: fora do passo de undo
     };
 
     // Arrastar o bloco ativo para outro sítio (pega estilo Notion).
