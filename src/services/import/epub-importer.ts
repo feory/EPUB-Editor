@@ -423,10 +423,14 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
         }
         reversePagebreaks(body);
         reverseUnderline(body);
+        const hadCover = Array.from(body.querySelectorAll('img'))
+            .some(img => skipIds.has(img.getAttribute('src')?.match(/([^/]+)\.[A-Za-z0-9]+$/)?.[1] ?? ''));
         await reverseImages(body, zip, docDir, images, skipIds);
 
         let content = body.innerHTML.trim();
         if (!content) continue;
+        // página da capa (só a imagem, que vai à parte como capa do ebook) → sem capítulo "Capa"
+        if (hadCover && !body.textContent?.trim() && !body.querySelector('img, .pagebreak')) continue;
         // Reconstruir título de quebra (export próprio remove o heading do corpo). Título = <title> do
         // ficheiro — nunca o nav (no InDesign traz o page-list → capítulos "1", "161"…); sem texto (ou só o nome
         // do ficheiro) → sem título, junta ao capítulo anterior.
