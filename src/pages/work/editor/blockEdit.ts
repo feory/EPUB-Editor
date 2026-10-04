@@ -7,7 +7,7 @@ import type { TinyMCEEditor } from './types';
  * formatter.apply/toggle/remove e escritas diretas no DOM NÃO criam passo de undo (só o
  * execCommand cria) — sem isto Ctrl+Z não revertia a ação, ou revertia-a junto com a
  * escrita anterior. O passo de undo já emite 'change' (UndoManager → AddUndo + change), que é
- * o que o React/onEditorChange ouve; sem alteração real não há passo nem 'change'.
+ * o que o canal de conteúdo (contentChannel.ts) ouve; sem alteração real não há passo nem 'change'.
  * nodeChanged no fim: mini-menu, pega, anel e botões de estado reavaliam o bloco.
  *
  * O foco fica com quem chama: umas ações devem levá-lo ao editor (pega), outras não

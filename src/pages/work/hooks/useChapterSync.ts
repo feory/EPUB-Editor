@@ -15,7 +15,7 @@ export function useChapterSync(
     contentState: ContentState,
     dispatch: React.Dispatch<ContentAction>,
     skipSyncRef: React.MutableRefObject<boolean>,
-    // Reporta já a edição presa no debounce do onEditorChange (WorkEditor.flushContent) —
+    // Reporta já a edição à espera de ser reportada pelo editor (WorkEditor.flushContent) —
     // chamado ANTES de ler localContentRef para gravar/trocar de capítulo. Tem de ser estável.
     flushEditor?: () => void,
 ) {
