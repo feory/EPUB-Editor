@@ -109,6 +109,9 @@ const IndesignImportModalComponent: React.FC<IndesignImportModalProps> = ({ file
                                             <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-200 text-text-muted">{isSpan ? 'Carácter' : 'Parágrafo'}</span>
                                             <span className="text-sm font-medium text-text-main truncate">{key.slice(key.indexOf('.') + 1)}</span>
                                             <span className="shrink-0 text-xs px-1.5 py-0.5 rounded-full bg-slate-200 text-text-muted">{e.count}</span>
+                                            {e.origem === 'revisto' && (
+                                                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-800" title={`Sugestão: ${e.suggested || 'automático'}`}>decidido antes</span>
+                                            )}
                                         </div>
                                         {e.sample && <p className="text-xs text-text-muted truncate">{e.sample}</p>}
                                         {doubt && <p className="text-xs text-amber-800 mt-0.5">{doubt}</p>}

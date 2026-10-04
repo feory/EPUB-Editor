@@ -22,7 +22,7 @@ import { EbookGrid } from './home/EbookGrid';
 import { UserMenu } from './home/UserMenu';
 import { EpubMappingModal } from './EpubMappingModal';
 import { IndesignImportModal } from './IndesignImportModal';
-import { analyzeBook, convertBook, verifyBook, type BookMap } from '../services/indesign/commands';
+import { analyzeBook, convertBook, decisionsOf, verifyBook, type BookMap } from '../services/indesign/commands';
 import { editorExportCss } from '../services/indesign/editor';
 import baseStyles from '../services/indesign/estilos-base.json';
 import { DEFAULT_CSS } from '../context/StyleContext';
@@ -168,7 +168,7 @@ export function HomePage() {
     // estilos do editor (src/services/indesign) → verifica contra o original → importa como EPUB normal.
     // A mesma lógica corre na CLI do skill .claude/skills/epub-indesign.
     const indesignInputRef = useRef<HTMLInputElement>(null);
-    const [indesign, setIndesign] = useState<{ file: File; bytes: Uint8Array; map: BookMap } | null>(null);
+    const [indesign, setIndesign] = useState<{ file: File; bytes: Uint8Array; map: BookMap; isbn: string } | null>(null);
     const [indesignBusy, setIndesignBusy] = useState(false);
     const handleImportIndesign = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -177,14 +177,18 @@ export function HomePage() {
         setIndesignBusy(true);
         try {
             const bytes = new Uint8Array(await file.arrayBuffer());
-            const { map, alreadyOptimized } = await analyzeBook(bytes, { baseStyles, previousMap: null });
+            const { map, isbn, alreadyOptimized } = await analyzeBook(bytes, {
+                baseStyles, fileName: file.name,
+                // sem decisões (ou servidor em baixo) → só casa/heurística; nunca impede a análise
+                loadDecisions: isbn => ebooksApi.getIndesignDecisions(isbn).catch(() => null),
+            });
             // já no formato da app (ex. ficheiro de optimizados/): nada a decidir nem a optimizar → importa direto
             if (alreadyOptimized) {
                 showNotification('success', 'EPUB já optimizado — importado sem alterações.', 4000);
                 importEpubMutation.mutate({ file });
                 return;
             }
-            setIndesign({ file, bytes, map });
+            setIndesign({ file, bytes, map, isbn });
         } catch {
             showNotification('error', 'Não foi possível ler o EPUB do InDesign.');
         } finally {
@@ -212,6 +216,10 @@ export function HomePage() {
             if (problems.length) showNotification('error', `Importado com erros na verificação: ${problems.join(' · ')}`, 10000);
             const diffs = v.diffs.reduce((s, d) => s + d.count, 0);
             if (diffs) showNotification('success', `Optimizado com ${diffs} diferença(s) de alinhamento/recuo/espaço — confirmar no editor.`, 6000);
+            // Decisões do livro: só quando a importação avança; falhar a gravação não a impede
+            ebooksApi.saveIndesignDecisions(indesign.isbn, decisionsOf(map)).catch(() => {
+                showNotification('error', 'Não foi possível guardar as decisões deste livro.');
+            });
             const file = new File([bytes], indesign.file.name, { type: 'application/epub+zip' });
             setIndesign(null);
             importEpubMutation.mutate({ file });
