@@ -159,7 +159,7 @@ export function HomePage() {
             setIndesignBusy(false);
         }
     };
-    const confirmIndesign = async (map: BookMap) => {
+    const confirmIndesign = async (map: BookMap, force: boolean) => {
         if (!indesign) return;
         setIndesignBusy(true);
         try {
@@ -172,10 +172,12 @@ export function HomePage() {
                 v.pages[0] !== v.pages[1] && `quebras de página ${v.pages[0]} → ${v.pages[1]}`,
                 v.notes[0] !== v.notes[1] && `notas ${v.notes[0]} → ${v.notes[1]}`,
             ].filter(Boolean);
-            if (problems.length) {
+            if (problems.length && !force) {
                 showNotification('error', `Importação InDesign bloqueada: ${problems.join(' · ')}`, 10000);
                 return;
             }
+            // "Importar mesmo com erros" (checkbox do modal): importa, mas deixa o aviso do que falhou
+            if (problems.length) showNotification('error', `Importado com erros na verificação: ${problems.join(' · ')}`, 10000);
             const diffs = v.diffs.reduce((s, d) => s + d.count, 0);
             if (diffs) showNotification('success', `Optimizado com ${diffs} diferença(s) de alinhamento/recuo/espaço — confirmar no editor.`, 6000);
             const file = new File([bytes], indesign.file.name, { type: 'application/epub+zip' });

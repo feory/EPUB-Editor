@@ -8,7 +8,7 @@ interface IndesignImportModalProps {
     fileName: string;
     map: BookMap;
     pending: boolean;
-    onConfirm: (map: BookMap) => void;
+    onConfirm: (map: BookMap, force: boolean) => void;   // force = importar mesmo com erros na verificação
     onClose: () => void;
 }
 
@@ -57,13 +57,14 @@ const IndesignImportModalComponent: React.FC<IndesignImportModalProps> = ({ file
         return [...all.filter(r => r.doubt), ...all.filter(r => !r.doubt)]; // dúvidas no topo
     }, [map, targets]);
     const doubts = rows.filter(r => r.doubt).length;
+    const [force, setForce] = useState(false);
 
     const confirm = () => onConfirm({
         classes: Object.fromEntries(Object.entries(map.classes).map(([k, e]) => {
             const target = targets[k] ?? e.target;
             return [k, target === e.target ? e : { ...e, target, origem: 'revisto' }];
         })),
-    });
+    }, force);
 
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
@@ -125,6 +126,20 @@ const IndesignImportModalComponent: React.FC<IndesignImportModalProps> = ({ file
                         })}
                     </div>
                 </div>
+
+                <label className="mx-6 mb-4 flex items-start gap-2 text-sm text-text-muted cursor-pointer select-none">
+                    <input
+                        type="checkbox"
+                        checked={force}
+                        disabled={pending}
+                        onChange={ev => setForce(ev.target.checked)}
+                        className="mt-0.5 accent-slate-700"
+                    />
+                    <span>
+                        Importar mesmo com erros na verificação
+                        <span className="block text-xs">Se faltar texto, imagens, notas ou quebras de página face ao original, importa na mesma e avisa.</span>
+                    </span>
+                </label>
 
                 <div className="p-6 bg-slate-50 border-t border-border flex gap-3">
                     <button
