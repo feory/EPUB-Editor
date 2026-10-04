@@ -515,6 +515,12 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             });
         };
         const forcePopAbove = () => {
+            placePop();
+            // As escritas acima geram mutações no aux; descartá-las para o observer só reagir ao
+            // TinyMCE — nenhuma correção nossa pode disparar outra (ciclo → separador bloqueado).
+            auxObserver.takeRecords();
+        };
+        const placePop = () => {
             const pop = document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
             if (!pop || !pop.offsetHeight) return; // ausente/escondido pelo TinyMCE
             if (toolbarHovered || gripHoveredRef.current) { pop.style.visibility = 'hidden'; return; } // rato na toolbar/pega → esconde bubble e mini-menu por igual
@@ -552,7 +558,12 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                     pop.classList.add(addClass);
                 }
                 // Alinhado à ESQUERDA, encostado à linha da borda (anel 4px fora da caixa do bloco).
-                const viewLeft = ir.left + br.left - 4;
+                // Clamp à direita: em editores estreitos o menu (~450px) sairia do ecrã. Limite pelo
+                // CONTENTOR (aux) e não pela janela: o pop absoluto encolhe ao espaço até à direita do
+                // contentor — com a janela (mais larga, scrollbar) encolhia, a largura medida mudava e
+                // cada correção empurrava-o outra vez → ciclo infinito (separador bloqueado).
+                const maxLeft = (parentRect ? parentRect.right : window.innerWidth) - pop.offsetWidth - 4;
+                const viewLeft = Math.max(4, Math.min(ir.left + br.left - 4, maxLeft));
                 // Só se o dropdown aberto for DESTE menu (botão expandido nele): os da barra principal
                 // (ex. "Padrão" → Parágrafos) também são .tox-menu no aux e seriam atirados para longe.
                 if (lastPopPos && pop.querySelector('.tox-tbtn[aria-expanded="true"]')) {
@@ -569,6 +580,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             // até 0, por cima da 1.ª linha do bloco). Limpar ANTES de medir a altura.
             pop.style.bottom = '';
             pop.style.right = '';
+            // Medir com o pop à esquerda do contentor: perto da direita encolhe ao espaço que sobra
+            // (botões em coluna) e a largura/altura medidas saíam erradas. Sem paint pelo meio.
+            pop.style.left = '0px';
             // Preferência: em cima; sem espaço, em baixo; sem espaço em lado nenhum, esconder.
             const placed = placePopover(blockTop, blockBottom, blockVisible, pop.offsetHeight, ir.top, ir.height);
             if (placed?.side === 'top') {
@@ -593,6 +607,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             lastPopPos = null;
         };
         const auxObserver = new MutationObserver(forcePopAbove);
+        const editorResizeObserver = new ResizeObserver(() => forcePopAbove());
 
         // Scroll de contentor EXTERNO (fora do iframe) / resize da janela: reavaliar ambos os overlays.
         // Capture=true apanha scroll de qualquer ancestral com overflow. Removido no 'remove'.
@@ -612,6 +627,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             editor.getWin().addEventListener('scroll', onScroll, { passive: true });
             window.addEventListener('scroll', onScroll, true);
             window.addEventListener('resize', evalOverlays);
+            // Editor muda de posição/largura sem resize da janela (ex. barra lateral recolhida):
+            // sem isto o mini-menu ficava no sítio antigo até ao próximo clique/tecla.
+            editorResizeObserver.observe(editor.getContainer());
             // Toolbar por cima do editor: rato em cima dela esconde o mini-menu de bloco
             // (fica por baixo, sobreposto); ao sair, volta a aparecer. toolbarHovered lido
             // por forcePopAbove (senão o MutationObserver do aux desfazia o hide sozinho —
@@ -646,6 +664,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             editor.getWin()?.removeEventListener('scroll', onScroll);
             window.removeEventListener('scroll', onScroll, true);
             window.removeEventListener('resize', evalOverlays);
+            editorResizeObserver.disconnect();
             auxObserver.disconnect();
         });
     };
