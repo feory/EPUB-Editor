@@ -19,6 +19,7 @@ import { useImageCrop } from './images/useImageCrop';
 import { ImageCropModal } from './images/ImageCropModal';
 import { BoxStyleModal } from '../modals/BoxStyleModal';
 import { createEditorSetup } from '../editor/setup';
+import { editBlocks } from '../editor/blockEdit';
 import { buildContentStyle } from '../editor/contentStyles';
 import { EDITOR_PLUGINS, EDITOR_TOOLBAR, QUICKBARS_SELECTION_TOOLBAR, STYLE_FORMATS, TEXT_PATTERNS } from '../editor/config';
 
@@ -47,6 +48,8 @@ import 'tinymce/plugins/wordcount/plugin';
 import 'tinymce/skins/ui/oxide/skin.css';
 import 'tinymce/skins/ui/oxide/content.css';
 import type { TinyMCEEditor } from '../editor/types';
+import { attachContentChannel, type ContentChannel } from '../editor/contentChannel';
+import { normalizeEditorBody } from '../editor/normalizeBody';
 import type { GrammarMatch } from '../hooks/useEbookGrammar';
 
 type FilePickerCallback = NonNullable<RawEditorOptions['file_picker_callback']>;
@@ -128,6 +131,9 @@ export interface WorkEditorRef {
     // useEbookWork.commitHtml) SEM limpar o undo — devolve o fullHtml reconciliado (segmento
     // reserializado) que o chamador deve persistir. Ver comentário na implementação.
     syncExternalContent: (newFullHtml: string, chapterIndex: number) => string;
+    // Reporta JÁ (setHtmlContent) uma edição ainda à espera de ser reportada — quem lê o
+    // conteúdo para gravar/trocar de capítulo chama isto antes (canal: editor/contentChannel.ts).
+    flushContent: () => void;
     cleanIndexSelection: () => void;
     linkIndexPagesSelection: () => void;
     applyConversions: (options: ImportOptions) => void;
@@ -160,8 +166,18 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook,
         readOnly, wholeBookLoaded: activeChapterIndex === -1, chapterLabel: chapters[activeChapterIndex]?.title || 'Capítulo',
     });
-    const isCleaningRef = useRef(false);
     const isDiffHighlightingRef = useRef(false);
+    // Canal de conteúdo (editor/contentChannel.ts): o ÚNICO caminho de entrada (load) e saída
+    // (report → setHtmlContent) do HTML. O <Editor> é não controlado — sem value/onEditorChange,
+    // logo sem depender do estado interno do tinymce-react. Criado no init_instance_callback.
+    const channelRef = useRef<ContentChannel | null>(null);
+    const htmlContentRef = useRef(htmlContent);
+    htmlContentRef.current = htmlContent;
+    const setHtmlContentRef = useRef(setHtmlContent);
+    setHtmlContentRef.current = setHtmlContent;
+    // Troca de capítulo / carregamento: o reducer mudou o conteúdo → carregar com o undo a zero
+    // (desfazer não pode trazer outro capítulo). Eco de um report (estado → prop) não recarrega.
+    useEffect(() => { channelRef.current?.load(htmlContent, { undo: 'reset' }); }, [htmlContent]);
     const grammarCacheRef = useRef(grammarCache);
     grammarCacheRef.current = grammarCache;
     const onGrammarCheckRef = useRef(onGrammarCheck);
@@ -246,6 +262,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             if (!editor) return;
             const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const body = editor.getBody();
+            // Edição ainda por reportar: reportá-la antes — com a flag ligada os reports param.
+            channelRef.current?.flush();
             isDiffHighlightingRef.current = true;
 
             try {
@@ -437,9 +455,10 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 }
             }
             if (out.length === 0) return;
-            if (useSelection) editor.selection.setContent(out.join(''));
-            else editor.setContent(out.join(''));
-            editor.dispatch('Change');
+            editBlocks(editor, () => {
+                if (useSelection) editor.selection.setContent(out.join(''));
+                else editor.setContent(out.join(''));
+            });
         },
 
         // Como cleanIndexSelection, mas em vez de descartar a lista de páginas de cada entrada,
@@ -497,9 +516,10 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 }
             }
             if (out.length === 0) return;
-            if (useSelection) editor.selection.setContent(out.join(''));
-            else editor.setContent(out.join(''));
-            editor.dispatch('Change');
+            editBlocks(editor, () => {
+                if (useSelection) editor.selection.setContent(out.join(''));
+                else editor.setContent(out.join(''));
+            });
         },
 
         applyConversions: (options: ImportOptions) => {
@@ -510,8 +530,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             let result = applyImportOptions(html, options);
             if (options.convertListsToDialogue) result = convertListsToDialogue(result);
             if (result === html) return;
-            editor.setContent(result);
-            editor.dispatch('Change');
+            editBlocks(editor, () => editor.setContent(result));
         },
 
         filterGrammarHighlights: (filter: 'all' | 'spelling' | 'grammar') => {
@@ -600,10 +619,11 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const body = editor.getBody();
             const marker = body.querySelector(`.grammar-error-highlight[data-error-index="${index}"]`);
             if (marker?.parentNode) {
-                marker.textContent = suggestion;
-                unwrapNode(marker);
-                editor.dispatch('change');
-                body.normalize();
+                editBlocks(editor, () => {
+                    marker.textContent = suggestion;
+                    unwrapNode(marker);
+                    body.normalize();
+                });
             }
         },
 
@@ -656,14 +676,15 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const body = editor.getBody();
             const marker = body.querySelector(`.spell-error-highlight[data-spell-index="${index}"]`);
             if (marker) {
-                marker.textContent = suggestion;
-                const parent = marker.parentNode;
-                if (parent) {
-                    while (marker.firstChild) parent.insertBefore(marker.firstChild, marker);
-                    parent.removeChild(marker);
-                }
-                editor.dispatch('change');
-                body.normalize();
+                editBlocks(editor, () => {
+                    marker.textContent = suggestion;
+                    const parent = marker.parentNode;
+                    if (parent) {
+                        while (marker.firstChild) parent.insertBefore(marker.firstChild, marker);
+                        parent.removeChild(marker);
+                    }
+                    body.normalize();
+                });
             }
         },
 
@@ -798,42 +819,24 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         },
 
         setContent: (content: string) => {
-            const editor = editorRef.current;
-            if (!editor) return;
-            editor.setContent(content);
+            channelRef.current?.load(content, { undo: 'reset' });
         },
 
-        // dom.setHTML + undoManager.add() em vez de editor.setContent(): setContent() LIMPA a
-        // pilha de undo inteira (mesmo bug documentado em book-find-replace.ts). Chamado por
-        // commitHtml (useEbookWork) ANTES do dispatch que atualiza a prop `value` controlada.
-        // Devolve o fullHtml com o segmento aberto RESERIALIZADO pelo próprio TinyMCE
-        // (editor.getContent(), não a string escrita à mão) — é esse que tem de ir para o
-        // dispatch/fullHtml: o wrapper (@tinymce/tinymce-react) só evita chamar setContent()
-        // de novo no próximo render se `value` bater byte a byte com o que ele guardou de
-        // editor.getContent() após o 'Change'; a string original quase nunca bate certo
-        // (aspas, ordem de atributos, etc. do serializer do TinyMCE), o que voltava a limpar
-        // o undo mesmo depois deste dom.setHTML — confirmado ao vivo (hasUndo:false).
+        flushContent: () => channelRef.current?.flush(),
+
+        // Transformação do livro inteiro (useEbookWork.commitHtml), chamada ANTES do dispatch: carrega
+        // no editor o capítulo aberto mantendo o undo (reversível) e devolve o fullHtml com esse
+        // segmento RESERIALIZADO pelo TinyMCE — é esse que vai para o reducer; quando a prop volta
+        // igual, o canal reconhece-o e não recarrega (o que limparia o undo).
         syncExternalContent: (newFullHtml: string, chapterIndex: number): string => {
-            const editor = editorRef.current;
-            if (!editor) return newFullHtml;
-            if (chapterIndex === -1) {
-                if (newFullHtml === editor.getContent()) return newFullHtml;
-                editor.dom.setHTML(editor.getBody(), newFullHtml);
-                editor.undoManager.add();
-                editor.dispatch('Change');
-                editor.nodeChanged();
-                return editor.getContent();
-            }
+            const channel = channelRef.current;
+            if (!channel) return newFullHtml;
+            if (chapterIndex === -1) return channel.load(newFullHtml, { undo: 'keep' });
             const segments = newFullHtml.split(CHAPTER_SPLIT_PATTERN);
             let nonEmptyIdx = -1;
             const targetSegIdx = segments.findIndex(s => s.trim().length > 0 && ++nonEmptyIdx === chapterIndex);
             if (targetSegIdx === -1) return newFullHtml; // índice fora de alcance — nada a sincronizar
-            if (segments[targetSegIdx] === editor.getContent()) return newFullHtml;
-            editor.dom.setHTML(editor.getBody(), segments[targetSegIdx]);
-            editor.undoManager.add();
-            editor.dispatch('Change');
-            editor.nodeChanged();
-            segments[targetSegIdx] = editor.getContent();
+            segments[targetSegIdx] = channel.load(segments[targetSegIdx], { undo: 'keep' });
             return segments.join('');
         },
 
@@ -963,9 +966,17 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             editor.getWin().removeEventListener('scroll', onEditorScroll);
                         });
                     }}
-                    value={htmlContent}
-                    onEditorChange={(content) => { if (!isDiffHighlightingRef.current) setHtmlContent(content); }}
                     init={{
+                        // Depois do init do tinymce-react (que acabou de pôr o initialValue vazio):
+                        // ligar o canal e carregar o conteúdo ATUAL (pode ter mudado desde o mount).
+                        init_instance_callback: (editor: TinyMCEEditor) => {
+                            channelRef.current = attachContentChannel(editor, {
+                                onReport: (html) => setHtmlContentRef.current(html),
+                                shouldReport: () => !isDiffHighlightingRef.current,
+                                normalize: () => normalizeEditorBody(editor.getBody()),
+                            });
+                            channelRef.current.load(htmlContentRef.current, { undo: 'reset' });
+                        },
                         height: 700,
                         menubar: false,
                         elementpath: false,
@@ -989,7 +1000,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         // table spellchecker configurepermanentpen) — só acrescenta, não troca nada.
                         contextmenu: 'imagecrop boxedit link linkchecker image editimage table spellchecker configurepermanentpen',
                         setup: createEditorSetup({
-                            setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport,
+                            onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
                             openStyleMenu: overlays.openStyleMenu,
                             chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef,

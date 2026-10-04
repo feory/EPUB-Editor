@@ -1,13 +1,12 @@
 import type { Editor } from 'tinymce';
-import { cleanEditorDOM } from '../../../utils/html-cleaner';
 import { isIndiceChapterTitle } from '../../../utils/indice-links';
 import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
 import type { TinyMCEEditor } from './types';
+import { editBlocks } from './blockEdit';
+import { attachActiveBlock, type ActiveBlock } from './activeBlock';
 
 interface SetupDeps {
-    setHtmlContent: (content: string) => void;
-    isCleaningRef: React.MutableRefObject<boolean>;
     onGrammarClick?: (index: number) => void;
     onSave?: () => void;
     onExport?: () => void;
@@ -25,16 +24,18 @@ interface SetupDeps {
     onLinkIndiceEntryRef: React.MutableRefObject<((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void) | undefined>;
     wireOverlays: (
         editor: TinyMCEEditor,
-        ctx: { blockOf: (n: Node | null) => Element | null; getHiddenBlock: () => Element | null },
+        ctx: { blockOf: (n: Node | null) => Element | null; activeBlock: ActiveBlock },
     ) => void;
 }
 
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
-    const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
+    const { onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
         chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment, onEditBoxStyle } = deps;
 
     return (editor: Editor) => {
+        // Ação de menu/atalho como edição de bloco (blockEdit.ts): passo de undo + change + nodeChanged.
+        const undoable = (fn: () => void) => () => editBlocks(editor, fn);
         editor.addCommand('mceChapterBreak', () => {
             const bookmark = editor.selection.getBookmark(2, true);
             editor.windowManager.open({
@@ -58,14 +59,14 @@ export function createEditorSetup(deps: SetupDeps) {
                     // vazio "por perto" do cursor podia na verdade ser o 1º parágrafo do capítulo
                     // SEGUINTE (ex. Ficha Técnica começa com uma linha em branco antes do texto) —
                     // substituí-lo "roubava" o conteúdo desse capítulo para o novo marcador.
-                    editor.insertContent(html);
-                    editor.dispatch('Change');
-                    const markers = editor.dom.select('p.chapter-break');
-                    const inserted = markers[markers.length - 1];
-                    const after = inserted?.nextSibling as HTMLElement | null;
-                    if (after && after.nodeName === 'P') editor.selection.setCursorLocation(after, 0);
-                    editor.focus();
-                    editor.nodeChanged();
+                    editBlocks(editor, () => {
+                        editor.insertContent(html);
+                        const markers = editor.dom.select('p.chapter-break');
+                        const inserted = markers[markers.length - 1];
+                        const after = inserted?.nextSibling as HTMLElement | null;
+                        if (after && after.nodeName === 'P') editor.selection.setCursorLocation(after, 0);
+                        editor.focus();
+                    });
                 },
             });
         });
@@ -97,49 +98,6 @@ export function createEditorSetup(deps: SetupDeps) {
             });
         });
 
-        editor.on('SetContent', (e: { selection?: boolean; format?: string }) => {
-            // Carregamento programático do corpo (conteúdo inicial e troca de capítulo): o nível 0
-            // do undoManager do TinyMCE é o editor VAZIO (o wrapper React arranca com value='' e só
-            // depois faz setContent), por isso a seta de desfazer já vinha ativa ao entrar e o 1º
-            // clique apagava o documento todo. Repõe o nível base no conteúdo atual.
-            // Excluídos: insertContent/paste (selection:true) e a REPOSIÇÃO de um nível pelo próprio
-            // undoManager (format:'raw') — limpar aí matava o redo a meio do undo.
-            if (!e.selection && e.format !== 'raw') {
-                editor.undoManager.clear();
-                editor.undoManager.add();
-                editor.setDirty(false);
-            }
-            if (isCleaningRef.current) return;
-            const body = editor.getBody();
-            const beforeHtml = body.innerHTML;
-            cleanEditorDOM(body);
-            // Backfill data-image-id before capturing afterHtml so the attribute is
-            // included in the state update and present when prepareEpubAssets runs.
-            body.querySelectorAll<HTMLImageElement>('img:not([data-image-id])').forEach((img) => {
-                const src = img.getAttribute('src');
-                if (src && src.includes('/api/ebooks/') && src.includes('/images/')) {
-                    const match = src.match(/\/images\/([^/?]+)/);
-                    if (match && match[1]) {
-                        img.setAttribute('data-image-id', match[1]);
-                        img.setAttribute('loading', 'lazy');
-                        img.setAttribute('alt', 'Imagem');
-                        if (!img.style.maxWidth) img.style.maxWidth = '100%';
-                        if (!img.style.height) img.style.height = 'auto';
-                    }
-                }
-            });
-            const afterHtml = body.innerHTML;
-            // Guard: never propagate empty content — prevents a race where TinyMCE's
-            // initial empty <p><br></p> gets cleaned and wipes real content already loaded.
-            if (afterHtml !== beforeHtml && afterHtml.trim().length > 0) {
-                isCleaningRef.current = true;
-                setTimeout(() => {
-                    setHtmlContent(afterHtml);
-                    isCleaningRef.current = false;
-                }, 0);
-            }
-        });
-
         editor.on('click', (e: MouseEvent) => {
             const target = e.target as HTMLElement;
             const errorSpan = target.closest('.grammar-error-highlight');
@@ -162,8 +120,8 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.addShortcut('meta+p,ctrl+p', 'Parágrafo Padrão', () => editor.execCommand('FormatBlock', false, 'p'));
         // formatter.apply() sozinho não dispara 'Change' — sem isto o React nunca sincroniza
         // a classe aplicada, perdida ao gravar (mesmo motivo de editor.dispatch('Change') em styleAction).
-        editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', () => { editor.formatter.toggle('p-indent'); editor.dispatch('Change'); editor.nodeChanged(); });
-        editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', () => { editor.formatter.toggle('p-top'); editor.dispatch('Change'); editor.nodeChanged(); });
+        editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', undoable(() => editor.formatter.toggle('p-indent')));
+        editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', undoable(() => editor.formatter.toggle('p-top')));
 
         editor.on('init', () => {
             // selector (não block): aplica a classe ao bloco existente sem lhe trocar a tag —
@@ -201,9 +159,10 @@ export function createEditorSetup(deps: SetupDeps) {
         const setImgAlign = (cls: string) => {
             const node = editor.selection.getNode();
             if (node.nodeName !== 'IMG') return;
-            ['img-left', 'img-center', 'img-right', 'img-inline'].forEach((c) => editor.dom.removeClass(node, c));
-            editor.dom.addClass(node, cls);
-            editor.dispatch('Change');
+            editBlocks(editor, () => {
+                ['img-left', 'img-center', 'img-right', 'img-inline'].forEach((c) => editor.dom.removeClass(node, c));
+                editor.dom.addClass(node, cls);
+            });
         };
         ([
             ['imgalignleft', 'img-left', 'align-left', 'Imagem à esquerda'],
@@ -249,10 +208,10 @@ export function createEditorSetup(deps: SetupDeps) {
                     ],
                     onSubmit: (api: { getData: () => { offset: string }; close: () => void }) => {
                         const value = parseFloat(api.getData().offset);
-                        (node as HTMLElement).style.transform = value ? `translateY(${value}px)` : '';
                         api.close();
-                        editor.dispatch('Change');
-                        editor.nodeChanged();
+                        editBlocks(editor, () => {
+                            (node as HTMLElement).style.transform = value ? `translateY(${value}px)` : '';
+                        });
                     },
                 });
             },
@@ -330,8 +289,9 @@ export function createEditorSetup(deps: SetupDeps) {
                 if (!dragging) return;
                 dragging = false;
                 doc.body.style.userSelect = '';
-                editor.dispatch('Change');
-                editor.nodeChanged();
+                // O deslocamento já foi escrito durante o arrasto: aqui só se regista o resultado
+                // como UM passo de undo (o arrasto inteiro), não um por cada mousemove.
+                editBlocks(editor, () => {});
                 dragImg = null;
             };
             doc.addEventListener('mousemove', (e: MouseEvent) => {
@@ -397,12 +357,10 @@ export function createEditorSetup(deps: SetupDeps) {
             editor.ui.registry.addToggleButton(name, {
                 icon,
                 tooltip,
-                onAction: () => {
+                onAction: undoable(() => {
                     editor.formatter.toggle(format);
                     if (/^h[123]$/.test(format)) syncChapterMarker();
-                    editor.dispatch('Change'); // sem isto o React não sincroniza a classe aplicada
-                    editor.nodeChanged();
-                },
+                }),
                 onSetup: (api) => {
                     editor.formatter.formatChanged(format, (active) => api.setActive(active));
                     return () => {};
@@ -419,32 +377,16 @@ export function createEditorSetup(deps: SetupDeps) {
             });
         });
 
-        // Segundo clique no mesmo bloco oculta o mini-menu (toggle)
-        let hiddenBlock: Element | null = null;
-        let prevBlock: Element | null = null;
         const blockOf = (node: Node | null) =>
             node ? (editor.dom.getParent(node, 'p,h1,h2,h3,h4,h5,h6') as Element | null) : null;
-        editor.on('click', (e: MouseEvent) => {
-            const block = blockOf(e.target as Node);
-            if (block && block === prevBlock) {
-                // Mesmo bloco: alternar visibilidade. Seleção não se move → forçar reavaliação.
-                hiddenBlock = hiddenBlock === block ? null : block;
-                editor.nodeChanged();
-            } else {
-                hiddenBlock = null; // bloco novo: o NodeChange natural do clique já reavalia
-            }
-            prevBlock = block;
-        });
+        // Bloco ativo (anel, "+", pega; recolhido pelo 2.º clique) — activeBlock.ts.
+        const activeBlock = attachActiveBlock(editor, { blockOf });
 
-        // Contorno do bloco ativo: marcador de UI puro `data-mce-psactive`.
-        // addTempAttr → o serializer nunca o emite (getContent/autosave/EPUB saem limpos).
+        // Marcadores de UI puros: o serializer nunca os emite (getContent/autosave/EPUB saem limpos).
         editor.on('PreInit', () => {
-            editor.serializer.addTempAttr('data-mce-psactive');
             editor.serializer.addTempAttr('data-mce-empty'); // placeholder de bloco vazio (nunca exporta)
             editor.serializer.addTempAttr('data-mce-htmledit'); // bloco escondido durante edição de HTML inline
         });
-        // Limpa qualquer marcador stale no DOM após o load inicial (uma vez).
-        editor.on('init', () => editor.dom.select('[data-mce-psactive]').forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-psactive', null)));
         // Placeholder: marca o <p> vazio focado (CSS mostra "Escreve algo…" via ::before).
         const refreshEmptyMarker = () => {
             editor.dom.select('[data-mce-empty]').forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-empty', null));
@@ -455,19 +397,7 @@ export function createEditorSetup(deps: SetupDeps) {
                 editor.dom.setAttrib(block, 'data-mce-empty', '1');
             }
         };
-        editor.on('NodeChange', () => {
-            // Limpar TODOS os marcadores: Enter no início de um bloco marcado faz o
-            // TinyMCE clonar o data-mce-psactive para os <p> criados — uma só ref não os apanha
-            editor.dom.select('[data-mce-psactive]').forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-psactive', null));
-            // Só marcar com foco real — colocação programática do cursor (entrada/troca de capítulo) não conta
-            if (editor.hasFocus()) {
-                const block = blockOf(editor.selection.getNode());
-                if (block && block !== hiddenBlock && block !== editor.getBody()) {
-                    editor.dom.setAttrib(block, 'data-mce-psactive', '1');
-                }
-            }
-            refreshEmptyMarker();
-        });
+        editor.on('NodeChange', refreshEmptyMarker);
         editor.on('input', refreshEmptyMarker); // ao escrever/apagar, atualizar o placeholder
 
         // Converter parágrafo→título remove os estilos de parágrafo associados.
@@ -548,13 +478,15 @@ export function createEditorSetup(deps: SetupDeps) {
                     .map((i) => ({ type: 'autocompleteitem' as const, value: i.value, text: i.text, icon: i.icon })),
             ),
             onAction: (api: { hide: () => void }, rng: Range, value: string) => {
-                editor.selection.setRng(rng);
-                editor.execCommand('Delete'); // remove o "/pattern"
                 api.hide();
-                if (/^h[123]$/.test(value) || value === 'p') editor.execCommand('FormatBlock', false, value);
-                else if (value === 'image') editor.execCommand('mceImage');
-                else if (value === 'hr') editor.execCommand('mceInsertContent', false, '<hr>');
-                else editor.formatter.apply(value); // p-quote, p-small, footnote
+                undoable(() => { // apagar o "/pattern" + aplicar = um só passo de undo
+                    editor.selection.setRng(rng);
+                    editor.execCommand('Delete'); // remove o "/pattern"
+                    if (/^h[123]$/.test(value) || value === 'p') editor.execCommand('FormatBlock', false, value);
+                    else if (value === 'image') editor.execCommand('mceImage');
+                    else if (value === 'hr') editor.execCommand('mceInsertContent', false, '<hr>');
+                    else editor.formatter.apply(value); // p-quote, p-small, footnote
+                })();
                 editor.focus();
             },
         });
@@ -647,32 +579,22 @@ export function createEditorSetup(deps: SetupDeps) {
             },
         });
 
-        // Combobox de estilo de parágrafo — redundante de propósito com os botões psX (acesso
-        // rápido sem procurar o botão certo). Texto mostra o estilo ATIVO; formatChanged (não
-        // NodeChange cru) só reavalia quando um destes formatos MUDA mesmo, em vez de escanear
-        // os 8 formatos a cada NodeChange (cursor, clique, tecla — dispara constantemente).
+        // Botão (ícone ¶) de estilo de parágrafo — redundante de propósito com os botões psX (acesso
+        // rápido sem procurar o botão certo). Ícone em vez do texto do estilo ativo: mini-menu mais
+        // estreito; o estilo ativo vê-se pelo visto no menu (match lido só ao abrir).
         editor.ui.registry.addMenuButton('pscombopara', {
-            text: 'Padrão',
-            fetch: (callback) => callback(PARAGRAPH_QUICK_STYLES.map(([format, label]) => ({
-                type: 'menuitem',
-                text: label,
-                onAction: () => {
-                    editor.formatter.toggle(format);
-                    editor.dispatch('Change');
-                    editor.nodeChanged();
-                },
-            }))),
-            onSetup: (api) => {
-                const labelFor = () => {
-                    const active = PARAGRAPH_QUICK_STYLES.find(([format]) => editor.formatter.match(format));
-                    return active ? active[1] : 'Padrão';
-                };
-                api.setText(labelFor());
-                const { unbind } = editor.formatter.formatChanged(
-                    PARAGRAPH_QUICK_STYLES.map(([format]) => format).join(','),
-                    () => api.setText(labelFor()),
-                );
-                return unbind;
+            icon: 'paragraph',
+            tooltip: 'Estilo do parágrafo',
+            fetch: (callback) => {
+                // 'p' casa com QUALQUER <p> → "Padrão" só marcado quando nenhum outro estilo está.
+                const active = new Set(PARAGRAPH_QUICK_STYLES.map(([f]) => f).filter((f) => f !== 'p' && editor.formatter.match(f)));
+                if (!active.size) active.add('p');
+                callback(PARAGRAPH_QUICK_STYLES.map(([format, label]) => ({
+                    type: 'togglemenuitem',
+                    text: label,
+                    active: active.has(format),
+                    onAction: undoable(() => editor.formatter.toggle(format)),
+                })));
             },
         });
         // Alinhamento agrupado num único dropdown (esquerda/centro/direita)
@@ -693,7 +615,7 @@ export function createEditorSetup(deps: SetupDeps) {
             // próprio em vez de alargar blockOf), para dar acesso a p-top/p-quote/etc. em bullets.
             predicate: (node: Node) => {
                 const block = blockOf(node) || editor.dom.getParent(node, 'li');
-                return !!block && (block.nodeName === 'P' || block.nodeName === 'LI') && block !== hiddenBlock && editor.selection.isCollapsed();
+                return !!block && (block.nodeName === 'P' || block.nodeName === 'LI') && !activeBlock.isCollapsed(block) && editor.selection.isCollapsed();
             },
             position: 'node',
             scope: 'node',
@@ -703,7 +625,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addContextToolbar('headingstyles', {
             predicate: (node: Node) => {
                 const block = blockOf(node);
-                return !!block && /^H[1-6]$/.test(block.nodeName) && block !== hiddenBlock && editor.selection.isCollapsed();
+                return !!block && /^H[1-6]$/.test(block.nodeName) && !activeBlock.isCollapsed(block) && editor.selection.isCollapsed();
             },
             position: 'node',
             scope: 'node',
@@ -713,7 +635,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addToggleButton('smalltext', {
             icon: 'ps-smalltext',
             tooltip: 'Texto Pequeno (small)',
-            onAction: () => editor.formatter.toggle('small-text'),
+            onAction: undoable(() => editor.formatter.toggle('small-text')),
             onSetup: (api) => {
                 editor.formatter.formatChanged('small-text', (active) => api.setActive(active));
                 return () => {};
@@ -723,7 +645,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addToggleButton('smallcaps', {
             icon: 'ps-smallcaps',
             tooltip: 'Versaletes (small-caps)',
-            onAction: () => {
+            onAction: undoable(() => {
                 if (editor.formatter.match('small-caps')) {
                     editor.formatter.remove('small-caps');
                     return;
@@ -735,7 +657,7 @@ export function createEditorSetup(deps: SetupDeps) {
                 }
                 const cased = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
                 editor.selection.setContent(`<span class="small-caps">${editor.dom.encode(cased)}</span>`);
-            },
+            }),
             onSetup: (api) => {
                 editor.formatter.formatChanged('small-caps', (active) => api.setActive(active));
                 return () => {};
@@ -745,7 +667,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addToggleButton('uppercase', {
             icon: 'ps-uppercase',
             tooltip: 'Maiúsculas',
-            onAction: () => editor.formatter.toggle('uppercase'),
+            onAction: undoable(() => editor.formatter.toggle('uppercase')),
             onSetup: (api) => {
                 editor.formatter.formatChanged('uppercase', (active) => api.setActive(active));
                 return () => {};
@@ -755,7 +677,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addToggleButton('box', {
             icon: 'ps-box',
             tooltip: 'Envolver em caixa com borda',
-            onAction: () => {
+            onAction: undoable(() => {
                 const selectedNode = editor.selection.getNode();
                 const existingBox = editor.dom.getParent(selectedNode, '.box') as HTMLElement | null;
                 if (existingBox) {
@@ -766,8 +688,7 @@ export function createEditorSetup(deps: SetupDeps) {
                         editor.selection.setContent(`<div class="box">${html}</div>`);
                     }
                 }
-                editor.dispatch('Change');
-            },
+            }),
             onSetup: (api) => {
                 const handler = () => {
                     const node = editor.selection.getNode();
@@ -781,7 +702,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addToggleButton('noBreak', {
             icon: 'ps-union',
             tooltip: 'União entre título e o parágrafo',
-            onAction: () => {
+            onAction: undoable(() => {
                 // Wrap manual (igual ao botão "box") em vez de editor.formatter.apply: o
                 // formatter nativo do TinyMCE, ao abranger seleção com vários <p>, funde-os
                 // num só bloco em vez de os envolver preservando cada um.
@@ -795,8 +716,7 @@ export function createEditorSetup(deps: SetupDeps) {
                         editor.selection.setContent(`<div class="noBreak">${html}</div>`);
                     }
                 }
-                editor.dispatch('Change');
-            },
+            }),
             onSetup: (api) => {
                 const handler = () => {
                     const node = editor.selection.getNode();
@@ -824,6 +744,6 @@ export function createEditorSetup(deps: SetupDeps) {
         });
 
         // Overlays estilo Notion (fora do iframe): instalar reação ao editor.
-        wireOverlays(editor, { blockOf, getHiddenBlock: () => hiddenBlock });
+        wireOverlays(editor, { blockOf, activeBlock });
     };
 }

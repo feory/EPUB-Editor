@@ -1,139 +1,51 @@
-import { useEffect, useState } from 'react';
 import {
-    Plus, GripVertical, ChevronUp, ChevronDown, Pilcrow, Heading1, Heading2, Heading3, Quote, Type,
-    StickyNote, Image as ImageIcon, Copy, Trash2, Minus, X, Save, BookMarked, Replace,
+    GripVertical, ChevronUp, ChevronDown, Pilcrow, Heading1, Heading2, Heading3, Quote, Type,
+    StickyNote, Image as ImageIcon, Copy, Trash2, Minus, BookMarked,
 } from 'lucide-react';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
-import { useNotification } from '../../../../context/NotificationContext';
 
 type Pos = { top: number; left: number };
 
 // Único sítio que define esta forma — useBlockOverlays deriva o seu "internal" bag daqui
-// via Omit (as 3 últimas são as únicas que atravessam para fora do subsistema de overlays).
+// via Omit (readOnly é o único que atravessa de fora). A edição de HTML inline vive à parte
+// (HtmlEdit.tsx).
 export interface BlockOverlaysProps {
-    addBtnPos: Pos | null;
-    addBtnFading: boolean;
     plusMenu: Pos | null;
     gripPos: Pos | null;
     gripFading: boolean;
     gripMenu: Pos | null;
     hrCtl: Pos | null;
-    htmlEdit: string | null;
-    htmlEditPos: { top: number; left: number; width: number; height: number; maxHeight: number; visible: boolean } | null;
     dropLine: { top: number; left: number; width: number } | null;
-    htmlTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
     styleMenu: { top: number; left: number; kind: 'para' | 'head' } | null;
-    openPlusMenu: (e: React.MouseEvent) => void;
     closePlusMenu: () => void;
     plusAction: (type: string) => void;
-    cancelAddBtnHide: () => void;
-    clearAddBtn: () => void;
     startBlockDrag: (e: React.MouseEvent) => void;
+    onGripEnter: () => void;
+    onGripLeave: () => void;
     moveBlock: (dir: 'up' | 'down') => void;
     setGripMenu: React.Dispatch<React.SetStateAction<Pos | null>>;
     gripAction: (action: string) => void;
     setHrWidth: (full: boolean) => void;
     deleteHr: () => void;
-    endHtmlEdit: () => void;
-    saveHtmlEdit: (html: string) => void;
-    startHtmlEdit: (top: HTMLElement) => void;
-    openStyleMenu: (kind: 'para' | 'head') => void;
     styleAction: (format: string) => void;
     setStyleMenu: React.Dispatch<React.SetStateAction<{ top: number; left: number; kind: 'para' | 'head' } | null>>;
-    replaceInDocument: (find: string, replaceWith: string, scope: 'chapter' | 'document') => number;
-    countInDocument: (find: string, scope: 'chapter' | 'document') => number;
-    onHtmlEditCloseRef: React.MutableRefObject<(() => void) | null>;
     readOnly?: boolean;
-    wholeBookLoaded: boolean;
-    chapterLabel: string;
 }
 
 type Props = BlockOverlaysProps;
 
 /** Overlays estilo Notion renderizados FORA do iframe (posição fixed em coords da viewport). */
 export function BlockOverlays({
-    addBtnPos, addBtnFading, plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
-    htmlTextareaRef, openPlusMenu, closePlusMenu, plusAction, cancelAddBtnHide, clearAddBtn,
-    startBlockDrag, moveBlock, setGripMenu, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
-    styleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument, onHtmlEditCloseRef, wholeBookLoaded, chapterLabel, readOnly,
+    plusMenu, gripPos, gripFading, gripMenu, hrCtl, dropLine, closePlusMenu, plusAction,
+    startBlockDrag, moveBlock, setGripMenu, onGripEnter, onGripLeave, gripAction, setHrWidth, deleteHr,
+    styleMenu, styleAction, setStyleMenu, readOnly,
 }: Props) {
-    // Substituição em todo o HTML do documento (não só o bloco aberto) — mini find/replace
-    // acionado a partir da caixa de edição de HTML, já que é o único sítio onde se vê/edita
-    // HTML em bruto. Estado local ao BlockOverlays (que NUNCA desmonta — só a caixa condicional
-    // por baixo dele desmonta).
-    const { showNotification } = useNotification();
-    const [replaceOpen, setReplaceOpen] = useState(false);
-    const [findText, setFindText] = useState('');
-    const [replaceText, setReplaceText] = useState('');
-    const [matchCount, setMatchCount] = useState<number | null>(null);
-    // Âmbito escolhido pelo utilizador — nem sempre bate com o que está carregado no editor
-    // (wholeBookLoaded): "Documento" a partir de um capítulo aberto alcança o livro inteiro por
-    // fora do editor (onReplaceInWholeBook, dentro de useBlockOverlays); "Capítulo" a partir
-    // de Documento Completo isola só o segmento do bloco aberto. Ver replaceInDocument.
-    const [docScope, setDocScope] = useState<'chapter' | 'document'>('chapter');
-    const resetReplace = () => { setReplaceOpen(false); setFindText(''); setReplaceText(''); setMatchCount(null); };
-    // Regista-se em endHtmlEdit (useBlockOverlays.tsx) — ponto único de fecho da caixa (clique
-    // fora, Cancelar, Guardar, Substituir com sucesso) — por ref, reatribuído a cada render via
-    // efeito (sem escrever a ref durante o render). Sem isto, fechar por CLIQUE NOUTRO PARÁGRAFO
-    // (único caminho que fecha por fora deste componente) deixava o painel aberto/preenchido a
-    // arrastar para a sessão seguinte.
-    useEffect(() => { onHtmlEditCloseRef.current = resetReplace; });
-    // Contagem ao vivo (debounced — getContent() serializa o documento inteiro a cada chamada,
-    // não vale a pena recalcular a cada tecla) para o utilizador ver quantas ocorrências há
-    // ANTES de aplicar, em vez de descobrir só depois do "Substituir tudo" já ter corrido. Só
-    // agenda com o painel aberto + texto preenchido — sem cláusula de limpeza síncrona: o
-    // contador só é mostrado quando findText existe (JSX abaixo), por isso um matchCount
-    // desatualizado enquanto vazio/fechado nunca chega a aparecer.
-    useEffect(() => {
-        if (!replaceOpen || !findText) return;
-        const t = setTimeout(() => setMatchCount(countInDocument(findText, docScope)), 150);
-        return () => clearTimeout(t);
-    }, [replaceOpen, findText, docScope, countInDocument]);
-    const openReplace = () => {
-        if (!replaceOpen) {
-            setDocScope(wholeBookLoaded ? 'document' : 'chapter');
-            const ta = htmlTextareaRef.current;
-            if (ta && ta.selectionStart !== ta.selectionEnd) setFindText(ta.value.slice(ta.selectionStart, ta.selectionEnd));
-        }
-        setReplaceOpen(o => !o);
-    };
-    const applyReplace = () => {
-        if (!findText) return;
-        const count = replaceInDocument(findText, replaceText, docScope);
-        if (count === 0) { showNotification('error', 'Sem ocorrências encontradas.'); return; }
-        showNotification('success', `${count} ${count === 1 ? 'substituição feita' : 'substituições feitas'}.`, 2500);
-        endHtmlEdit(); // o documento inteiro foi reescrito — a caixa deste bloco já não é fiável (reset do painel via onHtmlEditCloseRef)
-    };
-    const cancelHtmlEdit = () => endHtmlEdit(); // reset do painel via onHtmlEditCloseRef
-    const confirmSaveHtmlEdit = () => saveHtmlEdit(htmlTextareaRef.current?.value ?? ''); // idem (saveHtmlEdit chama endHtmlEdit)
-
-    // Painel "Substituir" sempre abaixo da toolbar (top-11) cortava-se fora do espaço disponível
-    // (statusbar do TinyMCE, ou fundo do ecrã) na última linha do capítulo. Mesma ideia do
-    // forcePopAbove do mini-menu (useBlockOverlays.tsx): sem espaço a seguir aos 44px da
-    // toolbar, abre para cima. ~260px cobre o painel cheio (scope + 2 inputs + contagem + botão);
-    // htmlEditPos.maxHeight já vem limitado à statusbar (ver chromeBounds em useBlockOverlays.tsx).
-    const REPLACE_PANEL_HEIGHT = 260;
-    const replaceOpensAbove = !!htmlEditPos && htmlEditPos.maxHeight - 44 < REPLACE_PANEL_HEIGHT;
-
     return (
         <>
-            {addBtnPos && !readOnly && (
-                <button
-                    type="button"
-                    title="Adicionar parágrafo"
-                    onMouseDown={(e) => e.preventDefault()} // manter foco no editor (evita blur→esconder)
-                    onMouseEnter={cancelAddBtnHide} // rato no botão → não esconder
-                    onMouseLeave={clearAddBtn}      // saiu do botão → esconder
-                    onClick={openPlusMenu}
-                    style={{ position: 'fixed', top: addBtnPos.top, left: addBtnPos.left, zIndex: 100, opacity: addBtnFading ? 0 : 1 }}
-                    className="add-para-pop flex items-center justify-center w-5 h-5 rounded-full bg-white hover:bg-slate-100 text-slate-700 shadow-md border border-slate-200 transition-opacity duration-300 ease-out"
-                >
-                    <Plus size={12} />
-                </button>
-            )}
             {plusMenu && (
                 <>
-                    <div className="fixed inset-0 z-[110]" onMouseDown={closePlusMenu} />
+                    {/* preventDefault: o editor não perde o foco → o parágrafo continua selecionado */}
+                    <div className="fixed inset-0 z-[110]" onMouseDown={(e) => { e.preventDefault(); closePlusMenu(); }} />
                     <div
                         style={{ position: 'fixed', top: plusMenu.top - 10, left: plusMenu.left, transform: 'translate(-50%, -100%)', zIndex: 111 }}
                         className="w-64 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
@@ -163,6 +75,8 @@ export function BlockOverlays({
             {gripPos && !readOnly && (
                 <div
                     style={{ position: 'fixed', top: gripPos.top, left: gripPos.left, zIndex: 100, opacity: gripFading ? 0 : 1 }}
+                    onMouseEnter={onGripEnter}
+                    onMouseLeave={onGripLeave}
                     className="add-para-pop flex flex-col items-center w-5 rounded-md bg-white text-slate-700 shadow-md border border-slate-200 overflow-hidden transition-opacity duration-300 ease-out"
                 >
                     <button
@@ -258,88 +172,6 @@ export function BlockOverlays({
                     <button type="button" title="Eliminar divisória" onClick={deleteHr} className="flex items-center px-2 py-1 rounded text-slate-600 hover:bg-slate-100">
                         <Trash2 size={13} />
                     </button>
-                </div>
-            )}
-            {htmlEdit !== null && htmlEditPos && (
-                <div
-                    style={{ position: 'fixed', top: htmlEditPos.top, left: htmlEditPos.left, width: Math.max(htmlEditPos.width, 420), zIndex: 200, visibility: htmlEditPos.visible ? 'visible' : 'hidden' }}
-                >
-                    <div className="relative">
-                        <textarea
-                            ref={htmlTextareaRef}
-                            defaultValue={htmlEdit}
-                            spellCheck={false}
-                            autoFocus
-                            onKeyDown={(e) => {
-                                if (e.key === 'Escape') cancelHtmlEdit();
-                                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveHtmlEdit(htmlTextareaRef.current?.value ?? '');
-                            }}
-                            style={{ height: Math.min(Math.max(htmlEditPos.height + 40, 120), 600, htmlEditPos.maxHeight) }}
-                            className="w-full font-mono text-sm leading-relaxed p-3 pr-24 rounded-lg border border-slate-300 bg-slate-50 text-slate-700 outline-none shadow-xl resize-y"
-                        />
-                        <div className="absolute top-2 right-2 flex gap-1">
-                            <button title="Substituir" onMouseDown={(e) => e.preventDefault()} onClick={openReplace} className={`flex items-center justify-center w-7 h-7 rounded-md border shadow-sm ${replaceOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'}`}>
-                                <Replace size={15} />
-                            </button>
-                            <button title="Cancelar" onMouseDown={(e) => e.preventDefault()} onClick={cancelHtmlEdit} className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200 shadow-sm">
-                                <X size={15} />
-                            </button>
-                            <button title="Guardar" onMouseDown={(e) => e.preventDefault()} onClick={confirmSaveHtmlEdit} className="flex items-center justify-center w-7 h-7 rounded-md bg-slate-700 hover:bg-slate-800 text-white shadow-sm">
-                                <Save size={15} />
-                            </button>
-                        </div>
-                        {replaceOpen && (
-                            <div className={`absolute right-2 z-10 w-64 p-2.5 rounded-lg border border-slate-300 bg-white shadow-xl flex flex-col gap-1.5 ${replaceOpensAbove ? 'bottom-full mb-2' : 'top-11'}`}>
-                                <div className="flex gap-1">
-                                    {([['document', 'Documento'], ['chapter', chapterLabel]] as const).map(([scope, label]) => (
-                                        <button
-                                            key={scope}
-                                            type="button"
-                                            onMouseDown={(e) => e.preventDefault()}
-                                            onClick={() => setDocScope(scope)}
-                                            title={scope === 'chapter' ? chapterLabel : undefined}
-                                            className={`flex-1 min-w-0 truncate px-2 py-1 rounded text-xs font-medium transition-colors ${docScope === scope ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                                        >
-                                            {label}
-                                        </button>
-                                    ))}
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder="Procurar"
-                                    value={findText}
-                                    autoFocus
-                                    onChange={(e) => setFindText(e.target.value)}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') applyReplace(); }}
-                                    className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-300 outline-none focus:border-slate-500"
-                                />
-                                {findText && (
-                                    <div className="text-xs px-0.5 -mt-0.5 text-slate-400">
-                                        {matchCount === null ? 'a contar…' : matchCount === 0 ? 'sem ocorrências' : `${matchCount} ocorrência${matchCount === 1 ? '' : 's'}`}
-                                    </div>
-                                )}
-                                <input
-                                    type="text"
-                                    placeholder="Substituir por"
-                                    value={replaceText}
-                                    onChange={(e) => setReplaceText(e.target.value)}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') applyReplace(); }}
-                                    className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-300 outline-none focus:border-slate-500"
-                                />
-                                <button
-                                    type="button"
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    onClick={applyReplace}
-                                    disabled={!findText || matchCount === 0}
-                                    className="mt-0.5 w-full py-1.5 rounded-md bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold disabled:opacity-50"
-                                >
-                                    Substituir tudo
-                                </button>
-                            </div>
-                        )}
-                    </div>
                 </div>
             )}
             {dropLine && (

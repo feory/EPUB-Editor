@@ -222,6 +222,21 @@ body {
   transition: opacity 0.6s ease-out;
 }
 
+/* Mini-menu de bloco / bubble do TinyMCE sem a seta: o mini-menu fica encostado à linha da
+   borda do bloco (forcePopAbove em useBlockOverlays), a seta só criava um espaço vazio. */
+.tox .tox-pop::before,
+.tox .tox-pop::after {
+  display: none !important; /* skin.css carrega depois (chunk do editor) e tem seletores mais específicos */
+}
+
+/* Mini-menu: sem animação de posição do TinyMCE (.tox-pop--transition) — forcePopAbove
+   (useBlockOverlays) corrige-o antes do paint, inclusive a cada evento de scroll. */
+.tox-tinymce-aux .tox-pop,
+.tox-tinymce-aux .tox-pop.tox-pop--transition {
+  /* sem animação de posição do TinyMCE: o observer corrige antes do paint, sem "viagens" à vista */
+  transition: opacity 0.2s ease-out !important;
+}
+
 /* tw-animate-css (animate-in, fade-in, slide-in-from-N, zoom-in) passa a animar de verdade —
    respeitar prefers-reduced-motion em todo o lado, não só nestas classes. */
 @media (prefers-reduced-motion: reduce) {

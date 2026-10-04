@@ -38,7 +38,9 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     const initializedRef = useRef(false);
 
     // --- Chapter sync (local editor content ↔ reducer, chapters list, undo/redo) ---
-    const chapterSync = useChapterSync(contentState, dispatch, skipSyncRef);
+    // editorRef é estável → flushEditor também (deps dos callbacks do useChapterSync).
+    const flushEditor = useCallback(() => editorRef?.current?.flushContent(), [editorRef]);
+    const chapterSync = useChapterSync(contentState, dispatch, skipSyncRef, flushEditor);
 
     // --- Presence / edit-lock (2º utilizador = só leitura, nunca grava) ---
     const presence = usePresence(isbn);

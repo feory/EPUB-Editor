@@ -136,13 +136,6 @@ export const DEFAULT_CSS = `
     img.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }
 
     /* === EDITOR (não exportado para EPUB) === */
-    [data-mce-psactive] {
-        box-shadow: inset 0 0 0 2px #475569;
-        border-radius: 2px;
-        padding: 5px 8px;
-        margin-left: -8px;
-        margin-right: -8px;
-    }
     hr.chapter-break {
         border: 0;
         border-top: 2px dashed #2563eb;
