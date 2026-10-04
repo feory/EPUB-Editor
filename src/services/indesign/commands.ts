@@ -373,7 +373,9 @@ async function blocks(bytes: Uint8Array, opt: boolean) {
         allText += (body.textContent ?? '').replace(/\s+/g, '');
         imgs += body.querySelectorAll('img').length;
         pages += body.querySelectorAll('[role="doc-pagebreak"]').length;
-        notes += body.querySelectorAll(opt ? 'aside.footnote' : 'li._idFootnote').length;
+        // notas pelo significado (InDesign li._idFootnote ou já no formato da app, role=doc-footnote): o
+        // original pode ser um EPUB já optimizado — contar só li._idFootnote dava "notas 0 → N"
+        notes += body.querySelectorAll('li._idFootnote, [role="doc-footnote"]').length;
         for (const el of Array.from(body.querySelectorAll('body p, body h1, body h2, body h3, body h4, body h5, body h6'))) {
             const classes = (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean);
             const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
