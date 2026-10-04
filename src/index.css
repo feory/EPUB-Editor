@@ -175,16 +175,6 @@ body {
 
 }
 
-/* Aparecimento suave do botão "+" (fade + scale) */
-@keyframes plusPop {
-  from { transform: scale(0.6); opacity: 0; }
-  to   { transform: scale(1);   opacity: 1; }
-}
-
-.add-para-pop {
-  animation: plusPop 0.15s ease-out;
-}
-
 /* Botão de estilos (select "Padrão") no toolbar: fundo preto, texto branco */
 .tox .tox-tbtn--bespoke {
   background-color: #f1f5f9 !important;

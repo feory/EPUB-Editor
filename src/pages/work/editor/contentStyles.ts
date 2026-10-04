@@ -1,4 +1,4 @@
-import { activeBlockCss, PLUS_SIZE, PLUS_CUT } from './blockGeometry';
+import { activeBlockCss, gripCss, PLUS_SIZE, PLUS_CUT } from './blockGeometry';
 
 // content_style do editor: o CSS do livro + estilos só-editor (diff/spell/noBreak/
 // marcadores de UI/hr). Os marcadores `data-mce-*` nunca exportam para EPUB.
@@ -17,6 +17,8 @@ export function buildContentStyle(currentCss: string): string {
 .noBreak::before { content: "Unido"; position: absolute; top: 0; right: 0; font-size: 9px; font-weight: bold; color: #475569; background: rgba(100,116,139,0.15); padding: 1px 5px; border-bottom-left-radius: 4px; pointer-events: none; }
 /* Bloco ativo: padding + anel (geometria em blockGeometry.ts — partilhada com o JS). */
 ${activeBlockCss()}
+/* Pega de mover (::before do bloco ativo), também em blockGeometry.ts. */
+${gripCss()}
 [data-mce-empty]::before { content: 'Escreve algo…'; color: #94a3b8; pointer-events: none; }
 [data-mce-htmledit] { visibility: hidden !important; }
 /* Botão "+" (inserir bloco): só CSS, ::after do bloco de topo, centrado na borda inferior.
