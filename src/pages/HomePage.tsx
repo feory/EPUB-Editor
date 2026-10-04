@@ -23,7 +23,7 @@ import { EbookGrid } from './home/EbookGrid';
 import { UserMenu } from './home/UserMenu';
 import { EpubMappingModal } from './EpubMappingModal';
 import { IndesignImportModal } from './IndesignImportModal';
-import { analyzeBook, optimizeBook, type BookMap } from '../services/indesign/commands';
+import { analyzeBook, optimizeBook, type BookMap, type LineBreakSummary } from '../services/indesign/commands';
 import { editorExportCss } from '../services/indesign/editor';
 import baseStyles from '../services/indesign/estilos-base.json';
 import { DEFAULT_CSS } from '../context/StyleContext';
@@ -116,9 +116,13 @@ export function HomePage() {
         onSuccess: (_data, variables) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['ebook', variables.isbn] }); setShowMetadataModal(false); showNotification('success', 'Metadados atualizados!'); },
         onError: () => { showNotification('error', 'Erro ao atualizar metadados.'); },
     });
+    // Ebook acabado de criar (novo ou importado) com o ISBN de um que foi apagado nesta sessão: o cache
+    // desse ISBN (conteúdo com staleTime: Infinity, histórico…) é do ebook antigo — o editor mostrava-o e
+    // gravava-o por cima da importação nova. Esquecer tudo o que é deste ISBN antes de abrir o editor.
+    const forgetEbookCache = (isbn: string) => queryClient.removeQueries({ predicate: q => q.queryKey[1] === isbn });
     const createEbookMutation = useMutation({
         mutationFn: (data: Omit<Ebook, 'status'>) => ebooksApi.create(data),
-        onSuccess: (_, variables) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); setIsModalOpen(false); navigate(`/work/${variables.ebook_isbn}`); },
+        onSuccess: (_, variables) => { forgetEbookCache(variables.ebook_isbn); queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); setIsModalOpen(false); navigate(`/work/${variables.ebook_isbn}`); },
         onError: () => { showNotification('error', 'Erro ao criar ebook. Verifique se o ISBN já existe.'); },
     });
 
@@ -151,14 +155,14 @@ export function HomePage() {
             });
             return isbn;
         },
-        onSuccess: (isbn) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); navigate(`/work/${isbn}`); },
+        onSuccess: (isbn) => { forgetEbookCache(isbn); queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); navigate(`/work/${isbn}`); },
         onError: (e: AxiosError) => { showNotification('error', e?.response?.status === 409 ? 'Já existe um ebook com este ISBN.' : 'Erro ao importar o EPUB.'); },
     });
     // Importação InDesign: analisa o EPUB (mapa de estilos sugerido) → modal de revisão → optimiza para os
     // estilos do editor (src/services/indesign) → verifica contra o original → importa como EPUB normal.
     // A mesma lógica corre na CLI do skill .claude/skills/epub-indesign.
     const indesignInputRef = useRef<HTMLInputElement>(null);
-    const [indesign, setIndesign] = useState<{ file: File; bytes: Uint8Array; map: BookMap } | null>(null);
+    const [indesign, setIndesign] = useState<{ file: File; bytes: Uint8Array; map: BookMap; lineBreaks: LineBreakSummary[] } | null>(null);
     const [indesignBusy, setIndesignBusy] = useState(false);
     const handleImportIndesign = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -167,26 +171,26 @@ export function HomePage() {
         setIndesignBusy(true);
         try {
             const bytes = new Uint8Array(await file.arrayBuffer());
-            const { map, alreadyOptimized } = await analyzeBook(bytes, { baseStyles });
+            const { map, alreadyOptimized, lineBreaks } = await analyzeBook(bytes, { baseStyles });
             // já no formato da app (ex. ficheiro de optimizados/): nada a decidir nem a optimizar → importa direto
             if (alreadyOptimized) {
                 showNotification('success', 'EPUB já optimizado — importado sem alterações.', 4000);
                 importEpubMutation.mutate({ file });
                 return;
             }
-            setIndesign({ file, bytes, map });
+            setIndesign({ file, bytes, map, lineBreaks });
         } catch {
             showNotification('error', 'Não foi possível ler o EPUB do InDesign.');
         } finally {
             setIndesignBusy(false);
         }
     };
-    const confirmIndesign = async (map: BookMap, force: boolean) => {
+    const confirmIndesign = async (map: BookMap, force: boolean, joinLineBreaks: boolean) => {
         if (!indesign) return;
         setIndesignBusy(true);
         try {
             // Política (o que bloqueia / o que só avisa) vive em optimizeBook — igual à CLI.
-            const { bytes, problems, warnings } = await optimizeBook(indesign.bytes, map, editorExportCss(DEFAULT_CSS));
+            const { bytes, problems, warnings } = await optimizeBook(indesign.bytes, map, editorExportCss(DEFAULT_CSS), { joinLineBreaks });
             const listed = problems.map(p => p.message).join(' · ');
             if (problems.length && !force) {
                 showNotification('error', `Importação InDesign bloqueada: ${listed}`, 10000);
@@ -582,6 +586,7 @@ export function HomePage() {
                 <IndesignImportModal
                     fileName={indesign.file.name}
                     map={indesign.map}
+                    lineBreaks={indesign.lineBreaks}
                     pending={indesignBusy}
                     onConfirm={confirmIndesign}
                     onClose={() => setIndesign(null)}

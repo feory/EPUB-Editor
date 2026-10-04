@@ -5,7 +5,8 @@
 // direita/esquerda como o editor o grava (style inline). Tira o lixo do InDesign e converte notas/quebras
 // de página para o modelo da app.
 //   bun .claude/skills/epub-indesign/optimize.ts analyze <livro.epub>  → mapa sugerido (regras da casa + heurística)
-//   bun .claude/skills/epub-indesign/optimize.ts convert <livro.epub>  → <dir>/optimizados/<livro>.epub + verificação
+//   bun .claude/skills/epub-indesign/optimize.ts convert <livro.epub> [--juntar-br]  → <dir>/optimizados/<livro>.epub + verificação
+//     --juntar-br: junta as quebras de linha do paginador — SÓ depois de o utilizador aceitar (ver analyze)
 // Decisões por livro fazem-se no modal da Importação InDesign da app (não são guardadas); aqui só o mapa sugerido.
 // Ver SKILL.md.
 //
@@ -29,17 +30,22 @@ function analyzeFile(epubPath: string) {
 }
 
 async function analyze(epubPath: string) {
-    const { map, bodySize, alreadyOptimized } = await analyzeFile(epubPath);
+    const { map, bodySize, alreadyOptimized, lineBreaks } = await analyzeFile(epubPath);
     console.log(`Texto base ${bodySize}em\n`);
     if (alreadyOptimized) console.log('  ℹ EPUB já optimizado (formato da app) — o convert copia-o sem alterações.\n');
     for (const [k, e] of Object.entries(map.classes)) {
         console.log(`${String(e.count).padStart(6)}  ${k.padEnd(36)} → ${(e.target || '∅').padEnd(14)} [${e.origem}] ${e.css}`);
     }
+    if (lineBreaks.length) {
+        // perguntar ao utilizador (casos + 1 exemplo por tipo) antes de usar convert --juntar-br
+        console.log(`\n  <br/> do paginador em parágrafos/notas: ${lineBreaks.reduce((n, l) => n + l.count, 0)} — PERGUNTAR antes de juntar`);
+        for (const l of lineBreaks) console.log(`${String(l.count).padStart(6)}  ${l.label}\n          ${l.before}  →  ${l.after}`);
+    }
 }
 
-async function convert(epubPath: string) {
+async function convert(epubPath: string, joinLineBreaks: boolean) {
     const { map } = await analyzeFile(epubPath);
-    const { bytes, report, verify: r, problems, warnings } = await optimizeBook(readFileSync(epubPath), map, editorExportCss(DEFAULT_CSS));
+    const { bytes, report, verify: r, problems, warnings } = await optimizeBook(readFileSync(epubPath), map, editorExportCss(DEFAULT_CSS), { joinLineBreaks });
     const outPath = optimizedPathFor(epubPath);
     mkdirSync(dirname(outPath), { recursive: true });
     writeFileSync(outPath, bytes);
@@ -64,9 +70,10 @@ async function convert(epubPath: string) {
     if (!problems.length && !warnings.length) console.log('  verificação ✓ (texto, imagens, quebras, notas, intenção, classes só do editor)');
 }
 
-const [cmd, file] = process.argv.slice(2);
+const [cmd, file, ...flags] = process.argv.slice(2);
 if (!file || !['analyze', 'convert'].includes(cmd)) {
-    console.error('uso: bun optimize.ts analyze|convert <livro.epub>');
+    console.error('uso: bun optimize.ts analyze <livro.epub> | convert <livro.epub> [--juntar-br]');
     process.exit(1);
 }
-await ({ analyze, convert }[cmd as 'analyze'])(file);
+if (cmd === 'analyze') await analyze(file);
+else await convert(file, flags.includes('--juntar-br'));

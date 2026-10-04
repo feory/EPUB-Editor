@@ -1,8 +1,8 @@
 // Os três comandos do skill, sem disco nem consola: dados entram, dados saem.
-//   analyzeBook(bytes, { baseStyles })              → { map, bodySize, alreadyOptimized }
+//   analyzeBook(bytes, { baseStyles })              → { map, bodySize, alreadyOptimized, lineBreaks }
 //   convertBook(bytes, map, editorCss)              → { bytes, report }
 //   verifyBook(originalBytes, optimizedBytes)       → VerifyReport
-//   optimizeBook(bytes, map, editorCss)             → convert + verify + política: { bytes, report, verify, problems, warnings }
+//   optimizeBook(bytes, map, editorCss, opts?)      → convert + verify + política: { bytes, report, verify, problems, warnings }
 // Adapters: a importação InDesign da app (HomePage) e a CLI do skill (.claude/skills/epub-indesign/optimize.ts).
 // Os testes (tests/commands.test.ts) usam EPUBs mínimos construídos em memória.
 import JSZip from 'jszip';
@@ -92,10 +92,88 @@ export async function analyzeBook(bytes: Uint8Array, opts: { baseStyles: Record<
             count, sample, css: cssSummary(p),
         };
     }
-    return { map: { classes } as BookMap, bodySize: base, alreadyOptimized: isAlreadyOptimized(book) };
+    // <br/> do paginador, por tipo (contagem + 1.º exemplo) — para PERGUNTAR antes de juntar
+    const isHeading = (p: Element) => (p.getAttribute('class') ?? '').split(/\s+/)
+        .some(c => /(^|\s)h[1-6](\s|$)/.test(classes[`p.${c}`]?.target ?? ''));
+    const breaks = new Map<LineBreakKind, LineBreakSummary>();
+    for (const { doc } of documents) {
+        for (const { a, b, kind } of lineBreaksIn(doc.querySelector('body')!, isHeading)) {
+            const e = breaks.get(kind);
+            if (e) { e.count++; continue; }
+            const [x, y] = [a.slice(-30), b.slice(0, 25)];
+            breaks.set(kind, { kind, label: LINE_BREAK_LABELS[kind], count: 1, before: `…${x}⏎${y}…`, after: `…${joined(x, y, kind)}…` });
+        }
+    }
+    const lineBreaks = [...breaks.values()].sort((p, q) => q.count - p.count);
+    return { map: { classes } as BookMap, bodySize: base, alreadyOptimized: isAlreadyOptimized(book), lineBreaks };
 }
 
 // ---------- convert ----------
+// Quebras de linha forçadas do paginador (<br/> a meio de parágrafos e notas; títulos como "I<br/>TÍTULO" nunca).
+// Regra para todos os livros, mas SÓ aplicada se o utilizador aceitar: o analyze conta os casos por tipo (com um
+// exemplo de cada) para a pergunta — modal da app ou skill — e o convert junta-os com joinLineBreaks: true.
+export type LineBreakKind = 'meio-da-frase' | 'fim-da-frase' | 'hifen-repetido' | 'barra-repetida' | 'hifen-no-fim' | 'pontas';
+export const LINE_BREAK_LABELS: Record<LineBreakKind, string> = {
+    'meio-da-frase': 'a meio da frase → espaço',
+    'fim-da-frase': 'depois do fim da frase → espaço',
+    'hifen-repetido': 'hífen repetido na linha seguinte → um hífen',
+    'barra-repetida': 'barra repetida na linha seguinte → uma barra',
+    'hifen-no-fim': 'hífen no fim da linha → junta, mantém o hífen',
+    'pontas': 'no início/fim do parágrafo → sai',
+};
+export type LineBreakSummary = { kind: LineBreakKind; label: string; count: number; before: string; after: string };
+
+function breakKind(a: string, b: string): LineBreakKind {
+    if (!a || !b) return 'pontas';
+    if (a.endsWith('-') && b.startsWith('-')) return 'hifen-repetido';
+    if (a.endsWith('/') && b.startsWith('/')) return 'barra-repetida';
+    if (a.endsWith('-')) return 'hifen-no-fim';
+    return /[.!?…»”)]$/.test(a) ? 'fim-da-frase' : 'meio-da-frase';
+}
+const joined = (a: string, b: string, kind: LineBreakKind) =>
+    kind === 'hifen-repetido' || kind === 'barra-repetida' ? a + b.slice(1)
+        : kind === 'hifen-no-fim' || kind === 'pontas' ? a + b : `${a} ${b}`;
+
+// texto vizinho do <br> dentro do parágrafo (desce pelos spans/sup)
+function edgeText(node: Node | null, last: boolean): Text | null {
+    if (!node) return null;
+    if (node.nodeType === 3) return node as Text;
+    const kids = Array.from(node.childNodes);
+    for (const k of last ? kids.reverse() : kids) { const t = edgeText(k, last); if (t) return t; }
+    return null;
+}
+function besideBr(br: Element, before: boolean): Text | null {
+    for (let n: Node | null = br; n && n.nodeName.toLowerCase() !== 'p'; n = n.parentNode) {
+        for (let s = before ? n.previousSibling : n.nextSibling; s; s = before ? s.previousSibling : s.nextSibling) {
+            const t = edgeText(s, before);
+            if (t) return t;
+        }
+    }
+    return null;
+}
+// <br> dentro de <p> (texto e notas); `skip` = parágrafos que vão ser títulos (no original ainda são <p>)
+function breakAt(br: Element) {
+    const prev = besideBr(br, true), next = besideBr(br, false);
+    const a = prev?.data.trimEnd() ?? '', b = next?.data.trimStart() ?? '';
+    return { br, prev, next, a, b, kind: breakKind(a, b) };
+}
+const lineBreaksIn = (body: Element, skip: (p: Element) => boolean = () => false) =>
+    Array.from(body.querySelectorAll('p br')).filter(br => !skip(br.closest('p')!)).map(breakAt);
+// "a<br/>b" → "a b"; "não-<br/>-instr." → "não-instr."; "a/<br/>/b" → "a/b"; "pseudo-<br/>prof." → "pseudo-prof."
+function joinLineBreaks(body: Element) {
+    // um a um, lido na hora: o texto entre dois <br> muda quando o 1.º é juntado
+    for (const el of Array.from(body.querySelectorAll('p br'))) {
+        const { br, prev, next, a, b, kind } = breakAt(el);
+        if (kind === 'meio-da-frase' || kind === 'fim-da-frase') {
+            if (/\s$/.test(prev!.data) || /^\s/.test(next!.data)) br.remove(); // já há espaço
+            else br.replaceWith(br.ownerDocument.createTextNode(' '));
+        } else {
+            if (prev) prev.data = a;
+            if (next) next.data = kind === 'hifen-repetido' || kind === 'barra-repetida' ? b.slice(1) : b;
+            br.remove();
+        }
+    }
+}
 function moveChildren(from: Element, to: Node) {
     while (from.firstChild) to.appendChild(from.firstChild);
 }
@@ -292,7 +370,7 @@ type ConvertReport = {
 };
 
 // editorCss = CSS do editor (a CLI lê o DEFAULT_CSS da app; os testes passam um mínimo).
-export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: string): Promise<{ bytes: Uint8Array; report: ConvertReport }> {
+export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: string, opts: { joinLineBreaks?: boolean } = {}): Promise<{ bytes: Uint8Array; report: ConvertReport }> {
     const book = await openBook(bytes);
     if (isAlreadyOptimized(book)) {
         return { bytes, report: { documents: book.documents.length, notes: 0, bodySize: book.bodySize, alreadyOptimized: true, missing: [], styles: [] } };
@@ -325,6 +403,7 @@ export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: st
         const hadHeading = Array.from(doc.querySelectorAll('body p[class]')).some(p => (p.getAttribute('class') ?? '')
             .split(/\s+/).some(c => /(^|\s)h[1-6](\s|$)/.test(map.classes[`p.${c}`]?.target ?? '')));
         notes += convertBody(doc, map, resolve, base, front, vocabulary, referenced, missing, used);
+        if (opts.joinLineBreaks) joinLineBreaks(doc.querySelector('body')!);
         // <title> = nome do capítulo no editor; política do InDesign em titles.ts
         const titleEl = doc.querySelector('title');
         if (titleEl) {
@@ -379,13 +458,17 @@ export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: st
 // Mesma leitura de intenção que o convert (translate.ts), nos dois lados; só os campos preservados contam.
 type Preserved = ReturnType<typeof preservedOf>;
 
+// texto para comparar original × optimizado: sem espaços; "--"/"//" = "-"/"/" (o <br/> do paginador junta hífen/barra
+// repetidos no início da linha e passa a espaço — nada disso é texto perdido)
+const comparable = (s: string) => s.replace(/\s+/g, '').replace(/-{2,}/g, '-').replace(/\/{2,}/g, '/');
+
 async function blocks(bytes: Uint8Array, opt: boolean) {
     const { documents, resolve, css } = await openBook(bytes);
-    const out: { key: string; text: string; v: Preserved; empty: boolean; skip: boolean }[] = [];
+    const out: { key: string; text: string; match: string; v: Preserved; empty: boolean; skip: boolean }[] = [];
     let allText = '', imgs = 0, pages = 0, notes = 0;
     for (const { doc } of documents) {
         const body = doc.querySelector('body')!;
-        allText += (body.textContent ?? '').replace(/\s+/g, '');
+        allText += comparable(body.textContent ?? '');
         imgs += body.querySelectorAll('img').length;
         pages += body.querySelectorAll('[role="doc-pagebreak"]').length;
         // notas pelo significado (InDesign li._idFootnote ou já no formato da app, role=doc-footnote): o
@@ -398,7 +481,7 @@ async function blocks(bytes: Uint8Array, opt: boolean) {
             const v = preservedOf(intentOf(resolve(el.localName, classes, el.getAttribute('style') ?? ''), 1));
             // notas, tabelas e títulos seguem o estilo do editor — só o texto conta
             const skip = !!el.closest(opt ? 'aside, td, th' : 'li, td, th') || /^h[1-6]$/.test(el.localName);
-            out.push({ key: `${el.localName}.${classes.join('.')}`, text, empty: !text && !el.querySelector('img'), v, skip });
+            out.push({ key: `${el.localName}.${classes.join('.')}`, text, match: comparable(text), empty: !text && !el.querySelector('img'), v, skip });
         }
     }
     return { out, allText, imgs, pages, notes, documents, css };
@@ -421,9 +504,9 @@ export async function verifyBook(originalBytes: Uint8Array, optimizedBytes: Uint
     for (const o of O.out) {
         if (o.empty) { pendingAbove = true; continue; } // vazio = espaço acima do seguinte
         // <h1> fundido com o anterior (abertura + título): o texto está no último emparelhado
-        if (j > 0 && /^h1\./.test(opt[j - 1].key) && opt[j - 1].text.includes(o.text) && !opt[j - 1].text.startsWith(o.text)) { paired++; continue; }
+        if (j > 0 && /^h1\./.test(opt[j - 1].key) && opt[j - 1].match.includes(o.match) && !opt[j - 1].match.startsWith(o.match)) { paired++; continue; }
         let k = j;
-        while (k < opt.length && k < j + 30 && !opt[k].text.startsWith(o.text)) k++;
+        while (k < opt.length && k < j + 30 && !opt[k].match.startsWith(o.match)) k++;
         if (k >= opt.length || k >= j + 30) { unpaired++; continue; }
         const b = opt[k];
         j = k + 1;
@@ -467,8 +550,8 @@ export async function verifyBook(originalBytes: Uint8Array, optimizedBytes: Uint
 export type Problem = { kind: 'text' | 'images' | 'pages' | 'notes'; message: string };
 export type Warning = { kind: 'intent' | 'classes'; message: string };
 
-export async function optimizeBook(bytes: Uint8Array, map: BookMap, editorCss: string) {
-    const { bytes: out, report } = await convertBook(bytes, map, editorCss);
+export async function optimizeBook(bytes: Uint8Array, map: BookMap, editorCss: string, opts: { joinLineBreaks?: boolean } = {}) {
+    const { bytes: out, report } = await convertBook(bytes, map, editorCss, opts);
     if (report.alreadyOptimized) return { bytes: out, report, verify: null, problems: [] as Problem[], warnings: [] as Warning[] };
     const v = await verifyBook(bytes, out);
     const lost = (kind: Problem['kind'], label: string, [a, b]: [number, number]): Problem[] =>

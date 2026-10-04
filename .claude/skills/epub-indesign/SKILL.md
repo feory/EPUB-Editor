@@ -11,7 +11,7 @@ Traduz para o **vocabulário e valores do editor** (livro igual aos da app; barr
 
 ## Regras de ouro
 
-- **Dúvida → PERGUNTAR** (AskUserQuestion, amostras + recomendação) antes de converter: `h1` com muitas ocorrências (ou `h3`?), `<title>` estranhos, citação/alínea/legenda, `__remove__` (sempre).
+- **Dúvida → PERGUNTAR** (AskUserQuestion, amostras + recomendação) antes de converter: `h1` com muitas ocorrências (ou `h3`?), `<title>` estranhos, citação/alínea/legenda, `__remove__` (sempre), `<br/>` do paginador (sempre: quantos casos + 1 exemplo de cada tipo).
 - Resposta só deste livro → escolher no modal da app ao importar; regra que vale para todos os livros → `estilos-base.json`.
 - Nunca editar o `.epub` original (saída em `<dir>/optimizados/`). `verify` obrigatório.
 
@@ -85,6 +85,7 @@ Exceções: notas e tabelas sem classes; `p-legendas` tira `p-small`/`p-bottom`/
 - **Notas**: `a._idFootnoteLink` → `sup > a[noteref]` (nº sempre em `<sup>`); `section._idFootnotes` → `div.footnotes-section > aside.footnote` (o importador desembrulha e junta parágrafos com `<br>`).
 - **Quebras de página**: mantêm `id`/`aria-label`; `<div>` → `<span>` vazio no parágrafo seguinte; conteúdo lá dentro (nº da nota) sai para a linha da nota.
 - **Sai**: CSS/fontes do InDesign, `style=""`, classes de tabelas/imagens/listas/links, `<div>` contentores (id referenciado passa para o 1.º filho), âncoras `_idTextAnchor` vazias não referenciadas, hífenes discricionários (`U+00AD`, `&#173;`, `&shy;`), `nav` do spine.
+- **`<br/>` do paginador** (parágrafos e notas; títulos nunca): o `analyze` conta por tipo — a meio da frase / depois do fim da frase → espaço; hífen ou barra repetidos → um; hífen no fim → junta; no início/fim do parágrafo → sai. **Nunca juntar sem perguntar**: mostrar o total, a contagem de cada tipo e o exemplo (antes → depois) e só com o "sim" usar `convert --juntar-br` (na app: caixa no modal, desligada por omissão). O verify trata `--`/`//` como `-`/`/`.
 - **Fica**: nomes dos ficheiros, imagens, capa, OPF/metadados, `toc.ncx`, `nav` (com page-list).
 
 ## Diferenças intencionais no verify
