@@ -572,7 +572,7 @@ export async function optimizeBook(bytes: Uint8Array, map: BookMap, editorCss: s
     ];
     const diffs = v.diffs.reduce((n, d) => n + d.count, 0);
     const warnings: Warning[] = [
-        ...(diffs ? [{ kind: 'intent' as const, message: `${diffs} diferença(s) de formatação face ao original (alinhamento, recuo, espaço, negrito, itálico…) — confirmar no editor` }] : []),
+        ...(diffs ? [{ kind: 'intent' as const, message: `${diffs} diferença(s)` }] : []),
         ...(v.foreignClasses.length ? [{ kind: 'classes' as const, message: `classes fora do editor: ${v.foreignClasses.join(', ')}` }] : []),
     ];
     return { bytes: out, report, verify: v, problems, warnings };
