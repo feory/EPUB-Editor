@@ -19,6 +19,7 @@ import { useImageCrop } from './images/useImageCrop';
 import { ImageCropModal } from './images/ImageCropModal';
 import { BoxStyleModal } from '../modals/BoxStyleModal';
 import { createEditorSetup } from '../editor/setup';
+import { editBlocks } from '../editor/blockEdit';
 import { buildContentStyle } from '../editor/contentStyles';
 import { EDITOR_PLUGINS, EDITOR_TOOLBAR, QUICKBARS_SELECTION_TOOLBAR, STYLE_FORMATS, TEXT_PATTERNS } from '../editor/config';
 
@@ -472,9 +473,10 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 }
             }
             if (out.length === 0) return;
-            if (useSelection) editor.selection.setContent(out.join(''));
-            else editor.setContent(out.join(''));
-            editor.dispatch('Change');
+            editBlocks(editor, () => {
+                if (useSelection) editor.selection.setContent(out.join(''));
+                else editor.setContent(out.join(''));
+            });
         },
 
         // Como cleanIndexSelection, mas em vez de descartar a lista de páginas de cada entrada,
@@ -532,9 +534,10 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 }
             }
             if (out.length === 0) return;
-            if (useSelection) editor.selection.setContent(out.join(''));
-            else editor.setContent(out.join(''));
-            editor.dispatch('Change');
+            editBlocks(editor, () => {
+                if (useSelection) editor.selection.setContent(out.join(''));
+                else editor.setContent(out.join(''));
+            });
         },
 
         applyConversions: (options: ImportOptions) => {
@@ -545,8 +548,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             let result = applyImportOptions(html, options);
             if (options.convertListsToDialogue) result = convertListsToDialogue(result);
             if (result === html) return;
-            editor.setContent(result);
-            editor.dispatch('Change');
+            editBlocks(editor, () => editor.setContent(result));
         },
 
         filterGrammarHighlights: (filter: 'all' | 'spelling' | 'grammar') => {
@@ -635,10 +637,11 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const body = editor.getBody();
             const marker = body.querySelector(`.grammar-error-highlight[data-error-index="${index}"]`);
             if (marker?.parentNode) {
-                marker.textContent = suggestion;
-                unwrapNode(marker);
-                editor.dispatch('change');
-                body.normalize();
+                editBlocks(editor, () => {
+                    marker.textContent = suggestion;
+                    unwrapNode(marker);
+                    body.normalize();
+                });
             }
         },
 
@@ -691,14 +694,15 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const body = editor.getBody();
             const marker = body.querySelector(`.spell-error-highlight[data-spell-index="${index}"]`);
             if (marker) {
-                marker.textContent = suggestion;
-                const parent = marker.parentNode;
-                if (parent) {
-                    while (marker.firstChild) parent.insertBefore(marker.firstChild, marker);
-                    parent.removeChild(marker);
-                }
-                editor.dispatch('change');
-                body.normalize();
+                editBlocks(editor, () => {
+                    marker.textContent = suggestion;
+                    const parent = marker.parentNode;
+                    if (parent) {
+                        while (marker.firstChild) parent.insertBefore(marker.firstChild, marker);
+                        parent.removeChild(marker);
+                    }
+                    body.normalize();
+                });
             }
         },
 

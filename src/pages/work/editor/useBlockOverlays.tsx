@@ -118,11 +118,11 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const deleteHr = () => {
         const editor = editorRef.current; const hr = hrRef.current;
         if (!editor || !hr) return;
-        editor.dom.remove(hr);
         hrRef.current = null; setHrCtl(null);
-        editor.focus();
-        editor.dispatch('Change');
-        editor.nodeChanged();
+        editBlocks(editor, () => {
+            editor.dom.remove(hr);
+            editor.focus();
+        });
     };
 
     // Editar HTML do bloco (linha) INLINE: esconde o bloco e mostra um textarea no lugar (mesma caixa).
@@ -175,10 +175,10 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const editor = editorRef.current; const block = htmlBlockRef.current;
         endHtmlEdit();
         if (!editor || !block || !block.parentNode) return;
-        editor.dom.setOuterHTML(block, html);
-        editor.focus();
-        editor.dispatch('Change');
-        editor.nodeChanged();
+        editBlocks(editor, () => {
+            editor.dom.setOuterHTML(block, html);
+            editor.focus();
+        });
     };
 
     // Contagem/substituição do mini find/replace da caixa de edição de HTML (BlockOverlays) —
@@ -204,12 +204,13 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         let top = block;
         while (top.parentElement && top.parentElement !== body) top = top.parentElement;
         const sib = (dir === 'up' ? top.previousElementSibling : top.nextElementSibling) as HTMLElement | null;
-        if (!sib || !top.parentNode) return;
-        top.parentNode.insertBefore(top, dir === 'up' ? sib : sib.nextSibling);
-        editor.selection.select(block); editor.selection.collapse(true);
-        editor.focus();
-        editor.dispatch('Change');
-        editor.nodeChanged(); // reavaliar posição da pega no novo sítio
+        const parent = top.parentNode;
+        if (!sib || !parent) return;
+        editBlocks(editor, () => { // nodeChanged no fim reavalia a pega no novo sítio
+            parent.insertBefore(top, dir === 'up' ? sib : sib.nextSibling);
+            editor.selection.select(block); editor.selection.collapse(true);
+            editor.focus();
+        });
     };
 
     // Ações do menu da pega sobre o bloco ativo (formato) ou o bloco de topo (duplicar/eliminar).
@@ -261,14 +262,15 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const block = plusBlockRef.current;
         if (!editor || !block || !block.parentNode) return;
         if (type === 'hr') { // divisória: só o <hr> (sem parágrafo extra)
-            const hr = editor.dom.create('hr', {});
-            block.parentNode.insertBefore(hr, block.nextSibling);
-            const after = hr.nextSibling as HTMLElement | null;
-            if (after && /^(P|H[1-6])$/.test(after.nodeName)) editor.selection.setCursorLocation(after, 0);
-            else { editor.selection.select(block); editor.selection.collapse(false); }
-            editor.focus();
-            editor.dispatch('Change');
-            editor.nodeChanged();
+            const parent = block.parentNode;
+            editBlocks(editor, () => {
+                const hr = editor.dom.create('hr', {});
+                parent.insertBefore(hr, block.nextSibling);
+                const after = hr.nextSibling as HTMLElement | null;
+                if (after && /^(P|H[1-6])$/.test(after.nodeName)) editor.selection.setCursorLocation(after, 0);
+                else { editor.selection.select(block); editor.selection.collapse(false); }
+                editor.focus();
+            });
             return;
         }
         if (type === 'chapterbreak') { // marcador+conteúdo próprios, ver comando mceChapterBreak
@@ -345,14 +347,15 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const tgt = dropTargetRef.current;
             dragBlockRef.current = null; dropTargetRef.current = null;
             miniMenuRef.current?.suppress('grip', false); // ver onGripLeave
-            if (drag && tgt && tgt.block !== drag && drag.parentNode) {
+            const parent = drag?.parentNode;
+            if (drag && tgt && tgt.block !== drag && parent) {
                 const ref = tgt.pos === 'before' ? tgt.block : tgt.block.nextSibling;
                 if (ref !== drag) {
-                    drag.parentNode.insertBefore(drag, ref);
-                    editor.selection.select(drag); editor.selection.collapse(true);
-                    editor.focus();
-                    editor.dispatch('Change');
-                    editor.nodeChanged(); // reavaliar posição da pega/"+" no novo sítio
+                    editBlocks(editor, () => { // nodeChanged no fim reavalia a pega/"+" no novo sítio
+                        parent.insertBefore(drag, ref);
+                        editor.selection.select(drag); editor.selection.collapse(true);
+                        editor.focus();
+                    });
                 }
             }
         };

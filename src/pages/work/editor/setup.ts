@@ -61,14 +61,14 @@ export function createEditorSetup(deps: SetupDeps) {
                     // vazio "por perto" do cursor podia na verdade ser o 1º parágrafo do capítulo
                     // SEGUINTE (ex. Ficha Técnica começa com uma linha em branco antes do texto) —
                     // substituí-lo "roubava" o conteúdo desse capítulo para o novo marcador.
-                    editor.insertContent(html);
-                    editor.dispatch('Change');
-                    const markers = editor.dom.select('p.chapter-break');
-                    const inserted = markers[markers.length - 1];
-                    const after = inserted?.nextSibling as HTMLElement | null;
-                    if (after && after.nodeName === 'P') editor.selection.setCursorLocation(after, 0);
-                    editor.focus();
-                    editor.nodeChanged();
+                    editBlocks(editor, () => {
+                        editor.insertContent(html);
+                        const markers = editor.dom.select('p.chapter-break');
+                        const inserted = markers[markers.length - 1];
+                        const after = inserted?.nextSibling as HTMLElement | null;
+                        if (after && after.nodeName === 'P') editor.selection.setCursorLocation(after, 0);
+                        editor.focus();
+                    });
                 },
             });
         });
@@ -204,9 +204,10 @@ export function createEditorSetup(deps: SetupDeps) {
         const setImgAlign = (cls: string) => {
             const node = editor.selection.getNode();
             if (node.nodeName !== 'IMG') return;
-            ['img-left', 'img-center', 'img-right', 'img-inline'].forEach((c) => editor.dom.removeClass(node, c));
-            editor.dom.addClass(node, cls);
-            editor.dispatch('Change');
+            editBlocks(editor, () => {
+                ['img-left', 'img-center', 'img-right', 'img-inline'].forEach((c) => editor.dom.removeClass(node, c));
+                editor.dom.addClass(node, cls);
+            });
         };
         ([
             ['imgalignleft', 'img-left', 'align-left', 'Imagem à esquerda'],
@@ -252,10 +253,10 @@ export function createEditorSetup(deps: SetupDeps) {
                     ],
                     onSubmit: (api: { getData: () => { offset: string }; close: () => void }) => {
                         const value = parseFloat(api.getData().offset);
-                        (node as HTMLElement).style.transform = value ? `translateY(${value}px)` : '';
                         api.close();
-                        editor.dispatch('Change');
-                        editor.nodeChanged();
+                        editBlocks(editor, () => {
+                            (node as HTMLElement).style.transform = value ? `translateY(${value}px)` : '';
+                        });
                     },
                 });
             },
@@ -333,8 +334,9 @@ export function createEditorSetup(deps: SetupDeps) {
                 if (!dragging) return;
                 dragging = false;
                 doc.body.style.userSelect = '';
-                editor.dispatch('Change');
-                editor.nodeChanged();
+                // O deslocamento já foi escrito durante o arrasto: aqui só se regista o resultado
+                // como UM passo de undo (o arrasto inteiro), não um por cada mousemove.
+                editBlocks(editor, () => {});
                 dragImg = null;
             };
             doc.addEventListener('mousemove', (e: MouseEvent) => {
