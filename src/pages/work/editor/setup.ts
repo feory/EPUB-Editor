@@ -101,19 +101,9 @@ export function createEditorSetup(deps: SetupDeps) {
             });
         });
 
-        editor.on('SetContent', (e: { selection?: boolean; format?: string; keepUndo?: boolean }) => {
-            // Carregamento programático do corpo (conteúdo inicial e troca de capítulo): o nível 0
-            // do undoManager do TinyMCE é o editor VAZIO (o wrapper React arranca com value='' e só
-            // depois faz setContent), por isso a seta de desfazer já vinha ativa ao entrar e o 1º
-            // clique apagava o documento todo. Repõe o nível base no conteúdo atual.
-            // Excluídos: insertContent/paste (selection:true) e a REPOSIÇÃO de um nível pelo próprio
-            // undoManager (format:'raw') — limpar aí matava o redo a meio do undo — e as edições do
-            // capítulo inteiro que se querem reversíveis (`keepUndo`: conversões, limpar/ligar índice).
-            if (!e.selection && e.format !== 'raw' && !e.keepUndo) {
-                editor.undoManager.clear();
-                editor.undoManager.add();
-                editor.setDirty(false);
-            }
+        // A política de undo dos carregamentos é do canal de conteúdo (contentChannel.ts:
+        // load reset/keep) — aqui só a limpeza do DOM depois de cada setContent.
+        editor.on('SetContent', () => {
             if (isCleaningRef.current) return;
             const body = editor.getBody();
             const beforeHtml = body.innerHTML;

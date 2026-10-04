@@ -36,10 +36,9 @@ export function countInBook(
 // Substituição literal (todas as ocorrências), acionada a partir do mini find/replace da
 // caixa de edição de HTML (BlockOverlays) — devolve o nº de ocorrências trocadas.
 // split/join em vez de RegExp: sem escaping de caracteres especiais para uma substring
-// literal. dom.setHTML(getBody()) em vez de editor.setContent(): setContent() LIMPA a
-// pilha de undo inteira (pensado para carregar conteúdo pela 1ª vez, não para editar) —
-// testado ao vivo, ficava sempre sem Ctrl+Z possível mesmo com undoManager.add()/
-// transact() a seguir. dom.setHTML + add() cria 1 nível normal.
+// literal. dom.setHTML(getBody()) + undoManager.add(): cria 1 nível de undo normal (Ctrl+Z
+// reverte a substituição). Os carregamentos com política de undo passam pelo canal de
+// conteúdo (contentChannel.ts); isto é uma edição, não um carregamento.
 export function replaceInBook(
     editor: TinyMCEEditor | null,
     activeChapterIndex: number,
