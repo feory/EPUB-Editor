@@ -1,4 +1,5 @@
 import type { TinyMCEEditor } from './types';
+import { RING } from './blockGeometry'; // linha do anel do bloco ativo — o menu encosta a ela
 
 /**
  * Mini-menu (ver Design/CONTEXT.md): a barra de estilos do bloco ativo — o `.tox-pop` do
@@ -37,8 +38,6 @@ export interface MiniMenu {
 // Escondem também a barra de seleção de texto (o pop é o mesmo); 'plusMenu' só o mini-menu.
 const HIDES_SELECTION_BAR: ReadonlySet<Reason> = new Set<Reason>(['toolbar', 'grip']);
 
-// Anel do bloco ativo: 4px fora da caixa do bloco (contentStyles.ts) — o menu encosta a ele.
-const RING = 4;
 
 /**
  * Cabe ACIMA do bloco, senão ABAIXO, senão null (esconder). Ambos os lados medidos dentro da

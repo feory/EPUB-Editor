@@ -5,6 +5,7 @@ import { BlockOverlays, type BlockOverlaysProps } from './overlays/BlockOverlays
 import { attachMiniMenu, type MiniMenu } from './miniMenu';
 import { editBlocks } from './blockEdit';
 import type { ActiveBlock } from './activeBlock';
+import { plusCenterY, PLUS_HIT, PLUS_SIZE, gripLeft } from './blockGeometry';
 
 // As únicas 3 que atravessam para fora do subsistema (WorkEditor/setup.ts); tudo o resto em
 // BlockOverlaysProps só alimenta o render interno — ver useBlockOverlays() no fim do ficheiro.
@@ -382,11 +383,12 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         // Pseudo-elementos não recebem eventos → o clique chega ao próprio bloco e é reconhecido
         // pela posição (círculo de 20px centrado na borda inferior).
         editor.on('PreInit', () => editor.serializer.addTempAttr('data-mce-plusopen'));
-        // Centro do círculo = fim do conteúdo + --plus-dy (mesma conta do CSS).
-        const plusCenterY = (block: HTMLElement) => {
-            const cs = getComputedStyle(block);
-            return block.getBoundingClientRect().bottom - parseFloat(cs.paddingBottom) + (parseFloat(cs.getPropertyValue('--plus-dy')) || 0);
-        };
+        // Centro do círculo (blockGeometry.ts, a mesma conta que gera o CSS): fim do conteúdo,
+        // mais o desvio do bloco ativo.
+        const centerOfPlus = (block: HTMLElement) => plusCenterY(
+            block.getBoundingClientRect().bottom - parseFloat(getComputedStyle(block).paddingBottom),
+            activeBlock.current() === block,
+        );
         // O 'click' que se segue ao mousedown no "+" contaria como "2.º clique no mesmo bloco"
         // (activeBlock.ts → recolhido) e tirava o anel ao parágrafo; engolido antes de lá chegar.
         let swallowClick = false;
@@ -400,7 +402,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const block = e.target as HTMLElement;
             if (e.button !== 0 || editor.mode.isReadOnly() || block.parentNode !== editor.getBody() || !isPlusBlock(block)) return;
             const br = block.getBoundingClientRect();
-            if (Math.abs(e.clientX - (br.left + br.width / 2)) > 11 || Math.abs(e.clientY - plusCenterY(block)) > 11) return;
+            if (Math.abs(e.clientX - (br.left + br.width / 2)) > PLUS_HIT || Math.abs(e.clientY - centerOfPlus(block)) > PLUS_HIT) return;
             // Com outro bloco ativo o "+" deste está escondido (CSS) → clique normal.
             const active = activeBlock.current();
             if (active && active !== block) return;
@@ -416,7 +418,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             editor.focus();
             editor.nodeChanged(); // síncrono: aplica data-mce-psactive → --plus-dy já conta abaixo
             const ir = iframe.getBoundingClientRect();
-            openPlusMenu(block, { top: ir.top + plusCenterY(block) - 10, left: ir.left + br.left + br.width / 2 });
+            openPlusMenu(block, { top: ir.top + centerOfPlus(block) - PLUS_SIZE / 2, left: ir.left + br.left + br.width / 2 });
         });
         // Hover sobre uma divisória → controlo Pequena/Larga.
         editor.on('mousemove', (e: MouseEvent) => {
@@ -463,8 +465,8 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             if (posTop < 0 || posTop > window.innerHeight) { fadeOutGrip(); return; } // clamp à janela
             cancelGripHide(); // rato de volta ao gutter → cancelar o fade pendente
             gripBlockRef.current = block;
-            // Linha da borda ≈ 4px à esquerda do bloco; centrar a pega (20px) nessa linha.
-            const pos = { top: posTop, left: ir.left + br.left - 14 };
+            // Pega centrada na linha do anel (blockGeometry.ts).
+            const pos = { top: posTop, left: ir.left + gripLeft(br.left) };
             const prev = gripPosRef.current;
             if (prev && Math.abs(prev.top - pos.top) < 0.5 && Math.abs(prev.left - pos.left) < 0.5) { setGripFading(false); return; }
             gripPosRef.current = pos; setGripFading(false); setGripPos(pos);
