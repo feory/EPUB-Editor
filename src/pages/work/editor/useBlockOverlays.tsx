@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { TinyMCEEditor } from './types';
-import { countInBook, replaceInBook } from './book-find-replace';
 import { BlockOverlays, type BlockOverlaysProps } from './overlays/BlockOverlays';
+import { useHtmlEdit } from './overlays/HtmlEdit';
 import { attachMiniMenu, type MiniMenu } from './miniMenu';
 import { editBlocks } from './blockEdit';
 import type { ActiveBlock } from './activeBlock';
 import { plusCenterY, PLUS_HIT, PLUS_SIZE, gripLeft } from './blockGeometry';
 
-// As únicas 3 que atravessam para fora do subsistema (WorkEditor/setup.ts); tudo o resto em
-// BlockOverlaysProps só alimenta o render interno — ver useBlockOverlays() no fim do ficheiro.
-type BlockOverlaysInternal = Omit<BlockOverlaysProps, 'readOnly' | 'wholeBookLoaded' | 'chapterLabel'>;
+// readOnly atravessa de fora; tudo o resto em BlockOverlaysProps só alimenta o render interno.
+type BlockOverlaysInternal = Omit<BlockOverlaysProps, 'readOnly'>;
 
 const noop0 = () => 0;
 
@@ -18,21 +17,6 @@ type Pos = { top: number; left: number };
 // iframe do editor (dentro do container); todas as posições de overlay derivam do seu rect.
 const iframeOf = (editor: TinyMCEEditor) =>
     (editor.getContainer()?.querySelector('iframe') as HTMLIFrameElement | null);
-
-// A caixa de editar HTML (position:fixed, z-index alto — ver BlockOverlays.tsx) pintava por
-// cima da toolbar sticky e da statusbar do TinyMCE (nenhuma das duas tem z-index próprio, só
-// stacking por ordem no DOM — a nossa caixa vem depois no DOM e ganha sempre). Em vez de entrar
-// numa guerra de z-index com o skin do TinyMCE, limita-se a própria caixa ao espaço ENTRE as
-// duas: nunca começa acima do fundo da toolbar, nunca cresce para lá do topo da statusbar.
-const GAP = 8;
-function chromeBounds(editor: TinyMCEEditor): { minTop: number; maxBottom: number } {
-    const container = editor.getContainer() as HTMLElement | null;
-    const header = container?.querySelector('.tox-editor-header') as HTMLElement | null;
-    const statusbar = container?.querySelector('.tox-statusbar') as HTMLElement | null;
-    const minTop = header ? header.getBoundingClientRect().bottom + GAP : 0;
-    const maxBottom = statusbar ? statusbar.getBoundingClientRect().top - GAP : window.innerHeight;
-    return { minTop, maxBottom };
-}
 
 export interface BlockOverlaysOptions {
     activeChapterIndex: number;
@@ -55,6 +39,8 @@ export interface BlockOverlaysOptions {
  */
 export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor | null>, options: BlockOverlaysOptions) {
     const { activeChapterIndex, onCountInWholeBook = noop0, onReplaceInWholeBook = noop0, readOnly, wholeBookLoaded, chapterLabel } = options;
+    // Edição de HTML inline (overlays/HtmlEdit.tsx): estado, vista e procurar/substituir próprios.
+    const htmlEdit = useHtmlEdit(editorRef, { activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook, wholeBookLoaded, chapterLabel });
     // Pega de arrastar (gutter esquerdo): visível enquanto o bloco está ativo (selecionado), independente do rato.
     const [gripPos, setGripPos] = useState<Pos | null>(null);
     const [gripFading, setGripFading] = useState(false); // fade-out suave durante o scroll
@@ -126,76 +112,6 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             editor.focus();
         });
     };
-
-    // Editar HTML do bloco (linha) INLINE: esconde o bloco e mostra um textarea no lugar (mesma caixa).
-    const htmlBlockRef = useRef<HTMLElement | null>(null);
-    const htmlTextareaRef = useRef<HTMLTextAreaElement>(null);
-    const [htmlEdit, setHtmlEdit] = useState<string | null>(null);
-    const [htmlEditPos, setHtmlEditPos] = useState<{ top: number; left: number; width: number; height: number; maxHeight: number; visible: boolean } | null>(null);
-    const repositionHtmlEdit = () => {
-        const editor = editorRef.current; const block = htmlBlockRef.current;
-        if (!editor || !block) return;
-        const iframe = iframeOf(editor);
-        if (!iframe) return;
-        const ir = iframe.getBoundingClientRect(); const r = block.getBoundingClientRect();
-        const { minTop, maxBottom } = chromeBounds(editor);
-        const top = Math.max(ir.top + r.top, minTop);
-        // esconder (sem desmontar → preserva o texto) quando o bloco sai da área visível do editor
-        const visible = r.bottom > 0 && r.top < ir.height && top >= 0 && top < window.innerHeight;
-        setHtmlEditPos({ top, left: ir.left + r.left, width: r.width, height: r.height, maxHeight: Math.max(maxBottom - top, 120), visible });
-    };
-    // Painel "Substituir" (estado local a BlockOverlays.tsx, ver findText/replaceOpen ali)
-    // regista aqui o próprio reset — por ref, atualizado a cada render (sem efeito) — para que
-    // endHtmlEdit, ponto único de fecho da caixa (clique fora, Cancelar, Guardar, Substituir),
-    // o dispare sempre. Sem isto, fechar a caixa por CLIQUE NOUTRO PARÁGRAFO (mousedown abaixo,
-    // único caminho que não passa por BlockOverlays.tsx) deixava o painel arrastar findText/
-    // replaceOpen de um parágrafo para o seguinte.
-    const onHtmlEditCloseRef = useRef<(() => void) | null>(null);
-    const endHtmlEdit = () => {
-        const block = htmlBlockRef.current;
-        if (block) editorRef.current?.dom.setAttrib(block, 'data-mce-htmledit', null); // volta a mostrar o texto
-        htmlBlockRef.current = null; setHtmlEdit(null); setHtmlEditPos(null);
-        onHtmlEditCloseRef.current?.();
-    };
-    // Abrir a edição de HTML inline para um elemento de topo (usado pela pega e pelo mini-menu).
-    const startHtmlEdit = (top: HTMLElement) => {
-        const editor = editorRef.current;
-        if (!editor) return;
-        htmlBlockRef.current = top;
-        const clean = editor.dom.getOuterHTML(top).replace(/\s*data-mce-[\w-]+="[^"]*"/g, '');
-        setHtmlEdit(clean);
-        editor.dom.setAttrib(top, 'data-mce-htmledit', '1');
-        const iframe = iframeOf(editor);
-        if (iframe) {
-            const ir = iframe.getBoundingClientRect(); const r = top.getBoundingClientRect();
-            const { minTop, maxBottom } = chromeBounds(editor);
-            const boxTop = Math.max(ir.top + r.top, minTop);
-            setHtmlEditPos({ top: boxTop, left: ir.left + r.left, width: r.width, height: r.height, maxHeight: Math.max(maxBottom - boxTop, 120), visible: true });
-        }
-    };
-    const saveHtmlEdit = (html: string) => {
-        const editor = editorRef.current; const block = htmlBlockRef.current;
-        endHtmlEdit();
-        if (!editor || !block || !block.parentNode) return;
-        editBlocks(editor, () => {
-            editor.dom.setOuterHTML(block, html);
-            editor.focus();
-        });
-    };
-
-    // Contagem/substituição do mini find/replace da caixa de edição de HTML (BlockOverlays) —
-    // lógica de âmbito (documento/capítulo, isolar segmento, delegar p/ livro inteiro fora da
-    // DOM) vive em book-find-replace.ts. useCallback: identidade estável entre renders
-    // (gripPos muda a cada mousemove no editor) — sem isto, o useEffect de contagem
-    // debounced em BlockOverlays reiniciava o temporizador a cada movimento do rato com o
-    // painel aberto.
-    const countInDocument = useCallback((find: string, scope: 'chapter' | 'document'): number =>
-        countInBook(editorRef.current, activeChapterIndex, onCountInWholeBook, find, scope),
-        [activeChapterIndex, onCountInWholeBook, editorRef]);
-
-    const replaceInDocument = useCallback((find: string, replaceWith: string, scope: 'chapter' | 'document'): number =>
-        replaceInBook(editorRef.current, activeChapterIndex, onReplaceInWholeBook, htmlBlockRef.current, find, replaceWith, scope),
-        [activeChapterIndex, onReplaceInWholeBook, editorRef]);
 
     // Mover o bloco de topo uma posição para cima/baixo (setas na pega).
     const moveBlock = (dir: 'up' | 'down') => {
@@ -476,7 +392,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         editor.on('blur', clearGrip);
 
         // Editar HTML inline aberto + clique noutro bloco → fechar (descarta a edição).
-        editor.on('mousedown', () => { if (htmlBlockRef.current) endHtmlEdit(); });
+        editor.on('mousedown', () => { if (htmlEdit.isOpen()) htmlEdit.close(); });
 
 
         // Scroll de contentor EXTERNO (fora do iframe) / resize da janela: reavaliar ambos os overlays.
@@ -491,8 +407,8 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             if (gripScrollTimer) clearTimeout(gripScrollTimer);
             gripScrollTimer = setTimeout(() => { setGripFading(false); evalGrip(); }, 150);
         };
-        const onScroll = () => { closeMenuIfOpen(); gripOnScroll(); if (htmlBlockRef.current) repositionHtmlEdit(); };
-        const evalOverlays = () => { closeMenuIfOpen(); gripOnScroll(); if (htmlBlockRef.current) repositionHtmlEdit(); };
+        const onScroll = () => { closeMenuIfOpen(); gripOnScroll(); if (htmlEdit.isOpen()) htmlEdit.reposition(); };
+        const evalOverlays = () => { closeMenuIfOpen(); gripOnScroll(); if (htmlEdit.isOpen()) htmlEdit.reposition(); };
         editor.on('init', () => {
             editor.getWin().addEventListener('scroll', onScroll, { passive: true });
             window.addEventListener('scroll', onScroll, true);
@@ -506,16 +422,14 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
 
     const internal: BlockOverlaysInternal = {
-        plusMenu, gripPos, gripFading, gripMenu, hrCtl, htmlEdit, htmlEditPos, dropLine,
-        htmlTextareaRef, styleMenu,
+        plusMenu, gripPos, gripFading, gripMenu, hrCtl, dropLine, styleMenu,
         closePlusMenu, plusAction,
-        startBlockDrag, moveBlock, setGripMenu, onGripEnter, onGripLeave, gripAction, setHrWidth, deleteHr, endHtmlEdit, saveHtmlEdit,
-        startHtmlEdit, openStyleMenu, styleAction, setStyleMenu, replaceInDocument, countInDocument,
-        onHtmlEditCloseRef,
+        startBlockDrag, moveBlock, setGripMenu, onGripEnter, onGripLeave, gripAction, setHrWidth, deleteHr,
+        styleAction, setStyleMenu,
     };
-    const render = <BlockOverlays {...internal} readOnly={readOnly} wholeBookLoaded={wholeBookLoaded} chapterLabel={chapterLabel} />;
+    const render = <><BlockOverlays {...internal} readOnly={readOnly} />{htmlEdit.element}</>;
 
-    return { render, mount: wireEditor, startHtmlEdit, openStyleMenu };
+    return { render, mount: wireEditor, startHtmlEdit: htmlEdit.start, openStyleMenu };
 }
 
 export type BlockOverlaysHandle = ReturnType<typeof useBlockOverlays>;
