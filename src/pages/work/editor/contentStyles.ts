@@ -37,15 +37,15 @@ body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-
   border: 1px solid #e2e8f0; border-radius: 50%; background: #fff;
   /* 2 cópias brancas da própria forma, desviadas p/ os lados: cortam a linha da borda
      à esquerda/direita do círculo (ilusão de espaço). */
-  box-shadow: 0 2px 6px rgba(15,23,42,.15), -${PLUS_CUT}px 0 0 0 #fff, ${PLUS_CUT}px 0 0 0 #fff;
+  box-shadow: -${PLUS_CUT}px 0 0 0 #fff, ${PLUS_CUT}px 0 0 0 #fff;
   color: #334155; font: 400 15px/17px system-ui, sans-serif; text-align: center; text-indent: 0;
   letter-spacing: 0; text-transform: none; cursor: pointer; user-select: none;
   visibility: hidden; opacity: 0; transform: scale(.6);
   transition: opacity .2s ease-in, transform .2s ease-in, visibility 0s linear .2s;
 }
 /* A entrada usa a transição DESTE estado: atraso de 60ms evita o "piscar" ao passar o rato por vários blocos. */
-body:not(.mce-content-readonly):not(.ps-has-active) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]):hover::after,
-body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]):is([data-mce-psactive]:hover,[data-mce-plusopen])::after {
+body:not(.mce-content-readonly):not(.ps-has-active):not(.ps-grip-menu) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]):hover::after,
+body:not(.mce-content-readonly):not(.ps-grip-menu) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]):is([data-mce-psactive]:hover,[data-mce-plusopen])::after {
   visibility: visible; opacity: 1; transform: none;
   transition: opacity .22s ease-out .06s, transform .22s ease-out .06s, visibility 0s linear .06s;
 }

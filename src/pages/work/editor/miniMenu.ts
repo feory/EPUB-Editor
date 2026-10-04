@@ -27,7 +27,7 @@ import { RING } from './blockGeometry'; // linha do anel do bloco ativo — o me
  */
 
 /** Motivos de fora para esconder o mini-menu. ('toolbar' é interno: o módulo ouve o hover.) */
-export type MiniMenuSuppressReason = 'grip' | 'plusMenu';
+export type MiniMenuSuppressReason = 'grip' | 'plusMenu' | 'gripMenu';
 type Reason = MiniMenuSuppressReason | 'toolbar';
 
 export interface MiniMenu {

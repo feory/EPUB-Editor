@@ -85,7 +85,7 @@ export const gripCss = () => {
   margin: calc(var(--grip-y, 0px) - ${ACTIVE_PAD_Y}px) 0 0 -${ACTIVE_PAD_X + RING + GRIP_WIDTH / 2}px;
   background: #fff url("data:image/svg+xml,${encodeURIComponent(GRIP_SVG)}") center / ${GRIP_WIDTH}px ${GRIP_HEIGHT}px no-repeat;
   border: 1px solid #e2e8f0; border-radius: 6px;
-  box-shadow: 0 2px 6px rgba(15,23,42,.15), 0 -${PLUS_CUT}px 0 0 #fff, 0 ${PLUS_CUT}px 0 0 #fff;
+  box-shadow: 0 -${PLUS_CUT}px 0 0 #fff, 0 ${PLUS_CUT}px 0 0 #fff;
   cursor: grab; user-select: none;
   visibility: hidden; opacity: 0;
   transition: opacity .2s ease-in, visibility 0s linear .2s;

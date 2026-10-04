@@ -17,8 +17,8 @@ export interface BlockOverlaysProps {
     styleMenu: { top: number; left: number; kind: 'para' | 'head' } | null;
     closePlusMenu: () => void;
     plusAction: (type: string) => void;
-    setGripMenu: React.Dispatch<React.SetStateAction<Pos | null>>;
-    gripAction: (action: string) => void;
+    dismissGripMenu: (x: number, y: number) => void;
+    gripAction: (action: 'duplicate' | 'delete') => void;
     setHrWidth: (full: boolean) => void;
     deleteHr: () => void;
     styleAction: (format: string) => void;
@@ -31,7 +31,7 @@ type Props = BlockOverlaysProps;
 /** Overlays estilo Notion renderizados FORA do iframe (posição fixed em coords da viewport). */
 export function BlockOverlays({
     plusMenu, gripMenu, hrCtl, dropLine, closePlusMenu, plusAction,
-    setGripMenu, gripAction, setHrWidth, deleteHr,
+    dismissGripMenu, gripAction, setHrWidth, deleteHr,
     styleMenu, styleAction, setStyleMenu, readOnly,
 }: Props) {
     return (
@@ -68,29 +68,24 @@ export function BlockOverlays({
             )}
             {gripMenu && (
                 <>
-                    <div className="fixed inset-0 z-[110]" onMouseDown={() => setGripMenu(null)} />
+                    {/* preventDefault: o editor não perde o foco; dismissGripMenu põe o cursor onde se clicou */}
+                    <div className="fixed inset-0 z-[110]" onMouseDown={(e) => { e.preventDefault(); dismissGripMenu(e.clientX, e.clientY); }} />
                     <div
                         style={{ position: 'fixed', top: gripMenu.top, left: gripMenu.left, zIndex: 111 }}
                         className="w-48 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
                     >
-                        {([
-                            ['duplicate', 'Duplicar', Copy], ['delete', 'Eliminar', Trash2], ['__sep__', '', Copy],
-                            ['h1', 'Título 1', Heading1], ['h2', 'Título 2', Heading2], ['h3', 'Título 3', Heading3],
-                            ['p', 'Parágrafo', Pilcrow], ['p-quote', 'Citação', Quote],
-                        ] as const).map(([action, label, Icon]) => action === '__sep__'
-                            ? <div key="sep" className="my-1 h-px bg-slate-200" />
-                            : (
-                                <button
-                                    key={action}
-                                    type="button"
-                                    onMouseDown={(ev) => ev.preventDefault()}
-                                    onClick={() => gripAction(action)}
-                                    className={`flex items-center gap-2 w-full text-left px-2 py-1.5 rounded-lg transition-colors ${action === 'delete' ? 'text-rose-600 hover:bg-rose-50' : 'hover:bg-slate-100 active:bg-slate-200'}`}
-                                >
-                                    <Icon size={15} className={`shrink-0 ${action === 'delete' ? 'text-rose-500' : 'text-slate-400'}`} />
-                                    <span className="truncate">{label}</span>
-                                </button>
-                            ))}
+                        {([['duplicate', 'Duplicar', Copy], ['delete', 'Eliminar', Trash2]] as const).map(([action, label, Icon]) => (
+                            <button
+                                key={action}
+                                type="button"
+                                onMouseDown={(ev) => ev.preventDefault()}
+                                onClick={() => gripAction(action)}
+                                className={`flex items-center gap-2 w-full text-left px-2 py-1.5 rounded-lg transition-colors ${action === 'delete' ? 'text-rose-600 hover:bg-rose-50' : 'hover:bg-slate-100 active:bg-slate-200'}`}
+                            >
+                                <Icon size={15} className={`shrink-0 ${action === 'delete' ? 'text-rose-500' : 'text-slate-400'}`} />
+                                <span className="truncate">{label}</span>
+                            </button>
+                        ))}
                     </div>
                 </>
             )}
