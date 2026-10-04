@@ -27,16 +27,20 @@ export interface ContentChannel {
 export interface ContentChannelOptions {
     onReport: (html: string) => void;
     shouldReport?: () => boolean;
+    // Limpeza do corpo depois de cada setContent (carregar, colar, inserir); devolve se mudou.
+    // Num carregamento, se mudou, o canal reporta o HTML já limpo (o eco não recarrega).
+    normalize?: () => boolean;
     deferMs?: number;
 }
 
 const DEFERRED_EVENTS = 'input change compositionend CommentChange';
 const IMMEDIATE_EVENTS = 'SetContent NewBlock Undo Redo remove';
 
-export function attachContentChannel(editor: TinyMCEEditor, { onReport, shouldReport = () => true, deferMs = 300 }: ContentChannelOptions): ContentChannel {
+export function attachContentChannel(editor: TinyMCEEditor, { onReport, shouldReport = () => true, normalize, deferMs = 300 }: ContentChannelOptions): ContentChannel {
     let known: string | null = null;        // último HTML reportado ou carregado (serializado)
     let lastLoadedRaw: string | null = null; // o último html PASSADO a load (antes de reserializar)
     let loading = false;                     // os eventos do próprio load não são edições
+    let normalizedInLoad = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const report = () => {
@@ -52,6 +56,8 @@ export function attachContentChannel(editor: TinyMCEEditor, { onReport, shouldRe
         clearTimeout(timer);
         timer = setTimeout(report, deferMs);
     };
+    // ANTES do report imediato do SetContent: o report (colar/inserir) já vê o DOM limpo.
+    editor.on('SetContent', () => { if (normalize?.() && loading) normalizedInLoad = true; });
     editor.on(DEFERRED_EVENTS, defer);
     editor.on(IMMEDIATE_EVENTS, () => { if (!loading) report(); });
 
@@ -59,6 +65,7 @@ export function attachContentChannel(editor: TinyMCEEditor, { onReport, shouldRe
         if (known !== null && (html === known || html === lastLoadedRaw)) return known;
         clearTimeout(timer); timer = undefined; // o pendente é do conteúdo que vai ser substituído
         loading = true;
+        normalizedInLoad = false;
         try {
             if (undo === 'reset') {
                 editor.setContent(html);
@@ -78,6 +85,9 @@ export function attachContentChannel(editor: TinyMCEEditor, { onReport, shouldRe
         lastLoadedRaw = html;
         const loaded: string = editor.getContent();
         known = loaded;
+        // A limpeza mudou o que veio de fora (ex. data-image-id): quem guarda tem de ficar com a
+        // versão limpa. Nunca um vazio (o <p><br></p> inicial do TinyMCE não é conteúdo).
+        if (normalizedInLoad && loaded.trim() && shouldReport()) onReport(loaded);
         return loaded;
     };
 

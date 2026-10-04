@@ -1,5 +1,4 @@
 import type { Editor } from 'tinymce';
-import { cleanEditorDOM } from '../../../utils/html-cleaner';
 import { isIndiceChapterTitle } from '../../../utils/indice-links';
 import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
@@ -8,8 +7,6 @@ import { editBlocks } from './blockEdit';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
 
 interface SetupDeps {
-    setHtmlContent: (content: string) => void;
-    isCleaningRef: React.MutableRefObject<boolean>;
     onGrammarClick?: (index: number) => void;
     onSave?: () => void;
     onExport?: () => void;
@@ -33,7 +30,7 @@ interface SetupDeps {
 
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
-    const { setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
+    const { onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
         chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment, onEditBoxStyle } = deps;
 
     return (editor: Editor) => {
@@ -99,40 +96,6 @@ export function createEditorSetup(deps: SetupDeps) {
                 };
                 reader.readAsDataURL(file);
             });
-        });
-
-        // A política de undo dos carregamentos é do canal de conteúdo (contentChannel.ts:
-        // load reset/keep) — aqui só a limpeza do DOM depois de cada setContent.
-        editor.on('SetContent', () => {
-            if (isCleaningRef.current) return;
-            const body = editor.getBody();
-            const beforeHtml = body.innerHTML;
-            cleanEditorDOM(body);
-            // Backfill data-image-id before capturing afterHtml so the attribute is
-            // included in the state update and present when prepareEpubAssets runs.
-            body.querySelectorAll<HTMLImageElement>('img:not([data-image-id])').forEach((img) => {
-                const src = img.getAttribute('src');
-                if (src && src.includes('/api/ebooks/') && src.includes('/images/')) {
-                    const match = src.match(/\/images\/([^/?]+)/);
-                    if (match && match[1]) {
-                        img.setAttribute('data-image-id', match[1]);
-                        img.setAttribute('loading', 'lazy');
-                        img.setAttribute('alt', 'Imagem');
-                        if (!img.style.maxWidth) img.style.maxWidth = '100%';
-                        if (!img.style.height) img.style.height = 'auto';
-                    }
-                }
-            });
-            const afterHtml = body.innerHTML;
-            // Guard: never propagate empty content — prevents a race where TinyMCE's
-            // initial empty <p><br></p> gets cleaned and wipes real content already loaded.
-            if (afterHtml !== beforeHtml && afterHtml.trim().length > 0) {
-                isCleaningRef.current = true;
-                setTimeout(() => {
-                    setHtmlContent(afterHtml);
-                    isCleaningRef.current = false;
-                }, 0);
-            }
         });
 
         editor.on('click', (e: MouseEvent) => {

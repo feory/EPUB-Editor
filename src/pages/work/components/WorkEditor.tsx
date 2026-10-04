@@ -49,6 +49,7 @@ import 'tinymce/skins/ui/oxide/skin.css';
 import 'tinymce/skins/ui/oxide/content.css';
 import type { TinyMCEEditor } from '../editor/types';
 import { attachContentChannel, type ContentChannel } from '../editor/contentChannel';
+import { normalizeEditorBody } from '../editor/normalizeBody';
 import type { GrammarMatch } from '../hooks/useEbookGrammar';
 
 type FilePickerCallback = NonNullable<RawEditorOptions['file_picker_callback']>;
@@ -165,7 +166,6 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook,
         readOnly, wholeBookLoaded: activeChapterIndex === -1, chapterLabel: chapters[activeChapterIndex]?.title || 'Capítulo',
     });
-    const isCleaningRef = useRef(false);
     const isDiffHighlightingRef = useRef(false);
     // Canal de conteúdo (editor/contentChannel.ts): o ÚNICO caminho de entrada (load) e saída
     // (report → setHtmlContent) do HTML. O <Editor> é não controlado — sem value/onEditorChange,
@@ -973,6 +973,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             channelRef.current = attachContentChannel(editor, {
                                 onReport: (html) => setHtmlContentRef.current(html),
                                 shouldReport: () => !isDiffHighlightingRef.current,
+                                normalize: () => normalizeEditorBody(editor.getBody()),
                             });
                             channelRef.current.load(htmlContentRef.current, { undo: 'reset' });
                         },
@@ -999,7 +1000,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         // table spellchecker configurepermanentpen) — só acrescenta, não troca nada.
                         contextmenu: 'imagecrop boxedit link linkchecker image editimage table spellchecker configurepermanentpen',
                         setup: createEditorSetup({
-                            setHtmlContent, isCleaningRef, onGrammarClick, onSave, onExport,
+                            onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
                             openStyleMenu: overlays.openStyleMenu,
                             chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef,

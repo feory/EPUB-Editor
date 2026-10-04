@@ -109,3 +109,53 @@ test('realce do diff ativo suspende os reports (como o isDiffHighlightingRef de 
     ch.flush();
     expect(reports).toEqual(['<p>depois</p>']);
 });
+
+// --- normalize: limpeza depois de cada setContent ---------------------------------------------
+// O fake guarda o conteúdo numa string; a "limpeza" acrescenta data-image-id às imagens sem ele.
+function withNormalize() {
+    const f = fakeEditor();
+    const reports: string[] = [];
+    let normalized = 0;
+    const normalize = () => {
+        const body = f.editor.getContent() as string;
+        if (!body.includes('<img src="x">')) return false;
+        normalized++;
+        (f.editor as unknown as { dom: { setHTML: (b: unknown, h: string) => void } }).dom.setHTML({}, body.replace('<img src="x">', '<img src="x" data-image-id="1">'));
+        return true;
+    };
+    const ch = attachContentChannel(f.editor, { onReport: (h) => reports.push(h), normalize, deferMs: 5 });
+    return { f, ch, reports, normalizedCount: () => normalized };
+}
+
+test('carregamento que a limpeza muda → 1 report com o HTML limpo; o eco não recarrega', () => {
+    const t = withNormalize();
+    const out = t.ch.load('<p><img src="x"></p>', { undo: 'reset' });
+    expect(out).toBe('<p><img src="x" data-image-id="1"></p>');
+    expect(t.reports).toEqual(['<p><img src="x" data-image-id="1"></p>']);
+    t.f.log.length = 0;
+    t.ch.load(t.reports[0], { undo: 'reset' }); // eco: estado → prop → load
+    expect(t.f.log).toEqual([]); // nada recarregado
+});
+
+test('carregamento que a limpeza não muda → sem report', () => {
+    const t = withNormalize();
+    t.ch.load('<p>texto</p>', { undo: 'reset' });
+    expect(t.reports).toEqual([]);
+});
+
+test('colar/inserir (SetContent fora de um load) → limpo e reportado de imediato, sem recarregar', () => {
+    const t = withNormalize();
+    t.ch.load('<p>texto</p>', { undo: 'reset' });
+    t.f.log.length = 0;
+    t.f.editor.setContent('<p>texto</p><p><img src="x"></p>'); // simula o resultado de colar
+    expect(t.reports).toEqual(['<p>texto</p><p><img src="x" data-image-id="1"></p>']);
+    expect(t.f.log).toEqual([]);
+});
+
+test('nunca reporta um carregamento vazio, mesmo que a limpeza mude alguma coisa', () => {
+    const f = fakeEditor('');
+    const reports: string[] = [];
+    const ch = attachContentChannel(f.editor, { onReport: (h) => reports.push(h), normalize: () => true });
+    ch.load('   ', { undo: 'reset' });
+    expect(reports).toEqual([]);
+});
