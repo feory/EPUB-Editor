@@ -1,5 +1,5 @@
 // Política de títulos do InDesign — casos reais dos 15 EPUBs.
-// Correr: bun test ./.claude/skills/epub-indesign/tests/
+// Correr: bun test src/services/indesign
 import { test, expect } from 'bun:test';
 import { indesignTitle, type TitlePage } from '../titles';
 
@@ -49,4 +49,9 @@ test('rótulo de ficha técnica (autor/autora, revisão, capa, ISBN) → Ficha T
 test('as mesmas palavras a meio de um capítulo não contam', () => {
     expect(indesignTitle(page({ title: 'Capítulo 3', paragraphs: ['O autor defende que a capa do livro…', 'Ver Silva (2020), ISBN 978-1-23.'] }))).toBe('Capítulo 3');
     expect(indesignTitle(page({ title: 'Capítulo 3', paragraphs: ['Autoridade e poder são…', 'Capacidade de liderança…'] }))).toBe('Capítulo 3');
+});
+
+test('título real que acaba em ":" (ex. "Sun Tzu disse:") não é rótulo da ficha → mantém-se', () => {
+    expect(indesignTitle(page({ title: 'Sun Tzu disse:', bodyText: 'Sun Tzu disse: a guerra…' }))).toBe('Sun Tzu disse:');
+    expect(indesignTitle(page({ title: 'TÍTULO:', bodyText: 'A Arte da Guerra' }))).toBe('Rosto');
 });

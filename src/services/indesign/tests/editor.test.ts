@@ -1,4 +1,4 @@
-// Correr: bun test ./.claude/skills/epub-indesign/tests/
+// Correr: bun test src/services/indesign
 import { test, expect } from 'bun:test';
 import { editorVocabulary } from '../editor';
 
@@ -13,7 +13,7 @@ table th, table td { border: 1px solid #333; }`;
 });
 
 test('editorVocabulary: o DEFAULT_CSS real da app tem todas as classes que a tradução emite', async () => {
-    const src = await Bun.file(new URL('../../../../src/context/StyleContext.tsx', import.meta.url)).text();
+    const src = await Bun.file(new URL('../../../context/StyleContext.tsx', import.meta.url)).text();
     const vocab = editorVocabulary(src.match(/export const DEFAULT_CSS = `([\s\S]*?)`;/)![1]);
     for (const c of ['p-indent', 'p-top', 'p-space', 'p-bottom', 'p-center', 'p-small', 'p-legendas', 'p-quote',
         'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-asterisk', 'p-border-top', 'p-border-bottom',

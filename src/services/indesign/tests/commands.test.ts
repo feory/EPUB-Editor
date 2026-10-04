@@ -1,6 +1,7 @@
 // Testes de livro inteiro: EPUBs mínimos "à InDesign" construídos em memória → convertBook / verifyBook.
-// Correr: bun test ./.claude/skills/epub-indesign/tests/  (com ./ — o bun ignora pastas com ponto num filtro)
+// Correr: bun test src/services/indesign
 import { test, expect } from 'bun:test';
+import '../happy-dom';
 import JSZip from 'jszip';
 import { parseXml } from '../book';
 import { convertBook, verifyBook, type BookMap } from '../commands';
@@ -132,4 +133,15 @@ test('verify: original × optimizado limpo; e apanha texto perdido', async () =>
     zip.file('OEBPS/c1.xhtml', xml.replace('segundo parágrafo', 'segundo'));
     const bad = await verifyBook(epub, await zip.generateAsync({ type: 'uint8array' }));
     expect(bad.text.ok).toBe(false);
+});
+
+test('título repetido em vários ficheiros só cria um capítulo: os seguintes ficam sem título', async () => {
+    const epub = await makeEpub([
+        { href: 'c1.xhtml', title: 'Sun Tzu disse:', body: '<p class="TXT">um</p>' },
+        { href: 'c2.xhtml', title: 'Outro', body: '<p class="TXT">dois</p>' },
+        { href: 'c3.xhtml', title: 'Sun Tzu disse:', body: '<p class="TXT">três</p>' },
+    ]);
+    const { bytes } = await convert(epub);
+    expect((await readDoc(bytes, 'c1.xhtml')).querySelector('title')?.textContent).toBe('Sun Tzu disse:');
+    expect((await readDoc(bytes, 'c3.xhtml')).querySelector('title')?.textContent).toBe('c3'); // nome do ficheiro = sem título
 });

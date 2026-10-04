@@ -22,22 +22,24 @@ Traduz para o **vocabulário e valores do editor** (livro igual aos da app; barr
 3. `… convert <livro.epub>` → relatório "Estilo original → estilo do editor"; `⚠ classes fora do mapa` → `analyze` de novo.
 4. `… verify <livro.epub>` → `0 diferenças de intenção` (alinhamento, recuo, espaço acima/abaixo, negrito, itálico, maiúsculas), `texto ✓`, imagens/quebras/notas `✓`, `classes: só do editor ✓`.
 5. Importar na HomePage e confirmar a Estrutura. Decisões recorrentes → `estilos-base.json`.
-6. Mudou `translate.ts`/`commands.ts` → testes + reconverter; `verify` limpo.
+6. Mudou algo em `src/services/indesign/` → `bun test src/services/indesign` + reconverter; `verify` limpo (vale para a app e para a CLI).
 
 ## Ficheiros
 
-| Ficheiro | Papel |
-|---|---|
-| `optimize.ts` | Só CLI: lê/escreve (EPUB, mapa, `estilos-base.json`, `DEFAULT_CSS`), imprime |
-| `commands.ts` | `analyzeBook(bytes, {baseStyles, previousMap})`, `convertBook(bytes, map, editorCss)`, `verifyBook(orig, opt)` — sem disco/consola; estrutura do DOM, títulos, pacote de saída |
-| `book.ts` | `openBook(bytes)` abre 1×: OPF, cascata do CSS original (`resolve`), documentos, `css`, `bodySize`, `referencedIds`, `frontMatter` (calculados antes do convert mexer) |
-| `translate.ts` | `intentOf`, `translateParagraph`, `translateSpan`, `preservedOf` — **toda a regra e limiares**; convert aplica, verify compara |
-| `titles.ts` | `indesignTitle` (Ficha Técnica, Rosto); usa `chapterTitleOf` da app |
-| `editor.ts` | `editorVocabulary(css)` = classes do CSS do editor (convert valida classes forçadas; verify lê o `style.css` do optimizado) — sem listas à mão |
-| `estilos-base.json` | Decisões da casa por `tag.classe` (sem maiúsculas), antes da heurística |
-| `tests/` | `bun test ./.claude/skills/epub-indesign/tests/` (o `./` é preciso: bun ignora pastas com ponto). `translate` (regras), `editor` (inclui `DEFAULT_CSS` real), `titles`, `commands` (livro inteiro com `makeEpub` em memória). Caso novo = teste novo |
+O código vive na **app** (`src/services/indesign/`) e é o mesmo da **Importação InDesign** (página inicial → menu do utilizador, debaixo de "Importação EPUB 2.0": analisa → modal com dúvidas em destaque → optimiza → verifica, e bloqueia se perder texto/imagens/notas/quebras → importa). Os `.ts` desta pasta só o reexportam (sempre sincronizados) e `estilos-base.json` é um link para o da app.
 
-CSS de saída = `DEFAULT_CSS` (`src/context/StyleContext.tsx`, sem editor-only nem `@font-face`).
+| Ficheiro (`src/services/indesign/`) | Papel |
+|---|---|
+| `commands.ts` | `analyzeBook(bytes, {baseStyles, previousMap})`, `convertBook(bytes, map, editorCss)`, `verifyBook(orig, opt)` — sem disco/consola; estrutura do DOM, títulos, pacote de saída |
+| `book.ts` | `openBook(bytes)` abre 1×: OPF, cascata do CSS original (`resolve`), documentos, `css`, `bodySize`, `referencedIds`, `frontMatter`. DOM = `DOMParser`/`XMLSerializer` globais (browser; no bun via `happy-dom.ts`) |
+| `translate.ts` | `intentOf`, `translateParagraph`, `translateSpan`, `preservedOf` — **toda a regra e limiares**; convert aplica, verify compara |
+| `titles.ts` | `indesignTitle` (Ficha Técnica, Rosto); usa `chapterTitleOf` (`src/utils/chapter-title.ts`) |
+| `editor.ts` | `editorVocabulary(css)` (classes do editor, sem listas à mão), `editorExportCss(DEFAULT_CSS)` (CSS de saída) |
+| `estilos-base.json` | Decisões da casa por `tag.classe` (sem maiúsculas), antes da heurística |
+| `tests/` | `bun test src/services/indesign` — `translate`, `editor` (inclui `DEFAULT_CSS` real), `titles`, `commands` (livro inteiro com `makeEpub` em memória). Caso novo = teste novo |
+| `.claude/skills/epub-indesign/optimize.ts` | Só CLI: lê/escreve (EPUB, mapa), imprime |
+
+CSS de saída = `editorExportCss(DEFAULT_CSS)` (sem editor-only nem `@font-face`).
 
 ## Tradução automática (CSS resolvido: estilo + overrides + `#id`, shorthands expandidos)
 
@@ -70,7 +72,8 @@ Exceções: notas e tabelas sem classes; `p-legendas` tira `p-small`/`p-bottom`/
 - Só do `<title>` de cada ficheiro, nunca do nav (no InDesign traz o page-list → "1", "161"…).
 - Vazio, sem letras/números ou = nome do ficheiro → sem título (junta ao anterior). Regra única: `chapterTitleOf` (`src/utils/chapter-title.ts`), usada pelo importador e pelo skill.
 - Chamadas de nota fora do nome ("SOMBRA(143)" → "SOMBRA").
-- Convert: parágrafo-rótulo de ficha técnica (começa por autor/autora/autores, revisão, capa, design da capa, ISBN; < 120 car.) → `Ficha Técnica` em qualquer página (as mesmas palavras a meio de um capítulo não contam) · ficha técnica (©/ISBN/"Título original") com título falso ou antes do Índice → `Ficha Técnica` · rótulo da ficha ("Título:", "Título original:") noutra página → `Rosto` · antes do Índice (se houver Índice) com títulos/imagem → `Rosto`, títulos viram parágrafos · texto simples e dedicatórias mantêm o `<title>`.
+- Convert: parágrafo-rótulo de ficha técnica (começa por autor/autora/autores, revisão, capa, design da capa, ISBN; < 120 car.) → `Ficha Técnica` em qualquer página (as mesmas palavras a meio de um capítulo não contam) · ficha técnica (©/ISBN/"Título original") com título falso ou antes do Índice → `Ficha Técnica` · rótulo da ficha (só "Título"/"Título original", com ou sem ":"; "Sun Tzu disse:" é título real) noutra página → `Rosto` · antes do Índice (se houver Índice) com títulos/imagem → `Rosto`, títulos viram parágrafos · texto simples e dedicatórias mantêm o `<title>`.
+- `<title>` repetido em vários ficheiros (ex. "Sun Tzu disse:") só cria **um** capítulo (o 1.º pela ordem de leitura); os seguintes ficam sem título e juntam-se ao anterior.
 - Resultado típico: **Capa · Rosto · Ficha Técnica · Índice · capítulos**.
 
 ## Estrutura e limpeza (fixas)
