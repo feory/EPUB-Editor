@@ -6,16 +6,16 @@ import type {
   ProcessedParagraph,
   ExtractedImage,
   PdfPage
-} from './pdf/types';
-import { extractImagesFromPage } from './pdf/image-processor';
-import { PdfHeuristics } from './pdf/heuristics';
+} from './types';
+import { extractImagesFromPage } from './image-processor';
+import { PdfHeuristics } from './heuristics';
 import {
   consolidateSplitFootnotes,
   consolidateSplitParagraphs,
   finalCleanup,
   fixFootnoteNumbers,
   consolidateFootnoteContinuations
-} from './pdf/post-processor';
+} from './post-processor';
 // Re-export types for backward compatibility
 export type { ExtractedImage, ExtractionResult };
 

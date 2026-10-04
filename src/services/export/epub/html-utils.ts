@@ -1,4 +1,4 @@
-import { cleanEpubHtml } from '../../utils/html-cleaner';
+import { cleanEpubHtml } from '../../../utils/html-cleaner';
 
 const decodeHtmlEntities = (text: string): string => {
     const doc = new DOMParser().parseFromString(`<div>${text}</div>`, 'text/html');

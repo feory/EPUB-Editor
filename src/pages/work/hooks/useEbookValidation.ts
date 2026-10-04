@@ -2,10 +2,10 @@ import { useState, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { ebooksApi } from '../../../api/ebooks-api';
 import type { ValidationResult } from '../../../api/ebooks-api';
-import { generateEpubBlob } from '../../../services/epub-service';
-import { validateFootnotes, type ValidationReport } from '../../../services/footnote-validator';
-import { validateLinks, type LinkReport } from '../../../services/link-validator';
-import type { BookMetadata } from '../../../services/epub-service';
+import { generateEpubBlob } from '../../../services/export/epub-service';
+import { validateFootnotes, type ValidationReport } from '../../../services/validation/footnote-validator';
+import { validateLinks, type LinkReport } from '../../../services/validation/link-validator';
+import type { BookMetadata } from '../../../services/export/epub-service';
 
 type ValidationConfig = {
     type: 'footnotes' | 'epub' | 'accessibility' | 'links';

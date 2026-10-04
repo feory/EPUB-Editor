@@ -12,10 +12,10 @@ import { cleanEditorHtml, applyDropCapToFirstParagraph, countOccurrences } from 
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { moveChapters, renameChapterPart, deleteChapterPart, changeChapterLevel } from '../../utils/toc';
 import { linkIndiceEntries, linkOneIndiceEntry } from '../../utils/indice-links';
-import type { DocxStyleMapping } from '../../services/document-importer';
-import { insertPageBreaks } from '../../services/page-list';
-import type { PageAnchor } from '../../services/page-list';
-import { fixLinks, validateLinks } from '../../services/link-validator';
+import type { DocxStyleMapping } from '../../services/import/document-importer';
+import { insertPageBreaks } from '../../services/page-list/page-list';
+import type { PageAnchor } from '../../services/page-list/page-list';
+import { fixLinks, validateLinks } from '../../services/validation/link-validator';
 
 import { contentReducer, initialContentState } from './hooks/contentReducer';
 import { useChapterSync } from './hooks/useChapterSync';

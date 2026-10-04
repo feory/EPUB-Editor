@@ -4,9 +4,9 @@ import type { ImportOptions } from '../../../utils/html-cleaner';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 import { CONVERSION_OPTIONS } from './conversionOptions';
-import { scanDocxStyles } from '../../../services/document-importer';
-import { scanIdmlStyles } from '../../../services/idml-importer';
-import type { DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from '../../../services/document-importer';
+import { scanDocxStyles } from '../../../services/import/document-importer';
+import { scanIdmlStyles } from '../../../services/import/idml/importer';
+import type { DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from '../../../services/import/document-importer';
 
 interface ImportOptionsModalProps {
     file: File;

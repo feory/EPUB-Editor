@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
-import { sanitizeImageFilename } from '../utils/format';
-import { buildPdfLines, mapFolioToPdfPage, normalize as normalizeForMatch } from './page-list';
+import { sanitizeImageFilename } from '../../../utils/format';
+import { buildPdfLines, mapFolioToPdfPage, normalize as normalizeForMatch } from '../../page-list/page-list';
 
 /**
  * Reconstrução de figuras no import IDML+PDF: cada imagem da Links/ é colocada no editor como
@@ -28,7 +28,7 @@ const clean = (s: string) => s.replace(/[\u2028\u2029\t]+/g, ' ').replace(/\s+/g
 
 // Blocos-alvo para colocação de figuras (insertFigures/placeNumberedFigures): parágrafos e
 // títulos, exceto entradas de Índice de Figuras/Tabelas (data-indice — ver markIndiceBlocks
-// em idml-importer.ts).
+// em idml/importer.ts).
 const targetBlocksOf = (doc: Document): Element[] =>
     Array.from(doc.body.querySelectorAll('p, h1, h2, h3, h4, h5, h6')).filter(b => !b.hasAttribute('data-indice'));
 
@@ -58,7 +58,7 @@ const numPattern = (num: string) => num.split('.').map(p => `0*${parseInt(p, 10)
 const normalizeNum = (num: string) => num.split('.').map(p => parseInt(p, 10)).join('.');
 
 // Espaço antes/depois (pt) por estilo de parágrafo (Resources/Styles.xml) — mesmo sinal que
-// spacingClasses em idml-importer.ts, mas independente (idml-figures.ts é regex-only, sem
+// spacingClasses em idml/importer.ts, mas independente (idml/figures.ts é regex-only, sem
 // DOMParser). Chave = nome do estilo SEM o prefixo "ParagraphStyle/".
 function scanSpacingStyles(stylesXml: string): Map<string, { before: number; after: number }> {
     const map = new Map<string, { before: number; after: number }>();
@@ -211,7 +211,7 @@ const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 /**
  * Insere o visual (imagem/tabela) junto à legenda no corpo. Duas estratégias, por ordem:
  *  1) a PRÓPRIA legenda já existe como parágrafo no corpo (estilo "Figura titulo": caption
- *     não é dropada do fluxo, ver isFigurasTituloStory em idml-importer.ts) — é o alvo mais
+ *     não é dropada do fluxo, ver isFigurasTituloStory em idml/importer.ts) — é o alvo mais
  *     fiável (evita casar com uma menção textual incidental tipo "conforme a Tabela 4.1.");
  *     o visual fica DEPOIS da legenda (convenção destes livros).
  *  2) legenda clássica LEGENDAS (dropada do fluxo): procura a referência textual

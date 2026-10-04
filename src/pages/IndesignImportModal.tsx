@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, FileUp, Info, Loader2 } from 'lucide-react';
-import type { BookMap } from '../services/indesign/commands';
+import type { BookMap, LineBreakSummary } from '../services/indesign/commands';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../components/ModalCloseButton';
 
 interface IndesignImportModalProps {
     fileName: string;
     map: BookMap;
+    lineBreaks: LineBreakSummary[];   // <br/> do paginador por tipo — o utilizador decide se junta
     pending: boolean;
-    onConfirm: (map: BookMap, force: boolean) => void;   // force = importar mesmo com erros na verificação
+    onConfirm: (map: BookMap, force: boolean, joinLineBreaks: boolean) => void;   // force = importar mesmo com erros na verificação
     onClose: () => void;
 }
 
@@ -48,7 +49,7 @@ function doubtOf(key: string, target: string, count: number): string {
     return '';
 }
 
-const IndesignImportModalComponent: React.FC<IndesignImportModalProps> = ({ fileName, map, pending, onConfirm, onClose }) => {
+const IndesignImportModalComponent: React.FC<IndesignImportModalProps> = ({ fileName, map, lineBreaks, pending, onConfirm, onClose }) => {
     useBodyScrollLock();
     const [targets, setTargets] = useState<Record<string, string>>(
         () => Object.fromEntries(Object.entries(map.classes).map(([k, e]) => [k, e.target])),
@@ -59,13 +60,15 @@ const IndesignImportModalComponent: React.FC<IndesignImportModalProps> = ({ file
     }, [map, targets]);
     const doubts = rows.filter(r => r.doubt).length;
     const [force, setForce] = useState(false);
+    const [joinBreaks, setJoinBreaks] = useState(false); // nunca por omissão: perguntar sempre
+    const breakTotal = lineBreaks.reduce((n, l) => n + l.count, 0);
 
     const confirm = () => onConfirm({
         classes: Object.fromEntries(Object.entries(map.classes).map(([k, e]) => {
             const target = targets[k] ?? e.target;
             return [k, target === e.target ? e : { ...e, target, origem: 'revisto' }];
         })),
-    }, force);
+    }, force, joinBreaks);
 
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
@@ -127,6 +130,26 @@ const IndesignImportModalComponent: React.FC<IndesignImportModalProps> = ({ file
                         })}
                     </div>
                 </div>
+
+                {breakTotal > 0 && (
+                    <div className="mx-6 mb-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-sm">
+                        <p className="font-medium text-amber-900">
+                            {breakTotal} quebra(s) de linha (&lt;br/&gt;) da paginação dentro de parágrafos e notas — juntar?
+                        </p>
+                        <ul className="mt-2 flex flex-col gap-1.5">
+                            {lineBreaks.map(l => (
+                                <li key={l.kind} className="text-xs text-text-muted">
+                                    <span className="font-medium text-text-main">{l.count}</span> {l.label}
+                                    <span className="block font-mono">{l.before} → {l.after}</span>
+                                </li>
+                            ))}
+                        </ul>
+                        <label className="mt-2 flex items-center gap-2 text-text-main cursor-pointer select-none">
+                            <input type="checkbox" checked={joinBreaks} disabled={pending} onChange={ev => setJoinBreaks(ev.target.checked)} className="accent-slate-700" />
+                            Juntar estas quebras de linha (títulos não mudam)
+                        </label>
+                    </div>
+                )}
 
                 <label className="mx-6 mb-4 flex items-start gap-2 text-sm text-text-muted cursor-pointer select-none">
                     <input

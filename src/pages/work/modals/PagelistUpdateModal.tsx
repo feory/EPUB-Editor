@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { RefreshCw, Upload, Loader2 } from 'lucide-react';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { extractPdfPageAnchors } from '../../../services/page-list';
-import type { PageAnchor } from '../../../services/page-list';
+import { extractPdfPageAnchors } from '../../../services/page-list/page-list';
+import type { PageAnchor } from '../../../services/page-list/page-list';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FileUp, Info } from 'lucide-react';
-import type { EpubClassInfo } from '../services/epub-importer';
+import type { EpubClassInfo } from '../services/import/epub-importer';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../components/ModalCloseButton';
 

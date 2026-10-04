@@ -21,7 +21,7 @@ const MAP: BookMap = {
 };
 
 // EPUB mínimo como o InDesign exporta: OPF + CSS próprio + documentos .xhtml (+ nav opcional, fora do conteúdo)
-async function makeEpub(documents: Doc[], nav = ''): Promise<Uint8Array> {
+async function makeEpub(documents: Doc[], nav = '', metadata = ''): Promise<Uint8Array> {
     const zip = new JSZip();
     zip.file('mimetype', 'application/epub+zip');
     zip.file('META-INF/container.xml', '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>');
@@ -32,7 +32,7 @@ async function makeEpub(documents: Doc[], nav = ''): Promise<Uint8Array> {
     documents.forEach(d => zip.file(`OEBPS/${d.href}`, xhtml(d.title, d.body)));
     if (nav) zip.file('OEBPS/toc.xhtml', xhtml('Conteúdo', `<nav epub:type="toc">${nav}</nav>`));
     zip.file('OEBPS/content.opf', `<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata/><manifest>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/">${metadata}</metadata><manifest>
 ${documents.map((d, i) => `<item id="d${i}" href="${d.href}" media-type="application/xhtml+xml"/>`).join('\n')}
 ${nav ? '<item id="toc" href="toc.xhtml" media-type="application/xhtml+xml" properties="nav"/>' : ''}
 <item id="css" href="css/idGeneratedStyles.css" media-type="text/css"/>
@@ -181,4 +181,24 @@ test('optimizeBook: perder conteúdo é problema (bloqueia); livro limpo e já o
 
     const again = await optimizeBook(clean.bytes, { classes: {} }, EDITOR_CSS);
     expect([again.report.alreadyOptimized, again.verify, again.problems, again.warnings]).toEqual([true, null, [], []]);
+});
+
+test('<br/> do paginador: analyze conta por tipo com exemplo; convert só junta quando pedido; títulos ficam', async () => {
+    const body = '<p class="ABERTURA">I<br/>O TÍTULO</p>'
+        + '<p class="TXT">anti-intelectual<br/>ou anti-espiritual. Para vender.<br/>É ironia, não-<br/>-instrumentalizado, direccionar/<br/>/desviar, pseudo-<br/>profundidade e fim.</p>';
+    const epub = await makeEpub([{ href: 'c1.xhtml', title: 'Um', body }]);
+    const { map, lineBreaks } = await analyzeBook(epub, { baseStyles: { 'p.ABERTURA': 'h1' } });
+    expect(lineBreaks.map(l => [l.kind, l.count])).toEqual([
+        ['meio-da-frase', 1], ['fim-da-frase', 1], ['hifen-repetido', 1], ['barra-repetida', 1], ['hifen-no-fim', 1]]);
+    expect(lineBreaks.find(l => l.kind === 'hifen-repetido')!.after).toBe('…É ironia, não-instrumentalizado, direc…');
+
+    const { bytes, problems } = await optimizeBook(epub, map, EDITOR_CSS, { joinLineBreaks: true });
+    const doc = await readDoc(bytes, 'c1.xhtml');
+    expect(doc.querySelector('h1')!.innerHTML).toContain('<br');
+    expect(doc.querySelector('p')!.textContent).toBe(
+        'anti-intelectual ou anti-espiritual. Para vender. É ironia, não-instrumentalizado, direccionar/desviar, pseudo-profundidade e fim.');
+    expect(problems).toEqual([]); // hífen/barra a menos não é "texto diferente"
+
+    const kept = await optimizeBook(epub, map, EDITOR_CSS); // sem resposta do utilizador → não mexe
+    expect((await readDoc(kept.bytes, 'c1.xhtml')).querySelectorAll('p br').length).toBe(5);
 });

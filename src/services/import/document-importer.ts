@@ -1,7 +1,7 @@
 import mammoth from 'mammoth';
 import DOMPurify from 'dompurify';
 import JSZip from 'jszip';
-import { extractIdml } from './idml-importer';
+import { extractIdml } from './idml/importer';
 import { extractEpub } from './epub-importer';
 import type { EpubMetadata } from './epub-importer';
 
@@ -37,7 +37,7 @@ export interface DocxStyleInfo {
 }
 
 // `centered` adiciona a classe p-center ao alvo (título h1-h6 OU parágrafo p/p-indent/…).
-// `top` adiciona p-top (espaço acima) — só aplicado no import IDML (idml-importer.ts).
+// `top` adiciona p-top (espaço acima) — só aplicado no import IDML (idml/importer.ts).
 export interface DocxStyleMapEntry {
     target: DocxStyleTarget;
     centered?: boolean;

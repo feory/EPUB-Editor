@@ -1,8 +1,8 @@
 import React from 'react';
 import { CheckCircle2, AlertCircle, Hash, FileText, Lightbulb, MapPin, Code, Navigation, Link2 } from 'lucide-react';
 import type { ValidationResult } from '../../../api/ebooks-api';
-import type { ValidationReport } from '../../../services/footnote-validator';
-import type { LinkReport } from '../../../services/link-validator';
+import type { ValidationReport } from '../../../services/validation/footnote-validator';
+import type { LinkReport } from '../../../services/validation/link-validator';
 
 // Extract plain text from an HTML string (e.g. "<h3 xmlns="...">Title</h3>" → "Title")
 const extractTextFromHtml = (html: string): string =>

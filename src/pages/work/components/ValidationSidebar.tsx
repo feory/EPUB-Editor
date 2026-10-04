@@ -1,8 +1,8 @@
 import React from 'react';
 import { X, CheckCircle2, AlertCircle } from 'lucide-react';
 import type { ValidationResult } from '../../../api/ebooks-api';
-import type { ValidationReport } from '../../../services/footnote-validator';
-import type { LinkReport } from '../../../services/link-validator';
+import type { ValidationReport } from '../../../services/validation/footnote-validator';
+import type { LinkReport } from '../../../services/validation/link-validator';
 import { ValidationContent } from './ValidationContent';
 import { PanelResizeHandle } from './PanelResizeHandle';
 

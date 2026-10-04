@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import type { ExtractedDocument } from './document-importer';
-import { toNCName } from './epub/image-utils';
-import { chapterTitleOf } from '../utils/chapter-title';
+import { toNCName } from '../export/epub/image-utils';
+import { chapterTitleOf } from '../../utils/chapter-title';
 
 export interface EpubMetadata {
     ebook_isbn: string;
@@ -14,7 +14,7 @@ export interface EpubMetadata {
     pub_date?: string;
 }
 
-// Importa um EPUB revertendo o pipeline de export da app (src/services/epub/).
+// Importa um EPUB revertendo o pipeline de export da app (src/services/export/epub/).
 // Foco: EPUBs gerados pela própria app (sectionN.xhtml com as classes do editor).
 // Abre EPUBs de terceiros em best-effort (concatena o spine, mapeia o que reconhece).
 

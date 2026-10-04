@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { fillFolioGaps } from './page-list-folio';
+import { fillFolioGaps } from './folio';
 
 test('fillFolioGaps: interpola 1 página em falta (abertura de capítulo sem folio)', () => {
     expect(fillFolioGaps([40, null, 42, 43])).toEqual([40, 41, 42, 43]);

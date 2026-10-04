@@ -1,12 +1,12 @@
 import { test, expect } from 'bun:test';
 
-// idml-importer.ts importa page-list.ts, que por sua vez importa pdfjs-dist a mostrar da
+// idml/importer.ts importa page-list.ts, que por sua vez importa pdfjs-dist a mostrar da
 // mesma limitacao que log-activity.test.js documenta para database.js: um efeito colateral de
 // nivel de modulo (pdfjs-dist referencia DOMMatrix, global so-browser) rebenta so por
 // IMPORTAR o ficheiro, mesmo sem chamar nada relacionado com PDF. Stub minimo + import()
 // dinamico (adia a avaliacao do modulo para depois do stub existir) em vez de import estatico.
 (globalThis as { DOMMatrix?: unknown }).DOMMatrix ??= class {};
-const { cleanText, collapseHyphenBreaks } = await import('./idml-importer');
+const { cleanText, collapseHyphenBreaks } = await import('./importer');
 
 test('cleanText: tira hifen mole (U+00AD) e normaliza separadores de linha/tab', () => {
     expect(cleanText('Romano­-Germanico')).toBe('Romano-Germanico');

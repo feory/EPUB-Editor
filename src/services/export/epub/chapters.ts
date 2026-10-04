@@ -1,6 +1,6 @@
 import { decodeHtmlEntities } from './html-utils';
 import type { Section } from './types';
-import { CHAPTER_SPLIT_PATTERN, HR_BREAK_PATTERN, HR_DATA_TITLE_PATTERN, matchChapterMarkerElement, flattenHeadingText } from '../../utils/html-cleaner';
+import { CHAPTER_SPLIT_PATTERN, HR_BREAK_PATTERN, HR_DATA_TITLE_PATTERN, matchChapterMarkerElement, flattenHeadingText } from '../../../utils/html-cleaner';
 
 const relocateFootnotes = (html: string): string => {
     const footnoteRegex = /<(p|aside)[^>]*class="[^"]*footnote[^"]*"[^>]*>.*?<\/\1>/gs;
