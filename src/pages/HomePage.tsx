@@ -176,7 +176,7 @@ export function HomePage() {
                 showNotification('error', `Importação InDesign bloqueada: ${problems.join(' · ')}`, 10000);
                 return;
             }
-            // "Importar mesmo com erros" (checkbox do modal): importa, mas deixa o aviso do que falhou
+            // "Importação forçada" (checkbox do modal): importa, mas deixa o aviso do que falhou
             if (problems.length) showNotification('error', `Importado com erros na verificação: ${problems.join(' · ')}`, 10000);
             const diffs = v.diffs.reduce((s, d) => s + d.count, 0);
             if (diffs) showNotification('success', `Optimizado com ${diffs} diferença(s) de alinhamento/recuo/espaço — confirmar no editor.`, 6000);

@@ -136,7 +136,7 @@ const IndesignImportModalComponent: React.FC<IndesignImportModalProps> = ({ file
                         className="mt-0.5 accent-slate-700"
                     />
                     <span>
-                        Importar mesmo com erros na verificação
+                        Importação forçada
                         <span className="block text-xs">Se faltar texto, imagens, notas ou quebras de página face ao original, importa na mesma e avisa.</span>
                     </span>
                 </label>
