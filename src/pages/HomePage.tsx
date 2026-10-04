@@ -8,6 +8,7 @@ import type { Ebook } from '../api/ebooks-api';
 import type { AxiosError } from 'axios';
 import { useNotification } from '../context/NotificationContext';
 import { extractEpub, scanEpubClasses } from '../services/epub-importer';
+import { uploadExtractedImages } from '../services/extracted-images';
 import type { EpubClassInfo } from '../services/epub-importer';
 import { cleanEditorHtml } from '../utils/html-cleaner';
 import { compressHtml } from '../utils/compression';
@@ -141,18 +142,7 @@ export function HomePage() {
                     await ebooksApi.uploadCover(isbn, fd);
                 } catch { /* sem capa: o utilizador pode pô-la depois no botão de capa */ }
             }
-            let finalHtml = cleanEditorHtml(html);
-            if (images.size > 0) {
-                const fd = new FormData();
-                for (const [id, blob] of images) fd.append('images', blob, `${id}.${blob.type.split('/')[1] || 'png'}`);
-                await ebooksApi.uploadImages(isbn, fd);
-                // src="placeholder" → URL do servidor. Independente da ordem dos atributos
-                // (o src pode vir antes do data-image-id) e preserva os restantes atributos.
-                finalHtml = finalHtml.replace(/<img\b[^>]*>/gi, (tag) => {
-                    const m = tag.match(/data-image-id="([^"]+)"/);
-                    return m ? tag.replace(/\bsrc="placeholder"/, `src="/api/ebooks/${isbn}/images/${m[1]}"`) : tag;
-                });
-            }
+            const finalHtml = await uploadExtractedImages(isbn, cleanEditorHtml(html), images, fd => ebooksApi.uploadImages(isbn, fd));
             await ebooksApi.saveContent(isbn, compressHtml(finalHtml));
             if (metadata) await ebooksApi.updateMetadata(isbn, {
                 title, author, description: metadata.description,
