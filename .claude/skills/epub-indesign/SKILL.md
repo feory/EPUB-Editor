@@ -73,7 +73,7 @@ CSS resolvido (estilo + overrides + `#id`, shorthands expandidos):
 | recuo 1.ª linha | `p-indent` |
 | recuo pendente, margem ≥ 1.5em / mais curto | `alinea` / normal |
 | margem esquerda ≥ 1em | `p-quote` (+ `p-indent` se recuo) |
-| acima ≥ 0.5em / ≥ 2.5em · abaixo ≥ 0.5em | `p-top` / `p-space` · `p-bottom` |
+| acima ≥ 0.5em / ≥ 3em · abaixo ≥ 0.5em | `p-top` / `p-space` · `p-bottom` |
 | parágrafo/título vazio | sai; `p-top` no seguinte |
 | corpo < 95% do texto corrente | `p-small` |
 | negrito / itálico / ambos | `p-bold` / `p-italic` / `p-bold-italic` |

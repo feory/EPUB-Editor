@@ -12,6 +12,7 @@ export interface EpubMetadata {
     description?: string;
     subjects?: string;
     pub_date?: string;
+    physical_isbn?: string;
 }
 
 // Importa um EPUB revertendo o pipeline de export da app (src/services/export/epub/).
@@ -42,15 +43,18 @@ function parseOpfMetadata(opfXml: string, fallbackIsbn: string): EpubMetadata {
             .map(m => decodeEntities(m[1].trim())).filter(Boolean);
     const isbn = (grab('identifier').match(/[\d-]{8,}/)?.[0] || fallbackIsbn).trim();
     const date = grab('date').slice(0, 10);
+    // ISBN do livro físico (InDesign): <meta property="pageBreakSource">urn:isbn: 978…</meta>
+    const physical = opfXml.match(/<meta\b[^>]*\bproperty="pageBreakSource"[^>]*>([^<]*)</i)?.[1].match(/\d[\d-]{7,}[\dXx]/)?.[0];
     return {
         ebook_isbn: isbn,
-        title: grab('title'),
+        title: grab('title').replace(/_ebook$/i, '').trim(), // InDesign: "Título_ebook"
         author: grab('creator'),
         publisher: grab('publisher') || undefined,
         language: grab('language') || undefined,
         description: grab('description') || undefined,
         subjects: grabAll('subject').join('; ') || undefined,
         pub_date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined,
+        physical_isbn: physical,
     };
 }
 
@@ -423,10 +427,14 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
         }
         reversePagebreaks(body);
         reverseUnderline(body);
+        const hadCover = Array.from(body.querySelectorAll('img'))
+            .some(img => skipIds.has(img.getAttribute('src')?.match(/([^/]+)\.[A-Za-z0-9]+$/)?.[1] ?? ''));
         await reverseImages(body, zip, docDir, images, skipIds);
 
         let content = body.innerHTML.trim();
         if (!content) continue;
+        // página da capa (só a imagem, que vai à parte como capa do ebook) → sem capítulo "Capa"
+        if (hadCover && !body.textContent?.trim() && !body.querySelector('img, .pagebreak')) continue;
         // Reconstruir título de quebra (export próprio remove o heading do corpo). Título = <title> do
         // ficheiro — nunca o nav (no InDesign traz o page-list → capítulos "1", "161"…); sem texto (ou só o nome
         // do ficheiro) → sem título, junta ao capítulo anterior.

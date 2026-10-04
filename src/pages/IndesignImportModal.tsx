@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, FileUp, Info, Loader2 } from 'lucide-react';
+import { AlertTriangle, FileUp, Info, Loader2, WrapText } from 'lucide-react';
 import type { BookMap, LineBreakSummary } from '../services/indesign/commands';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../components/ModalCloseButton';
@@ -132,23 +132,47 @@ const IndesignImportModalComponent: React.FC<IndesignImportModalProps> = ({ file
                 </div>
 
                 {breakTotal > 0 && (
-                    <div className="mx-6 mb-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-sm">
-                        <p className="font-medium text-amber-900">
-                            {breakTotal} quebra(s) de linha (&lt;br/&gt;) da paginação dentro de parágrafos e notas — juntar?
-                        </p>
-                        <ul className="mt-2 flex flex-col gap-1.5">
+                    <section className={`mx-6 mb-4 rounded-xl border p-4 transition-colors ${joinBreaks ? 'border-emerald-300 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/60'}`}>
+                        <div className="flex items-start gap-2">
+                            <WrapText size={16} className="mt-0.5 shrink-0 text-amber-700" />
+                            <div>
+                                <h3 className="text-sm font-bold text-text-main">
+                                    Quebras de linha da paginação <span className="ml-1 rounded-full bg-amber-200 px-2 py-0.5 text-xs text-amber-900">{breakTotal}</span>
+                                </h3>
+                                <p className="mt-0.5 text-xs text-text-muted">
+                                    O InDesign partiu linhas à mão (&lt;br/&gt;) para a versão impressa. No ebook o texto ajusta-se ao ecrã,
+                                    por isso estas quebras ficam a meio das frases. Os títulos não são alterados.
+                                </p>
+                            </div>
+                        </div>
+
+                        <ul className="mt-3 flex flex-col divide-y divide-amber-100 rounded-lg border border-amber-100 bg-white">
                             {lineBreaks.map(l => (
-                                <li key={l.kind} className="text-xs text-text-muted">
-                                    <span className="font-medium text-text-main">{l.count}</span> {l.label}
-                                    <span className="block font-mono">{l.before} → {l.after}</span>
+                                <li key={l.kind} className="flex gap-3 px-3 py-2">
+                                    <span className="w-10 shrink-0 text-right text-sm font-bold tabular-nums text-text-main">{l.count}</span>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-text-main">{l.type} <span className="text-text-muted">→ {l.action}</span></p>
+                                        <div className="mt-1 grid grid-cols-[3.5rem_1fr] gap-x-2 gap-y-0.5 text-xs">
+                                            <span className="text-text-muted">Antes</span>
+                                            <span className="truncate font-serif text-text-main">
+                                                …{l.left}<span className="mx-0.5 rounded bg-rose-100 px-1 font-sans font-bold text-rose-700" title="quebra de linha (&lt;br/&gt;)">↵</span>{l.right}…
+                                            </span>
+                                            <span className="text-text-muted">Depois</span>
+                                            <span className="truncate font-serif text-text-main">
+                                                …{l.left.slice(0, -1)}<mark className="rounded-sm bg-emerald-100 text-emerald-900">{l.left.slice(-1)}{l.glue}{l.rest.slice(0, 1)}</mark>{l.rest.slice(1)}…
+                                            </span>
+                                        </div>
+                                    </div>
                                 </li>
                             ))}
                         </ul>
-                        <label className="mt-2 flex items-center gap-2 text-text-main cursor-pointer select-none">
-                            <input type="checkbox" checked={joinBreaks} disabled={pending} onChange={ev => setJoinBreaks(ev.target.checked)} className="accent-slate-700" />
-                            Juntar estas quebras de linha (títulos não mudam)
+
+                        <label className="mt-3 flex items-center gap-2 text-sm font-medium text-text-main cursor-pointer select-none">
+                            <input type="checkbox" checked={joinBreaks} disabled={pending} onChange={ev => setJoinBreaks(ev.target.checked)} className="h-4 w-4 accent-emerald-700" />
+                            Juntar as {breakTotal} quebras de linha
+                            <span className="font-normal text-text-muted">{joinBreaks ? '— vão ser juntadas' : '— ficam como no original'}</span>
                         </label>
-                    </div>
+                    </section>
                 )}
 
                 <label className="mx-6 mb-4 flex items-start gap-2 text-sm text-text-muted cursor-pointer select-none">

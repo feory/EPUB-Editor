@@ -100,8 +100,11 @@ export async function analyzeBook(bytes: Uint8Array, opts: { baseStyles: Record<
         for (const { a, b, kind } of lineBreaksIn(doc.querySelector('body')!, isHeading)) {
             const e = breaks.get(kind);
             if (e) { e.count++; continue; }
-            const [x, y] = [a.slice(-30), b.slice(0, 25)];
-            breaks.set(kind, { kind, label: LINE_BREAK_LABELS[kind], count: 1, before: `…${x}⏎${y}…`, after: `…${joined(x, y, kind)}…` });
+            const [left, right] = [a.slice(-30), b.slice(0, 25)];
+            const { glue, rest } = joinParts(right, kind);
+            const { type, action } = LINE_BREAK_LABELS[kind];
+            breaks.set(kind, { kind, type, action, count: 1, left, right, glue, rest,
+                label: `${type.toLowerCase()} → ${action}`, before: `…${left}⏎${right}…`, after: `…${left}${glue}${rest}…` });
         }
     }
     const lineBreaks = [...breaks.values()].sort((p, q) => q.count - p.count);
@@ -113,15 +116,21 @@ export async function analyzeBook(bytes: Uint8Array, opts: { baseStyles: Record<
 // Regra para todos os livros, mas SÓ aplicada se o utilizador aceitar: o analyze conta os casos por tipo (com um
 // exemplo de cada) para a pergunta — modal da app ou skill — e o convert junta-os com joinLineBreaks: true.
 export type LineBreakKind = 'meio-da-frase' | 'fim-da-frase' | 'hifen-repetido' | 'barra-repetida' | 'hifen-no-fim' | 'pontas';
-export const LINE_BREAK_LABELS: Record<LineBreakKind, string> = {
-    'meio-da-frase': 'a meio da frase → espaço',
-    'fim-da-frase': 'depois do fim da frase → espaço',
-    'hifen-repetido': 'hífen repetido na linha seguinte → um hífen',
-    'barra-repetida': 'barra repetida na linha seguinte → uma barra',
-    'hifen-no-fim': 'hífen no fim da linha → junta, mantém o hífen',
-    'pontas': 'no início/fim do parágrafo → sai',
+export const LINE_BREAK_LABELS: Record<LineBreakKind, { type: string; action: string }> = {
+    'meio-da-frase': { type: 'A meio da frase', action: 'passa a espaço' },
+    'fim-da-frase': { type: 'Depois do fim da frase', action: 'passa a espaço' },
+    'hifen-repetido': { type: 'Hífen repetido na linha seguinte', action: 'fica um hífen' },
+    'barra-repetida': { type: 'Barra repetida na linha seguinte', action: 'fica uma barra' },
+    'hifen-no-fim': { type: 'Hífen no fim da linha', action: 'junta, mantém o hífen' },
+    'pontas': { type: 'No início ou fim do parágrafo', action: 'sai' },
 };
-export type LineBreakSummary = { kind: LineBreakKind; label: string; count: number; before: string; after: string };
+// Exemplo em partes para a UI realçar a junção: antes = left ⏎ right; depois = left + glue + rest.
+// label/before/after = o mesmo em texto (CLI).
+export type LineBreakSummary = {
+    kind: LineBreakKind; type: string; action: string; count: number;
+    left: string; right: string; glue: string; rest: string;
+    label: string; before: string; after: string;
+};
 
 function breakKind(a: string, b: string): LineBreakKind {
     if (!a || !b) return 'pontas';
@@ -130,9 +139,10 @@ function breakKind(a: string, b: string): LineBreakKind {
     if (a.endsWith('-')) return 'hifen-no-fim';
     return /[.!?…»”)]$/.test(a) ? 'fim-da-frase' : 'meio-da-frase';
 }
-const joined = (a: string, b: string, kind: LineBreakKind) =>
-    kind === 'hifen-repetido' || kind === 'barra-repetida' ? a + b.slice(1)
-        : kind === 'hifen-no-fim' || kind === 'pontas' ? a + b : `${a} ${b}`;
+// o que fica entre as duas linhas (glue) e o resto da 2.ª linha depois de juntar
+const joinParts = (b: string, kind: LineBreakKind) =>
+    kind === 'hifen-repetido' || kind === 'barra-repetida' ? { glue: '', rest: b.slice(1) }
+        : kind === 'hifen-no-fim' || kind === 'pontas' ? { glue: '', rest: b } : { glue: ' ', rest: b };
 
 // texto vizinho do <br> dentro do parágrafo (desce pelos spans/sup)
 function edgeText(node: Node | null, last: boolean): Text | null {
@@ -562,7 +572,7 @@ export async function optimizeBook(bytes: Uint8Array, map: BookMap, editorCss: s
     ];
     const diffs = v.diffs.reduce((n, d) => n + d.count, 0);
     const warnings: Warning[] = [
-        ...(diffs ? [{ kind: 'intent' as const, message: `${diffs} diferença(s) de formatação face ao original (alinhamento, recuo, espaço, negrito, itálico…) — confirmar no editor` }] : []),
+        ...(diffs ? [{ kind: 'intent' as const, message: `${diffs} diferença(s)` }] : []),
         ...(v.foreignClasses.length ? [{ kind: 'classes' as const, message: `classes fora do editor: ${v.foreignClasses.join(', ')}` }] : []),
     ];
     return { bytes: out, report, verify: v, problems, warnings };
