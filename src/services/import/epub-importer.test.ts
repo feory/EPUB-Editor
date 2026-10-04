@@ -1,12 +1,11 @@
 import { test, expect, beforeAll } from 'bun:test';
 import { Window } from 'happy-dom';
 import JSZip from 'jszip';
-import { extractEpub } from './epub-importer';
+import { extractEpub, parseOpfMetadata } from './epub-importer';
 
-// extractEpub usa DOMParser/document globais (browser)
+// extractEpub usa o DOMParser global (browser)
 beforeAll(() => {
-    const win = new Window();
-    Object.assign(globalThis, { DOMParser: win.DOMParser, document: win.document });
+    Object.assign(globalThis, { DOMParser: new Window().DOMParser });
 });
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]);
@@ -37,4 +36,17 @@ test('extractEpub sem capa declarada usa a imagem da página de capa (cover.xhtm
     const { cover, images } = await extractEpub(await makeEpub({ declareCover: false }));
     expect(new Uint8Array(await cover!.arrayBuffer())).toEqual(JPEG);
     expect(images.size).toBe(0);
+});
+
+const opf = (meta: string) => `<package><metadata><dc:identifier>9789896948993</dc:identifier>${meta}</metadata></package>`;
+
+test('parseOpfMetadata lê o ISBN físico do pageBreakSource (InDesign, com espaço após urn:isbn:)', () => {
+    const m = parseOpfMetadata(opf('<meta property="pageBreakSource">urn:isbn: 9789896948986</meta>'), 'x');
+    expect(m.physical_isbn).toBe('9789896948986');
+    expect(parseOpfMetadata(opf(''), 'x').physical_isbn).toBeUndefined();
+});
+
+test('parseOpfMetadata tira o sufixo _ebook do título (InDesign)', () => {
+    expect(parseOpfMetadata(opf('<dc:title>Porque falham as equipas_ebook</dc:title>'), 'x').title).toBe('Porque falham as equipas');
+    expect(parseOpfMetadata(opf('<dc:title>O ebook do futuro</dc:title>'), 'x').title).toBe('O ebook do futuro');
 });

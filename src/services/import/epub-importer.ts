@@ -33,7 +33,7 @@ const decodeEntities = (s: string) =>
         .replace(/&amp;/g, '&');
 
 // Metadados Dublin Core do OPF → campos do Ebook. Regex tolerante a prefixo de namespace.
-function parseOpfMetadata(opfXml: string, fallbackIsbn: string): EpubMetadata {
+export function parseOpfMetadata(opfXml: string, fallbackIsbn: string): EpubMetadata {
     const grab = (tag: string) => {
         const m = opfXml.match(new RegExp(`<dc:${tag}\\b[^>]*>([\\s\\S]*?)</dc:${tag}>`, 'i'));
         return m ? decodeEntities(m[1].trim()) : '';
