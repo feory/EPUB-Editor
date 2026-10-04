@@ -6,6 +6,7 @@ import type { DocxStyleMapping } from '../../../services/document-importer';
 import { cleanEditorHtml, applyImportOptions, prependFichaTecnica } from '../../../utils/html-cleaner';
 import type { ImportOptions } from '../../../utils/html-cleaner';
 import type { ImageSettings } from '../../../components/MarginPreview';
+import { uploadExtractedImages } from '../../../services/extracted-images';
 
 interface UseEbookImportOptions {
     isbn: string | undefined;
@@ -28,24 +29,8 @@ export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImp
             options: ImportOptions;
         }) => {
             const result = await extractHtmlFromPdf(file, { headerMargin, footerMargin, imageSettings });
-            let finalHtml = result.html;
-
-            if (result.images.size > 0) {
-                const formData = new FormData();
-                for (const [id, img] of result.images.entries()) {
-                    formData.append('images', img.blob, `${id}.png`);
-                }
-                await ebooksApi.uploadImages(isbn!, formData);
-
-                for (const [id] of result.images.entries()) {
-                    const serverUrl = `/api/ebooks/${isbn}/images/${id}`;
-                    finalHtml = finalHtml.replace(
-                        new RegExp(`<img[^>]*data-image-id="${id}"[^>]*>`, 'g'),
-                        `<img data-image-id="${id}" src="${serverUrl}" alt="Imagem PDF" style="max-width: 100%; height: auto;" loading="lazy" />`
-                    );
-                }
-            }
-            return finalHtml;
+            const blobs = new Map([...result.images].map(([id, img]) => [id, img.blob]));
+            return uploadExtractedImages(isbn!, result.html, blobs, fd => ebooksApi.uploadImages(isbn!, fd));
         },
         onSuccess: (newHtml, variables) => {
             onImport(prependFichaTecnica(applyImportOptions(cleanEditorHtml(newHtml), variables.options)));
@@ -60,32 +45,10 @@ export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImp
     const importDocumentMutation = useMutation({
         mutationFn: async ({ file, options, styleMapping, epubClassMapping }: { file: File; options: ImportOptions; styleMapping?: DocxStyleMapping; epubClassMapping?: Record<string, string> }) => {
             const result = await extractDocument(file, { convertListsToDialogue: options.convertListsToDialogue, styleMapping, detectParagraphSpacing: options.detectParagraphSpacing, epubClassMapping });
-            let finalHtml = result.html;
-
             // Fire-and-forget: PDF de impressão do zip IDML, para o viewer lado a lado no editor.
             if (result.printPdf) ebooksApi.uploadPrintPdf(isbn!, result.printPdf).catch(() => {});
 
-            if (result.images.size > 0) {
-                const formData = new FormData();
-                for (const [id, blob] of result.images.entries()) {
-                    // extensão real do blob (jpeg/png/…) — não forçar .png (jpeg da Links/ ficaria mal rotulado).
-                    // EPS (application/postscript) → enviar como .eps (Ghostscript); PSD
-                    // (image/vnd.adobe.photoshop) → enviar como .psd (ImageMagick), servidor converte.
-                    const ext = blob.type === 'application/postscript' ? 'eps'
-                        : blob.type === 'image/vnd.adobe.photoshop' ? 'psd'
-                        : (blob.type.split('/')[1] || 'png');
-                    formData.append('images', blob, `${id}.${ext}`);
-                }
-                await ebooksApi.uploadImages(isbn!, formData);
-
-                for (const [id] of result.images.entries()) {
-                    const serverUrl = `/api/ebooks/${isbn}/images/${id}`;
-                    finalHtml = finalHtml.replace(
-                        new RegExp(`<img[^>]*data-image-id="${id}"[^>]*>`, 'g'),
-                        `<img data-image-id="${id}" src="${serverUrl}" alt="Imagem Importada" style="max-width: 100%; height: auto;" loading="lazy" />`
-                    );
-                }
-            }
+            const finalHtml = await uploadExtractedImages(isbn!, result.html, result.images, fd => ebooksApi.uploadImages(isbn!, fd));
             return { html: finalHtml, pageBreaks: result.pageBreaks, figuresPlaced: result.figuresPlaced };
         },
         onSuccess: ({ html: newHtml, pageBreaks, figuresPlaced }, variables) => {
