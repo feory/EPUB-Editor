@@ -56,12 +56,12 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   return (
     <NotificationContext.Provider value={{ showNotification, hideNotification, clearNotifications }}>
       {children}
-      <div className="fixed bottom-8 right-8 flex flex-col gap-3 z-[2000] pointer-events-none">
+      <div className="fixed top-20 right-8 flex flex-col gap-3 z-[2000] pointer-events-none">
         {notifications.map((n) => (
           <div 
             key={n.id} 
             className={`pointer-events-auto min-w-[320px] p-4 rounded-xl shadow-2xl flex items-center gap-3 bg-surface transition-all duration-300 ${
-              n.isClosing ? 'animate-slide-out' : 'animate-slide-up'
+              n.isClosing ? 'animate-slide-out' : 'animate-slide-down'
             }`}
           >
             <div className="shrink-0 text-slate-500">
