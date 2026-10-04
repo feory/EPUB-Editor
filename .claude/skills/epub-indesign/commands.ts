@@ -313,7 +313,8 @@ export async function convertBook(bytes: Uint8Array, map: BookMap, editorCss: st
         const titleEl = doc.querySelector('title');
         if (titleEl) {
             const title = indesignTitle({ title: titleEl.textContent ?? '', href: item.href,
-                bodyText: doc.querySelector('body')!.textContent ?? '', frontMatter: front, hasImage: hasImg, hasHeading: hadHeading });
+                bodyText: doc.querySelector('body')!.textContent ?? '', frontMatter: front, hasImage: hasImg, hasHeading: hadHeading,
+                paragraphs: Array.from(doc.querySelectorAll('body p')).map(p => p.textContent ?? '') });
             if (title !== titleEl.textContent) titleEl.textContent = title;
         }
         zip.file(path, renderXhtml(doc, cssRel(item.href)));

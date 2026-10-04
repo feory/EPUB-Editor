@@ -4,7 +4,7 @@ import { test, expect } from 'bun:test';
 import { indesignTitle, type TitlePage } from '../titles';
 
 const page = (p: Partial<TitlePage>): TitlePage =>
-    ({ title: '', href: 'OEBPS/x.xhtml', bodyText: '', frontMatter: false, hasImage: false, hasHeading: false, ...p });
+    ({ title: '', href: 'OEBPS/x.xhtml', bodyText: '', paragraphs: [], frontMatter: false, hasImage: false, hasHeading: false, ...p });
 
 test('ficha técnica com rótulo "Título original:" → Ficha Técnica', () => {
     expect(indesignTitle(page({ title: 'Título original:', bodyText: 'Título original: … © Editora, 2026' }))).toBe('Ficha Técnica');
@@ -38,4 +38,15 @@ test('dedicatória (texto simples) mantém o título, antes ou depois do Índice
 
 test('capítulo normal mantém o título', () => {
     expect(indesignTitle(page({ title: 'Capítulo 2.', bodyText: 'texto © citado' }))).toBe('Capítulo 2.');
+});
+
+test('rótulo de ficha técnica (autor/autora, revisão, capa, ISBN) → Ficha Técnica, mesmo com título real e fora do front matter', () => {
+    for (const label of ['autor', 'Autora: Maria Silva', 'revisão', 'Revisão: Edições Almedina', 'capa', 'Design da capa: FBA', 'ISBN 978-989-694-899-3']) {
+        expect(indesignTitle(page({ title: 'Créditos', paragraphs: ['Porque Falham As Equipas', label] }))).toBe('Ficha Técnica');
+    }
+});
+
+test('as mesmas palavras a meio de um capítulo não contam', () => {
+    expect(indesignTitle(page({ title: 'Capítulo 3', paragraphs: ['O autor defende que a capa do livro…', 'Ver Silva (2020), ISBN 978-1-23.'] }))).toBe('Capítulo 3');
+    expect(indesignTitle(page({ title: 'Capítulo 3', paragraphs: ['Autoridade e poder são…', 'Capacidade de liderança…'] }))).toBe('Capítulo 3');
 });
