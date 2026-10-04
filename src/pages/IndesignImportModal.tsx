@@ -22,6 +22,7 @@ const PARAGRAPH_OPTIONS: { value: string; label: string }[] = [
     { value: 'p-quote', label: 'Citação' },
     { value: 'alinea', label: 'Alínea' },
     { value: 'p-small', label: 'Pequeno' },
+    { value: 'p-bold', label: 'Parágrafo a negrito' },
     { value: '__remove__', label: 'Remover (apaga o texto)' },
 ];
 const SPAN_OPTIONS: { value: string; label: string }[] = [

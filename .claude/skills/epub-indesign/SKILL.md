@@ -69,7 +69,7 @@ Exceções: notas e tabelas sem classes; `p-legendas` tira `p-small`/`p-bottom`/
 - **`__remove__`**: apaga elemento **e conteúdo**; só lixo comprovado, confirmado.
 - **Sugestões**: corpo ≥ 1.6× → `h1`; ≥ 1.1× ou nome título/subt/sub → `h3`; "legenda" → `p-legendas`; spans pelo CSS.
 - **Checklist**: `h1` só para títulos do TOC original (números de aforismos, rosto, autor, "FIM" → `""`/`h3`; centenas de `h1` = erro) · subtítulos `h3` · legendas `p-legendas` · citações `p-quote` · rever o relatório do convert.
-- **Decididos** (reaplicar se o mapa se perder): `9789724429861` `SUBT-TULOS-CENTRADOS` = `h3` · `9789724429557` `ABERTURA` = `h3` (cada poema continua capítulo pelo `<title>` do ficheiro) · `9789899336186` `CAD-AUT_TIT` = `h1`, `Tit2` = `""` · `9789724429823` `Autor_inicio` = `""`, `Titulo-Tabela` = `p-legendas` · `Rosto-*`, `nome-do-autor`, `nome-autor`, `FIM` = parágrafo · `Recolhido*` = `p-quote` · `LEGENDAS*` = `p-legendas` · `Capitular` = `drop-cap`.
+- **Decididos** (reaplicar se o mapa se perder): `9789724429861` `SUBT-TULOS-CENTRADOS` = `h3` · `9789724429885` `subtitulos` = `p-bold` (h3 logo após h1 → Ace `heading-order`) · `9789724429557` `ABERTURA` = `h3` (cada poema continua capítulo pelo `<title>` do ficheiro) · `9789899336186` `CAD-AUT_TIT` = `h1`, `Tit2` = `""` · `9789724429823` `Autor_inicio` = `""`, `Titulo-Tabela` = `p-legendas` · `Rosto-*`, `nome-do-autor`, `nome-autor`, `FIM` = parágrafo · `Recolhido*` = `p-quote` · `LEGENDAS*` = `p-legendas` · `Capitular` = `drop-cap`.
 
 ## Títulos dos capítulos
 
