@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LogOut, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2 } from 'lucide-react';
+import { LogOut, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2, Wand2 } from 'lucide-react';
 import type { AuthUser } from '../../api/auth-api';
 
 type ViewMode = 'table' | 'grid';
@@ -11,6 +11,7 @@ interface UserMenuProps {
     onLogout: () => void;
     onNavigatePanel: () => void;
     onImportEpub: () => void;
+    onImportIndesign: () => void;
     importPending: boolean;
 }
 
@@ -27,7 +28,7 @@ const VIEW_MODES: { mode: ViewMode; icon: React.ReactNode; label: string }[] = [
 ];
 
 export const UserMenu: React.FC<UserMenuProps> = ({
-    user, viewMode, onViewModeChange, onLogout, onNavigatePanel, onImportEpub, importPending,
+    user, viewMode, onViewModeChange, onLogout, onNavigatePanel, onImportEpub, onImportIndesign, importPending,
 }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -104,6 +105,14 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                             >
                                 {importPending ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
                                 <span>{importPending ? 'A importar…' : 'Importação EPUB 2.0'}</span>
+                            </button>
+                            <button
+                                onClick={() => { setOpen(false); onImportIndesign(); }}
+                                disabled={importPending}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:bg-slate-50 hover:text-text-main transition-colors disabled:opacity-50"
+                            >
+                                <Wand2 size={15} />
+                                <span>Importação InDesign</span>
                             </button>
                         </div>
                     )}

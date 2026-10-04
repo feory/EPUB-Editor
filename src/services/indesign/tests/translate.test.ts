@@ -1,5 +1,5 @@
 // Casos reais encontrados ao converter os 15 EPUBs do InDesign (ver SKILL.md).
-// Correr: bun test ./.claude/skills/epub-indesign/tests/  (com ./ — o bun ignora pastas com ponto num filtro)
+// Correr: bun test src/services/indesign
 import { test, expect } from 'bun:test';
 import { intentOf, preservedOf, translateParagraph, translateSpan, type ParagraphContext, type Props } from '../translate';
 

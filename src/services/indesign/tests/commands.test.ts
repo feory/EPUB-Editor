@@ -1,9 +1,10 @@
 // Testes de livro inteiro: EPUBs mínimos "à InDesign" construídos em memória → convertBook / verifyBook.
-// Correr: bun test ./.claude/skills/epub-indesign/tests/  (com ./ — o bun ignora pastas com ponto num filtro)
+// Correr: bun test src/services/indesign
 import { test, expect } from 'bun:test';
+import '../happy-dom';
 import JSZip from 'jszip';
 import { parseXml } from '../book';
-import { convertBook, verifyBook, type BookMap } from '../commands';
+import { analyzeBook, convertBook, verifyBook, type BookMap } from '../commands';
 
 type Doc = { href: string; title: string; body: string };
 
@@ -132,4 +133,40 @@ test('verify: original × optimizado limpo; e apanha texto perdido', async () =>
     zip.file('OEBPS/c1.xhtml', xml.replace('segundo parágrafo', 'segundo'));
     const bad = await verifyBook(epub, await zip.generateAsync({ type: 'uint8array' }));
     expect(bad.text.ok).toBe(false);
+});
+
+test('título repetido em vários ficheiros só cria um capítulo: os seguintes ficam sem título', async () => {
+    const epub = await makeEpub([
+        { href: 'c1.xhtml', title: 'Sun Tzu disse:', body: '<p class="TXT">um</p>' },
+        { href: 'c2.xhtml', title: 'Outro', body: '<p class="TXT">dois</p>' },
+        { href: 'c3.xhtml', title: 'Sun Tzu disse:', body: '<p class="TXT">três</p>' },
+    ]);
+    const { bytes } = await convert(epub);
+    expect((await readDoc(bytes, 'c1.xhtml')).querySelector('title')?.textContent).toBe('Sun Tzu disse:');
+    expect((await readDoc(bytes, 'c3.xhtml')).querySelector('title')?.textContent).toBe('c3'); // nome do ficheiro = sem título
+});
+
+test('verify: EPUB já optimizado (notas no formato da app) conta as notas do original — não dá "notas 0 → N"', async () => {
+    const epub = await makeEpub([{ href: 'c1.xhtml', title: 'Um', body:
+        '<p class="TXT">texto<span class="Subido"><a class="_idFootnoteLink" id="fn1-back" href="#fn1" epub:type="noteref">1</a></span></p>' +
+        '<section class="_idFootnotes"><ol class="_listStyleNone"><li class="_idFootnote" id="fn1">' +
+        '<p class="NOTAS"><a class="_idFootnoteAnchor" href="#fn1-back">1</a> nota</p></li></ol></section>' }]);
+    const once = (await convert(epub)).bytes;          // já no formato da app (aside.footnote)
+    const twice = (await convert(once)).bytes;         // escolher um EPUB já optimizado na Importação InDesign
+    expect((await verifyBook(once, twice)).notes).toEqual([1, 1]);
+});
+
+test('EPUB já optimizado: optimizar de novo não muda nada (não perde capítulos nem subtítulos)', async () => {
+    const epub = await makeEpub([{ href: 'c1.xhtml', title: 'Um', body:
+        '<p class="ABERTURA">Capítulo 1</p><p class="SUB">Uma secção</p><p class="TXT">texto</p>' }]);
+    const map: BookMap = { classes: { ...MAP.classes, 'p.SUB': { target: 'h3' } } };
+    const once = (await convertBook(epub, map, EDITOR_CSS)).bytes;
+    const doc1 = await readDoc(once, 'c1.xhtml');
+    expect([doc1.querySelectorAll('h1').length, doc1.querySelectorAll('h3').length]).toEqual([1, 1]);
+    const { bytes: twice, report } = await convertBook(once, { classes: {} }, EDITOR_CSS);
+    expect(report.alreadyOptimized).toBe(true);
+    expect(twice).toEqual(once); // tal e qual
+    const { alreadyOptimized } = await analyzeBook(once, { baseStyles: {}, previousMap: null });
+    expect(alreadyOptimized).toBe(true);
+    expect((await analyzeBook(epub, { baseStyles: {}, previousMap: null })).alreadyOptimized).toBe(false);
 });

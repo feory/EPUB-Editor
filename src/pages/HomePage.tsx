@@ -21,8 +21,31 @@ import { CompletedTable } from './home/CompletedTable';
 import { EbookGrid } from './home/EbookGrid';
 import { UserMenu } from './home/UserMenu';
 import { EpubMappingModal } from './EpubMappingModal';
+import { IndesignImportModal } from './IndesignImportModal';
+import { analyzeBook, convertBook, verifyBook, type BookMap } from '../services/indesign/commands';
+import { editorExportCss } from '../services/indesign/editor';
+import baseStyles from '../services/indesign/estilos-base.json';
+import { DEFAULT_CSS } from '../context/StyleContext';
 
 type ViewMode = 'table' | 'grid';
+
+// O servidor guarda a capa como cover.jpg e recusa > 3 MB: JPEG pequeno passa tal e qual; o resto
+// (PNG, ou JPEG grande — ex. capas de 5 MB do InDesign) é reduzido para JPEG no browser.
+const MAX_COVER_BYTES = 2_900_000;
+async function coverForUpload(blob: Blob): Promise<Blob> {
+    if (blob.type === 'image/jpeg' && blob.size <= MAX_COVER_BYTES) return blob;
+    const bitmap = await createImageBitmap(blob);
+    const scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.9, 0.8, 0.7]) {
+        const jpeg = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', quality));
+        if (jpeg && jpeg.size <= MAX_COVER_BYTES) return jpeg;
+    }
+    throw new Error('capa demasiado grande');
+}
 
 export function HomePage() {
     const navigate = useNavigate();
@@ -104,12 +127,20 @@ export function HomePage() {
     const [epubMapping, setEpubMapping] = useState<{ file: File; classes: EpubClassInfo[] } | null>(null);
     const importEpubMutation = useMutation({
         mutationFn: async ({ file, mapping }: { file: File; mapping?: Record<string, string> }): Promise<string> => {
-            const { html, images, metadata } = await extractEpub(file, mapping);
+            const { html, images, metadata, cover } = await extractEpub(file, mapping);
             const isbn = metadata?.ebook_isbn || file.name.replace(/\.epub$/i, '');
             // O servidor exige title+author não-vazios; fallback quando o OPF não os traz.
             const title = metadata?.title || file.name.replace(/\.epub$/i, '');
             const author = metadata?.author || '—';
             await ebooksApi.create({ ebook_isbn: isbn, physical_isbn: '', title, author });
+            // Capa do EPUB → capa do ebook (lista/grelha). Falhar a capa nunca bloqueia a importação.
+            if (cover) {
+                try {
+                    const fd = new FormData();
+                    fd.append('cover', await coverForUpload(cover), 'cover.jpg');
+                    await ebooksApi.uploadCover(isbn, fd);
+                } catch { /* sem capa: o utilizador pode pô-la depois no botão de capa */ }
+            }
             let finalHtml = cleanEditorHtml(html);
             if (images.size > 0) {
                 const fd = new FormData();
@@ -133,6 +164,63 @@ export function HomePage() {
         onSuccess: (isbn) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); navigate(`/work/${isbn}`); },
         onError: (e: AxiosError) => { showNotification('error', e?.response?.status === 409 ? 'Já existe um ebook com este ISBN.' : 'Erro ao importar o EPUB.'); },
     });
+    // Importação InDesign: analisa o EPUB (mapa de estilos sugerido) → modal de revisão → optimiza para os
+    // estilos do editor (src/services/indesign) → verifica contra o original → importa como EPUB normal.
+    // A mesma lógica corre na CLI do skill .claude/skills/epub-indesign.
+    const indesignInputRef = useRef<HTMLInputElement>(null);
+    const [indesign, setIndesign] = useState<{ file: File; bytes: Uint8Array; map: BookMap } | null>(null);
+    const [indesignBusy, setIndesignBusy] = useState(false);
+    const handleImportIndesign = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        setIndesignBusy(true);
+        try {
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            const { map, alreadyOptimized } = await analyzeBook(bytes, { baseStyles, previousMap: null });
+            // já no formato da app (ex. ficheiro de optimizados/): nada a decidir nem a optimizar → importa direto
+            if (alreadyOptimized) {
+                showNotification('success', 'EPUB já optimizado — importado sem alterações.', 4000);
+                importEpubMutation.mutate({ file });
+                return;
+            }
+            setIndesign({ file, bytes, map });
+        } catch {
+            showNotification('error', 'Não foi possível ler o EPUB do InDesign.');
+        } finally {
+            setIndesignBusy(false);
+        }
+    };
+    const confirmIndesign = async (map: BookMap, force: boolean) => {
+        if (!indesign) return;
+        setIndesignBusy(true);
+        try {
+            const { bytes } = await convertBook(indesign.bytes, map, editorExportCss(DEFAULT_CSS));
+            const v = await verifyBook(indesign.bytes, bytes);
+            // Perder conteúdo bloqueia; diferenças de intenção (alinhamento, recuo…) só avisam.
+            const problems = [
+                !v.text.ok && `texto diferente na posição ${v.text.at} («${v.text.original}» → «${v.text.optimized}»)`,
+                v.images[0] !== v.images[1] && `imagens ${v.images[0]} → ${v.images[1]}`,
+                v.pages[0] !== v.pages[1] && `quebras de página ${v.pages[0]} → ${v.pages[1]}`,
+                v.notes[0] !== v.notes[1] && `notas ${v.notes[0]} → ${v.notes[1]}`,
+            ].filter(Boolean);
+            if (problems.length && !force) {
+                showNotification('error', `Importação InDesign bloqueada: ${problems.join(' · ')}`, 10000);
+                return;
+            }
+            // "Importação forçada" (checkbox do modal): importa, mas deixa o aviso do que falhou
+            if (problems.length) showNotification('error', `Importado com erros na verificação: ${problems.join(' · ')}`, 10000);
+            const diffs = v.diffs.reduce((s, d) => s + d.count, 0);
+            if (diffs) showNotification('success', `Optimizado com ${diffs} diferença(s) de alinhamento/recuo/espaço — confirmar no editor.`, 6000);
+            const file = new File([bytes], indesign.file.name, { type: 'application/epub+zip' });
+            setIndesign(null);
+            importEpubMutation.mutate({ file });
+        } catch {
+            showNotification('error', 'Erro ao optimizar o EPUB do InDesign.');
+        } finally {
+            setIndesignBusy(false);
+        }
+    };
     // EPUB antigo → abre modal de mapeamento de classes; EPUB da app → importa direto.
     const handleImportEpub = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -333,6 +421,7 @@ export function HomePage() {
                     </button>
                     <div className="flex items-center gap-2">
                         <input type="file" accept=".epub" hidden ref={epubInputRef} onChange={handleImportEpub} />
+                        <input type="file" accept=".epub" hidden ref={indesignInputRef} onChange={handleImportIndesign} />
 
                         <button className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 h-10 rounded-lg font-semibold text-sm transition-all shadow-sm" onClick={() => setIsModalOpen(true)}>
                             <Plus className="w-4.5 h-4.5" />
@@ -347,7 +436,8 @@ export function HomePage() {
                                 onLogout={handleLogout}
                                 onNavigatePanel={() => navigate('/painel')}
                                 onImportEpub={() => epubInputRef.current?.click()}
-                                importPending={importEpubMutation.isPending || scanningEpub}
+                                onImportIndesign={() => indesignInputRef.current?.click()}
+                                importPending={importEpubMutation.isPending || scanningEpub || indesignBusy}
                             />
                         )}
                     </div>
@@ -505,6 +595,15 @@ export function HomePage() {
                 />
             )}
 
+            {indesign && (
+                <IndesignImportModal
+                    fileName={indesign.file.name}
+                    map={indesign.map}
+                    pending={indesignBusy}
+                    onConfirm={confirmIndesign}
+                    onClose={() => setIndesign(null)}
+                />
+            )}
             {epubMapping && (
                 <EpubMappingModal
                     fileName={epubMapping.file.name}

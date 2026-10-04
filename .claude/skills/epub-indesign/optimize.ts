@@ -9,34 +9,29 @@
 //   bun .claude/skills/epub-indesign/optimize.ts verify  <livro.epub>  → texto/estrutura/intenção original × optimizado
 // O mapa decide a semântica (títulos, itálico…) e pode forçar classes do editor; ver SKILL.md.
 //
-// Este ficheiro é só a CLI (adapter): lê/escreve ficheiros e imprime. A lógica está em commands.ts.
+// Este ficheiro é só a CLI (adapter): lê/escreve ficheiros e imprime. A lógica é a da app
+// (src/services/indesign/), a mesma da "Importação InDesign" da página inicial.
+import '../../../src/services/indesign/happy-dom'; // DOMParser/XMLSerializer no bun (o browser já os tem)
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { DEFAULT_CSS } from '../../../src/context/StyleContext';
 import { analyzeBook, convertBook, verifyBook, type BookMap } from './commands';
+import { editorExportCss } from './editor';
 
 const mapPathFor = (epub: string) => join(dirname(epub), 'mapas', basename(epub, '.epub') + '.json');
 const optimizedPathFor = (epub: string) => join(dirname(epub), 'optimizados', basename(epub));
 
-// CSS do editor = DEFAULT_CSS do StyleContext (o style.css de um livro novo da app), sem a secção
-// editor-only nem @font-face — exatamente o que a app exporta.
-function editorCss(): string {
-    const src = readFileSync(join(import.meta.dir, '../../../src/context/StyleContext.tsx'), 'utf8');
-    let css = src.match(/export const DEFAULT_CSS = `([\s\S]*?)`;/)![1];
-    const cut = css.indexOf('/* === EDITOR (não exportado para EPUB) === */');
-    if (cut !== -1) css = css.slice(0, cut);
-    return css.replace(/@font-face\s*\{[^}]*\}/g, '').replace(/^ {4}/gm, '').replace(/\n{3,}/g, '\n\n').trim();
-}
-
 async function analyze(epubPath: string) {
     const basePath = join(import.meta.dir, 'estilos-base.json');
     const mapPath = mapPathFor(epubPath);
-    const { map, bodySize } = await analyzeBook(readFileSync(epubPath), {
+    const { map, bodySize, alreadyOptimized } = await analyzeBook(readFileSync(epubPath), {
         baseStyles: existsSync(basePath) ? JSON.parse(readFileSync(basePath, 'utf8')) : {},
         previousMap: existsSync(mapPath) ? JSON.parse(readFileSync(mapPath, 'utf8')) : null,
     });
     mkdirSync(dirname(mapPath), { recursive: true });
     writeFileSync(mapPath, JSON.stringify(map, null, 2) + '\n');
     console.log(`Mapa: ${mapPath}  (texto base ${bodySize}em)\n`);
+    if (alreadyOptimized) console.log('  ℹ EPUB já optimizado (formato da app) — o convert copia-o sem alterações.\n');
     for (const [k, e] of Object.entries(map.classes)) {
         console.log(`${String(e.count).padStart(6)}  ${k.padEnd(36)} → ${(e.target || '∅').padEnd(14)} [${e.origem}] ${e.css}`);
     }
@@ -46,12 +41,13 @@ async function convert(epubPath: string) {
     const mapPath = mapPathFor(epubPath);
     if (!existsSync(mapPath)) throw new Error(`Falta o mapa ${mapPath} — correr "analyze" primeiro.`);
     const map: BookMap = JSON.parse(readFileSync(mapPath, 'utf8'));
-    const { bytes, report } = await convertBook(readFileSync(epubPath), map, editorCss());
+    const { bytes, report } = await convertBook(readFileSync(epubPath), map, editorExportCss(DEFAULT_CSS));
     const outPath = optimizedPathFor(epubPath);
     mkdirSync(dirname(outPath), { recursive: true });
     writeFileSync(outPath, bytes);
 
     console.log(`✓ ${outPath}`);
+    if (report.alreadyOptimized) { console.log('  ℹ EPUB já optimizado (formato da app) — copiado sem alterações'); return; }
     console.log(`  ${report.documents} documentos, ${report.notes} notas convertidas, corpo do texto ${report.bodySize}em`);
     if (report.missing.length) console.log(`  ⚠ classes fora do mapa (correr analyze): ${report.missing.join(', ')}`);
     console.log('\n  Estilo original → estilo do editor');
