@@ -29,14 +29,14 @@ beforeAll(() => {
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 });
 
-function mountChapterSync() {
+function mountChapterSync(flushEditor?: () => void) {
     let latestApi: ReturnType<typeof useChapterSync> | null = null;
     let latestDispatch: Dispatch<ContentAction> | null = null;
 
     function Harness() {
         const [state, dispatch] = useReducer(contentReducer, initialContentState);
         const skipSyncRef = useRef(false);
-        latestApi = useChapterSync(state, dispatch, skipSyncRef);
+        latestApi = useChapterSync(state, dispatch, skipSyncRef, flushEditor);
         latestDispatch = dispatch;
         return null;
     }
@@ -189,5 +189,51 @@ test('BUG (repro real): trocar de capítulo a partir de "Documento Completo" com
     const synced = h.api().getSyncedHtmlContent();
     expect(synced).toContain('original um');  // livro sobrevive
     expect(synced).toContain('original dois');
+    h.unmount();
+});
+
+// --- Edição ainda no debounce do onEditorChange (WorkEditor.wireDeferredChange) ---------------
+// O WorkEditor só reporta o conteúdo (handleEditorChange) quando a escrita pára. Quem lê para
+// gravar/trocar de capítulo tem de forçar esse report antes (flushEditor) — senão a última
+// edição ficava de fora. Aqui o flush simula o WorkEditor: reporta a edição pendente uma vez.
+function pendingEdit(getApi: () => ReturnType<typeof useChapterSync>, html: string) {
+    let pending: string | null = html;
+    return () => {
+        if (pending === null) return;
+        const h = pending; pending = null;
+        getApi().handleEditorChange(h);
+    };
+}
+
+test('getLatestHtmlContent força o flush do editor ANTES de ler (gravar inclui a edição ainda não reportada)', () => {
+    let api: (() => ReturnType<typeof useChapterSync>) | null = null;
+    const flush = pendingEdit(() => api!(), TWO_CHAPTERS.replace('original um', 'AINDA NO DEBOUNCE'));
+    const h = mountChapterSync(() => flush());
+    api = h.api;
+    h.dispatch({ type: 'LOAD_CONTENT', payload: TWO_CHAPTERS });
+    h.dispatch({ type: 'CHANGE_CHAPTER', index: 0 });
+
+    let latest = '';
+    act(() => { latest = h.api().getLatestHtmlContent(); });
+    expect(latest).toContain('AINDA NO DEBOUNCE');
+    h.unmount();
+});
+
+test('changeActiveChapter força o flush ANTES de trocar — a edição fica no capítulo de origem', () => {
+    let api: (() => ReturnType<typeof useChapterSync>) | null = null;
+    const h0 = { flush: () => {} };
+    const h = mountChapterSync(() => h0.flush());
+    api = h.api;
+    h.dispatch({ type: 'LOAD_CONTENT', payload: TWO_CHAPTERS });
+    h.dispatch({ type: 'CHANGE_CHAPTER', index: 0 });
+    const chapterOne = h.api().localEditorContent;
+    h0.flush = pendingEdit(() => api!(), chapterOne.replace('original um', 'AINDA NO DEBOUNCE'));
+
+    act(() => { h.api().changeActiveChapter(1); });
+    let latest = '';
+    act(() => { latest = h.api().getLatestHtmlContent(); });
+    expect(latest).toContain('AINDA NO DEBOUNCE');
+    expect(latest).toContain('original dois');
+    expect(latest.match(/AINDA NO DEBOUNCE/g)?.length).toBe(1);
     h.unmount();
 });

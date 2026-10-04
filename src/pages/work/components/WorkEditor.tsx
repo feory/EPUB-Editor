@@ -128,9 +128,39 @@ export interface WorkEditorRef {
     // useEbookWork.commitHtml) SEM limpar o undo — devolve o fullHtml reconciliado (segmento
     // reserializado) que o chamador deve persistir. Ver comentário na implementação.
     syncExternalContent: (newFullHtml: string, chapterIndex: number) => string;
+    // Reporta JÁ (setHtmlContent) uma edição ainda presa no debounce do onEditorChange — quem
+    // lê o conteúdo para gravar/trocar de capítulo chama isto antes (ver wireDeferredChange).
+    flushContent: () => void;
     cleanIndexSelection: () => void;
     linkIndexPagesSelection: () => void;
     applyConversions: (options: ImportOptions) => void;
+}
+
+// O tinymce-react (value + onEditorChange) chama editor.getContent() — o livro inteiro
+// serializado, ~130ms com o "Documento Completo" — em CADA keyup (até setas) e change: era a
+// maior parte da lentidão a escrever. Troca os handlers dele por um único getContent quando a
+// escrita pára (DEFER_MS), imediato nos eventos raros (setcontent, Enter, undo/redo, remove).
+// Passa sempre pelo handleEditorChange do próprio componente: atualiza o currentContent
+// interno — sem isso, o próximo render (value novo ≠ currentContent) fazia setContent ao
+// editor inteiro. Devolve o "flush" (reportar já o que está no debounce) para quem lê o
+// conteúdo: gravar, trocar de capítulo, sair (getLatestHtmlContent/changeActiveChapter).
+// O tinymce-react só liga estes handlers uma vez (no setup, ao passar a controlado) — desligá-los
+// no init não é desfeito por re-renders (bindHandlers só reage a controlado↔não controlado).
+const DEFER_MS = 300;
+function wireDeferredChange(editor: TinyMCEEditor, tinyReact: Editor | null): () => void {
+    const inst = tinyReact as unknown as { handleEditorChange?: () => void; handleEditorChangeSpecial?: () => void } | null;
+    const report = inst?.handleEditorChange;
+    if (!inst || !report || !inst.handleEditorChangeSpecial) return () => {}; // API interna mudou → comportamento original
+    editor.off('change keyup compositionend setcontent CommentChange NewBlock', report);
+    editor.off('keyup', inst.handleEditorChangeSpecial);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const now = () => { clearTimeout(timer); timer = undefined; report(); };
+    editor.on('input change compositionend CommentChange', () => {
+        clearTimeout(timer);
+        timer = setTimeout(now, DEFER_MS);
+    });
+    editor.on('setcontent NewBlock Undo Redo remove', now);
+    return () => { if (timer !== undefined) now(); };
 }
 
 // Corte/substituição gravam os bytes SOBRE o mesmo imageId (mesmo src) — o <img> já montado no
@@ -162,6 +192,9 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     });
     const isCleaningRef = useRef(false);
     const isDiffHighlightingRef = useRef(false);
+    // Componente <Editor> (tinymce-react) e o "flush" do onEditorChange diferido (wireDeferredChange).
+    const tinyReactRef = useRef<Editor | null>(null);
+    const flushContentRef = useRef<() => void>(() => {});
     const grammarCacheRef = useRef(grammarCache);
     grammarCacheRef.current = grammarCache;
     const onGrammarCheckRef = useRef(onGrammarCheck);
@@ -246,6 +279,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             if (!editor) return;
             const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const body = editor.getBody();
+            // Edição ainda no debounce: reportá-la antes — com a flag ligada o onEditorChange é ignorado.
+            flushContentRef.current();
             isDiffHighlightingRef.current = true;
 
             try {
@@ -813,6 +848,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         // editor.getContent() após o 'Change'; a string original quase nunca bate certo
         // (aspas, ordem de atributos, etc. do serializer do TinyMCE), o que voltava a limpar
         // o undo mesmo depois deste dom.setHTML — confirmado ao vivo (hasUndo:false).
+        flushContent: () => flushContentRef.current(),
+
         syncExternalContent: (newFullHtml: string, chapterIndex: number): string => {
             const editor = editorRef.current;
             if (!editor) return newFullHtml;
@@ -897,9 +934,11 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
 
             <div className="relative">
                 <Editor
+                    ref={tinyReactRef}
                     licenseKey="gpl"
                     onInit={(_evt, editor) => {
                         editorRef.current = editor;
+                        flushContentRef.current = wireDeferredChange(editor, tinyReactRef.current);
                         if (readOnlyRef.current) editor.mode.set('readonly');
                         applyCustomStyles(editor);
                         // toolbar_sticky não recalcula a largura quando o CONTENTOR muda de

@@ -14,7 +14,10 @@ type ChapterPart = { title: string; content: string; level: 'h1' | 'h2' | 'h3' |
 export function useChapterSync(
     contentState: ContentState,
     dispatch: React.Dispatch<ContentAction>,
-    skipSyncRef: React.MutableRefObject<boolean>
+    skipSyncRef: React.MutableRefObject<boolean>,
+    // Reporta já a edição presa no debounce do onEditorChange (WorkEditor.flushContent) —
+    // chamado ANTES de ler localContentRef para gravar/trocar de capítulo. Tem de ser estável.
+    flushEditor?: () => void,
 ) {
     const { fullHtml, activeChapterIndex } = contentState;
 
@@ -87,15 +90,17 @@ export function useChapterSync(
     // getSyncedHtmlContent deriva só do fullHtml, logo devolvia conteúdo antigo a quem grava:
     // escrever e carregar em Guardar (ou sair) dentro da janela do debounce não gravava nada.
     const getLatestHtmlContent = useCallback(() => {
+        flushEditor?.();
         const pending = localContentRef.current;
         const cleanedHtml = cleanHtmlCached(fullHtml);
         if (skipSyncRef.current || pending === syncedContentRef.current) return cleanedHtml;
         if (!pending && activeChapterIndex === -1) return cleanedHtml; // vazio transitório
         return replaceChapterContent(fullHtml, pending, activeChapterIndex, cleanedHtml) ?? cleanedHtml;
-    }, [fullHtml, activeChapterIndex, cleanHtmlCached, skipSyncRef]);
+    }, [fullHtml, activeChapterIndex, cleanHtmlCached, skipSyncRef, flushEditor]);
 
     const changeActiveChapter = useCallback((index: number) => {
         if (index === activeChapterIndex) return;
+        flushEditor?.();
         // Flush edits still inside the debounce window to THIS chapter before
         // switching, otherwise they are lost (timer cleared) or, worse, written
         // into the destination chapter (duplicated chapters). Mesmo guard de vazio
@@ -112,7 +117,7 @@ export function useChapterSync(
         }
         if (isLargeBook) dispatch({ type: 'SET_LOADING', loading: true });
         startTransition(() => dispatch({ type: 'CHANGE_CHAPTER', index }));
-    }, [activeChapterIndex, isLargeBook, dispatch, skipSyncRef]);
+    }, [activeChapterIndex, isLargeBook, dispatch, skipSyncRef, flushEditor]);
 
     const [localEditorContent, setLocalEditorContent] = useState(currentEditorContent);
     // Resincroniza o buffer local (estado independente, mutado depois por handleEditorChange)
