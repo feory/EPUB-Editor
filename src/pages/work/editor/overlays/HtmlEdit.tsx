@@ -3,6 +3,7 @@ import { X, Save, Replace } from 'lucide-react';
 import type { TinyMCEEditor } from '../types';
 import { countInBook, replaceInBook } from '../book-find-replace';
 import { editBlocks } from '../blockEdit';
+import { chromeBounds } from '../editorChrome'; // a caixa fica entre a barra de ferramentas e a de estado
 import { useNotification } from '../../../../context/NotificationContext';
 
 /**
@@ -35,18 +36,6 @@ type Box = { top: number; left: number; width: number; height: number; maxHeight
 const iframeOf = (editor: TinyMCEEditor) =>
     (editor.getContainer()?.querySelector('iframe') as HTMLIFrameElement | null);
 
-// A caixa (position:fixed, z-index alto) pintava por cima da toolbar sticky e da statusbar do
-// TinyMCE (sem z-index próprio, só ordem no DOM). Em vez de uma guerra de z-index com o skin,
-// limita-se ao espaço ENTRE as duas: nunca acima do fundo da toolbar nem abaixo da statusbar.
-const GAP = 8;
-function chromeBounds(editor: TinyMCEEditor): { minTop: number; maxBottom: number } {
-    const container = editor.getContainer() as HTMLElement | null;
-    const header = container?.querySelector('.tox-editor-header') as HTMLElement | null;
-    const statusbar = container?.querySelector('.tox-statusbar') as HTMLElement | null;
-    const minTop = header ? header.getBoundingClientRect().bottom + GAP : 0;
-    const maxBottom = statusbar ? statusbar.getBoundingClientRect().top - GAP : window.innerHeight;
-    return { minTop, maxBottom };
-}
 
 // Painel "Substituir" sempre abaixo da toolbar (top-11) cortava-se na última linha do
 // capítulo: sem espaço a seguir aos 44px da toolbar, abre para cima. ~260px = painel cheio.

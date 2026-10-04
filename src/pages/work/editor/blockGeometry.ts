@@ -25,6 +25,21 @@ export const GRIP_WIDTH = 20;
 /** Esquerda da pega: centrada na linha do anel (RING à esquerda da caixa do bloco). */
 export const gripLeft = (blockLeft: number) => blockLeft - RING - GRIP_WIDTH / 2;
 
+export const GRIP_HEIGHT = 76; // pilha da pega: ▲ (20) + arrastar (36) + ▼ (20)
+/**
+ * Topo da pega (coords da janela): centrada na parte VISÍVEL do bloco e sempre dentro do espaço
+ * útil [minTop, maxBottom] (entre barra de ferramentas e barra de estado). Centrar no meio do
+ * bloco inteiro punha-a por cima da barra de estado / fora do editor em parágrafos longos.
+ * null = pouco do bloco à vista (ou espaço útil menor que a pega) → esconder.
+ */
+export function gripTop(blockTop: number, blockBottom: number, minTop: number, maxBottom: number): number | null {
+    const top = Math.max(blockTop, minTop);
+    const bottom = Math.min(blockBottom, maxBottom);
+    if (bottom - top < 12 || maxBottom - minTop < GRIP_HEIGHT) return null;
+    const centered = (top + bottom) / 2 - GRIP_HEIGHT / 2;
+    return Math.min(Math.max(centered, minTop), maxBottom - GRIP_HEIGHT);
+}
+
 /**
  * Centro vertical do "+": o ::after fica no fim do CONTEÚDO do bloco e desce --plus-dy; no
  * bloco ativo isso põe-no em cima da linha do anel (padding + RING abaixo do conteúdo).

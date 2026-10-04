@@ -5,7 +5,8 @@ import { useHtmlEdit } from './overlays/HtmlEdit';
 import { attachMiniMenu, type MiniMenu } from './miniMenu';
 import { editBlocks } from './blockEdit';
 import type { ActiveBlock } from './activeBlock';
-import { plusCenterY, PLUS_HIT, PLUS_SIZE, gripLeft } from './blockGeometry';
+import { plusCenterY, PLUS_HIT, PLUS_SIZE, gripLeft, gripTop } from './blockGeometry';
+import { chromeBounds } from './editorChrome';
 
 // readOnly atravessa de fora; tudo o resto em BlockOverlaysProps só alimenta o render interno.
 type BlockOverlaysInternal = Omit<BlockOverlaysProps, 'readOnly'>;
@@ -370,15 +371,14 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             if (!iframe) { fadeOutGrip(); return; }
             const ir = iframe.getBoundingClientRect();
             const br = block.getBoundingClientRect();
-            const midY = br.top + br.height / 2;
-            if (midY < 0 || midY > ir.height) { fadeOutGrip(); return; } // fora do visível
             // Só com o rato no limite esquerdo do bloco (gutter) e à altura do bloco.
             if (lastMouseX < br.left - GRIP_BAND || lastMouseX > br.left + 12) { fadeOutGrip(); return; }
             if (lastMouseY < br.top - 4 || lastMouseY > br.bottom + 4) { fadeOutGrip(); return; }
-            // Pilha da pega ≈ 76px (h-5 + h-9 + h-5); topo = meio - 38 → centrada sem translate
-            // (translateY colidiria com a animação plusPop, causando um salto vertical).
-            const posTop = ir.top + midY - 38;
-            if (posTop < 0 || posTop > window.innerHeight) { fadeOutGrip(); return; } // clamp à janela
+            // Centrada na parte visível do bloco, dentro do espaço útil do editor (blockGeometry.ts).
+            // Sem translate: colidiria com a animação plusPop (salto vertical).
+            const { minTop, maxBottom } = chromeBounds(editor);
+            const posTop = gripTop(ir.top + br.top, ir.top + br.bottom, Math.max(minTop, ir.top), Math.min(maxBottom, ir.bottom));
+            if (posTop === null) { fadeOutGrip(); return; }
             cancelGripHide(); // rato de volta ao gutter → cancelar o fade pendente
             gripBlockRef.current = block;
             // Pega centrada na linha do anel (blockGeometry.ts).
