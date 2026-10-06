@@ -208,6 +208,11 @@ body {
   opacity: 0;
   transition: opacity 0.7s ease-in 0.15s;
 }
+/* Zona de ativação um pouco abaixo da toolbar: ::after em fluxo com margem negativa (não muda
+   a altura do header, não precisa de position) e o header tem z-index sobre a área de edição. */
+.tox .tox-editor-header::after {
+  content: ""; grid-column: 1 / -1; height: 20px; margin-bottom: -20px; /* o header é um grid */
+}
 .tox .tox-editor-header:hover,
 .tox .tox-editor-header:focus-within,
 .tox .tox-editor-header:has([aria-expanded="true"]) {
