@@ -3,8 +3,8 @@ import { RING } from './blockGeometry'; // linha do anel do bloco ativo — o me
 
 /**
  * Mini-menu (ver Design/CONTEXT.md): a barra de estilos do bloco ativo — o `.tox-pop` do
- * context toolbar do TinyMCE — encostada à linha da borda do bloco, em cima ou (sem espaço)
- * em baixo, alinhada à esquerda.
+ * context toolbar do TinyMCE — encostada à linha da borda do bloco, sempre em cima (preso ao
+ * topo visível com scroll), alinhada à esquerda.
  *
  * Este módulo é o ÚNICO que escreve no pop. O TinyMCE posiciona-o à maneira dele (centrado,
  * com folga para a seta, às vezes por dentro do bloco) e auto-flipa sem knob; aqui corrige-se
@@ -40,21 +40,19 @@ const HIDES_SELECTION_BAR: ReadonlySet<Reason> = new Set<Reason>(['toolbar', 'gr
 
 
 /**
- * Cabe ACIMA do bloco, senão ABAIXO, senão null (esconder). Ambos os lados medidos dentro da
- * área visível do iframe (`iframeTop`/`iframeHeight`), nunca da janela.
+ * Sempre EM CIMA do bloco. Sem espaço acima (o utilizador fez scroll e o topo do bloco passou
+ * por baixo da barra) o menu fica preso ao limite visível (`topBound`: topo do iframe ou, com a
+ * barra principal presa à janela, o fundo dela) enquanto o bloco ainda tiver parte à vista;
+ * null (esconder) quando o bloco já saiu. Medido dentro da área visível do iframe.
  */
 function placeVertically(
     blockTop: number, blockBottom: number, blockVisible: boolean,
-    popHeight: number, iframeTop: number, iframeHeight: number,
-): { top: number; side: 'top' | 'bottom' } | null {
+    popHeight: number, topBound: number, iframeBottom: number,
+): { top: number; side: 'top' } | null {
     if (!blockVisible) return null;
-    const above = blockTop - popHeight - RING;
-    if (above >= iframeTop + 4) return { top: above, side: 'top' };
-    // Em baixo também encostado à linha. O "+" (centro da borda) só fica tapado em blocos
-    // estreitos: o menu está alinhado à esquerda e acaba antes do centro nos normais.
-    const below = blockBottom + RING;
-    if (below + popHeight <= iframeTop + iframeHeight - 4) return { top: below, side: 'bottom' };
-    return null;
+    const top = Math.max(blockTop - popHeight - RING, topBound + 4);
+    if (top >= blockBottom - RING || top + popHeight > iframeBottom - 4) return null;
+    return { top, side: 'top' };
 }
 
 const popOf = () => document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
@@ -104,8 +102,10 @@ export function attachMiniMenu(
         pop.style.bottom = '';
         pop.style.right = '';
         pop.style.left = '0px'; // medir a largura/altura naturais
+        // Barra principal presa à janela (sticky) tapa o topo do iframe: o limite é o fundo dela.
+        const headerBottom = editor.getContainer()?.querySelector('.tox-editor-header')?.getBoundingClientRect().bottom ?? 0;
         const placed = placeVertically(ir.top + br.top, ir.top + br.bottom, br.top < ir.height && br.bottom > 0,
-            pop.offsetHeight, ir.top, ir.height);
+            pop.offsetHeight, Math.max(ir.top, headerBottom), ir.top + ir.height);
 
         if (!placed) {
             pop.style.visibility = 'hidden'; // não cabe em lado nenhum
