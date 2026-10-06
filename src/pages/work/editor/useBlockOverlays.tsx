@@ -4,7 +4,7 @@ import { BlockOverlays, type BlockOverlaysProps } from './overlays/BlockOverlays
 import { useHtmlEdit } from './overlays/HtmlEdit';
 import { attachMiniMenu, type MiniMenu } from './miniMenu';
 import { editBlocks } from './blockEdit';
-import { COLUMNS_HTML } from './columnsProps';
+import { COLUMNS_HTML, CONTAINER_SELECTOR, removeElement } from '../../../utils/containers';
 import type { ActiveBlock } from './activeBlock';
 import { plusCenterY, PLUS_HIT, PLUS_SIZE, gripZoneAt, gripTop, nearGripLine } from './blockGeometry';
 
@@ -126,20 +126,8 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const editor = editorRef.current; const el = delTargetsRef.current[index];
         if (!editor || !el) return;
         delTargetsRef.current = []; lastDelRef.current = ''; setDelBtns([]); // '' → o próximo update volta a mostrá-los, mesmo na mesma posição
-        const body = editor.getBody();
         editBlocks(editor, () => {
-            // Imagem sozinha no parágrafo → leva o parágrafo (o limpador apagava-o de qualquer forma).
-            const p = el.parentElement;
-            const doomed = el.nodeName === 'IMG' && p && p !== body && p.querySelectorAll('img').length === 1 && !p.textContent?.trim() ? p : el;
-            const parent = doomed.parentElement;
-            const next = (doomed.nextElementSibling ?? doomed.previousElementSibling) as HTMLElement | null;
-            doomed.remove();
-            // Contentor ficou vazio: a coluna ganha um parágrafo (senão não se edita); caixas vazias saem.
-            let holder = parent;
-            while (holder && holder !== body && !holder.children.length) {
-                if (holder.classList.contains('col')) { holder.innerHTML = '<p><br data-mce-bogus="1"></p>'; break; }
-                const up: HTMLElement | null = holder.parentElement; holder.remove(); holder = up;
-            }
+            const next = removeElement(el, editor.getBody()) as HTMLElement | null;
             editor.focus(); // antes do cursor/nodeChanged: o anel do bloco ativo só se aplica com foco
             if (next?.isConnected) {
                 if (/^(P|H[1-6])$/.test(next.nodeName)) editor.selection.setCursorLocation(next, 0);
@@ -485,7 +473,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                 const headerH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--wp-header-h')) || 57;
                 const cornerVisible = (top: number) => top >= 0 && top <= ir.height - 24 && ir.top + top >= headerH && ir.top + top <= window.innerHeight - 24;
                 if (cornerVisible(r.top + 4)) { btns.push({ top: ir.top + r.top + 4, left: ir.left + r.right - 4 - 24, container: false }); targets.push(el); }
-                const box = el.parentElement?.closest('.columns, .box') as HTMLElement | null;
+                const box = el.parentElement?.closest(CONTAINER_SELECTOR) as HTMLElement | null;
                 if (box) {
                     const br = box.getBoundingClientRect();
                     const above = br.top - 30; // botão (24px) todo acima do contentor, com folga — não toca no botão do elemento

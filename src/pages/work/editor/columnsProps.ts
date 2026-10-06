@@ -1,8 +1,6 @@
 // Bloco de colunas: <div class="columns"><div class="col">…</div><div class="col">…</div></div>.
 // Proporção = grid-template-columns inline; espaço = gap inline. '' / null = herda do CSS do livro (1fr 1fr).
 
-export const COLUMNS_HTML = '<div class="columns"><div class="col"><p><br></p></div><div class="col"><p><br></p></div></div>';
-
 export const COLUMN_RATIOS = [['', '50 / 50'], ['1fr 2fr', '33 / 67'], ['2fr 1fr', '67 / 33'], ['1fr 3fr', '25 / 75'], ['3fr 1fr', '75 / 25']] as const;
 export type ColumnRatio = typeof COLUMN_RATIOS[number][0];
 

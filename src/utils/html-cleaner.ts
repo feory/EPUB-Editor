@@ -4,6 +4,7 @@
  */
 
 import { decodeEntities } from './entities';
+import { isColumnPlaceholder } from './containers';
 
 // ---------------------------------------------------------------------------
 // Chapter structure patterns (shared with useEbookWork)
@@ -615,7 +616,7 @@ export function cleanEditorDOM(body: HTMLElement): void {
     const prev = p.previousElementSibling;
     if (prev && /\bchapter-break\b/.test(prev.className)) return;
     // Único parágrafo de uma coluna (bloco .columns): sem ele a coluna deixa de ser editável.
-    if (p.parentElement?.classList.contains('col') && p.parentElement.children.length === 1) return;
+    if (isColumnPlaceholder(p)) return;
     const text = p.textContent || '';
     const html = p.innerHTML || '';
     if (text.trim() === '' || /^(&nbsp;|\s|&#160;|&#xa0;)+$/.test(html.trim())) {
