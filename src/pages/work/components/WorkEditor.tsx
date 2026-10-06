@@ -17,6 +17,7 @@ import { useBlockOverlays } from '../editor/useBlockOverlays';
 import { useImageCrop } from './images/useImageCrop';
 import { ImageCropModal } from './images/ImageCropModal';
 import { applyBoxProps, type BoxProps } from '../editor/boxProps';
+import { BLOCK_STYLE_OPTIONS } from '../editor/config';
 import { applyTextProps, type TextProps, type BlockInfo } from '../editor/textProps';
 import { createEditorSetup } from '../editor/setup';
 import { editBlocks } from '../editor/blockEdit';
@@ -142,6 +143,7 @@ export interface WorkEditorRef {
     // Caixa / bloco de texto sob o cursor (painel lateral)
     setBoxProps: (patch: Partial<BoxProps>) => void;
     setTextProps: (patch: Partial<TextProps>) => void;
+    setBlockStyle: (format: string) => void; // troca o estilo (Título 1-3, Padrão, Citação…) do bloco
 }
 
 // Corte/substituição gravam os bytes SOBRE o mesmo imageId (mesmo src) — o <img> já montado no
@@ -560,6 +562,25 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     if (!e.getAttribute('style')) e.removeAttribute('style');
                 },
             }, el, patch));
+        },
+
+        setBlockStyle: (format) => {
+            const editor = editorRef.current;
+            if (!editor) return;
+            editBlocks(editor, () => {
+                const current = () => editor.dom.getParent(editor.selection.getNode(), 'p,h1,h2,h3,h4,h5,h6,li') as HTMLElement | null;
+                const el = current();
+                if (!el) return;
+                // Estilo = exclusivo: tira os outros estilos de parágrafo antes de aplicar o novo.
+                BLOCK_STYLE_OPTIONS.forEach(([f]) => !/^(h[1-3]|p)$/.test(f) && editor.dom.removeClass(el, f));
+                const tag = el.nodeName.toLowerCase();
+                if (/^h[123]$/.test(format)) {
+                    if (tag !== format) editor.execCommand('FormatBlock', false, format);
+                    return;
+                }
+                if (/^h[1-6]$/.test(tag)) editor.execCommand('FormatBlock', false, 'p'); // classes de parágrafo não casam em títulos
+                if (format !== 'p') editor.formatter.apply(format);
+            });
         },
 
         applyConversions: (options: ImportOptions) => {

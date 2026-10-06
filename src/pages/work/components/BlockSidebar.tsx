@@ -4,6 +4,7 @@ import { PanelResizeHandle } from './PanelResizeHandle';
 import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
 import { EMPTY_TEXT, textPropsFrom, type BlockInfo, type TextProps, type TextAlign } from '../editor/textProps';
 import { readRule, hasRule } from '../editor/cssRule';
+import { BLOCK_STYLE_OPTIONS } from '../editor/config';
 
 interface BlockSidebarProps {
     info: BlockInfo;                                  // caixa / bloco de texto sob o cursor
@@ -11,6 +12,7 @@ interface BlockSidebarProps {
     onBoxChange: (patch: Partial<BoxProps>) => void;
     onTextInline: (patch: Partial<TextProps>) => void;                     // "Este bloco"
     onTextStyle: (selector: string, patch: Partial<TextProps>) => void;    // regra CSS do livro
+    onBlockStyle: (format: string) => void;                                // troca o estilo do bloco
     onClose: () => void;
     width: number;
     onResize: (width: number) => void;
@@ -124,7 +126,8 @@ const MODES = [['block', 'Este bloco'], ['style', 'Estilo']] as const;
 const TextSection: React.FC<{
     text: NonNullable<BlockInfo['text']>; css: string;
     onInline: (patch: Partial<TextProps>) => void; onStyle: (selector: string, patch: Partial<TextProps>) => void;
-}> = ({ text, css, onInline, onStyle }) => {
+    onBlockStyle: (format: string) => void;
+}> = ({ text, css, onInline, onStyle, onBlockStyle }) => {
     const [mode, setMode] = useState<'block' | 'style'>('block');
     const [picked, setPicked] = useState('');
     // Alvos do modo "Estilo": classes do bloco com regra no livro + todos os blocos da mesma tag.
@@ -135,6 +138,15 @@ const TextSection: React.FC<{
     const selector = targets.some(([sel]) => sel === picked) ? picked : targets[0][0];
     return (
         <Section title={`Bloco · ${text.tag}${text.classes.length ? ' · ' + text.classes.join(' ') : ''}`}>
+            {(/^h[123]$/.test(text.tag) || text.tag === 'p' || text.tag === 'li') && (
+                <Row label="Estilo">
+                    <Select
+                        value={/^h[123]$/.test(text.tag) ? text.tag : BLOCK_STYLE_OPTIONS.find(([f]) => text.classes.includes(f))?.[0] ?? 'p'}
+                        options={BLOCK_STYLE_OPTIONS}
+                        onChange={onBlockStyle}
+                    />
+                </Row>
+            )}
             <div className="flex rounded-lg border border-border p-0.5 bg-slate-50">
                 {MODES.map(([m, label]) => (
                     <button key={m} type="button" onClick={() => setMode(m)}
@@ -159,7 +171,7 @@ const TextSection: React.FC<{
     );
 };
 
-export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onBoxChange, onTextInline, onTextStyle, onClose, width, onResize }) => (
+export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onBoxChange, onTextInline, onTextStyle, onBlockStyle, onClose, width, onResize }) => (
     <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
         <PanelResizeHandle width={width} onResize={onResize} />
         <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
@@ -172,7 +184,7 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onBoxChan
             </div>
         ) : (
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
-                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={onTextInline} onStyle={onTextStyle} />}
+                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={onTextInline} onStyle={onTextStyle} onBlockStyle={onBlockStyle} />}
                 {info.box && <BoxSection box={info.box} onChange={onBoxChange} />}
             </div>
         )}

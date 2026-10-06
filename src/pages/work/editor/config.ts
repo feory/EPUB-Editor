@@ -76,6 +76,11 @@ const OTHER_STYLES = [
 export const MORE_STYLES_PARA: ReadonlyArray<readonly [string, string]> = [...HEADING_STYLES, ...OTHER_STYLES];
 export const MORE_STYLES_HEAD: ReadonlyArray<readonly [string, string]> = [...PARAGRAPH_STYLES, ...OTHER_STYLES];
 
+// Estilos mutuamente exclusivos do seletor "Estilo" do painel de bloco (títulos + parágrafo + bordas + nota de rodapé + capitular).
+export const BLOCK_STYLE_OPTIONS: ReadonlyArray<readonly [string, string]> = [
+    ...HEADING_STYLES, ...PARAGRAPH_STYLES, ...OTHER_STYLES.filter(([f]) => f !== 'box'), // box é um wrapper (div), não um estilo do próprio bloco
+];
+
 // Botão ¶ "Estilo do parágrafo" do mini-menu (ver mini-menu 'parastyles' em setup.ts) — subconjunto
 // reordenado de PARAGRAPH_STYLES (labels vêm de lá, fonte única).
 const QUICK_STYLE_ORDER = ['p', 'p-indent', 'p-small', 'p-legendas', 'p-bold', 'p-italic', 'p-bold-italic', 'p-quote'] as const;

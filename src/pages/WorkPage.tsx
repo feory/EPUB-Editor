@@ -597,6 +597,7 @@ export function WorkPage() {
           onBoxChange={(patch) => editorRef.current?.setBoxProps(patch)}
           onTextInline={(patch) => editorRef.current?.setTextProps(patch)}
           onTextStyle={handleTextStyle}
+          onBlockStyle={(format) => editorRef.current?.setBlockStyle(format)}
           onClose={() => sidebars.setShowBoxSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}
