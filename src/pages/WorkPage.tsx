@@ -23,8 +23,10 @@ import { TocModal } from './work/components/TocModal';
 import { FocusModeBar } from './work/components/FocusModeBar';
 import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { CommentSidebar } from './work/components/CommentSidebar';
-import { BoxSidebar } from './work/components/BoxSidebar';
-import type { BoxProps } from './work/editor/boxProps';
+import { BlockSidebar } from './work/components/BlockSidebar';
+import type { BlockInfo, TextProps } from './work/editor/textProps';
+import { textPatchToDecls } from './work/editor/textProps';
+import { applyRule } from './work/editor/cssRule';
 import { useComments } from './work/hooks/useComments';
 import { useCommentEditorSync } from './work/hooks/useCommentEditorSync';
 import { useAuth } from '../context/AuthContext';
@@ -61,9 +63,9 @@ export function WorkPage() {
   const { isbn } = useParams<{ isbn: string }>();
   const navigate = useNavigate();
   const { showNotification } = useNotification();
-  const { setCustomCss } = useStyles();
+  const { setCustomCss, getCurrentCss } = useStyles();
   const editorRef = useRef<WorkEditorRef>(null);
-  const [boxProps, setBoxProps] = useState<BoxProps | null>(null);
+  const [blockInfo, setBlockInfo] = useState<BlockInfo>({ box: null, text: null });
   const work = useEbookWork(isbn, editorRef);
   const { user } = useAuth();
   const comments = useComments(isbn);
@@ -389,6 +391,15 @@ export function WorkPage() {
     } catch { return ts; }
   };
 
+  // Modo "Estilo" do painel de bloco: edita a regra no CSS do livro (aplica já; grava com debounce).
+  const styleSaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleTextStyle = (selector: string, patch: Partial<TextProps>) => {
+    const next = applyRule(getCurrentCss(), selector, textPatchToDecls(patch));
+    setCustomCss(next);
+    clearTimeout(styleSaveTimer.current);
+    if (isbn) styleSaveTimer.current = setTimeout(() => ebooksApi.saveStyle(isbn, next), 600);
+  };
+
   const anySidebarOpen = !!sidebars.activePanel || diff.showDiffSidebar || work.versionDiff.open;
 
   const presence = work.presence;
@@ -512,7 +523,7 @@ export function WorkPage() {
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 onAddComment={(anchorId) => { comments.setDraftAnchorId(anchorId); sidebars.openPanel('comments'); }}
                 onEditBox={() => sidebars.openPanel('box')}
-                onBoxChange={setBoxProps}
+                onBlockChange={setBlockInfo}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
                 activeChapterIndex={work.activeChapterIndex}
@@ -580,9 +591,12 @@ export function WorkPage() {
       )}
 
       {sidebars.showBoxSidebar && (
-        <BoxSidebar
-          box={boxProps}
-          onChange={(patch) => editorRef.current?.setBoxProps(patch)}
+        <BlockSidebar
+          info={blockInfo}
+          css={getCurrentCss()}
+          onBoxChange={(patch) => editorRef.current?.setBoxProps(patch)}
+          onTextInline={(patch) => editorRef.current?.setTextProps(patch)}
+          onTextStyle={handleTextStyle}
           onClose={() => sidebars.setShowBoxSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}

@@ -4,7 +4,8 @@ import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
 import type { TinyMCEEditor } from './types';
 import { editBlocks } from './blockEdit';
-import { BOX_VARIANTS, applyBoxProps, readBoxProps, type BoxProps } from './boxProps';
+import { BOX_VARIANTS, applyBoxProps, readBoxProps } from './boxProps';
+import { textPropsFrom, type BlockInfo } from './textProps';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
 
 interface SetupDeps {
@@ -16,8 +17,8 @@ interface SetupDeps {
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
     onEditBoxStyle: () => void;
-    // Props da caixa sob o cursor (null fora de caixas) — por ref: setup() só corre 1x.
-    onBoxChangeRef: React.MutableRefObject<((props: BoxProps | null) => void) | undefined>;
+    // Caixa e bloco de texto sob o cursor (painel lateral) — por ref: setup() só corre 1x.
+    onBlockChangeRef: React.MutableRefObject<((info: BlockInfo) => void) | undefined>;
     // Título do ebook no canto direito da barra de estado (ref: setup() só corre 1x).
     ebookLabelRef: React.MutableRefObject<string>;
     onToggleFocusModeRef: React.MutableRefObject<(() => void) | undefined>;
@@ -38,7 +39,7 @@ interface SetupDeps {
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
     const { onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
-        chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment, onEditBoxStyle, onBoxChangeRef } = deps;
+        chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment, onEditBoxStyle, onBlockChangeRef } = deps;
 
     return (editor: Editor) => {
         // Ação de menu/atalho como edição de bloco (blockEdit.ts): passo de undo + change + nodeChanged.
@@ -351,22 +352,40 @@ export function createEditorSetup(deps: SetupDeps) {
             getSubmenuItems: () => BOX_VARIANTS.map(([variant, text]) => ({
                 type: 'togglemenuitem' as const,
                 text,
-                onSetup: (api) => { const box = boxOf(); api.setActive(!!box && readBoxProps(box).variant === variant); return () => {}; },
+                onSetup: (api: { setActive: (state: boolean) => void }) => { const box = boxOf(); api.setActive(!!box && readBoxProps(box).variant === variant); return () => {}; },
                 onAction: () => {
                     const box = boxOf();
                     if (box) editBlocks(editor, () => applyBoxProps(editor.dom, box, { variant }));
                 },
             })),
         });
-        // Painel lateral: acompanha a caixa sob o cursor (só emite quando as props mudam).
-        let lastBoxJson = 'null';
+        // Painel lateral: acompanha a caixa e o bloco de texto sob o cursor (só emite quando mudam).
+        let lastBlockJson = '';
         editor.on('NodeChange', () => {
             const box = boxOf();
-            const props = box ? readBoxProps(box) : null;
-            const json = JSON.stringify(props);
-            if (json === lastBoxJson) return;
-            lastBoxJson = json;
-            onBoxChangeRef.current?.(props);
+            const el = editor.dom.getParent(editor.selection.getNode(), 'p,h1,h2,h3,h4,h5,h6,li') as HTMLElement | null;
+            const isText = !!el && !/(^|\s)chapter-break/.test(el.className);
+            const info: BlockInfo = {
+                box: box ? readBoxProps(box) : null,
+                text: isText ? {
+                    tag: el.nodeName.toLowerCase(),
+                    classes: Array.from(el.classList).filter((c) => !/^(mce-|diff-)/.test(c)),
+                    inline: textPropsFrom((n) => el.style.getPropertyValue(n)),
+                } : null,
+            };
+            const json = JSON.stringify(info);
+            if (json === lastBlockJson) return;
+            lastBlockJson = json;
+            onBlockChangeRef.current?.(info);
+        });
+        // Parágrafos/títulos/itens: abre o painel de edição do bloco.
+        editor.ui.registry.addMenuItem('blockedit-item', {
+            text: 'Editar bloco',
+            icon: 'edit-block',
+            onAction: () => onEditBoxStyle(),
+        });
+        editor.ui.registry.addContextMenu('blockedit', {
+            update: (element) => editor.dom.getParent(element, 'p,h1,h2,h3,h4,h5,h6,li') && !editor.dom.getParent(element, '.box') ? ['blockedit-item'] : [],
         });
         editor.ui.registry.addContextMenu('boxedit', {
             update: (element) => editor.dom.getParent(element, '.box') ? ['boxedit-item', 'boxvariant-item'] : [],

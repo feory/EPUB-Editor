@@ -17,6 +17,7 @@ import { useBlockOverlays } from '../editor/useBlockOverlays';
 import { useImageCrop } from './images/useImageCrop';
 import { ImageCropModal } from './images/ImageCropModal';
 import { applyBoxProps, type BoxProps } from '../editor/boxProps';
+import { applyTextProps, type TextProps, type BlockInfo } from '../editor/textProps';
 import { createEditorSetup } from '../editor/setup';
 import { editBlocks } from '../editor/blockEdit';
 import { buildContentStyle } from '../editor/contentStyles';
@@ -80,7 +81,7 @@ interface WorkEditorProps {
     onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void;
     onAddComment?: (anchorId: string) => void;
     onEditBox?: () => void;
-    onBoxChange?: (props: BoxProps | null) => void;
+    onBlockChange?: (info: BlockInfo) => void;
     readOnly?: boolean;
     editorFont?: string;
     editorFontSize?: string;
@@ -138,8 +139,9 @@ export interface WorkEditorRef {
     linkIndexPagesSelection: () => void;
     applyConversions: (options: ImportOptions) => void;
 
-    // Caixa sob o cursor (painel lateral)
+    // Caixa / bloco de texto sob o cursor (painel lateral)
     setBoxProps: (patch: Partial<BoxProps>) => void;
+    setTextProps: (patch: Partial<TextProps>) => void;
 }
 
 // Corte/substituição gravam os bytes SOBRE o mesmo imageId (mesmo src) — o <img> já montado no
@@ -160,7 +162,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onVisiblePageChange, onLinkIndiceEntry, onAddComment, onEditBox, onBoxChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onVisiblePageChange, onLinkIndiceEntry, onAddComment, onEditBox, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -212,8 +214,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     const currentCss = getCurrentCss();
     const onEditBoxRef = useRef(onEditBox);
     onEditBoxRef.current = onEditBox;
-    const onBoxChangeRef = useRef(onBoxChange);
-    onBoxChangeRef.current = onBoxChange;
+    const onBlockChangeRef = useRef(onBlockChange);
+    onBlockChangeRef.current = onBlockChange;
     const imageCrop = useImageCrop(isbn ?? '', (imageId) => refreshImageInEditor(editorRef.current, imageId));
 
 
@@ -543,6 +545,21 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const editor = editorRef.current;
             const box = editor?.dom.getParent(editor.selection.getNode(), '.box') as HTMLElement | null;
             if (editor && box) editBlocks(editor, () => applyBoxProps(editor.dom, box, patch));
+        },
+
+        setTextProps: (patch) => {
+            const editor = editorRef.current;
+            const el = editor?.dom.getParent(editor.selection.getNode(), 'p,h1,h2,h3,h4,h5,h6,li') as HTMLElement | null;
+            if (!editor || !el) return;
+            editBlocks(editor, () => applyTextProps({
+                // !important: as classes de parágrafo do livro (.p-center…) usam-no. data-mce-style fora:
+                // o TinyMCE serializa-o de preferência ao style, e ficava desatualizado.
+                setStyle: (e, name, value) => {
+                    if (value) e.style.setProperty(name, value, 'important'); else e.style.removeProperty(name);
+                    e.removeAttribute('data-mce-style');
+                    if (!e.getAttribute('style')) e.removeAttribute('style');
+                },
+            }, el, patch));
         },
 
         applyConversions: (options: ImportOptions) => {
@@ -999,7 +1016,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         toolbar_sticky_offset: 57, // altura da navbar da app (WorkToolbar), sem folga
                         // "imagecrop" à frente do default do TinyMCE (link linkchecker image editimage
                         // table spellchecker configurepermanentpen) — só acrescenta, não troca nada.
-                        contextmenu: 'imagecrop boxedit link linkchecker image editimage table spellchecker configurepermanentpen',
+                        contextmenu: 'imagecrop boxedit blockedit link linkchecker image editimage table spellchecker configurepermanentpen',
                         setup: createEditorSetup({
                             onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
@@ -1010,7 +1027,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             onCropImage: imageCrop.handleOpenCrop,
                             onAddComment,
                             onEditBoxStyle: () => onEditBoxRef.current?.(),
-                            onBoxChangeRef,
+                            onBlockChangeRef,
                         }),
                         automatic_uploads: true,
                         paste_data_images: true,
