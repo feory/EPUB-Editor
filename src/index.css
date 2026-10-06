@@ -243,3 +243,7 @@ body {
 
 /* Toolbar do editor: sem folgas entre grupos de ícones */
 .tox .tox-editor-header .tox-toolbar__group { padding: 0 2px; }
+
+/* Toolbar do editor sem sombra (normal e sticky) */
+.tox:not(.tox-tinymce-inline) .tox-editor-header,
+.tox:not(.tox-tinymce-inline).tox-tinymce--toolbar-sticky-on .tox-editor-header { box-shadow: none; }

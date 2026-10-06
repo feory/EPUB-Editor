@@ -13,8 +13,9 @@ export function buildContentStyle(currentCss: string): string {
 .idx-link { text-decoration: underline dotted; text-decoration-color: #64748b; text-underline-offset: 3px; background-color: rgba(100, 116, 139, 0.08); border-radius: 2px; cursor: default; }
 .comment-anchor { background-color: rgba(245, 158, 11, 0.18); border-bottom: 2px solid #f59e0b; cursor: pointer; }
 .comment-anchor.comment-anchor-resolved { background-color: transparent; border-bottom-color: #cbd5e1; opacity: 0.6; }
-.noBreak { outline: 2px dashed #94a3b8; background: rgba(100,116,139,0.05); position: relative; padding: 2px 0; }
-.noBreak::before { content: "Unido"; position: absolute; top: 0; right: 0; font-size: 9px; font-weight: bold; color: #475569; background: rgba(100,116,139,0.15); padding: 1px 5px; border-bottom-left-radius: 4px; pointer-events: none; }
+.noBreak { outline: 2px dashed #94a3b8; background: rgba(100,116,139,0.03); padding: 10px 31px; border-radius: 8px; margin: 12px -11px; }
+.noBreak::before { content: "Unido"; float: right; margin: -10px -31px 0 6px; font-size: 9px; font-weight: bold; color: #475569; background: rgba(100,116,139,0.15); padding: 1px 5px; border-radius: 0 6px 0 4px; pointer-events: none; }
+.noBreak [data-mce-psactive] { box-shadow: 0 0 0 3px #fff, 0 0 0 4px #475569 !important; }
 /* Bloco ativo: padding + anel (geometria em blockGeometry.ts — partilhada com o JS). */
 ${activeBlockCss()}
 /* Pega de mover (::before do bloco ativo), também em blockGeometry.ts. */

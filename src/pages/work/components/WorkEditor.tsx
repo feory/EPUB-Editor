@@ -880,7 +880,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
 
     return (
         <div
-            className={`bg-surface rounded-2xl shadow-xl shadow-slate-200/50 border border-border overflow-hidden animate-in fade-in duration-500 ${isDragOver ? 'ring-2 ring-primary ring-offset-2 bg-blue-50/50' : ''}`}
+            className={`bg-surface rounded-2xl border border-border overflow-hidden animate-in fade-in duration-500 ${isDragOver ? 'ring-2 ring-primary ring-offset-2 bg-blue-50/50' : ''}`}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
