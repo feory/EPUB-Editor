@@ -480,16 +480,18 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             if (el && iframe) {
                 const ir = iframe.getBoundingClientRect();
                 const r = el.getBoundingClientRect();
-                const visible = (b: DOMRect) => b.bottom > 0 && b.top < ir.height;
-                if (visible(r)) { btns.push({ top: ir.top + Math.max(r.top, 0) + 4, left: ir.left + r.right - 4 - 24, container: false }); targets.push(el); }
+                // Sem "sticky": o botão fica no canto do elemento e esconde-se quando o canto sai da área visível.
+                // Também dentro da janela e por baixo da barra da app (se a página rolar em vez do editor).
+                const headerH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--wp-header-h')) || 57;
+                const cornerVisible = (top: number) => top >= 0 && top <= ir.height - 24 && ir.top + top >= headerH && ir.top + top <= window.innerHeight - 24;
+                if (cornerVisible(r.top + 4)) { btns.push({ top: ir.top + r.top + 4, left: ir.left + r.right - 4 - 24, container: false }); targets.push(el); }
                 const box = el.parentElement?.closest('.columns, .box') as HTMLElement | null;
                 if (box) {
                     const br = box.getBoundingClientRect();
-                    if (visible(br)) {
-                        const above = br.top - 30; // botão (24px) todo acima do contentor, com folga — não toca no botão do elemento
-                        btns.push({ top: ir.top + Math.max(above, 2), left: ir.left + br.right - 4 - 24 - (above < 2 ? 28 : 0), container: true });
-                        targets.push(box);
-                    }
+                    const above = br.top - 30; // botão (24px) todo acima do contentor, com folga — não toca no botão do elemento
+                    // Sem espaço por cima (contentor no topo do editor): desce para dentro, à esquerda do botão do elemento.
+                    if (above >= 0) { btns.push({ top: ir.top + above, left: ir.left + br.right - 4 - 24, container: true }); targets.push(box); }
+                    else if (cornerVisible(br.top + 4)) { btns.push({ top: ir.top + br.top + 4, left: ir.left + br.right - 4 - 24 - 28, container: true }); targets.push(box); }
                 }
             }
             delTargetsRef.current = targets;
