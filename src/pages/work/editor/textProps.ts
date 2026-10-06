@@ -49,6 +49,7 @@ export interface BlockInfo {
     box: import('./boxProps').BoxProps | null;
     text: TextBlockInfo | null;
     image: import('./imageProps').ImageProps | null; // imagem selecionada
+    columns: import('./columnsProps').ColumnsProps | null; // bloco .columns à volta do cursor
 }
 
 // Escrita inline: !important porque as classes de parágrafo do livro (.p-center…) usam !important

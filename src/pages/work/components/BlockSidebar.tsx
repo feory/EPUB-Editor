@@ -4,6 +4,7 @@ import { PanelResizeHandle } from './PanelResizeHandle';
 import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
 import { EMPTY_TEXT, textPropsFrom, type BlockInfo, type TextProps, type TextAlign } from '../editor/textProps';
 import { readRule, hasRule } from '../editor/cssRule';
+import { COLUMN_RATIOS, EMPTY_COLUMNS, type ColumnsProps } from '../editor/columnsProps';
 import { IMAGE_ALIGNS, EMPTY_IMAGE, type ImageProps } from '../editor/imageProps';
 import { BLOCK_STYLE_OPTIONS } from '../editor/config';
 
@@ -15,6 +16,7 @@ interface BlockSidebarProps {
     onTextStyle: (selector: string, patch: Partial<TextProps>) => void;    // regra CSS do livro
     onBlockStyle: (format: string) => void;                                // troca o estilo do bloco
     onImageChange: (patch: Partial<ImageProps>) => void;
+    onColumnsChange: (patch: Partial<ColumnsProps>) => void;
     onClose: () => void;
     width: number;
     onResize: (width: number) => void;
@@ -145,6 +147,15 @@ const ImageSection: React.FC<{ image: ImageProps; onChange: (patch: Partial<Imag
     );
 };
 
+const ColumnsSection: React.FC<{ columns: ColumnsProps; onChange: (patch: Partial<ColumnsProps>) => void }> = ({ columns, onChange }) => (
+    <Section title="Colunas">
+        <Row label="Proporção"><Select value={columns.ratio} options={COLUMN_RATIOS} onChange={ratio => onChange({ ratio })} /></Row>
+        <Row label="Espaço entre colunas"><Num value={columns.gap} unit="em" min={0} max={6} step={0.1} onChange={gap => onChange({ gap })} /></Row>
+        <p className="text-xs text-text-muted">Em ecrãs estreitos as colunas passam a uma por linha.</p>
+        <ResetButton onClick={() => onChange(EMPTY_COLUMNS)} />
+    </Section>
+);
+
 const MODES = [['block', 'Este bloco'], ['style', 'Estilo']] as const;
 
 const TextSection: React.FC<{
@@ -195,14 +206,14 @@ const TextSection: React.FC<{
     );
 };
 
-export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onBoxChange, onTextInline, onTextStyle, onBlockStyle, onImageChange, onClose, width, onResize }) => (
+export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onBoxChange, onTextInline, onTextStyle, onBlockStyle, onImageChange, onColumnsChange, onClose, width, onResize }) => (
     <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
         <PanelResizeHandle width={width} onResize={onResize} />
         <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Edição do Bloco</h3>
             <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-500 transition-all"><X size={16} /></button>
         </div>
-        {!info.box && !info.text && !info.image ? (
+        {!info.box && !info.text && !info.image && !info.columns ? (
             <div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-text-muted">
                 Põe o cursor num parágrafo, título ou caixa, ou seleciona uma imagem, para editar os seus atributos.
             </div>
@@ -210,6 +221,7 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onBoxChan
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
                 {info.image && <ImageSection image={info.image} onChange={onImageChange} />}
                 {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={onTextInline} onStyle={onTextStyle} onBlockStyle={onBlockStyle} />}
+                {info.columns && <ColumnsSection columns={info.columns} onChange={onColumnsChange} />}
                 {info.box && <BoxSection box={info.box} onChange={onBoxChange} />}
             </div>
         )}

@@ -1,6 +1,6 @@
 import {
     Pilcrow, Heading1, Heading2, Heading3, Quote, Type,
-    StickyNote, Image as ImageIcon, Copy, Trash2, Minus, BookMarked,
+    StickyNote, Image as ImageIcon, Copy, Trash2, Minus, BookMarked, Columns2,
 } from 'lucide-react';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
 
@@ -49,7 +49,7 @@ export function BlockOverlays({
                             {([
                                 ['p', 'Parágrafo', Pilcrow], ['h1', 'Título 1', Heading1], ['h2', 'Título 2', Heading2], ['h3', 'Título 3', Heading3],
                                 ['p-quote', 'Citação', Quote], ['p-small', 'Texto pequeno', Type], ['footnote', 'Nota de rodapé', StickyNote], ['image', 'Imagem', ImageIcon],
-                                ['hr', 'Divisória', Minus], ['chapterbreak', 'Capítulo sem Título', BookMarked],
+                                ['hr', 'Divisória', Minus], ['columns', 'Colunas', Columns2], ['chapterbreak', 'Capítulo sem Título', BookMarked],
                             ] as const).map(([type, label, Icon]) => (
                                 <button
                                     key={type}

@@ -88,6 +88,11 @@ export const DEFAULT_CSS = `
     .box--aviso { border-color: #b91c1c; }
     .box--nota { border-style: dashed; }
 
+    /* === COLUNAS === */
+    .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; margin: 1em 0; }
+    .columns > .col { min-width: 0; }
+    @media (max-width: 600px) { .columns { grid-template-columns: 1fr !important; } }
+
     /* === QUEBRAS === */
     .noBreak { page-break-inside: avoid; break-inside: avoid; }
 
@@ -213,6 +218,11 @@ const MISSING_UPPERCASE_STYLE = `    .p-uppercase  { text-transform: uppercase !
 const MISSING_IMG_INLINE_STYLE = `    img.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }
 `;
 
+const MISSING_COLUMNS_STYLE = `    .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; margin: 1em 0; }
+    .columns > .col { min-width: 0; }
+    @media (max-width: 600px) { .columns { grid-template-columns: 1fr !important; } }
+`;
+
 function insertParagraphStyleRule(css: string, rule: string): string {
   const marker = '/* === ESTILOS DE PARÁGRAFO === */';
   const idx = css.indexOf(marker);
@@ -236,6 +246,7 @@ export function patchLoadedCss(css: string): string {
   if (!css.includes('.p-italic')) css = insertParagraphStyleRule(css, MISSING_PARAGRAPH_STYLES);
   if (!css.includes('.p-uppercase')) css = insertParagraphStyleRule(css, MISSING_UPPERCASE_STYLE);
   if (!css.includes('.img-inline')) css = insertParagraphStyleRule(css, MISSING_IMG_INLINE_STYLE);
+  if (!css.includes('.columns')) css = insertParagraphStyleRule(css, MISSING_COLUMNS_STYLE);
   return css;
 }
 

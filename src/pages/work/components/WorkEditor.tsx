@@ -18,6 +18,7 @@ import { useImageCrop } from './images/useImageCrop';
 import { ImageCropModal } from './images/ImageCropModal';
 import { applyBoxProps, type BoxProps } from '../editor/boxProps';
 import { BLOCK_STYLE_OPTIONS } from '../editor/config';
+import { applyColumnsProps, type ColumnsProps } from '../editor/columnsProps';
 import { applyImageProps, type ImageProps } from '../editor/imageProps';
 import { applyTextProps, type TextProps, type BlockInfo } from '../editor/textProps';
 import { createEditorSetup } from '../editor/setup';
@@ -145,6 +146,7 @@ export interface WorkEditorRef {
     setBoxProps: (patch: Partial<BoxProps>) => void;
     setTextProps: (patch: Partial<TextProps>) => void;
     setImageProps: (patch: Partial<ImageProps>) => void;
+    setColumnsProps: (patch: Partial<ColumnsProps>) => void;
     setBlockStyle: (format: string) => void; // troca o estilo (Título 1-3, Padrão, Citação…) do bloco
 }
 
@@ -564,6 +566,12 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     if (!e.getAttribute('style')) e.removeAttribute('style');
                 },
             }, el, patch));
+        },
+
+        setColumnsProps: (patch) => {
+            const editor = editorRef.current;
+            const cols = editor?.dom.getParent(editor.selection.getNode(), '.columns') as HTMLElement | null;
+            if (editor && cols) editBlocks(editor, () => applyColumnsProps(editor.dom, cols, patch));
         },
 
         setImageProps: (patch) => {

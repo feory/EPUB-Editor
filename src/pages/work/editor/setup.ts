@@ -7,6 +7,7 @@ import { editBlocks } from './blockEdit';
 import { BOX_VARIANTS, applyBoxProps, readBoxProps } from './boxProps';
 import { textPropsFrom, type BlockInfo } from './textProps';
 import { readImageProps } from './imageProps';
+import { readColumnsProps } from './columnsProps';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
 
 interface SetupDeps {
@@ -365,10 +366,12 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.on('NodeChange', () => {
             const box = boxOf();
             const node = editor.selection.getNode();
+            const cols = editor.dom.getParent(node, '.columns') as HTMLElement | null;
             const el = editor.dom.getParent(node, 'p,h1,h2,h3,h4,h5,h6,li') as HTMLElement | null;
             const isText = !!el && !/(^|\s)chapter-break/.test(el.className);
             const info: BlockInfo = {
                 box: box ? readBoxProps(box) : null,
+                columns: cols ? readColumnsProps(cols) : null,
                 image: node.nodeName === 'IMG' ? readImageProps(node as HTMLElement) : null,
                 text: isText ? {
                     tag: el.nodeName.toLowerCase(),

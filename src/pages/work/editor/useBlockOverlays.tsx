@@ -4,6 +4,7 @@ import { BlockOverlays, type BlockOverlaysProps } from './overlays/BlockOverlays
 import { useHtmlEdit } from './overlays/HtmlEdit';
 import { attachMiniMenu, type MiniMenu } from './miniMenu';
 import { editBlocks } from './blockEdit';
+import { COLUMNS_HTML } from './columnsProps';
 import type { ActiveBlock } from './activeBlock';
 import { plusCenterY, PLUS_HIT, PLUS_SIZE, gripZoneAt, gripTop, nearGripLine } from './blockGeometry';
 
@@ -203,6 +204,18 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                 const after = hr.nextSibling as HTMLElement | null;
                 if (after && /^(P|H[1-6])$/.test(after.nodeName)) editor.selection.setCursorLocation(after, 0);
                 else { editor.selection.select(block); editor.selection.collapse(false); }
+                editor.focus();
+            });
+            return;
+        }
+        if (type === 'columns') { // 2 colunas lado a lado, cursor na 1.ª
+            const parent = block.parentNode;
+            editBlocks(editor, () => {
+                const wrap = editor.dom.create('div', {}, '');
+                wrap.innerHTML = COLUMNS_HTML;
+                const cols = wrap.firstElementChild as HTMLElement;
+                parent.insertBefore(cols, block.nextSibling);
+                editor.selection.setCursorLocation(cols.querySelector('p') as HTMLElement, 0);
                 editor.focus();
             });
             return;

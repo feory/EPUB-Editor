@@ -614,6 +614,8 @@ export function cleanEditorDOM(body: HTMLElement): void {
     // sem heading a seguir) — mantém, é onde o utilizador vai escrever o conteúdo.
     const prev = p.previousElementSibling;
     if (prev && /\bchapter-break\b/.test(prev.className)) return;
+    // Único parágrafo de uma coluna (bloco .columns): sem ele a coluna deixa de ser editável.
+    if (p.parentElement?.classList.contains('col') && p.parentElement.children.length === 1) return;
     const text = p.textContent || '';
     const html = p.innerHTML || '';
     if (text.trim() === '' || /^(&nbsp;|\s|&#160;|&#xa0;)+$/.test(html.trim())) {

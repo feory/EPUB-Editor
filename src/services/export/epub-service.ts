@@ -171,6 +171,9 @@ const exportCss = (css: string): string => {
     if (!out.includes('.img-inline')) {
         out += '\nimg.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }';
     }
+    if (!out.includes('.columns')) {
+        out += '\n.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; margin: 1em 0; }\n.columns > .col { min-width: 0; }\n@media (max-width: 600px) { .columns { grid-template-columns: 1fr !important; } }';
+    }
     if (!out.includes('.divider-full')) {
         // Livros antigos sem regra de `hr`: UA default do e-reader é ~100% largura,
         // fazendo a divisória "Pequena" (sem classe) exportar como larga.

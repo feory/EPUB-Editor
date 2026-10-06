@@ -65,7 +65,7 @@ export function WorkPage() {
   const { showNotification } = useNotification();
   const { setCustomCss, getCurrentCss } = useStyles();
   const editorRef = useRef<WorkEditorRef>(null);
-  const [blockInfo, setBlockInfo] = useState<BlockInfo>({ box: null, text: null, image: null });
+  const [blockInfo, setBlockInfo] = useState<BlockInfo>({ box: null, text: null, image: null, columns: null });
   const work = useEbookWork(isbn, editorRef);
   const { user } = useAuth();
   const comments = useComments(isbn);
@@ -599,6 +599,7 @@ export function WorkPage() {
           onTextStyle={handleTextStyle}
           onBlockStyle={(format) => editorRef.current?.setBlockStyle(format)}
           onImageChange={(patch) => editorRef.current?.setImageProps(patch)}
+          onColumnsChange={(patch) => editorRef.current?.setColumnsProps(patch)}
           onClose={() => sidebars.setShowBoxSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}
