@@ -4,6 +4,7 @@ import { BlockOverlays, type BlockOverlaysProps } from './overlays/BlockOverlays
 import { useHtmlEdit } from './overlays/HtmlEdit';
 import { attachMiniMenu, type MiniMenu } from './miniMenu';
 import { editBlocks } from './blockEdit';
+import { layoutDeleteButtons, type DeleteButton } from './deleteButtons';
 import { COLUMNS_HTML, CONTAINER_SELECTOR, removeElement } from '../../../utils/containers';
 import type { ActiveBlock } from './activeBlock';
 import { plusCenterY, PLUS_HIT, PLUS_SIZE, gripZoneAt, gripTop, nearGripLine } from './blockGeometry';
@@ -13,7 +14,6 @@ type BlockOverlaysInternal = Omit<BlockOverlaysProps, 'readOnly'>;
 
 const noop0 = () => 0;
 
-type DelBtn = Pos & { container: boolean };
 type Pos = { top: number; left: number };
 
 // iframe do editor (dentro do container); todas as posições de overlay derivam do seu rect.
@@ -119,7 +119,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
 
     // Botão eliminar no canto superior direito do elemento selecionado (bloco ativo ou imagem) e,
     // dentro de colunas/caixa, outro por cima do contentor (eliminar o bloco todo de uma vez).
-    const [delBtns, setDelBtns] = useState<DelBtn[]>([]);
+    const [delBtns, setDelBtns] = useState<DeleteButton[]>([]);
     const delTargetsRef = useRef<HTMLElement[]>([]); // paralelo a delBtns
     const lastDelRef = useRef(''); // última posição emitida (evita setState repetido)
     const deleteTarget = (index: number) => {
@@ -464,23 +464,17 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const node = editor.selection.getNode();
             const el = editor.hasFocus() && !editor.mode.isReadOnly() && !dragBlockRef.current && !htmlEdit.isOpen()
                 ? (node.nodeName === 'IMG' ? node : activeBlock.current()) as HTMLElement | null : null;
-            const btns: DelBtn[] = []; const targets: HTMLElement[] = [];
+            let btns: DeleteButton[] = []; const targets: HTMLElement[] = [];
             if (el && iframe) {
-                const ir = iframe.getBoundingClientRect();
-                const r = el.getBoundingClientRect();
-                // Sem "sticky": o botão fica no canto do elemento e esconde-se quando o canto sai da área visível.
-                // Também dentro da janela e por baixo da barra da app (se a página rolar em vez do editor).
-                const headerH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--wp-header-h')) || 57;
-                const cornerVisible = (top: number) => top >= 0 && top <= ir.height - 24 && ir.top + top >= headerH && ir.top + top <= window.innerHeight - 24;
-                if (cornerVisible(r.top + 4)) { btns.push({ top: ir.top + r.top + 4, left: ir.left + r.right - 4 - 24, container: false }); targets.push(el); }
                 const box = el.parentElement?.closest(CONTAINER_SELECTOR) as HTMLElement | null;
-                if (box) {
-                    const br = box.getBoundingClientRect();
-                    const above = br.top - 30; // botão (24px) todo acima do contentor, com folga — não toca no botão do elemento
-                    // Sem espaço por cima (contentor no topo do editor): desce para dentro, à esquerda do botão do elemento.
-                    if (above >= 0) { btns.push({ top: ir.top + above, left: ir.left + br.right - 4 - 24, container: true }); targets.push(box); }
-                    else if (cornerVisible(br.top + 4)) { btns.push({ top: ir.top + br.top + 4, left: ir.left + br.right - 4 - 24 - 28, container: true }); targets.push(box); }
-                }
+                btns = layoutDeleteButtons({
+                    item: el.getBoundingClientRect(),
+                    container: box?.getBoundingClientRect() ?? null,
+                    iframe: iframe.getBoundingClientRect(),
+                    headerHeight: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--wp-header-h')) || 57,
+                    windowHeight: window.innerHeight,
+                });
+                btns.forEach((b) => targets.push(b.container && box ? box : el));
             }
             delTargetsRef.current = targets;
             const key = btns.map((b) => `${b.top}|${b.left}`).join(';');
