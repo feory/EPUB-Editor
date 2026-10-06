@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-type Panel = 'grammar' | 'validation' | 'imageGallery' | 'printPdf' | 'comments';
+type Panel = 'grammar' | 'validation' | 'imageGallery' | 'printPdf' | 'comments' | 'box';
 
 // Um único painel lateral aberto de cada vez — activePanel substitui 5 booleans paralelos
 // que tinham de ser mantidos mutuamente exclusivos à mão em openPanel/closeAllPanels/togglePanel.
@@ -32,6 +32,8 @@ export function useWorkPageSidebars() {
         setShowPrintPdfSidebar: setPanelOpen('printPdf'),
         showCommentsSidebar: activePanel === 'comments',
         setShowCommentsSidebar: setPanelOpen('comments'),
+        showBoxSidebar: activePanel === 'box',
+        setShowBoxSidebar: setPanelOpen('box'),
         openPanel, closeAllPanels, togglePanel,
     };
 }

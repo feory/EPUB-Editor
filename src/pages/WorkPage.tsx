@@ -23,6 +23,8 @@ import { TocModal } from './work/components/TocModal';
 import { FocusModeBar } from './work/components/FocusModeBar';
 import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { CommentSidebar } from './work/components/CommentSidebar';
+import { BoxSidebar } from './work/components/BoxSidebar';
+import type { BoxProps } from './work/editor/boxProps';
 import { useComments } from './work/hooks/useComments';
 import { useCommentEditorSync } from './work/hooks/useCommentEditorSync';
 import { useAuth } from '../context/AuthContext';
@@ -61,6 +63,7 @@ export function WorkPage() {
   const { showNotification } = useNotification();
   const { setCustomCss } = useStyles();
   const editorRef = useRef<WorkEditorRef>(null);
+  const [boxProps, setBoxProps] = useState<BoxProps | null>(null);
   const work = useEbookWork(isbn, editorRef);
   const { user } = useAuth();
   const comments = useComments(isbn);
@@ -508,6 +511,8 @@ export function WorkPage() {
                 onVisiblePageChange={setEditorVisiblePage}
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 onAddComment={(anchorId) => { comments.setDraftAnchorId(anchorId); sidebars.openPanel('comments'); }}
+                onEditBox={() => sidebars.openPanel('box')}
+                onBoxChange={setBoxProps}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
                 activeChapterIndex={work.activeChapterIndex}
@@ -569,6 +574,16 @@ export function WorkPage() {
           currentUserId={user.id}
           currentUserRole={user.role}
           onClose={() => sidebars.setShowCommentsSidebar(false)}
+          width={panelWidth}
+          onResize={handlePanelResize}
+        />
+      )}
+
+      {sidebars.showBoxSidebar && (
+        <BoxSidebar
+          box={boxProps}
+          onChange={(patch) => editorRef.current?.setBoxProps(patch)}
+          onClose={() => sidebars.setShowBoxSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}
         />

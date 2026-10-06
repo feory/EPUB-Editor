@@ -1,4 +1,4 @@
-import React, { useRef, forwardRef, useImperativeHandle, useEffect, useState, useCallback } from 'react';
+import React, { useRef, forwardRef, useImperativeHandle, useEffect, useCallback } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import type { RawEditorOptions } from 'tinymce';
 import { useStyles } from '../../../context/StyleContext';
@@ -16,7 +16,7 @@ import { editorFontCss } from '../utils/editorFonts';
 import { useBlockOverlays } from '../editor/useBlockOverlays';
 import { useImageCrop } from './images/useImageCrop';
 import { ImageCropModal } from './images/ImageCropModal';
-import { BoxStyleModal } from '../modals/BoxStyleModal';
+import { applyBoxProps, type BoxProps } from '../editor/boxProps';
 import { createEditorSetup } from '../editor/setup';
 import { editBlocks } from '../editor/blockEdit';
 import { buildContentStyle } from '../editor/contentStyles';
@@ -79,6 +79,8 @@ interface WorkEditorProps {
     onVisiblePageChange?: (page: number) => void;
     onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void;
     onAddComment?: (anchorId: string) => void;
+    onEditBox?: () => void;
+    onBoxChange?: (props: BoxProps | null) => void;
     readOnly?: boolean;
     editorFont?: string;
     editorFontSize?: string;
@@ -135,6 +137,9 @@ export interface WorkEditorRef {
     cleanIndexSelection: () => void;
     linkIndexPagesSelection: () => void;
     applyConversions: (options: ImportOptions) => void;
+
+    // Caixa sob o cursor (painel lateral)
+    setBoxProps: (patch: Partial<BoxProps>) => void;
 }
 
 // Corte/substituição gravam os bytes SOBRE o mesmo imageId (mesmo src) — o <img> já montado no
@@ -155,7 +160,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onVisiblePageChange, onLinkIndiceEntry, onAddComment, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onVisiblePageChange, onLinkIndiceEntry, onAddComment, onEditBox, onBoxChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -203,9 +208,12 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     activeChapterIndexRef.current = activeChapterIndex;
     const onLinkIndiceEntryRef = useRef(onLinkIndiceEntry);
     onLinkIndiceEntryRef.current = onLinkIndiceEntry;
-    const { getCurrentCss, setCustomCss } = useStyles();
+    const { getCurrentCss } = useStyles();
     const currentCss = getCurrentCss();
-    const [showBoxStyleModal, setShowBoxStyleModal] = useState(false);
+    const onEditBoxRef = useRef(onEditBox);
+    onEditBoxRef.current = onEditBox;
+    const onBoxChangeRef = useRef(onBoxChange);
+    onBoxChangeRef.current = onBoxChange;
     const imageCrop = useImageCrop(isbn ?? '', (imageId) => refreshImageInEditor(editorRef.current, imageId));
 
 
@@ -529,6 +537,12 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 if (useSelection) editor.selection.setContent(out.join(''));
                 else editor.setContent(out.join(''));
             });
+        },
+
+        setBoxProps: (patch) => {
+            const editor = editorRef.current;
+            const box = editor?.dom.getParent(editor.selection.getNode(), '.box') as HTMLElement | null;
+            if (editor && box) editBlocks(editor, () => applyBoxProps(editor.dom, box, patch));
         },
 
         applyConversions: (options: ImportOptions) => {
@@ -995,7 +1009,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
                             onAddComment,
-                            onEditBoxStyle: () => setShowBoxStyleModal(true),
+                            onEditBoxStyle: () => onEditBoxRef.current?.(),
+                            onBoxChangeRef,
                         }),
                         automatic_uploads: true,
                         paste_data_images: true,
@@ -1062,17 +1077,6 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     imageUrl={imageCrop.cropImage.url}
                     onSave={imageCrop.handleCropSave}
                     onCancel={imageCrop.handleCropCancel}
-                />
-            )}
-            {showBoxStyleModal && (
-                <BoxStyleModal
-                    css={currentCss}
-                    onSave={(newCss) => {
-                        setCustomCss(newCss);
-                        if (isbn) ebooksApi.saveStyle(isbn, newCss);
-                        setShowBoxStyleModal(false);
-                    }}
-                    onCancel={() => setShowBoxStyleModal(false)}
                 />
             )}
         </div>

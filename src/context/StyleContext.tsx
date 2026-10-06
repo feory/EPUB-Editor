@@ -84,6 +84,9 @@ export const DEFAULT_CSS = `
 
     /* === CAIXAS === */
     .box { border: 2px solid #000; padding: 0.8em 1em; margin: 1em 0; }
+    .box--destaque { background-color: #f3f4f6; }
+    .box--aviso { border-color: #b91c1c; }
+    .box--nota { border-style: dashed; }
 
     /* === QUEBRAS === */
     .noBreak { page-break-inside: avoid; break-inside: avoid; }
