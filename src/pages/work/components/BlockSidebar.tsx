@@ -4,6 +4,7 @@ import { PanelResizeHandle } from './PanelResizeHandle';
 import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
 import { EMPTY_TEXT, textPropsFrom, type BlockInfo, type TextProps, type TextAlign } from '../editor/textProps';
 import { readRule, hasRule } from '../editor/cssRule';
+import { IMAGE_ALIGNS, EMPTY_IMAGE, type ImageProps } from '../editor/imageProps';
 import { BLOCK_STYLE_OPTIONS } from '../editor/config';
 
 interface BlockSidebarProps {
@@ -13,6 +14,7 @@ interface BlockSidebarProps {
     onTextInline: (patch: Partial<TextProps>) => void;                     // "Este bloco"
     onTextStyle: (selector: string, patch: Partial<TextProps>) => void;    // regra CSS do livro
     onBlockStyle: (format: string) => void;                                // troca o estilo do bloco
+    onImageChange: (patch: Partial<ImageProps>) => void;
     onClose: () => void;
     width: number;
     onResize: (width: number) => void;
@@ -121,6 +123,28 @@ const TextFields: React.FC<{ value: TextProps; onChange: (patch: Partial<TextPro
     </>
 );
 
+const ImageSection: React.FC<{ image: ImageProps; onChange: (patch: Partial<ImageProps>) => void }> = ({ image, onChange }) => {
+    const [alt, setAlt] = useState<string | null>(null); // rascunho: só grava ao sair/Enter (1 passo de undo)
+    const commitAlt = () => { if (alt !== null && alt !== image.alt) onChange({ alt }); setAlt(null); };
+    return (
+        <Section title="Imagem">
+            <Row label="Alinhamento"><Select value={image.align} options={IMAGE_ALIGNS} onChange={align => onChange({ align })} /></Row>
+            <Row label="Largura"><Num value={image.width} unit="%" min={5} max={100} onChange={width => onChange({ width })} /></Row>
+            <Row label="Margem em cima"><Num value={image.marginTop} unit="em" min={0} max={10} step={0.1} onChange={marginTop => onChange({ marginTop })} /></Row>
+            <Row label="Margem em baixo"><Num value={image.marginBottom} unit="em" min={0} max={10} step={0.1} onChange={marginBottom => onChange({ marginBottom })} /></Row>
+            <Row label="Deslocamento vertical"><Num value={image.offsetY} unit="px" min={-200} max={200} onChange={offsetY => onChange({ offsetY })} /></Row>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-text-main">
+                <span>Texto alternativo</span>
+                <textarea rows={2} value={alt ?? image.alt} placeholder="Descreve a imagem (acessibilidade)"
+                    onChange={e => setAlt(e.target.value)} onBlur={commitAlt}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitAlt(); } }}
+                    className="w-full rounded-lg border border-border px-2 py-1.5 text-sm outline-none focus:border-primary resize-none" />
+            </label>
+            <ResetButton onClick={() => onChange({ ...EMPTY_IMAGE, align: image.align, alt: image.alt })} />
+        </Section>
+    );
+};
+
 const MODES = [['block', 'Este bloco'], ['style', 'Estilo']] as const;
 
 const TextSection: React.FC<{
@@ -171,19 +195,20 @@ const TextSection: React.FC<{
     );
 };
 
-export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onBoxChange, onTextInline, onTextStyle, onBlockStyle, onClose, width, onResize }) => (
+export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onBoxChange, onTextInline, onTextStyle, onBlockStyle, onImageChange, onClose, width, onResize }) => (
     <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
         <PanelResizeHandle width={width} onResize={onResize} />
         <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Edição do Bloco</h3>
             <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-500 transition-all"><X size={16} /></button>
         </div>
-        {!info.box && !info.text ? (
+        {!info.box && !info.text && !info.image ? (
             <div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-text-muted">
-                Põe o cursor num parágrafo, título ou caixa para editar os seus atributos.
+                Põe o cursor num parágrafo, título ou caixa, ou seleciona uma imagem, para editar os seus atributos.
             </div>
         ) : (
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
+                {info.image && <ImageSection image={info.image} onChange={onImageChange} />}
                 {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={onTextInline} onStyle={onTextStyle} onBlockStyle={onBlockStyle} />}
                 {info.box && <BoxSection box={info.box} onChange={onBoxChange} />}
             </div>

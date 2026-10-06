@@ -53,7 +53,10 @@ export const replaceImageUrlsInContent = (content: string, images: Map<string, B
         const sizeAttrs = (widthMatch ? ` width="${widthMatch[1]}"` : '')
             + (heightMatch ? ` height="${heightMatch[1]}"` : '')
             + (styleMatch ? ` style="${styleMatch[1]}"` : '');
-        return `<img src="${filename}"${classAttr}${sizeAttrs} alt="Imagem ${id}" />`;
+        // alt escrito no painel (ignora o vazio e o "Imagem importada" do importador) senão "Imagem {id}".
+        const altMatch = tag.match(/\salt=["']([^"']*)["']/i)?.[1].trim();
+        const alt = altMatch && altMatch !== 'Imagem importada' ? altMatch : `Imagem ${id}`;
+        return `<img src="${filename}"${classAttr}${sizeAttrs} alt="${alt}" />`;
     });
 
     processed = processed.replace(/src=["']\/api\/ebooks\/[^/]+\/images\/([^"'?/]+)[^"']*["']/gi, (m, id) => {

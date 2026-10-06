@@ -18,6 +18,7 @@ import { useImageCrop } from './images/useImageCrop';
 import { ImageCropModal } from './images/ImageCropModal';
 import { applyBoxProps, type BoxProps } from '../editor/boxProps';
 import { BLOCK_STYLE_OPTIONS } from '../editor/config';
+import { applyImageProps, type ImageProps } from '../editor/imageProps';
 import { applyTextProps, type TextProps, type BlockInfo } from '../editor/textProps';
 import { createEditorSetup } from '../editor/setup';
 import { editBlocks } from '../editor/blockEdit';
@@ -143,6 +144,7 @@ export interface WorkEditorRef {
     // Caixa / bloco de texto sob o cursor (painel lateral)
     setBoxProps: (patch: Partial<BoxProps>) => void;
     setTextProps: (patch: Partial<TextProps>) => void;
+    setImageProps: (patch: Partial<ImageProps>) => void;
     setBlockStyle: (format: string) => void; // troca o estilo (Título 1-3, Padrão, Citação…) do bloco
 }
 
@@ -562,6 +564,12 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     if (!e.getAttribute('style')) e.removeAttribute('style');
                 },
             }, el, patch));
+        },
+
+        setImageProps: (patch) => {
+            const editor = editorRef.current;
+            const node = editor?.selection.getNode();
+            if (editor && node?.nodeName === 'IMG') editBlocks(editor, () => applyImageProps(editor.dom, node as HTMLElement, patch));
         },
 
         setBlockStyle: (format) => {
@@ -1037,7 +1045,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         toolbar_sticky_offset: 57, // altura da navbar da app (WorkToolbar), sem folga
                         // "imagecrop" à frente do default do TinyMCE (link linkchecker image editimage
                         // table spellchecker configurepermanentpen) — só acrescenta, não troca nada.
-                        contextmenu: 'imagecrop boxedit blockedit link linkchecker image editimage table spellchecker configurepermanentpen',
+                        contextmenu: 'imagecrop imageedit boxedit blockedit link linkchecker image editimage table spellchecker configurepermanentpen',
                         setup: createEditorSetup({
                             onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,

@@ -6,6 +6,7 @@ import type { TinyMCEEditor } from './types';
 import { editBlocks } from './blockEdit';
 import { BOX_VARIANTS, applyBoxProps, readBoxProps } from './boxProps';
 import { textPropsFrom, type BlockInfo } from './textProps';
+import { readImageProps } from './imageProps';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
 
 interface SetupDeps {
@@ -320,11 +321,11 @@ export function createEditorSetup(deps: SetupDeps) {
             });
         });
 
-        // Botão direito em cima de uma imagem → "Editar Imagem" (corte, mesmo mecanismo da
+        // Botão direito em cima de uma imagem → "Recorte" (corte, mesmo mecanismo da
         // Galeria: grava sobre o mesmo data-image-id). Grupo dinâmico (addContextMenu): só
         // aparece quando o nó clicado é mesmo a imagem.
         editor.ui.registry.addMenuItem('imagecrop-item', {
-            text: 'Editar Imagem',
+            text: 'Recorte',
             icon: 'crop',
             onAction: () => {
                 const node = editor.selection.getNode();
@@ -363,10 +364,12 @@ export function createEditorSetup(deps: SetupDeps) {
         let lastBlockJson = '';
         editor.on('NodeChange', () => {
             const box = boxOf();
-            const el = editor.dom.getParent(editor.selection.getNode(), 'p,h1,h2,h3,h4,h5,h6,li') as HTMLElement | null;
+            const node = editor.selection.getNode();
+            const el = editor.dom.getParent(node, 'p,h1,h2,h3,h4,h5,h6,li') as HTMLElement | null;
             const isText = !!el && !/(^|\s)chapter-break/.test(el.className);
             const info: BlockInfo = {
                 box: box ? readBoxProps(box) : null,
+                image: node.nodeName === 'IMG' ? readImageProps(node as HTMLElement) : null,
                 text: isText ? {
                     tag: el.nodeName.toLowerCase(),
                     classes: Array.from(el.classList).filter((c) => !/^(mce-|diff-)/.test(c)),
@@ -383,6 +386,15 @@ export function createEditorSetup(deps: SetupDeps) {
             text: 'Editar bloco',
             icon: 'edit-block',
             onAction: () => onEditBoxStyle(),
+        });
+        // Imagem selecionada: abre o painel (alinhamento, largura, margens, alt).
+        editor.ui.registry.addMenuItem('imageedit-item', {
+            text: 'Editar imagem',
+            icon: 'edit-image',
+            onAction: () => onEditBoxStyle(),
+        });
+        editor.ui.registry.addContextMenu('imageedit', {
+            update: (element) => element.nodeName === 'IMG' ? ['imageedit-item'] : [],
         });
         editor.ui.registry.addContextMenu('blockedit', {
             update: (element) => editor.dom.getParent(element, 'p,h1,h2,h3,h4,h5,h6,li') && !editor.dom.getParent(element, '.box') ? ['blockedit-item'] : [],

@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { stripPlaceholderImages } from './image-utils';
+import { stripPlaceholderImages, replaceImageUrlsInContent } from './image-utils';
 
 test('stripPlaceholderImages: remove parágrafo cujo único conteúdo é a imagem placeholder', () => {
     const html = '<p class="p-center"><img src="placeholder" alt="" data-image-id="Moçambique_160x230"></p>';
@@ -23,4 +23,10 @@ test('stripPlaceholderImages: imagem já resolvida (src real) não é tocada', (
 test('stripPlaceholderImages: sem imagens placeholder devolve inalterado', () => {
     const html = '<p>Só texto normal.</p>';
     expect(stripPlaceholderImages(html)).toBe(html);
+});
+
+test('replaceImageUrlsInContent preserva o alt escrito pelo utilizador', () => {
+    const images = new Map([['a', new Blob(['x'], { type: 'image/jpeg' })]]);
+    expect(replaceImageUrlsInContent('<img src="x" alt="Mapa de Moçambique" data-image-id="a">', images)).toContain('alt="Mapa de Moçambique"');
+    expect(replaceImageUrlsInContent('<img src="x" alt="Imagem importada" data-image-id="a">', images)).toContain('alt="Imagem a"');
 });
