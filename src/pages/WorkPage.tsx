@@ -24,7 +24,8 @@ import { FocusModeBar } from './work/components/FocusModeBar';
 import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { CommentSidebar } from './work/components/CommentSidebar';
 import { BlockSidebar } from './work/components/BlockSidebar';
-import type { BlockInfo, TextProps } from './work/editor/textProps';
+import type { BlockInfo } from './work/editor/blockEditing';
+import type { TextProps } from './work/editor/textProps';
 import { textPatchToDecls } from './work/editor/textProps';
 import { applyRule } from './work/editor/cssRule';
 import { useComments } from './work/hooks/useComments';
@@ -594,12 +595,8 @@ export function WorkPage() {
         <BlockSidebar
           info={blockInfo}
           css={getCurrentCss()}
-          onBoxChange={(patch) => editorRef.current?.setBoxProps(patch)}
-          onTextInline={(patch) => editorRef.current?.setTextProps(patch)}
+          onEdit={(edit) => editorRef.current?.editBlock(edit)}
           onTextStyle={handleTextStyle}
-          onBlockStyle={(format) => editorRef.current?.setBlockStyle(format)}
-          onImageChange={(patch) => editorRef.current?.setImageProps(patch)}
-          onColumnsChange={(patch) => editorRef.current?.setColumnsProps(patch)}
           onClose={() => sidebars.setShowBoxSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}

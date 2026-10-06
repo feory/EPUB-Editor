@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { X, RotateCcw } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
-import { EMPTY_TEXT, textPropsFrom, type BlockInfo, type TextProps, type TextAlign } from '../editor/textProps';
+import { EMPTY_TEXT, textPropsFrom, type TextProps, type TextAlign } from '../editor/textProps';
+import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 import { readRule, hasRule } from '../editor/cssRule';
 import { COLUMN_RATIOS, EMPTY_COLUMNS, type ColumnsProps } from '../editor/columnsProps';
 import { IMAGE_ALIGNS, EMPTY_IMAGE, type ImageProps } from '../editor/imageProps';
@@ -11,12 +12,8 @@ import { BLOCK_STYLE_OPTIONS } from '../editor/config';
 interface BlockSidebarProps {
     info: BlockInfo;                                  // caixa / bloco de texto sob o cursor
     css: string;                                      // CSS atual do livro (modo "Estilo")
-    onBoxChange: (patch: Partial<BoxProps>) => void;
-    onTextInline: (patch: Partial<TextProps>) => void;                     // "Este bloco"
-    onTextStyle: (selector: string, patch: Partial<TextProps>) => void;    // regra CSS do livro
-    onBlockStyle: (format: string) => void;                                // troca o estilo do bloco
-    onImageChange: (patch: Partial<ImageProps>) => void;
-    onColumnsChange: (patch: Partial<ColumnsProps>) => void;
+    onEdit: (edit: BlockEdit) => void;                                     // edita o que está sob o cursor
+    onTextStyle: (selector: string, patch: Partial<TextProps>) => void;    // modo "Estilo": regra CSS do livro
     onClose: () => void;
     width: number;
     onResize: (width: number) => void;
@@ -206,7 +203,7 @@ const TextSection: React.FC<{
     );
 };
 
-export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onBoxChange, onTextInline, onTextStyle, onBlockStyle, onImageChange, onColumnsChange, onClose, width, onResize }) => (
+export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, onTextStyle, onClose, width, onResize }) => (
     <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
         <PanelResizeHandle width={width} onResize={onResize} />
         <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
@@ -219,10 +216,10 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onBoxChan
             </div>
         ) : (
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
-                {info.image && <ImageSection image={info.image} onChange={onImageChange} />}
-                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={onTextInline} onStyle={onTextStyle} onBlockStyle={onBlockStyle} />}
-                {info.columns && <ColumnsSection columns={info.columns} onChange={onColumnsChange} />}
-                {info.box && <BoxSection box={info.box} onChange={onBoxChange} />}
+                {info.image && <ImageSection image={info.image} onChange={(patch) => onEdit({ target: 'image', patch })} />}
+                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onBlockStyle={(format) => onEdit({ target: 'style', format })} />}
+                {info.columns && <ColumnsSection columns={info.columns} onChange={(patch) => onEdit({ target: 'columns', patch })} />}
+                {info.box && <BoxSection box={info.box} onChange={(patch) => onEdit({ target: 'box', patch })} />}
             </div>
         )}
     </aside>

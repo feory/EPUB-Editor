@@ -45,12 +45,6 @@ export function textPatchToDecls(patch: Partial<TextProps>): [string, string | n
 }
 
 export interface TextBlockInfo { tag: string; classes: string[]; inline: TextProps }
-export interface BlockInfo {
-    box: import('./boxProps').BoxProps | null;
-    text: TextBlockInfo | null;
-    image: import('./imageProps').ImageProps | null; // imagem selecionada
-    columns: import('./columnsProps').ColumnsProps | null; // bloco .columns à volta do cursor
-}
 
 // Escrita inline: !important porque as classes de parágrafo do livro (.p-center…) usam !important
 // e, sem ele, o inline nunca as vence.

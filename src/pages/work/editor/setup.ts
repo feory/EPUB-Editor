@@ -4,10 +4,9 @@ import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
 import type { TinyMCEEditor } from './types';
 import { editBlocks } from './blockEdit';
-import { BOX_VARIANTS, applyBoxProps, readBoxProps } from './boxProps';
-import { textPropsFrom, type BlockInfo } from './textProps';
-import { readImageProps } from './imageProps';
-import { readColumnsProps } from './columnsProps';
+import { BOX_VARIANTS } from './boxProps';
+import { inspectBlock, applyBlockEdit, createBlockWatcher, TEXT_BLOCK_SELECTOR, type BlockInfo } from './blockEditing';
+import { tinymceEditorLike } from './blockEditingTinymce';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
 
 interface SetupDeps {
@@ -347,43 +346,20 @@ export function createEditorSetup(deps: SetupDeps) {
             onAction: () => onEditBoxStyle(),
         });
         // Variante da caixa (classe box--X; o CSS vive no livro e o export dá-lhe epub:type).
-        const boxOf = () => editor.dom.getParent(editor.selection.getNode(), '.box') as HTMLElement | null;
+        const blocks = tinymceEditorLike(editor);
         editor.ui.registry.addNestedMenuItem('boxvariant-item', {
             text: 'Tipo de caixa',
             icon: 'ps-box',
             getSubmenuItems: () => BOX_VARIANTS.map(([variant, text]) => ({
                 type: 'togglemenuitem' as const,
                 text,
-                onSetup: (api: { setActive: (state: boolean) => void }) => { const box = boxOf(); api.setActive(!!box && readBoxProps(box).variant === variant); return () => {}; },
-                onAction: () => {
-                    const box = boxOf();
-                    if (box) editBlocks(editor, () => applyBoxProps(editor.dom, box, { variant }));
-                },
+                onSetup: (api: { setActive: (state: boolean) => void }) => { api.setActive(inspectBlock(blocks).box?.variant === variant); return () => {}; },
+                onAction: () => applyBlockEdit(blocks, { target: 'box', patch: { variant } }),
             })),
         });
-        // Painel lateral: acompanha a caixa e o bloco de texto sob o cursor (só emite quando mudam).
-        let lastBlockJson = '';
-        editor.on('NodeChange', () => {
-            const box = boxOf();
-            const node = editor.selection.getNode();
-            const cols = editor.dom.getParent(node, '.columns') as HTMLElement | null;
-            const el = editor.dom.getParent(node, 'p,h1,h2,h3,h4,h5,h6,li') as HTMLElement | null;
-            const isText = !!el && !/(^|\s)chapter-break/.test(el.className);
-            const info: BlockInfo = {
-                box: box ? readBoxProps(box) : null,
-                columns: cols ? readColumnsProps(cols) : null,
-                image: node.nodeName === 'IMG' ? readImageProps(node as HTMLElement) : null,
-                text: isText ? {
-                    tag: el.nodeName.toLowerCase(),
-                    classes: Array.from(el.classList).filter((c) => !/^(mce-|diff-)/.test(c)),
-                    inline: textPropsFrom((n) => el.style.getPropertyValue(n)),
-                } : null,
-            };
-            const json = JSON.stringify(info);
-            if (json === lastBlockJson) return;
-            lastBlockJson = json;
-            onBlockChangeRef.current?.(info);
-        });
+        // Painel lateral: acompanha o que está sob o cursor (só emite quando muda).
+        const watcher = createBlockWatcher(blocks, (info) => onBlockChangeRef.current?.(info));
+        editor.on('NodeChange', watcher.update);
         // Parágrafos/títulos/itens: abre o painel de edição do bloco.
         editor.ui.registry.addMenuItem('blockedit-item', {
             text: 'Editar bloco',
@@ -400,7 +376,7 @@ export function createEditorSetup(deps: SetupDeps) {
             update: (element) => element.nodeName === 'IMG' ? ['imageedit-item'] : [],
         });
         editor.ui.registry.addContextMenu('blockedit', {
-            update: (element) => editor.dom.getParent(element, 'p,h1,h2,h3,h4,h5,h6,li') && !editor.dom.getParent(element, '.box') ? ['blockedit-item'] : [],
+            update: (element) => editor.dom.getParent(element, TEXT_BLOCK_SELECTOR) && !editor.dom.getParent(element, '.box') ? ['blockedit-item'] : [],
         });
         editor.ui.registry.addContextMenu('boxedit', {
             update: (element) => editor.dom.getParent(element, '.box') ? ['boxedit-item', 'boxvariant-item'] : [],
