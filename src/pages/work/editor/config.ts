@@ -12,7 +12,7 @@ export const QUICKBARS_SELECTION_TOOLBAR = 'bold italic underline superscript sm
 export const EDITOR_TOOLBAR =
     'undo redo | styles removeformat | ' +
     'align outdent indent bullist numlist | ' +
-    'box noBreak | link image charmap code';
+    'box noBreak | link image charmap code | pdfview focusmode';
 
 export const STYLE_FORMATS = [
     { title: 'Títulos', items: [

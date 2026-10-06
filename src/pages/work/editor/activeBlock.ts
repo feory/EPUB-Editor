@@ -55,6 +55,12 @@ export function attachActiveBlock(
         if (editor.hasFocus()) {
             const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
             if (block && block !== collapsed && block !== editor.getBody()) {
+                // Margens do bloco (citação, recuo inline) antes de a regra do anel as sobrepor:
+                // o CSS compensa o padding a partir delas em vez de as zerar.
+                const cs = editor.getWin().getComputedStyle(block);
+                const bs = editor.getBody().style;
+                bs.setProperty('--ps-ml', cs.marginLeft);
+                bs.setProperty('--ps-mr', cs.marginRight);
                 editor.dom.setAttrib(block, 'data-mce-psactive', '1');
                 current = block;
             }

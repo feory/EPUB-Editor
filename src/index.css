@@ -175,16 +175,6 @@ body {
 
 }
 
-/* Aparecimento suave do botão "+" (fade + scale) */
-@keyframes plusPop {
-  from { transform: scale(0.6); opacity: 0; }
-  to   { transform: scale(1);   opacity: 1; }
-}
-
-.add-para-pop {
-  animation: plusPop 0.15s ease-out;
-}
-
 /* Botão de estilos (select "Padrão") no toolbar: fundo preto, texto branco */
 .tox .tox-tbtn--bespoke {
   background-color: #f1f5f9 !important;
@@ -212,12 +202,20 @@ body {
   border: none !important;
 }
 
-/* Toolbar sticky (toolbar_sticky:true) oculta por omissão, só aparece com o rato por cima */
-.tox.tox-tinymce--toolbar-sticky-on .tox-editor-header {
+/* Toolbar do editor oculta por omissão (mantém o espaço); só aparece com o rato por cima,
+   ou enquanto tem foco / um dropdown aberto (os menus vivem fora do header). */
+.tox .tox-editor-header {
   opacity: 0;
   transition: opacity 0.7s ease-in 0.15s;
 }
-.tox.tox-tinymce--toolbar-sticky-on .tox-editor-header:hover {
+/* Zona de ativação um pouco abaixo da toolbar: ::after em fluxo com margem negativa (não muda
+   a altura do header, não precisa de position) e o header tem z-index sobre a área de edição. */
+.tox .tox-editor-header::after {
+  content: ""; grid-column: 1 / -1; height: 20px; margin-bottom: -20px; /* o header é um grid */
+}
+.tox .tox-editor-header:hover,
+.tox .tox-editor-header:focus-within,
+.tox .tox-editor-header:has([aria-expanded="true"]) {
   opacity: 1;
   transition: opacity 0.6s ease-out;
 }
@@ -247,3 +245,13 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Último grupo da toolbar do editor (PDF + Modo Foco) encostado à direita */
+.tox .tox-toolbar__group:has([data-mce-name="pdfview"]) { margin-left: auto; }
+
+/* Toolbar do editor: sem folgas entre grupos de ícones */
+.tox .tox-editor-header .tox-toolbar__group { padding: 0 2px; }
+
+/* Toolbar do editor sem sombra (normal e sticky) */
+.tox:not(.tox-tinymce-inline) .tox-editor-header,
+.tox:not(.tox-tinymce-inline).tox-tinymce--toolbar-sticky-on .tox-editor-header { box-shadow: none; }

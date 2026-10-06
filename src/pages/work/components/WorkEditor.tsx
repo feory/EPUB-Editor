@@ -1,7 +1,6 @@
 import React, { useRef, forwardRef, useImperativeHandle, useEffect, useState, useCallback } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import type { RawEditorOptions } from 'tinymce';
-import { Maximize2, FileText } from 'lucide-react';
 import { useStyles } from '../../../context/StyleContext';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { applyImportOptions, convertListsToDialogue, CHAPTER_SPLIT_PATTERN } from '../../../utils/html-cleaner';
@@ -77,7 +76,6 @@ interface WorkEditorProps {
     onToggleFocusMode?: () => void;
     isFocusMode?: boolean;
     onTogglePrintPdf?: () => void;
-    showPrintPdfPanel?: boolean;
     onVisiblePageChange?: (page: number) => void;
     onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void;
     onAddComment?: (anchorId: string) => void;
@@ -157,7 +155,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, onAddComment, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onVisiblePageChange, onLinkIndiceEntry, onAddComment, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -188,6 +186,17 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     onVisiblePageChangeRef.current = onVisiblePageChange;
     // Ligação manual do Índice (setup.ts, botão idxlinktarget): setup() só corre 1x no mount,
     // por isso chapters/activeChapterIndex (mudam a cada render) só lá chegam por ref.
+    const onToggleFocusModeRef = useRef(onToggleFocusMode);
+    onToggleFocusModeRef.current = onToggleFocusMode;
+    const onTogglePrintPdfRef = useRef(onTogglePrintPdf);
+    onTogglePrintPdfRef.current = onTogglePrintPdf;
+    const ebookLabel = `${isbn ?? ''}${title ? ` - ${title}` : ''}`;
+    const ebookLabelRef = useRef(ebookLabel);
+    ebookLabelRef.current = ebookLabel;
+    useEffect(() => {
+        const el = editorRef.current?.getContainer()?.querySelector<HTMLElement>('[data-ps-ebook-label]');
+        if (el) { el.textContent = ebookLabel; el.title = ebookLabel; }
+    }, [ebookLabel]);
     const chaptersRef = useRef(chapters);
     chaptersRef.current = chapters;
     const activeChapterIndexRef = useRef(activeChapterIndex);
@@ -871,33 +880,11 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
 
     return (
         <div
-            className={`bg-surface rounded-2xl shadow-xl shadow-slate-200/50 border border-border overflow-hidden animate-in fade-in duration-500 ${isDragOver ? 'ring-2 ring-primary ring-offset-2 bg-blue-50/50' : ''}`}
+            className={`bg-surface rounded-2xl border border-border overflow-hidden animate-in fade-in duration-500 ${isDragOver ? 'ring-2 ring-primary ring-offset-2 bg-blue-50/50' : ''}`}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
         >
-            {!isFocusMode && (
-                <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-end gap-3">
-                    <span className="text-xs font-medium text-text-muted truncate max-w-[500px]">
-                        {isbn}{title ? ` - ${title}` : ''}
-                    </span>
-                    <button
-                        onClick={() => onTogglePrintPdf?.()}
-                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors shrink-0 ${showPrintPdfPanel ? 'text-slate-800' : 'text-slate-500 hover:text-slate-800'}`}
-                        title="Ver PDF"
-                    >
-                        <FileText size={16} />
-                    </button>
-                    <button
-                        onClick={() => onToggleFocusMode?.()}
-                        className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-slate-800 transition-colors shrink-0"
-                        title="Modo Foco"
-                    >
-                        <Maximize2 size={16} />
-                    </button>
-                </div>
-            )}
-
             <div className="relative">
                 <Editor
                     licenseKey="gpl"
@@ -1003,7 +990,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
                             openStyleMenu: overlays.openStyleMenu,
-                            chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef,
+                            chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, ebookLabelRef,
+                            onToggleFocusModeRef, onTogglePrintPdfRef,
                             wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
                             onAddComment,

@@ -5,7 +5,7 @@ import { useHtmlEdit } from './overlays/HtmlEdit';
 import { attachMiniMenu, type MiniMenu } from './miniMenu';
 import { editBlocks } from './blockEdit';
 import type { ActiveBlock } from './activeBlock';
-import { plusCenterY, PLUS_HIT, PLUS_SIZE, gripLeft } from './blockGeometry';
+import { plusCenterY, PLUS_HIT, PLUS_SIZE, gripZoneAt, gripTop, nearGripLine } from './blockGeometry';
 
 // readOnly atravessa de fora; tudo o resto em BlockOverlaysProps só alimenta o render interno.
 type BlockOverlaysInternal = Omit<BlockOverlaysProps, 'readOnly'>;
@@ -41,16 +41,18 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const { activeChapterIndex, onCountInWholeBook = noop0, onReplaceInWholeBook = noop0, readOnly, wholeBookLoaded, chapterLabel } = options;
     // Edição de HTML inline (overlays/HtmlEdit.tsx): estado, vista e procurar/substituir próprios.
     const htmlEdit = useHtmlEdit(editorRef, { activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook, wholeBookLoaded, chapterLabel });
-    // Pega de arrastar (gutter esquerdo): visível enquanto o bloco está ativo (selecionado), independente do rato.
-    const [gripPos, setGripPos] = useState<Pos | null>(null);
-    const [gripFading, setGripFading] = useState(false); // fade-out suave durante o scroll
-    const gripPosRef = useRef<Pos | null>(null);
+    // Bloco da pega (::before do bloco ativo, em CSS — blockGeometry.ts) no último clique nela.
     const gripBlockRef = useRef<HTMLElement | null>(null);
     // Mini-menu (miniMenu.ts): o único que mexe no pop; aqui só se pede para o esconder.
     const miniMenuRef = useRef<MiniMenu | null>(null);
-    // Pega a desmontar com o rato em cima (sem mouseleave) não pode deixar o mini-menu preso.
-    const clearGrip = () => { miniMenuRef.current?.suppress('grip', false); gripPosRef.current = null; gripBlockRef.current = null; setGripFading(false); setGripPos(null); };
     const [gripMenu, setGripMenu] = useState<Pos | null>(null); // menu ao clicar na pega
+    // Menu da pega aberto → tudo o resto escondido: mini-menu (motivo próprio, o hover da pega
+    // não o repõe), "+" (body.ps-grip-menu → contentStyles.ts). Fechou (escolha, clique fora,
+    // scroll) → voltam.
+    useEffect(() => {
+        miniMenuRef.current?.suppress('gripMenu', !!gripMenu);
+        editorRef.current?.getBody()?.classList.toggle('ps-grip-menu', !!gripMenu);
+    }, [gripMenu, editorRef]);
     // "Mais estilos" (mini-menu ⋮): overlay React em 2 colunas, ancorado ao pop do mini-menu.
     const [styleMenu, setStyleMenu] = useState<{ top: number; left: number; kind: 'para' | 'head' } | null>(null);
     // Impede o clique no próprio ⋮ de reabrir o menu logo a seguir ao mousedown o ter fechado.
@@ -132,7 +134,29 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
 
     // Ações do menu da pega sobre o bloco ativo (formato) ou o bloco de topo (duplicar/eliminar).
-    const gripAction = (action: string) => {
+    // Fechar o menu da pega clicando fora: se o clique foi no texto do editor, o cursor vai para
+    // esse ponto (o parágrafo volta a ficar ativo) — o fundo do menu apanhava o clique e o editor
+    // ficava sem seleção. Fora do editor só fecha. Não é um 'click' no bloco: não o recolhe.
+    const dismissGripMenu = (x: number, y: number) => {
+        setGripMenu(null);
+        const editor = editorRef.current;
+        const iframe = editor && iframeOf(editor);
+        if (!editor || !iframe) return;
+        const ir = iframe.getBoundingClientRect();
+        if (x < ir.left || x > ir.right || y < ir.top || y > ir.bottom) return;
+        const doc = editor.getDoc() as Document & { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null };
+        let rng: Range | null = doc.caretRangeFromPoint?.(x - ir.left, y - ir.top) ?? null;
+        if (!rng && doc.caretPositionFromPoint) { // Firefox
+            const pos = doc.caretPositionFromPoint(x - ir.left, y - ir.top);
+            if (pos) { rng = doc.createRange(); rng.setStart(pos.offsetNode, pos.offset); rng.collapse(true); }
+        }
+        if (!rng) return;
+        editor.focus(); // antes do setRng: o focus pode repor a seleção anterior
+        editor.selection.setRng(rng);
+        editor.nodeChanged();
+    };
+    // Menu da pega: só duplicar/eliminar o bloco de topo.
+    const gripAction = (action: 'duplicate' | 'delete') => {
         setGripMenu(null);
         const editor = editorRef.current;
         const block = gripBlockRef.current;
@@ -141,15 +165,8 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         let top = block;
         while (top.parentElement && top.parentElement !== body) top = top.parentElement;
         editBlocks(editor, () => {
-            if (action === 'duplicate') {
-                top.parentNode?.insertBefore(top.cloneNode(true), top.nextSibling);
-            } else if (action === 'delete') {
-                top.remove();
-            } else {
-                editor.selection.select(block); editor.selection.collapse(true);
-                if (/^h[123]$/.test(action) || action === 'p') editor.execCommand('FormatBlock', false, action);
-                else editor.formatter.apply(action);
-            }
+            if (action === 'duplicate') top.parentNode?.insertBefore(top.cloneNode(true), top.nextSibling);
+            else top.remove();
             editor.focus(); // antes do nodeChanged: o anel do bloco ativo só se aplica com foco
         });
     };
@@ -170,7 +187,6 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         plusMenuOpenRef.current = true;
         plusBlockRef.current = block;
         block.setAttribute('data-mce-plusopen', '1'); // mantém o "+" visível sem :hover (rato vai para o menu)
-        clearGrip(); // esconder a pega enquanto o menu está aberto
         miniMenuRef.current?.suppress('plusMenu', true);
         setPlusMenu(pos); // acima do "+"
     };
@@ -212,14 +228,11 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
 
     // Arrastar o bloco ativo para outro sítio (pega estilo Notion).
     const dragBlockRef = useRef<HTMLElement | null>(null);
-    // Rato em cima da pega → mini-menu escondido. A arrastar, sair da pega não o repõe: só o
-    // fim do arrasto (onUp).
-    const onGripEnter = () => miniMenuRef.current?.suppress('grip', true);
-    const onGripLeave = () => { if (!dragBlockRef.current) miniMenuRef.current?.suppress('grip', false); };
     const dropTargetRef = useRef<{ block: HTMLElement; pos: 'before' | 'after' } | null>(null);
     const [dropLine, setDropLine] = useState<{ top: number; left: number; width: number } | null>(null);
-    const startBlockDrag = (e: React.MouseEvent) => {
-        e.preventDefault();
+    // Arrastar a partir da pega (mousedown DENTRO do editor). startX/startY: coords da janela.
+    // O rato pode ser capturado pelo iframe onde o gesto começou: ouvir o editor E a página.
+    const startBlockDrag = (startX: number, startY: number) => {
         const editor = editorRef.current;
         const block = gripBlockRef.current;
         if (!editor || !block) return;
@@ -231,17 +244,15 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         let top = block;
         while (top.parentElement && top.parentElement !== body) top = top.parentElement;
         dragBlockRef.current = top;
-        const startX = e.clientX, startY = e.clientY;
         let moved = false;
         document.body.style.userSelect = 'none';
-        const onMove = (ev: MouseEvent) => {
+        const onMove = (clientX: number, clientY: number) => {
             if (!moved) {
-                if (Math.abs(ev.clientX - startX) < 4 && Math.abs(ev.clientY - startY) < 4) return;
+                if (Math.abs(clientX - startX) < 4 && Math.abs(clientY - startY) < 4) return;
                 moved = true;
-                iframe.style.pointerEvents = 'none'; // só ao arrastar: eventos passam ao doc pai (senão o iframe engole-os)
             }
             const ir = iframe.getBoundingClientRect();
-            const y = ev.clientY - ir.top; // coords do iframe
+            const y = clientY - ir.top; // coords do iframe
             const blocks = (Array.from(body.children) as HTMLElement[]).filter((b) => b !== dragBlockRef.current);
             if (!blocks.length) { dropTargetRef.current = null; setDropLine(null); return; }
             let target = blocks[0]; let pos: 'before' | 'after' = 'before';
@@ -254,17 +265,30 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const r = target.getBoundingClientRect();
             setDropLine({ top: ir.top + (pos === 'before' ? r.top : r.bottom), left: ir.left + r.left, width: r.width });
         };
+        const editorDoc = editor.getDoc() as Document;
+        const onPageMove = (ev: MouseEvent) => onMove(ev.clientX, ev.clientY);
+        const onEditorMove = (ev: MouseEvent) => { const ir = iframe.getBoundingClientRect(); onMove(ir.left + ev.clientX, ir.top + ev.clientY); };
         const onUp = () => {
-            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mousemove', onPageMove);
             document.removeEventListener('mouseup', onUp);
-            iframe.style.pointerEvents = '';
+            editorDoc.removeEventListener('mousemove', onEditorMove);
+            editorDoc.removeEventListener('mouseup', onUp);
             document.body.style.userSelect = '';
             setDropLine(null);
-            if (!moved) { setGripMenu({ top: startY, left: startX + 14 }); return; } // clique → menu
+            // Fim do gesto SEMPRE (também no clique): com dragBlockRef preso, a pega deixava de
+            // aparecer e o mini-menu ficava escondido para sempre.
             const drag = dragBlockRef.current;
             const tgt = dropTargetRef.current;
             dragBlockRef.current = null; dropTargetRef.current = null;
-            miniMenuRef.current?.suppress('grip', false); // ver onGripLeave
+            // Clique → menu da pega, sozinho: fecham-se os outros menus (efeito do gripMenu esconde o resto).
+            if (!moved) {
+                if (plusMenuOpenRef.current) closePlusMenu();
+                setStyleMenu(null);
+                hrRef.current = null; setHrCtl(null);
+                setGripMenu({ top: startY, left: startX + 14 });
+                return;
+            }
+            miniMenuRef.current?.suppress('grip', false); // o rato já pode não estar na pega
             const parent = drag?.parentNode;
             if (drag && tgt && tgt.block !== drag && parent) {
                 const ref = tgt.pos === 'before' ? tgt.block : tgt.block.nextSibling;
@@ -277,8 +301,10 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                 }
             }
         };
-        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mousemove', onPageMove);
         document.addEventListener('mouseup', onUp);
+        editorDoc.addEventListener('mousemove', onEditorMove);
+        editorDoc.addEventListener('mouseup', onUp);
     };
 
     // Instala a reação ao editor (chamado pelo setup, com blockOf e o bloco ativo — activeBlock.ts).
@@ -290,11 +316,6 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             !!block && block !== editor.getBody() && /^(P|H[1-6])$/.test(block.nodeName)
             && !/\bchapter-break/.test(block.className);
         miniMenuRef.current = attachMiniMenu(editor, { blockOf });
-        let lastMouseY = -1; // Y do rato em coords do iframe (-1 = desconhecido)
-        let lastMouseX = -1; // X do rato em coords do iframe
-        // Zona à esquerda da aresta do bloco onde a pega aparece.
-        const GRIP_BAND = 36;
-        editor.on('mousemove', (e: MouseEvent) => { lastMouseX = e.clientX; lastMouseY = e.clientY; evalGrip(); });
         // Botão "+": desenhado só em CSS (::after do bloco sob o rato, ver contentStyles.ts).
         // Pseudo-elementos não recebem eventos → o clique chega ao próprio bloco e é reconhecido
         // pela posição (círculo de 20px centrado na borda inferior).
@@ -336,6 +357,54 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const ir = iframe.getBoundingClientRect();
             openPlusMenu(block, { top: ir.top + centerOfPlus(block) - PLUS_SIZE / 2, left: ir.left + br.left + br.width / 2 });
         });
+        // Pega de mover: ::before do bloco ativo (CSS, blockGeometry.ts). O CSS não sabe onde está o
+        // rato nem a altura do bloco: aqui decide-se se aparece (rato perto da linha esquerda →
+        // body.ps-grip-near) e a que altura (--grip-y: a meio da parte visível do bloco). O body
+        // não entra no conteúdo gravado. O clique usa a mesma posição (gripTopY).
+        let lastX = -1, lastY = -1;     // rato, coords do iframe
+        let gripTopY: number | null = null; // topo da pega (coords do iframe) quando visível
+        const gripBlock = () => {
+            const block = activeBlock.current();
+            return isPlusBlock(block) && block.parentNode === editor.getBody() && !block.hasAttribute('data-mce-empty') ? block : null;
+        };
+        const updateGrip = () => {
+            const body = editor.getBody();
+            const block = dragBlockRef.current ? null : gripBlock();
+            let top: number | null = null;
+            let overGrip = false;
+            if (block) {
+                const br = block.getBoundingClientRect();
+                const onGrip = gripTopY !== null && !!gripZoneAt(lastX, lastY, br.left, gripTopY);
+                if (onGrip || nearGripLine(lastX, lastY, br)) top = gripTop(br.top, br.bottom, 0, editor.getWin().innerHeight);
+                if (top !== null) {
+                    body.style.setProperty('--grip-y', `${top - br.top}px`);
+                    overGrip = !!gripZoneAt(lastX, lastY, br.left, top);
+                }
+            }
+            gripTopY = top;
+            body.classList.toggle('ps-grip-near', top !== null);
+            // Rato em cima da pega → mini-menu escondido (fica por cima dela). A arrastar, só o fim
+            // do arrasto o repõe.
+            if (!dragBlockRef.current) miniMenuRef.current?.suppress('grip', overGrip);
+        };
+        editor.on('mousemove', (e: MouseEvent) => { lastX = e.clientX; lastY = e.clientY; updateGrip(); });
+        editor.on('NodeChange', updateGrip);
+        // Rato sai do editor: sem mousemove a pega ficava visível.
+        editor.on('init', () => editor.getDoc().documentElement.addEventListener('mouseleave', () => { lastX = lastY = -1; updateGrip(); }));
+        editor.on('mousedown', (e: MouseEvent) => {
+            if (e.button !== 0 || editor.mode.isReadOnly() || gripTopY === null) return;
+            const block = gripBlock();
+            const iframe = iframeOf(editor);
+            if (!block || !iframe) return;
+            const zone = gripZoneAt(e.clientX, e.clientY, block.getBoundingClientRect().left, gripTopY);
+            if (!zone) return;
+            e.preventDefault();
+            swallowClick = true; // o click a seguir não conta como 2.º clique no bloco
+            gripBlockRef.current = block;
+            if (zone !== 'drag') { moveBlock(zone); return; }
+            const ir = iframe.getBoundingClientRect();
+            startBlockDrag(ir.left + e.clientX, ir.top + e.clientY);
+        });
         // Hover sobre uma divisória → controlo Pequena/Larga.
         editor.on('mousemove', (e: MouseEvent) => {
             const t = e.target as HTMLElement;
@@ -350,46 +419,6 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             } else if (hrRef.current) { hrRef.current = null; setHrCtl(null); }
         });
 
-        // Pega de arrastar no gutter esquerdo — visível quando o rato está no limite esquerdo do bloco ATIVO.
-        // Esconde com fade-out (opacidade → 0, depois desmonta) para um desaparecimento suave.
-        let gripHideTimer: ReturnType<typeof setTimeout> | null = null;
-        const cancelGripHide = () => { if (gripHideTimer) { clearTimeout(gripHideTimer); gripHideTimer = null; } };
-        const fadeOutGrip = () => {
-            if (!gripPosRef.current) return;      // nada montado
-            setGripFading(true);
-            if (gripHideTimer) return;            // já a desaparecer
-            // desmontar só DEPOIS de a transição de opacidade (300ms) terminar → sem salto
-            gripHideTimer = setTimeout(() => { gripHideTimer = null; clearGrip(); }, 340);
-        };
-        const evalGrip = () => {
-            if (plusMenuOpenRef.current) { fadeOutGrip(); return; } // menu de inserção aberto → sem pega
-            if (!editor.hasFocus()) { fadeOutGrip(); return; }
-            const block = activeBlock.current();
-            if (!isPlusBlock(block)) { fadeOutGrip(); return; }
-            const iframe = iframeOf(editor);
-            if (!iframe) { fadeOutGrip(); return; }
-            const ir = iframe.getBoundingClientRect();
-            const br = block.getBoundingClientRect();
-            const midY = br.top + br.height / 2;
-            if (midY < 0 || midY > ir.height) { fadeOutGrip(); return; } // fora do visível
-            // Só com o rato no limite esquerdo do bloco (gutter) e à altura do bloco.
-            if (lastMouseX < br.left - GRIP_BAND || lastMouseX > br.left + 12) { fadeOutGrip(); return; }
-            if (lastMouseY < br.top - 4 || lastMouseY > br.bottom + 4) { fadeOutGrip(); return; }
-            // Pilha da pega ≈ 76px (h-5 + h-9 + h-5); topo = meio - 38 → centrada sem translate
-            // (translateY colidiria com a animação plusPop, causando um salto vertical).
-            const posTop = ir.top + midY - 38;
-            if (posTop < 0 || posTop > window.innerHeight) { fadeOutGrip(); return; } // clamp à janela
-            cancelGripHide(); // rato de volta ao gutter → cancelar o fade pendente
-            gripBlockRef.current = block;
-            // Pega centrada na linha do anel (blockGeometry.ts).
-            const pos = { top: posTop, left: ir.left + gripLeft(br.left) };
-            const prev = gripPosRef.current;
-            if (prev && Math.abs(prev.top - pos.top) < 0.5 && Math.abs(prev.left - pos.left) < 0.5) { setGripFading(false); return; }
-            gripPosRef.current = pos; setGripFading(false); setGripPos(pos);
-        };
-        editor.on('NodeChange', evalGrip);
-        editor.on('input', evalGrip);
-        editor.on('blur', clearGrip);
 
         // Editar HTML inline aberto + clique noutro bloco → fechar (descarta a edição).
         editor.on('mousedown', () => { if (htmlEdit.isOpen()) htmlEdit.close(); });
@@ -399,16 +428,8 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         // Capture=true apanha scroll de qualquer ancestral com overflow. Removido no 'remove'.
         // Scroll com o menu de inserção aberto → fechá-lo (o menu é fixed e separar-se-ia do "+").
         const closeMenuIfOpen = () => { if (plusMenuOpenRef.current) closePlusMenu(); setGripMenu(null); setStyleMenu(null); if (hrRef.current) { hrRef.current = null; setHrCtl(null); } };
-        // Pega faz fade-out durante o scroll e reaparece alinhada quando este pára (debounce).
-        // Não desmonta: só varia a opacidade (transição CSS) → desaparecer suave.
-        let gripScrollTimer: ReturnType<typeof setTimeout> | null = null;
-        const gripOnScroll = () => {
-            setGripFading(true);
-            if (gripScrollTimer) clearTimeout(gripScrollTimer);
-            gripScrollTimer = setTimeout(() => { setGripFading(false); evalGrip(); }, 150);
-        };
-        const onScroll = () => { closeMenuIfOpen(); gripOnScroll(); if (htmlEdit.isOpen()) htmlEdit.reposition(); };
-        const evalOverlays = () => { closeMenuIfOpen(); gripOnScroll(); if (htmlEdit.isOpen()) htmlEdit.reposition(); };
+        const onScroll = () => { closeMenuIfOpen(); updateGrip(); if (htmlEdit.isOpen()) htmlEdit.reposition(); };
+        const evalOverlays = onScroll;
         editor.on('init', () => {
             editor.getWin().addEventListener('scroll', onScroll, { passive: true });
             window.addEventListener('scroll', onScroll, true);
@@ -422,9 +443,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
 
     const internal: BlockOverlaysInternal = {
-        plusMenu, gripPos, gripFading, gripMenu, hrCtl, dropLine, styleMenu,
+        plusMenu, gripMenu, hrCtl, dropLine, styleMenu,
         closePlusMenu, plusAction,
-        startBlockDrag, moveBlock, setGripMenu, onGripEnter, onGripLeave, gripAction, setHrWidth, deleteHr,
+        dismissGripMenu, gripAction, setHrWidth, deleteHr,
         styleAction, setStyleMenu,
     };
     const render = <><BlockOverlays {...internal} readOnly={readOnly} />{htmlEdit.element}</>;

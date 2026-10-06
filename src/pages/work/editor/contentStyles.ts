@@ -1,4 +1,4 @@
-import { activeBlockCss, PLUS_SIZE, PLUS_CUT } from './blockGeometry';
+import { activeBlockCss, gripCss, PLUS_SIZE, PLUS_CUT } from './blockGeometry';
 
 // content_style do editor: o CSS do livro + estilos só-editor (diff/spell/noBreak/
 // marcadores de UI/hr). Os marcadores `data-mce-*` nunca exportam para EPUB.
@@ -13,10 +13,13 @@ export function buildContentStyle(currentCss: string): string {
 .idx-link { text-decoration: underline dotted; text-decoration-color: #64748b; text-underline-offset: 3px; background-color: rgba(100, 116, 139, 0.08); border-radius: 2px; cursor: default; }
 .comment-anchor { background-color: rgba(245, 158, 11, 0.18); border-bottom: 2px solid #f59e0b; cursor: pointer; }
 .comment-anchor.comment-anchor-resolved { background-color: transparent; border-bottom-color: #cbd5e1; opacity: 0.6; }
-.noBreak { outline: 2px dashed #94a3b8; background: rgba(100,116,139,0.05); position: relative; padding: 2px 0; }
-.noBreak::before { content: "Unido"; position: absolute; top: 0; right: 0; font-size: 9px; font-weight: bold; color: #475569; background: rgba(100,116,139,0.15); padding: 1px 5px; border-bottom-left-radius: 4px; pointer-events: none; }
+.noBreak { outline: 2px dashed #94a3b8; background: rgba(100,116,139,0.03); padding: 10px 31px; border-radius: 8px; margin: 12px -11px; }
+.noBreak::before { content: "Unido"; float: right; margin: -10px -31px 0 6px; font-size: 9px; font-weight: bold; color: #475569; background: rgba(100,116,139,0.15); padding: 1px 5px; border-radius: 0 6px 0 4px; pointer-events: none; }
+.noBreak [data-mce-psactive] { box-shadow: 0 0 0 3px #fff, 0 0 0 4px #475569 !important; }
 /* Bloco ativo: padding + anel (geometria em blockGeometry.ts — partilhada com o JS). */
 ${activeBlockCss()}
+/* Pega de mover (::before do bloco ativo), também em blockGeometry.ts. */
+${gripCss()}
 [data-mce-empty]::before { content: 'Escreve algo…'; color: #94a3b8; pointer-events: none; }
 [data-mce-htmledit] { visibility: hidden !important; }
 /* Botão "+" (inserir bloco): só CSS, ::after do bloco de topo, centrado na borda inferior.
@@ -35,15 +38,15 @@ body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-
   border: 1px solid #e2e8f0; border-radius: 50%; background: #fff;
   /* 2 cópias brancas da própria forma, desviadas p/ os lados: cortam a linha da borda
      à esquerda/direita do círculo (ilusão de espaço). */
-  box-shadow: 0 2px 6px rgba(15,23,42,.15), -${PLUS_CUT}px 0 0 0 #fff, ${PLUS_CUT}px 0 0 0 #fff;
+  box-shadow: -${PLUS_CUT}px 0 0 0 #fff, ${PLUS_CUT}px 0 0 0 #fff;
   color: #334155; font: 400 15px/17px system-ui, sans-serif; text-align: center; text-indent: 0;
   letter-spacing: 0; text-transform: none; cursor: pointer; user-select: none;
   visibility: hidden; opacity: 0; transform: scale(.6);
   transition: opacity .2s ease-in, transform .2s ease-in, visibility 0s linear .2s;
 }
 /* A entrada usa a transição DESTE estado: atraso de 60ms evita o "piscar" ao passar o rato por vários blocos. */
-body:not(.mce-content-readonly):not(.ps-has-active) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]):hover::after,
-body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]):is([data-mce-psactive]:hover,[data-mce-plusopen])::after {
+body:not(.mce-content-readonly):not(.ps-has-active):not(.ps-grip-menu) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]):hover::after,
+body:not(.mce-content-readonly):not(.ps-grip-menu) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]):is([data-mce-psactive]:hover,[data-mce-plusopen])::after {
   visibility: visible; opacity: 1; transform: none;
   transition: opacity .22s ease-out .06s, transform .22s ease-out .06s, visibility 0s linear .06s;
 }

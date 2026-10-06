@@ -105,12 +105,13 @@ test('1. em cima, encostado à linha da borda e alinhado à esquerda; segue o ed
     expect(t.view.popLeft()).toBe(t.view.blockLeft() - 4);
 });
 
-test('2. sem espaço em cima → em baixo, encostado; sem espaço nenhum → escondido', () => {
+test('2. sem espaço em cima → fica preso ao topo visível (nunca em baixo); bloco fora de vista → escondido', () => {
     const t = setup();
     t.s.block.top = 2;
     t.scroll();
-    expect(t.view.popTop()).toBe(t.view.blockBottom() + 4);
-    t.s.iframe.height = 60; t.s.block.height = 50;
+    expect(t.pop.style.visibility).toBe('');
+    expect(t.view.popTop()).toBe(t.s.iframe.top + 4);
+    t.s.block.top = -60; // bloco já saiu por cima
     t.scroll();
     expect(t.pop.style.visibility).toBe('hidden');
 });
