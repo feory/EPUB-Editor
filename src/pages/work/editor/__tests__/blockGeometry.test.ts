@@ -27,7 +27,7 @@ test('pega centrada na linha do anel', () => {
 test('CSS do bloco ativo usa os mesmos números (padding, margem, anel, desvio do "+")', () => {
     const css = activeBlockCss();
     expect(css).toContain(`padding: ${ACTIVE_PAD_Y}px ${ACTIVE_PAD_X}px !important`);
-    expect(css).toContain(`margin-left: -${ACTIVE_PAD_X}px !important`);
+    expect(css).toContain(`margin-left: calc(var(--ps-ml, 0px) - ${ACTIVE_PAD_X}px) !important`);
     expect(css).toContain(`0 0 0 ${RING_GAP}px #fff, 0 0 0 ${RING}px`);
     expect(css).toContain(`--plus-dy: ${PLUS_DY_ACTIVE}px`);
 });

@@ -117,5 +117,5 @@ export const activeBlockCss = () => `[data-mce-psactive] {
 }
 [data-mce-psactive]:not([class*="chapter-break"]) {
   padding: ${ACTIVE_PAD_Y}px ${ACTIVE_PAD_X}px !important;
-  margin-left: -${ACTIVE_PAD_X}px !important; margin-right: -${ACTIVE_PAD_X}px !important;
+  margin-left: calc(var(--ps-ml, 0px) - ${ACTIVE_PAD_X}px) !important; margin-right: calc(var(--ps-mr, 0px) - ${ACTIVE_PAD_X}px) !important;
 }`;

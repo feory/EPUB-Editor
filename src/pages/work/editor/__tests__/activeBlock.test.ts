@@ -30,6 +30,7 @@ function setup(before?: (editor: TinyMCEEditor) => void) {
         hasFocus: () => s.focus,
         selection: { getNode: () => s.node },
         getBody: () => body,
+        getWin: () => win,
         nodeChanged: () => fire('NodeChange'),
         serializer: { addTempAttr: () => {} },
         dom: {
