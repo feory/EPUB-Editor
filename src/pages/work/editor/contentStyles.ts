@@ -15,6 +15,7 @@ export function buildContentStyle(currentCss: string): string {
 .comment-anchor.comment-anchor-resolved { background-color: transparent; border-bottom-color: #cbd5e1; opacity: 0.6; }
 .noBreak { outline: 2px dashed #94a3b8; background: rgba(100,116,139,0.03); padding: 10px 31px; border-radius: 8px; margin: 12px -11px; }
 .noBreak::before { content: "Unido"; float: right; margin: -10px -31px 0 6px; font-size: 9px; font-weight: bold; color: #475569; background: rgba(100,116,139,0.15); padding: 1px 5px; border-radius: 0 6px 0 4px; pointer-events: none; }
+.columns > .col { outline: 1px dashed #94a3b8; outline-offset: 6px; border-radius: 2px; } /* só-editor: limites das colunas (outline não afeta o layout) */
 .noBreak [data-mce-psactive] { box-shadow: 0 0 0 3px #fff, 0 0 0 4px #475569 !important; }
 /* Bloco ativo: padding + anel (geometria em blockGeometry.ts — partilhada com o JS). */
 ${activeBlockCss()}

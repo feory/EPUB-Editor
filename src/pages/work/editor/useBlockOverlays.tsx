@@ -13,6 +13,7 @@ type BlockOverlaysInternal = Omit<BlockOverlaysProps, 'readOnly'>;
 
 const noop0 = () => 0;
 
+type DelBtn = Pos & { container: boolean };
 type Pos = { top: number; left: number };
 
 // iframe do editor (dentro do container); todas as posições de overlay derivam do seu rect.
@@ -113,6 +114,37 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         editBlocks(editor, () => {
             editor.dom.remove(hr);
             editor.focus();
+        });
+    };
+
+    // Botão eliminar no canto superior direito do elemento selecionado (bloco ativo ou imagem) e,
+    // dentro de colunas/caixa, outro por cima do contentor (eliminar o bloco todo de uma vez).
+    const [delBtns, setDelBtns] = useState<DelBtn[]>([]);
+    const delTargetsRef = useRef<HTMLElement[]>([]); // paralelo a delBtns
+    const lastDelRef = useRef(''); // última posição emitida (evita setState repetido)
+    const deleteTarget = (index: number) => {
+        const editor = editorRef.current; const el = delTargetsRef.current[index];
+        if (!editor || !el) return;
+        delTargetsRef.current = []; lastDelRef.current = ''; setDelBtns([]); // '' → o próximo update volta a mostrá-los, mesmo na mesma posição
+        const body = editor.getBody();
+        editBlocks(editor, () => {
+            // Imagem sozinha no parágrafo → leva o parágrafo (o limpador apagava-o de qualquer forma).
+            const p = el.parentElement;
+            const doomed = el.nodeName === 'IMG' && p && p !== body && p.querySelectorAll('img').length === 1 && !p.textContent?.trim() ? p : el;
+            const parent = doomed.parentElement;
+            const next = (doomed.nextElementSibling ?? doomed.previousElementSibling) as HTMLElement | null;
+            doomed.remove();
+            // Contentor ficou vazio: a coluna ganha um parágrafo (senão não se edita); caixas vazias saem.
+            let holder = parent;
+            while (holder && holder !== body && !holder.children.length) {
+                if (holder.classList.contains('col')) { holder.innerHTML = '<p><br data-mce-bogus="1"></p>'; break; }
+                const up: HTMLElement | null = holder.parentElement; holder.remove(); holder = up;
+            }
+            editor.focus(); // antes do cursor/nodeChanged: o anel do bloco ativo só se aplica com foco
+            if (next?.isConnected) {
+                if (/^(P|H[1-6])$/.test(next.nodeName)) editor.selection.setCursorLocation(next, 0);
+                else editor.selection.select(next, true);
+            }
         });
     };
 
@@ -437,11 +469,42 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         editor.on('mousedown', () => { if (htmlEdit.isOpen()) htmlEdit.close(); });
 
 
+        // Posição do botão eliminar: acompanha NodeChange/scroll/resize; escondido sem foco, em leitura,
+        // a arrastar ou com o elemento fora da área visível do editor.
+        const updateDel = () => {
+            const iframe = iframeOf(editor);
+            const node = editor.selection.getNode();
+            const el = editor.hasFocus() && !editor.mode.isReadOnly() && !dragBlockRef.current && !htmlEdit.isOpen()
+                ? (node.nodeName === 'IMG' ? node : activeBlock.current()) as HTMLElement | null : null;
+            const btns: DelBtn[] = []; const targets: HTMLElement[] = [];
+            if (el && iframe) {
+                const ir = iframe.getBoundingClientRect();
+                const r = el.getBoundingClientRect();
+                const visible = (b: DOMRect) => b.bottom > 0 && b.top < ir.height;
+                if (visible(r)) { btns.push({ top: ir.top + Math.max(r.top, 0) + 4, left: ir.left + r.right - 4 - 24, container: false }); targets.push(el); }
+                const box = el.parentElement?.closest('.columns, .box') as HTMLElement | null;
+                if (box) {
+                    const br = box.getBoundingClientRect();
+                    if (visible(br)) {
+                        const above = br.top - 30; // botão (24px) todo acima do contentor, com folga — não toca no botão do elemento
+                        btns.push({ top: ir.top + Math.max(above, 2), left: ir.left + br.right - 4 - 24 - (above < 2 ? 28 : 0), container: true });
+                        targets.push(box);
+                    }
+                }
+            }
+            delTargetsRef.current = targets;
+            const key = btns.map((b) => `${b.top}|${b.left}`).join(';');
+            if (key === lastDelRef.current) return;
+            lastDelRef.current = key;
+            setDelBtns(btns);
+        };
+        editor.on('NodeChange input keyup', updateDel);
+
         // Scroll de contentor EXTERNO (fora do iframe) / resize da janela: reavaliar ambos os overlays.
         // Capture=true apanha scroll de qualquer ancestral com overflow. Removido no 'remove'.
         // Scroll com o menu de inserção aberto → fechá-lo (o menu é fixed e separar-se-ia do "+").
         const closeMenuIfOpen = () => { if (plusMenuOpenRef.current) closePlusMenu(); setGripMenu(null); setStyleMenu(null); if (hrRef.current) { hrRef.current = null; setHrCtl(null); } };
-        const onScroll = () => { closeMenuIfOpen(); updateGrip(); if (htmlEdit.isOpen()) htmlEdit.reposition(); };
+        const onScroll = () => { closeMenuIfOpen(); updateGrip(); updateDel(); if (htmlEdit.isOpen()) htmlEdit.reposition(); };
         const evalOverlays = onScroll;
         editor.on('init', () => {
             editor.getWin().addEventListener('scroll', onScroll, { passive: true });
@@ -456,7 +519,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
 
     const internal: BlockOverlaysInternal = {
-        plusMenu, gripMenu, hrCtl, dropLine, styleMenu,
+        plusMenu, gripMenu, hrCtl, dropLine, styleMenu, delBtns, deleteTarget,
         closePlusMenu, plusAction,
         dismissGripMenu, gripAction, setHrWidth, deleteHr,
         styleAction, setStyleMenu,

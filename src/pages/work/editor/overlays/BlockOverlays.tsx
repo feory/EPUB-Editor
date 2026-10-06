@@ -13,6 +13,8 @@ export interface BlockOverlaysProps {
     plusMenu: Pos | null;
     gripMenu: Pos | null;
     hrCtl: Pos | null;
+    delBtns: Array<Pos & { container: boolean }>; // [elemento, contentor (colunas/caixa)?]
+    deleteTarget: (index: number) => void;
     dropLine: { top: number; left: number; width: number } | null;
     styleMenu: { top: number; left: number; kind: 'para' | 'head' } | null;
     closePlusMenu: () => void;
@@ -30,7 +32,7 @@ type Props = BlockOverlaysProps;
 
 /** Overlays estilo Notion renderizados FORA do iframe (posição fixed em coords da viewport). */
 export function BlockOverlays({
-    plusMenu, gripMenu, hrCtl, dropLine, closePlusMenu, plusAction,
+    plusMenu, gripMenu, hrCtl, delBtns, deleteTarget, dropLine, closePlusMenu, plusAction,
     dismissGripMenu, gripAction, setHrWidth, deleteHr,
     styleMenu, styleAction, setStyleMenu, readOnly,
 }: Props) {
@@ -128,6 +130,20 @@ export function BlockOverlays({
                     </button>
                 </div>
             )}
+            {!readOnly && delBtns.map((btn, i) => (
+                // preventDefault no mousedown: o editor não perde o foco (senão o anel e o botão desapareciam antes do clique)
+                <button
+                    key={btn.container ? 'container' : 'item'}
+                    type="button" title={btn.container ? 'Eliminar bloco inteiro (colunas/caixa)' : 'Eliminar'}
+                    onMouseDown={(ev) => ev.preventDefault()} onClick={() => deleteTarget(i)}
+                    style={{ position: 'fixed', top: btn.top, left: btn.left, zIndex: 100 }}
+                    className={`w-6 h-6 flex items-center justify-center rounded-md border shadow-sm transition-colors ${btn.container
+                        ? 'bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100 hover:text-rose-700'
+                        : 'bg-white border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200'}`}
+                >
+                    <Trash2 size={13} />
+                </button>
+            ))}
             {dropLine && (
                 <div
                     style={{ position: 'fixed', top: dropLine.top - 1, left: dropLine.left, width: dropLine.width, height: 2, background: '#475569', zIndex: 100, pointerEvents: 'none' }}
