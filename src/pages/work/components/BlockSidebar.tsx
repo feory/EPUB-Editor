@@ -169,16 +169,7 @@ const TextSection: React.FC<{
     ];
     const selector = targets.some(([sel]) => sel === picked) ? picked : targets[0][0];
     return (
-        <Section title={`Bloco · ${text.tag}${text.classes.length ? ' · ' + text.classes.join(' ') : ''}`}>
-            {(/^h[123]$/.test(text.tag) || text.tag === 'p' || text.tag === 'li') && (
-                <Row label="Estilo">
-                    <Select
-                        value={/^h[123]$/.test(text.tag) ? text.tag : BLOCK_STYLE_OPTIONS.find(([f]) => text.classes.includes(f))?.[0] ?? 'p'}
-                        options={BLOCK_STYLE_OPTIONS}
-                        onChange={onBlockStyle}
-                    />
-                </Row>
-            )}
+        <div className="flex flex-col gap-4">
             <div className="flex rounded-lg border border-border p-0.5 bg-slate-50">
                 {MODES.map(([m, label]) => (
                     <button key={m} type="button" onClick={() => setMode(m)}
@@ -187,19 +178,30 @@ const TextSection: React.FC<{
                     </button>
                 ))}
             </div>
-            {mode === 'block' ? (
-                <>
-                    <TextFields value={text.inline} onChange={onInline} />
-                    <ResetButton onClick={() => onInline(EMPTY_TEXT)} />
-                </>
-            ) : (
-                <>
-                    <Row label="Editar"><Select value={selector} options={targets} onChange={setPicked} /></Row>
-                    <TextFields value={textPropsFrom(readRule(css, selector))} onChange={(patch) => onStyle(selector, patch)} />
-                    <p className="text-xs text-text-muted">Altera todos os blocos com este estilo, no CSS do livro.</p>
-                </>
-            )}
-        </Section>
+            {mode === 'style' && <p className="text-xs text-text-muted -mt-2">Altera todos os blocos com este estilo, no CSS do livro.</p>}
+            <Section title={`Bloco · ${text.tag}${text.classes.length ? ' · ' + text.classes.join(' ') : ''}`}>
+                {(/^h[123]$/.test(text.tag) || text.tag === 'p' || text.tag === 'li') && (
+                    <Row label="Estilo">
+                        <Select
+                            value={/^h[123]$/.test(text.tag) ? text.tag : BLOCK_STYLE_OPTIONS.find(([f]) => text.classes.includes(f))?.[0] ?? 'p'}
+                            options={BLOCK_STYLE_OPTIONS}
+                            onChange={onBlockStyle}
+                        />
+                    </Row>
+                )}
+                {mode === 'block' ? (
+                    <>
+                        <TextFields value={text.inline} onChange={onInline} />
+                        <ResetButton onClick={() => onInline(EMPTY_TEXT)} />
+                    </>
+                ) : (
+                    <>
+                        <Row label="Editar"><Select value={selector} options={targets} onChange={setPicked} /></Row>
+                        <TextFields value={textPropsFrom(readRule(css, selector))} onChange={(patch) => onStyle(selector, patch)} />
+                        </>
+                )}
+            </Section>
+        </div>
     );
 };
 
