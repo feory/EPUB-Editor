@@ -15,6 +15,10 @@ interface SetupDeps {
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
     onEditBoxStyle: () => void;
+    // Título do ebook no canto direito da barra de estado (ref: setup() só corre 1x).
+    ebookLabelRef: React.MutableRefObject<string>;
+    onToggleFocusModeRef: React.MutableRefObject<(() => void) | undefined>;
+    onTogglePrintPdfRef: React.MutableRefObject<(() => void) | undefined>;
     // Capítulos do livro + índice do capítulo aberto — via ref (setup() só corre 1x no mount,
     // ver comentário junto ao botão idxlinktarget) para ler sempre os valores mais recentes.
     chaptersRef: React.MutableRefObject<{ title: string; level: string }[]>;
@@ -517,6 +521,12 @@ export function createEditorSetup(deps: SetupDeps) {
                 cssInfoEl.title = 'CSS do bloco selecionado';
                 cssInfoEl.style.cssText = 'flex:1;min-width:0;padding:0 8px;font-size:11px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
                 sb.insertBefore(cssInfoEl, sb.firstChild);
+                const labelEl = document.createElement('div');
+                labelEl.dataset.psEbookLabel = '1';
+                labelEl.textContent = deps.ebookLabelRef.current;
+                labelEl.title = deps.ebookLabelRef.current;
+                labelEl.style.cssText = 'flex:0 1 auto;max-width:40%;padding:0 8px;font-size:11px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                sb.insertBefore(labelEl, sb.querySelector('.tox-statusbar__resize-handle'));
             }
             updateCssInfo();
         });
@@ -672,6 +682,15 @@ export function createEditorSetup(deps: SetupDeps) {
                 editor.formatter.formatChanged('uppercase', (active) => api.setActive(active));
                 return () => {};
             },
+        });
+
+        editor.ui.registry.addButton('pdfview', {
+            icon: 'document-properties', tooltip: 'Ver PDF',
+            onAction: () => deps.onTogglePrintPdfRef.current?.(),
+        });
+        editor.ui.registry.addButton('focusmode', {
+            icon: 'fullscreen', tooltip: 'Modo Foco',
+            onAction: () => deps.onToggleFocusModeRef.current?.(),
         });
 
         editor.ui.registry.addToggleButton('box', {

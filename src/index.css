@@ -237,3 +237,9 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Último grupo da toolbar do editor (PDF + Modo Foco) encostado à direita */
+.tox .tox-toolbar__group:has([data-mce-name="pdfview"]) { margin-left: auto; }
+
+/* Toolbar do editor: sem folgas entre grupos de ícones */
+.tox .tox-editor-header .tox-toolbar__group { padding: 0 2px; }
