@@ -43,6 +43,7 @@ import { useStyles, DEFAULT_CSS, patchLoadedCss } from '../context/StyleContext'
 import { sanitizeImageFilename } from '../utils/format';
 import { getStoredFont, storeFont, getStoredFontSize, storeFontSize } from './work/utils/editorFonts';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { PLACEHOLDER_ALT } from '../utils/image-alt';
 
 const HistoryModal = lazy(() => import('./work/modals/HistoryModal').then(m => ({ default: m.HistoryModal })));
 const CompareModal = lazy(() => import('./work/modals/CompareModal').then(m => ({ default: m.CompareModal })));
@@ -289,7 +290,7 @@ export function WorkPage() {
     formData.append('images', file, filename);
     await ebooksApi.uploadImages(isbn, formData);
     editorRef.current?.insertContent(
-      `<img data-image-id="${imageId}" src="/api/ebooks/${isbn}/images/${imageId}" alt="Imagem" style="max-width: 100%; height: auto;" loading="lazy" />`
+      `<img data-image-id="${imageId}" src="/api/ebooks/${isbn}/images/${imageId}" alt="${PLACEHOLDER_ALT}" style="max-width: 100%; height: auto;" loading="lazy" />`
     );
     refreshGallery();
   }, [isbn, refreshGallery]);

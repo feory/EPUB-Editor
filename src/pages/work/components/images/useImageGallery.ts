@@ -7,6 +7,7 @@ import { useImageCrop } from './useImageCrop';
 import type { WorkEditorRef } from '../WorkEditor';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { PLACEHOLDER_ALT } from '../../../../utils/image-alt';
 
 export interface ImageData {
     id: string;
@@ -184,7 +185,7 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
     const handleInsertAtCursor = useCallback((imageData: ImageData) => {
         if (editorRef.current) {
             editorRef.current.insertContent(
-                `<img data-image-id="${imageData.id}" src="/api/ebooks/${isbn}/images/${imageData.id}" alt="Imagem" style="max-width: 100%; height: auto;" loading="lazy" />`
+                `<img data-image-id="${imageData.id}" src="/api/ebooks/${isbn}/images/${imageData.id}" alt="${PLACEHOLDER_ALT}" style="max-width: 100%; height: auto;" loading="lazy" />`
             );
             showNotification('success', 'Imagem inserida no cursor', 2000);
         }

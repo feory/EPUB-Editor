@@ -1,4 +1,5 @@
 import type JSZip from 'jszip';
+import { isPlaceholderAlt } from '../../../utils/image-alt';
 
 export type ImageEntry = { id: string; filename: string; mediaType: string };
 
@@ -53,9 +54,9 @@ export const replaceImageUrlsInContent = (content: string, images: Map<string, B
         const sizeAttrs = (widthMatch ? ` width="${widthMatch[1]}"` : '')
             + (heightMatch ? ` height="${heightMatch[1]}"` : '')
             + (styleMatch ? ` style="${styleMatch[1]}"` : '');
-        // alt escrito no painel (ignora o vazio e o "Imagem importada" do importador) senão "Imagem {id}".
-        const altMatch = tag.match(/\salt=["']([^"']*)["']/i)?.[1].trim();
-        const alt = altMatch && altMatch !== 'Imagem importada' ? altMatch : `Imagem ${id}`;
+        // alt escrito pelo utilizador; placeholder (utils/image-alt) → "Imagem {id}".
+        const altText = tag.match(/\salt=["']([^"']*)["']/i)?.[1].trim();
+        const alt = isPlaceholderAlt(altText) ? `Imagem ${id}` : altText;
         return `<img src="${filename}"${classAttr}${sizeAttrs} alt="${alt}" />`;
     });
 
