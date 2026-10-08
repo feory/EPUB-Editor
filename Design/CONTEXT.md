@@ -1,0 +1,48 @@
+# EPUB Platform
+
+Plataforma de edição e produção de e-books (EPUB) — importação, edição no editor rico, e exportação.
+
+## Language
+
+**Comment**:
+Uma nota anexada a um trecho de texto de um capítulo, deixada por um utilizador durante a edição/revisão.
+_Avoid_: anotação, nota
+
+**Comment Thread**:
+Um Comment raiz mais as suas Replies.
+_Avoid_: conversa, discussão
+
+**Reply**:
+Um Comment que responde à raiz de um Comment Thread.
+
+**Anchor**:
+O trecho de texto a que um Comment está preso, marcado no editor com um id próprio. Só existe no editor — nunca sobrevive à exportação do EPUB.
+_Avoid_: marcador (termo partilhado por outros marcadores do editor, ex. quebra de página), span
+
+**Orphan Comment**:
+Um Comment Thread cujo Anchor já não existe no texto do capítulo (o trecho foi apagado à mão no editor). O comentário sobrevive; o anchor não.
+_Avoid_: dangling comment, detached comment
+
+**Bloco ativo**:
+O parágrafo ou título (p, h1–h6) onde está o cursor, com o editor focado — salvo se **recolhido**. Tem o anel à volta; é o único que mostra o botão "+" e a pega de mover. O Mini-menu aparece nele (e também em itens de lista, que não têm anel nem pega).
+_Avoid_: bloco selecionado, bloco focado, parágrafo atual
+
+**Recolhido**:
+Estado de um Bloco ativo depois de um 2.º clique no mesmo bloco: esconde o anel e o Mini-menu até se clicar noutro bloco ou voltar a clicar nele.
+_Avoid_: escondido, oculto
+
+**Mini-menu**:
+A barra de estilos do bloco ativo no editor (parágrafo ou título), encostada à linha da borda do bloco — em cima, ou em baixo se não houver espaço. Não é a barra de seleção de texto (aparece ao selecionar texto) nem a barra principal do editor.
+_Avoid_: toolbar, popover, barra de contexto, context toolbar
+
+**Regras da casa**:
+Decisões por nome de estilo que valem para todos os livros (`estilos-base.json`, ex. `LEGENDAS` → legenda). Mudam por código (PR); o que é só de um livro escolhe-se no modal ao importar (não é guardado).
+_Avoid_: estilos base, decisões globais
+
+**Painel de edição**:
+O painel lateral direito ("Edição do Bloco") que mostra e altera os atributos do que está sob o cursor: bloco de texto, caixa, imagem ou colunas. Acompanha o cursor; não é um modal.
+_Avoid_: sidebar de caixa, modal de edição
+
+**Edição de bloco**:
+O module (`editor/blockEditing.ts`) que sabe o que está sob o cursor e como ler/alterar cada alvo. É o único interface que o Painel de edição usa: `inspect` → `BlockInfo`, `apply(alvo, alteração)`. Modo "Este bloco" = style inline; modo "Estilo" = regra CSS do livro (fora deste module).
+_Avoid_: setProps, editor de atributos

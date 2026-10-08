@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { Window } from 'happy-dom';
-import { removeElement, isColumnPlaceholder, COLUMNS_HTML } from './containers';
+import { removeElement, isColumnPlaceholder, GRID_HTML } from './containers';
 
 const body = (html: string) => {
     const b = new Window().document.createElement('div') as unknown as HTMLElement;
@@ -9,10 +9,16 @@ const body = (html: string) => {
 };
 
 test('remover o único parágrafo de uma coluna deixa um parágrafo vazio (coluna continua editável)', () => {
-    const b = body(COLUMNS_HTML.replace('<p><br></p>', '<p>x</p>'));
+    const b = body('<div class="box"><div class="grid"><div class="col"><p>x</p></div></div></div>');
     const p = b.querySelector('p')!;
     expect(removeElement(p, b)).toBeNull();
     expect(b.querySelector('.col')!.innerHTML).toBe('<p><br data-mce-bogus="1"></p>');
+});
+
+test('remover a última célula deixa a grelha vazia (válida)', () => {
+    const b = body(GRID_HTML.replace('></div>', '><p>x</p></div>'));
+    removeElement(b.querySelector('p')!, b);
+    expect(b.innerHTML).toBe(GRID_HTML);
 });
 
 test('remover o único bloco de uma caixa remove a caixa; devolve o vizinho', () => {

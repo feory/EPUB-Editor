@@ -1,9 +1,10 @@
-// Blocos-contentor do editor (colunas, caixa): markup, seletor e invariantes num só sítio.
-// Invariante principal: uma coluna nunca fica sem parágrafo — sem ele não se consegue editar.
+// Blocos-contentor do editor (grelha, caixa): markup, seletor e invariantes num só sítio.
+// Invariantes: uma coluna nunca fica sem parágrafo (senão não se edita); a grelha pode ficar vazia (o "+" interno repõe células).
 
-export const COLUMNS_HTML = '<div class="columns"><div class="col"><p><br></p></div><div class="col"><p><br></p></div></div>';
+// "Grelha" é um elemento independente (não é uma caixa): nasce vazia, o "+" interno acrescenta células.
+export const GRID_HTML = '<div class="grid"></div>';
 
-export const CONTAINER_SELECTOR = '.columns, .box';
+export const CONTAINER_SELECTOR = '.grid, .box';
 
 /** Único parágrafo de uma coluna: não pode ser apagado por estar vazio (o limpador mantém-no). */
 export const isColumnPlaceholder = (p: Element): boolean =>
@@ -11,7 +12,7 @@ export const isColumnPlaceholder = (p: Element): boolean =>
 
 /**
  * Remove o elemento mantendo os invariantes: imagem sozinha no parágrafo leva o parágrafo; contentor
- * que fica vazio sai (caixa) ou ganha um parágrafo vazio (coluna). Devolve o vizinho para pôr o cursor.
+ * que fica vazio sai (caixa), ganha um parágrafo vazio (coluna) ou fica vazio (grelha). Devolve o vizinho para pôr o cursor.
  */
 export function removeElement(el: Element, body: Element): Element | null {
     const p = el.parentElement;
@@ -23,6 +24,7 @@ export function removeElement(el: Element, body: Element): Element | null {
     // Vazio = sem elementos E sem texto (um <p> com texto e sem filhos não é vazio).
     while (holder && holder !== body && !holder.children.length && !holder.textContent?.trim()) {
         if (holder.classList.contains('col')) { holder.innerHTML = '<p><br data-mce-bogus="1"></p>'; break; }
+        if (holder.classList.contains('grid')) break; // grelha vazia é válida: o "+" interno repõe células
         const up: HTMLElement | null = holder.parentElement;
         holder.remove();
         holder = up;

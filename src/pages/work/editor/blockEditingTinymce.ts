@@ -6,6 +6,8 @@ import { editBlocks } from './blockEdit';
 export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
     return {
         selectionNode: () => editor.selection.getNode(),
+        // marcado por useBlockOverlays (data-mce-psbox) ao clicar na área da caixa/grelha
+        selectedContainer: () => editor.getBody().querySelector('[data-mce-psbox]') as HTMLElement | null,
         closest: (node, selector) => editor.dom.getParent(node, selector) as HTMLElement | null,
         setStyle: (el, name, value) => editor.dom.setStyle(el, name, value),
         setImportantStyle: (el, name, value) => {

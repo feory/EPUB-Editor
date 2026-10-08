@@ -4,9 +4,9 @@
 
 export type BaselineTarget = 'editor' | 'export';
 
-export const COLUMNS_CSS = `.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; margin: 1em 0; }
-.columns > .col { min-width: 0; }
-@media (max-width: 600px) { .columns { grid-template-columns: 1fr !important; } }`;
+export const GRID_CSS = `.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; margin: 1em 0; }
+.grid > * { min-width: 0; }
+@media (max-width: 600px) { .grid { grid-template-columns: 1fr !important; } }`;
 
 interface BaselineRule {
     guard: string;            // se o CSS já contém isto, a regra existe (livro atual ou já corrigido)
@@ -23,7 +23,7 @@ const RULES: BaselineRule[] = [
     { guard: '.p-uppercase', css: '.p-uppercase { text-transform: uppercase !important; }', targets: ['editor', 'export'] },
     { guard: '.p-asterisk', css: '.p-asterisk { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }', targets: ['export'] },
     { guard: '.img-inline', css: 'img.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }', targets: ['editor', 'export'] },
-    { guard: '.columns', css: COLUMNS_CSS, targets: ['editor', 'export'] },
+    { guard: '.grid', css: GRID_CSS, targets: ['editor', 'export'] },
     // Livros antigos sem regra de `hr`: o default do e-reader é ~100% de largura e a divisória "Pequena"
     // (sem classe) exportava como larga.
     { guard: '.divider-full', css: 'hr { border: none; height: 1px; background: #ccc; width: 40%; margin: 1.5em auto; }\nhr.divider-full { width: 100%; }', targets: ['export'] },

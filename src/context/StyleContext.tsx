@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
-import { ensureBaselineCss, COLUMNS_CSS } from '../utils/baseline-css';
+import { ensureBaselineCss, GRID_CSS } from '../utils/baseline-css';
 
 export const DEFAULT_CSS = `
     /* === TIPOGRAFIA === */
@@ -90,7 +90,7 @@ export const DEFAULT_CSS = `
     .box--nota { border-style: dashed; }
 
     /* === COLUNAS === */
-${COLUMNS_CSS}
+${GRID_CSS}
 
     /* === QUEBRAS === */
     .noBreak { page-break-inside: avoid; break-inside: avoid; }

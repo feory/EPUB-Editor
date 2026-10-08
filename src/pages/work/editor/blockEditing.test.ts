@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
 import { Window } from 'happy-dom';
+import { EMPTY_GRID } from './gridProps';
 import { inspectBlock, applyBlockEdit, createBlockWatcher, type EditorLike } from './blockEditing';
 
 // Adapter em memória do seam EditorLike (o de produção é o TinyMCE).
@@ -31,11 +32,11 @@ function fakeEditor(html: string, select: (root: HTMLElement) => Node) {
     return ed;
 }
 
-test('inspect: parágrafo dentro de coluna dá text + columns; fora de caixas, box null', () => {
-    const ed = fakeEditor('<div class="columns"><div class="col"><p class="p-quote">x</p></div></div>', (r) => r.querySelector('p')!);
+test('inspect: parágrafo dentro de coluna dá text + grid; fora de caixas, box null', () => {
+    const ed = fakeEditor('<div class="grid"><div class="col"><p class="p-quote">x</p></div></div>', (r) => r.querySelector('p')!);
     const info = inspectBlock(ed);
     expect(info.text).toMatchObject({ tag: 'p', classes: ['p-quote'] });
-    expect(info.columns).toEqual({ ratio: '', gap: null });
+    expect(info.grid).toEqual(EMPTY_GRID);
     expect(info.box).toBeNull();
     expect(info.image).toBeNull();
 });
@@ -75,4 +76,14 @@ test('watcher só emite quando a informação muda', () => {
     applyBlockEdit(ed, { target: 'text', patch: { indent: 2 } });
     w.update();
     expect(seen.length).toBe(2);
+});
+
+test('caixa/grelha selecionada pelo clique tem prioridade sobre o que rodeia o cursor; aplicar às células', () => {
+    const ed = fakeEditor('<p id="x">fora</p><div class="grid"><div class="col"></div><p></p></div>', (r) => r.querySelector('#x')!);
+    ed.selectedContainer = () => ed.root.querySelector('.grid') as HTMLElement;
+    expect(inspectBlock(ed).grid).toEqual(EMPTY_GRID);     // cursor fora, mas a grelha está selecionada
+    applyBlockEdit(ed, { target: 'grid', patch: { borderWidth: 2, borderStyle: 'solid', borderColor: '#000000' } });
+    applyBlockEdit(ed, { target: 'gridCells' });
+    expect((ed.root.querySelector('.col') as HTMLElement).style.borderWidth).toBe('2px');
+    expect((ed.root.querySelector('.grid > p') as HTMLElement).style.borderStyle).toBe('solid');
 });

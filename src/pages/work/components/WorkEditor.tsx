@@ -169,6 +169,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     const overlays = useBlockOverlays(editorRef, {
         activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook,
         readOnly, wholeBookLoaded: activeChapterIndex === -1, chapterLabel: chapters[activeChapterIndex]?.title || 'Capítulo',
+        onOpenPanel: () => onEditBoxRef.current?.(),
     });
     const isDiffHighlightingRef = useRef(false);
     // Canal de conteúdo (editor/contentChannel.ts): o ÚNICO caminho de entrada (load) e saída

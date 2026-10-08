@@ -67,7 +67,7 @@ export function WorkPage() {
   const { showNotification } = useNotification();
   const { setCustomCss, getCurrentCss } = useStyles();
   const editorRef = useRef<WorkEditorRef>(null);
-  const [blockInfo, setBlockInfo] = useState<BlockInfo>({ box: null, text: null, image: null, columns: null });
+  const [blockInfo, setBlockInfo] = useState<BlockInfo>({ box: null, text: null, image: null, grid: null });
   const work = useEbookWork(isbn, editorRef);
   const { user } = useAuth();
   const comments = useComments(isbn);

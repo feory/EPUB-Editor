@@ -5,7 +5,7 @@
 import { readBoxProps, applyBoxProps, type BoxProps } from './boxProps';
 import { textPropsFrom, applyTextProps, type TextProps, type TextBlockInfo } from './textProps';
 import { readImageProps, applyImageProps, type ImageProps } from './imageProps';
-import { readColumnsProps, applyColumnsProps, type ColumnsProps } from './columnsProps';
+import { readGridProps, applyGridProps, applyGridToCells, type GridProps } from './gridProps';
 import { BLOCK_STYLE_OPTIONS } from './config';
 
 /** Seletor dos blocos de texto editáveis (parágrafo, títulos, item de lista). */
@@ -16,19 +16,22 @@ export interface BlockInfo {
     box: BoxProps | null;
     text: TextBlockInfo | null;
     image: ImageProps | null;       // imagem selecionada
-    columns: ColumnsProps | null;   // bloco .columns à volta do cursor
+    grid: GridProps | null;   // bloco .grid à volta do cursor
 }
 
 export type BlockEdit =
     | { target: 'box'; patch: Partial<BoxProps> }
     | { target: 'text'; patch: Partial<TextProps> }   // style inline do bloco ("Este bloco")
     | { target: 'image'; patch: Partial<ImageProps> }
-    | { target: 'columns'; patch: Partial<ColumnsProps> }
+    | { target: 'grid'; patch: Partial<GridProps> }
+    | { target: 'gridCells' }                          // copia contorno/fundo da grelha às suas células
     | { target: 'style'; format: string };            // troca o estilo (Título 1-3, Padrão, Citação…)
 
 /** O que o module pede ao editor (seam). Adapters: TinyMCE (produção) e um fake em memória (testes). */
 export interface EditorLike {
     selectionNode(): Node;
+    /** Caixa ou grelha selecionada pelo clique na sua área (o cursor pode estar fora dela). */
+    selectedContainer?(): HTMLElement | null;
     closest(node: Node, selector: string): HTMLElement | null;
     setStyle(el: HTMLElement, name: string, value: string | null): void;
     /** Style com !important: as classes de parágrafo do livro (.p-center…) usam-no e o inline não as vencia. */
@@ -42,15 +45,21 @@ export interface EditorLike {
     applyFormat(format: string): void;
 }
 
+/** Caixa/grelha alvo: a selecionada pelo clique na sua área, senão a que rodeia o cursor. */
+function containerTarget(ed: EditorLike, node: Node, selector: '.box' | '.grid'): HTMLElement | null {
+    const sel = ed.selectedContainer?.();
+    return sel?.matches(selector) ? sel : ed.closest(node, selector);
+}
+
 export function inspectBlock(ed: EditorLike): BlockInfo {
     const node = ed.selectionNode();
-    const box = ed.closest(node, '.box');
-    const columns = ed.closest(node, '.columns');
+    const box = containerTarget(ed, node, '.box');
+    const grid = containerTarget(ed, node, '.grid');
     const el = ed.closest(node, TEXT_BLOCK_SELECTOR);
     const isText = !!el && !/(^|\s)chapter-break/.test(el.className);
     return {
         box: box ? readBoxProps(box) : null,
-        columns: columns ? readColumnsProps(columns) : null,
+        grid: grid ? readGridProps(grid) : null,
         image: node.nodeName === 'IMG' ? readImageProps(node as HTMLElement) : null,
         text: isText ? {
             tag: el.nodeName.toLowerCase(),
@@ -64,13 +73,18 @@ export function applyBlockEdit(ed: EditorLike, edit: BlockEdit): void {
     const node = ed.selectionNode();
     switch (edit.target) {
         case 'box': {
-            const box = ed.closest(node, '.box');
+            const box = containerTarget(ed, node, '.box');
             if (box) ed.transact(() => applyBoxProps(ed, box, edit.patch));
             return;
         }
-        case 'columns': {
-            const cols = ed.closest(node, '.columns');
-            if (cols) ed.transact(() => applyColumnsProps(ed, cols, edit.patch));
+        case 'grid': {
+            const grid = containerTarget(ed, node, '.grid');
+            if (grid) ed.transact(() => applyGridProps(ed, grid, edit.patch));
+            return;
+        }
+        case 'gridCells': {
+            const grid = containerTarget(ed, node, '.grid');
+            if (grid) ed.transact(() => applyGridToCells(ed, grid));
             return;
         }
         case 'image':

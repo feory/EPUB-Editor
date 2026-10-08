@@ -17,6 +17,12 @@ export const RING = RING_GAP + RING_LINE; // distância da caixa do bloco à lin
 export const ACTIVE_PAD_Y = 5;
 export const ACTIVE_PAD_X = 8;
 
+// Dentro de colunas o anel não pode passar o limite da coluna: padding lateral mínimo (alcance lateral
+// = COL_PAD_X + RING) e o limite tracejado fica COL_OUTLINE_GAP px por fora do alcance MAIOR do anel.
+export const COL_PAD_X = 2;
+export const COL_OUTLINE_GAP = 3;
+export const COL_OUTLINE_OFFSET = Math.max(ACTIVE_PAD_Y, COL_PAD_X) + RING + COL_OUTLINE_GAP;
+
 export const PLUS_SIZE = 20;
 export const PLUS_HIT = PLUS_SIZE / 2 + 1; // tolerância do clique (raio + 1)
 export const PLUS_CUT = 8;                 // cortes brancos à esquerda/direita do "+" (falha na linha)
@@ -118,4 +124,10 @@ export const activeBlockCss = () => `[data-mce-psactive] {
 [data-mce-psactive]:not([class*="chapter-break"]) {
   padding: ${ACTIVE_PAD_Y}px ${ACTIVE_PAD_X}px !important;
   margin-left: calc(var(--ps-ml, 0px) - ${ACTIVE_PAD_X}px) !important; margin-right: calc(var(--ps-mr, 0px) - ${ACTIVE_PAD_X}px) !important;
+}`;
+
+/** Bloco ativo dentro de uma célula da grelha (coluna ou parágrafo): padding lateral reduzido (texto não mexe — margem compensa). */
+export const gridActiveCss = () => `.grid > [data-mce-psactive]:not([class*="chapter-break"]), .grid > .col > [data-mce-psactive]:not([class*="chapter-break"]) {
+  padding-left: ${COL_PAD_X}px !important; padding-right: ${COL_PAD_X}px !important;
+  margin-left: calc(var(--ps-ml, 0px) - ${COL_PAD_X}px) !important; margin-right: calc(var(--ps-mr, 0px) - ${COL_PAD_X}px) !important;
 }`;

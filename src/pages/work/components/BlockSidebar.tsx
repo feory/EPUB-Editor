@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { X, RotateCcw } from 'lucide-react';
+import { X, RotateCcw, Grid2x2 } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
 import { EMPTY_TEXT, textPropsFrom, type TextProps, type TextAlign } from '../editor/textProps';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 import { readRule, hasRule } from '../editor/cssRule';
-import { COLUMN_RATIOS, EMPTY_COLUMNS, type ColumnsProps } from '../editor/columnsProps';
+import { GRID_RATIOS, EMPTY_GRID, type GridProps } from '../editor/gridProps';
 import { IMAGE_ALIGNS, EMPTY_IMAGE, type ImageProps } from '../editor/imageProps';
 import { BLOCK_STYLE_OPTIONS } from '../editor/config';
 
@@ -64,11 +64,11 @@ const Color: React.FC<{ value: string; fallback: string; onChange: (v: string) =
 
 // Texto livre enquanto se escreve (limitar a cada tecla impedia números como 80 com min=30);
 // só aplica valores já dentro do intervalo e limita ao sair do campo.
-const Num: React.FC<{ value: number | null; unit: string; min: number; max: number; step?: number; onChange: (v: number | null) => void }> = ({ value, unit, min, max, step = 1, onChange }) => {
+const Num: React.FC<{ value: number | null; unit: string; min: number; max: number; step?: number; placeholder?: number | null; onChange: (v: number | null) => void }> = ({ value, unit, min, max, step = 1, placeholder, onChange }) => {
     const [draft, setDraft] = useState<string | null>(null);
     return (
         <>
-            <input type="number" min={min} max={max} step={step} value={draft ?? value ?? ''} placeholder="—"
+            <input type="number" min={min} max={max} step={step} value={draft ?? value ?? ''} placeholder={placeholder != null ? String(placeholder) : '—'}
                 onChange={e => {
                     setDraft(e.target.value);
                     if (e.target.value === '') return onChange(null);
@@ -109,15 +109,18 @@ const ResetButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
     </button>
 );
 
-const TextFields: React.FC<{ value: TextProps; onChange: (patch: Partial<TextProps>) => void }> = ({ value, onChange }) => (
+// Tamanho por omissão dos títulos no navegador (quando o CSS do livro não define font-size).
+const HEADING_EM: Record<string, number> = { h1: 2, h2: 1.5, h3: 1.17, h4: 1, h5: 0.83, h6: 0.67 };
+
+const TextFields: React.FC<{ value: TextProps; defaults?: Partial<TextProps>; onChange: (patch: Partial<TextProps>) => void }> = ({ value, defaults, onChange }) => (
     <>
         <Row label="Alinhamento"><Select value={value.align} options={ALIGNS} onChange={align => onChange({ align })} /></Row>
-        <Row label="Recuo da 1.ª linha"><Num value={value.indent} unit="em" min={-10} max={20} step={0.1} onChange={indent => onChange({ indent })} /></Row>
-        <Row label="Margem esquerda"><Num value={value.marginLeft} unit="em" min={0} max={20} step={0.1} onChange={marginLeft => onChange({ marginLeft })} /></Row>
-        <Row label="Tamanho do texto"><Num value={value.fontSize} unit="em" min={0.5} max={4} step={0.05} onChange={fontSize => onChange({ fontSize })} /></Row>
-        <Row label="Entrelinha"><Num value={value.lineHeight} unit="em" min={0.8} max={4} step={0.1} onChange={lineHeight => onChange({ lineHeight })} /></Row>
-        <Row label="Margem em cima"><Num value={value.marginTop} unit="em" min={0} max={10} step={0.1} onChange={marginTop => onChange({ marginTop })} /></Row>
-        <Row label="Margem em baixo"><Num value={value.marginBottom} unit="em" min={0} max={10} step={0.1} onChange={marginBottom => onChange({ marginBottom })} /></Row>
+        <Row label="Recuo da 1.ª linha"><Num value={value.indent} placeholder={defaults?.indent} unit="em" min={-10} max={20} step={0.1} onChange={indent => onChange({ indent })} /></Row>
+        <Row label="Margem esquerda"><Num value={value.marginLeft} placeholder={defaults?.marginLeft} unit="em" min={0} max={20} step={0.1} onChange={marginLeft => onChange({ marginLeft })} /></Row>
+        <Row label="Tamanho do texto"><Num value={value.fontSize} placeholder={defaults?.fontSize} unit="em" min={0.5} max={4} step={0.05} onChange={fontSize => onChange({ fontSize })} /></Row>
+        <Row label="Entrelinha"><Num value={value.lineHeight} placeholder={defaults?.lineHeight} unit="em" min={0.8} max={4} step={0.1} onChange={lineHeight => onChange({ lineHeight })} /></Row>
+        <Row label="Margem em cima"><Num value={value.marginTop} placeholder={defaults?.marginTop} unit="em" min={0} max={10} step={0.1} onChange={marginTop => onChange({ marginTop })} /></Row>
+        <Row label="Margem em baixo"><Num value={value.marginBottom} placeholder={defaults?.marginBottom} unit="em" min={0} max={10} step={0.1} onChange={marginBottom => onChange({ marginBottom })} /></Row>
         <Row label="Cor do texto"><Color value={value.color} fallback="#000000" onChange={color => onChange({ color })} /></Row>
     </>
 );
@@ -144,12 +147,27 @@ const ImageSection: React.FC<{ image: ImageProps; onChange: (patch: Partial<Imag
     );
 };
 
-const ColumnsSection: React.FC<{ columns: ColumnsProps; onChange: (patch: Partial<ColumnsProps>) => void }> = ({ columns, onChange }) => (
-    <Section title="Colunas">
-        <Row label="Proporção"><Select value={columns.ratio} options={COLUMN_RATIOS} onChange={ratio => onChange({ ratio })} /></Row>
-        <Row label="Espaço entre colunas"><Num value={columns.gap} unit="em" min={0} max={6} step={0.1} onChange={gap => onChange({ gap })} /></Row>
-        <p className="text-xs text-text-muted">Em ecrãs estreitos as colunas passam a uma por linha.</p>
-        <ResetButton onClick={() => onChange(EMPTY_COLUMNS)} />
+const GridSection: React.FC<{
+    grid: GridProps; onChange: (patch: Partial<GridProps>) => void; onApplyToCells: () => void;
+}> = ({ grid, onChange, onApplyToCells }) => (
+    <Section title="Grelha">
+        <Row label="Proporção"><Select value={grid.ratio} options={GRID_RATIOS} onChange={ratio => onChange({ ratio })} /></Row>
+        <Row label="Espaço entre células"><Num value={grid.gap} unit="em" min={0} max={6} step={0.1} onChange={gap => onChange({ gap })} /></Row>
+        <Row label="Cor de fundo"><Color value={grid.background} fallback="#ffffff" onChange={background => onChange({ background })} /></Row>
+        <Row label="Cor do contorno"><Color value={grid.borderColor} fallback="#000000" onChange={borderColor => onChange({ borderColor })} /></Row>
+        <Row label="Espessura do contorno"><Num value={grid.borderWidth} unit="px" min={0} max={10} onChange={borderWidth => onChange({ borderWidth })} /></Row>
+        <Row label="Estilo do contorno"><Select value={grid.borderStyle} options={BORDER_STYLES} onChange={borderStyle => onChange({ borderStyle })} /></Row>
+        <Row label="Cantos arredondados"><Num value={grid.radius} unit="px" min={0} max={40} onChange={radius => onChange({ radius })} /></Row>
+        <Row label="Espaço interior"><Num value={grid.padding} unit="em" min={0} max={5} step={0.1} onChange={padding => onChange({ padding })} /></Row>
+        <p className="text-xs text-text-muted">A linha tracejada cinzenta é só do editor. Em ecrãs estreitos as células passam a uma por linha.</p>
+        <div className="flex flex-wrap gap-2">
+            <ResetButton onClick={() => onChange(EMPTY_GRID)} />
+            <button type="button" onClick={onApplyToCells} title="Copia contorno, cantos e fundo a cada célula da grelha"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors">
+                <Grid2x2 size={16} />
+                <span>Aplicar às células</span>
+            </button>
+        </div>
     </Section>
 );
 
@@ -168,6 +186,16 @@ const TextSection: React.FC<{
         [text.tag, `Todos os <${text.tag}>`],
     ];
     const selector = targets.some(([sel]) => sel === picked) ? picked : targets[0][0];
+    // Valores herdados mostrados como sugestão: regra da tag/body no livro, padrão do navegador nos títulos.
+    // Sem valor em nenhum: 0.
+    const tagRule = textPropsFrom(readRule(css, text.tag));
+    const bodyRule = textPropsFrom(readRule(css, 'body'));
+    const defaults: Partial<TextProps> = {
+        indent: tagRule.indent ?? 0, marginLeft: tagRule.marginLeft ?? 0,
+        fontSize: tagRule.fontSize ?? HEADING_EM[text.tag] ?? bodyRule.fontSize ?? 0,
+        lineHeight: tagRule.lineHeight ?? bodyRule.lineHeight ?? 0,
+        marginTop: tagRule.marginTop ?? 0, marginBottom: tagRule.marginBottom ?? 0,
+    };
     return (
         <div className="flex flex-col gap-4">
             <div className="flex rounded-lg border border-border p-0.5 bg-slate-50">
@@ -191,13 +219,13 @@ const TextSection: React.FC<{
                 )}
                 {mode === 'block' ? (
                     <>
-                        <TextFields value={text.inline} onChange={onInline} />
+                        <TextFields value={text.inline} defaults={defaults} onChange={onInline} />
                         <ResetButton onClick={() => onInline(EMPTY_TEXT)} />
                     </>
                 ) : (
                     <>
                         <Row label="Editar"><Select value={selector} options={targets} onChange={setPicked} /></Row>
-                        <TextFields value={textPropsFrom(readRule(css, selector))} onChange={(patch) => onStyle(selector, patch)} />
+                        <TextFields value={textPropsFrom(readRule(css, selector))} defaults={defaults} onChange={(patch) => onStyle(selector, patch)} />
                         </>
                 )}
             </Section>
@@ -212,7 +240,7 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Edição do Bloco</h3>
             <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-500 transition-all"><X size={16} /></button>
         </div>
-        {!info.box && !info.text && !info.image && !info.columns ? (
+        {!info.box && !info.text && !info.image && !info.grid ? (
             <div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-text-muted">
                 Põe o cursor num parágrafo, título ou caixa, ou seleciona uma imagem, para editar os seus atributos.
             </div>
@@ -220,7 +248,7 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
                 {info.image && <ImageSection image={info.image} onChange={(patch) => onEdit({ target: 'image', patch })} />}
                 {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onBlockStyle={(format) => onEdit({ target: 'style', format })} />}
-                {info.columns && <ColumnsSection columns={info.columns} onChange={(patch) => onEdit({ target: 'columns', patch })} />}
+                {info.grid && <GridSection grid={info.grid} onChange={(patch) => onEdit({ target: 'grid', patch })} onApplyToCells={() => onEdit({ target: 'gridCells' })} />}
                 {info.box && <BoxSection box={info.box} onChange={(patch) => onEdit({ target: 'box', patch })} />}
             </div>
         )}

@@ -1,4 +1,4 @@
-import { activeBlockCss, gripCss, PLUS_SIZE, PLUS_CUT } from './blockGeometry';
+import { activeBlockCss, gridActiveCss, gripCss, PLUS_SIZE, PLUS_CUT, COL_OUTLINE_OFFSET } from './blockGeometry';
 
 // content_style do editor: o CSS do livro + estilos só-editor (diff/spell/noBreak/
 // marcadores de UI/hr). Os marcadores `data-mce-*` nunca exportam para EPUB.
@@ -15,10 +15,15 @@ export function buildContentStyle(currentCss: string): string {
 .comment-anchor.comment-anchor-resolved { background-color: transparent; border-bottom-color: #cbd5e1; opacity: 0.6; }
 .noBreak { outline: 2px dashed #94a3b8; background: rgba(100,116,139,0.03); padding: 10px 31px; border-radius: 8px; margin: 12px -11px; }
 .noBreak::before { content: "Unido"; float: right; margin: -10px -31px 0 6px; font-size: 9px; font-weight: bold; color: #475569; background: rgba(100,116,139,0.15); padding: 1px 5px; border-radius: 0 6px 0 4px; pointer-events: none; }
-.columns > .col { outline: 1px dashed #94a3b8; outline-offset: 6px; border-radius: 2px; } /* só-editor: limites das colunas (outline não afeta o layout) */
+.grid { min-height: 3em; } /* só-editor: grelha vazia clicável (onde cai o "+" interno) */
+.grid, .grid > .col { outline: 1px dashed #94a3b8; outline-offset: ${COL_OUTLINE_OFFSET}px; border-radius: 2px; } /* só-editor: borda cinzenta da grelha e das colunas (o outline não afeta o layout; o mesmo afastamento faz coincidir as bordas exteriores) */
 .noBreak [data-mce-psactive] { box-shadow: 0 0 0 3px #fff, 0 0 0 4px #475569 !important; }
 /* Bloco ativo: padding + anel (geometria em blockGeometry.ts — partilhada com o JS). */
 ${activeBlockCss()}
+${gridActiveCss()}
+/* Caixa selecionada (clique na área da caixa): anel à volta dela; o do parágrafo esconde-se. */
+[data-mce-psbox] { border-radius: 2px !important; box-shadow: 0 0 0 3px #fff, 0 0 0 4px #dbe2ea !important; }
+body.ps-box-selected [data-mce-psactive] { box-shadow: none !important; }
 /* Pega de mover (::before do bloco ativo), também em blockGeometry.ts. */
 ${gripCss()}
 [data-mce-empty]::before { content: 'Escreve algo…'; color: #94a3b8; pointer-events: none; }
