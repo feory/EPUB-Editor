@@ -45,7 +45,7 @@ body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-
   /* 2 cópias brancas da própria forma, desviadas p/ os lados: cortam a linha da borda
      à esquerda/direita do círculo (ilusão de espaço). */
   box-shadow: -${PLUS_CUT}px 0 0 0 #fff, ${PLUS_CUT}px 0 0 0 #fff;
-  color: #334155; font: 400 15px/17px system-ui, sans-serif; text-align: center; text-indent: 0;
+  color: #334155; font: 400 15px/15.5px system-ui, sans-serif; text-align: center; text-indent: 0;
   letter-spacing: 0; text-transform: none; cursor: pointer; user-select: none;
   visibility: hidden; opacity: 0; transform: scale(.6);
   transition: opacity .2s ease-in, transform .2s ease-in, visibility 0s linear .2s;

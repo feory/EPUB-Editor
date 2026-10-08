@@ -106,7 +106,7 @@ body.ps-grip-near:not(.mce-content-readonly) > ${sel}:not([data-mce-plusopen])::
  * Centro vertical do "+": o ::after fica no fim do CONTEÚDO do bloco e desce --plus-dy; no
  * bloco ativo isso põe-no em cima da linha do anel (padding + RING abaixo do conteúdo).
  */
-export const PLUS_DY_ACTIVE = ACTIVE_PAD_Y + RING;
+export const PLUS_DY_ACTIVE = ACTIVE_PAD_Y + RING_GAP + RING_LINE / 2; // meio da linha do anel (não do pixel abaixo dela)
 export const plusCenterY = (contentBottom: number, isActive: boolean) =>
     contentBottom + (isActive ? PLUS_DY_ACTIVE : 0);
 
