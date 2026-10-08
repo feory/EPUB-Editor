@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, RotateCcw, Grid2x2 } from 'lucide-react';
+import { X, RotateCcw, Grid2x2, Pencil } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
-import { EMPTY_TEXT, textPropsFrom, type TextProps, type TextAlign } from '../editor/textProps';
+import { EMPTY_TEXT, textPropsFrom, convertLen, type TextProps, type TextAlign, type Len, type Unit } from '../editor/textProps';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 import { readRule, hasRule } from '../editor/cssRule';
 import { GRID_RATIOS, EMPTY_GRID, type GridProps } from '../editor/gridProps';
@@ -64,7 +64,7 @@ const Color: React.FC<{ value: string; fallback: string; onChange: (v: string) =
 
 // Texto livre enquanto se escreve (limitar a cada tecla impedia números como 80 com min=30);
 // só aplica valores já dentro do intervalo e limita ao sair do campo.
-const Num: React.FC<{ value: number | null; unit: string; min: number; max: number; step?: number; placeholder?: number | null; onChange: (v: number | null) => void }> = ({ value, unit, min, max, step = 1, placeholder, onChange }) => {
+const Num: React.FC<{ value: number | null; unit: string; min: number; max: number; step?: number; placeholder?: number | null; suffix?: React.ReactNode; onChange: (v: number | null) => void }> = ({ value, unit, min, max, step = 1, placeholder, suffix, onChange }) => {
     const [draft, setDraft] = useState<string | null>(null);
     return (
         <>
@@ -80,8 +80,27 @@ const Num: React.FC<{ value: number | null; unit: string; min: number; max: numb
                     setDraft(null);
                 }}
                 className="w-28 h-9 rounded-lg border border-border px-2 text-sm outline-none focus:border-primary" />
-            <span className="w-6 text-xs text-text-muted">{unit}</span>
+            {suffix ?? <span className="w-6 text-xs text-text-muted">{unit}</span>}
         </>
+    );
+};
+
+// Medida com seletor px/em: mostra e guarda na unidade que o CSS já usa; trocar a unidade converte (16px = 1em).
+// Limites dados em em (em px ×16).
+const LenInput: React.FC<{ value: Len | null; placeholder?: Len | null; minEm: number; maxEm: number; stepEm: number; onChange: (v: Len | null) => void }> = ({ value, placeholder, minEm, maxEm, stepEm, onChange }) => {
+    const [picked, setPicked] = useState<Unit | null>(null); // unidade escolhida enquanto o campo está vazio
+    const unit: Unit = value?.u ?? picked ?? placeholder?.u ?? 'em';
+    const k = unit === 'px' ? 16 : 1;
+    return (
+        <Num value={value?.n ?? null} placeholder={placeholder ? convertLen(placeholder, unit).n : null} unit={unit}
+            min={minEm * k} max={maxEm * k} step={unit === 'px' ? 1 : stepEm}
+            suffix={
+                <select value={unit} aria-label="Unidade" onChange={(e) => { const u = e.target.value as Unit; if (value) onChange(convertLen(value, u)); else setPicked(u); }}
+                    className="w-12 h-9 rounded-lg border border-border bg-white px-1 text-xs text-text-muted outline-none cursor-pointer">
+                    <option value="em">em</option><option value="px">px</option>
+                </select>
+            }
+            onChange={(n) => onChange(n === null ? null : { n, u: unit })} />
     );
 };
 
@@ -109,18 +128,60 @@ const ResetButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
     </button>
 );
 
+// Estilos combináveis de um parágrafo/item (tudo o que não é título nem o 'Padrão').
+const COMBINABLE_STYLES = BLOCK_STYLE_OPTIONS.filter(([f]) => !/^(h[1-3]|p)$/.test(f));
+
+// Um chip por estilo do bloco (× tira) + escolha para acrescentar outro: um parágrafo pode ter vários.
+const StyleChips: React.FC<{ classes: string[]; onToggle: (cls: string, on: boolean) => void }> = ({ classes, onToggle }) => {
+    const active = COMBINABLE_STYLES.filter(([f]) => classes.includes(f));
+    const free = COMBINABLE_STYLES.filter(([f]) => !classes.includes(f));
+    return (
+        <div className="flex flex-wrap items-center gap-1.5">
+            {active.map(([f, label]) => (
+                <span key={f} className="inline-flex items-center gap-1 pl-2.5 pr-1 h-7 rounded-full bg-slate-200 text-xs font-medium text-slate-700">
+                    {label}
+                    <button type="button" title="Tirar este estilo" onClick={() => onToggle(f, false)}
+                        className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-300"><X size={12} /></button>
+                </span>
+            ))}
+            {free.length > 0 && (
+                <select value="" onChange={(e) => e.target.value && onToggle(e.target.value, true)} aria-label="Novo estilo"
+                    className="h-7 rounded-full border border-border bg-white px-2 text-xs text-text-muted outline-none cursor-pointer">
+                    <option value="">+ Novo estilo</option>
+                    {free.map(([f, label]) => <option key={f} value={f}>{label}</option>)}
+                </select>
+            )}
+        </div>
+    );
+};
+
+// Modo "Estilo": um chip por estilo do bloco, com lápis — escolher qual regra do livro se edita
+// (vale para todo o projeto), mais "Todos os <tag>".
+const StyleEditChips: React.FC<{ targets: Array<readonly [string, string]>; selected: string; onPick: (sel: string) => void }> = ({ targets, selected, onPick }) => (
+    <div className="flex flex-wrap items-center gap-1.5">
+        {targets.map(([sel, label]) => (
+            <button key={sel} type="button" onClick={() => onPick(sel)} title={`Editar ${sel} em todo o projeto`}
+                className={`inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full text-xs font-medium transition-colors ${sel === selected ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}>
+                <Pencil size={11} />
+                {label}
+            </button>
+        ))}
+    </div>
+);
+
 // Tamanho por omissão dos títulos no navegador (quando o CSS do livro não define font-size).
 const HEADING_EM: Record<string, number> = { h1: 2, h2: 1.5, h3: 1.17, h4: 1, h5: 0.83, h6: 0.67 };
+const em = (n: number): Len => ({ n, u: 'em' });
 
 const TextFields: React.FC<{ value: TextProps; defaults?: Partial<TextProps>; onChange: (patch: Partial<TextProps>) => void }> = ({ value, defaults, onChange }) => (
     <>
         <Row label="Alinhamento"><Select value={value.align} options={ALIGNS} onChange={align => onChange({ align })} /></Row>
-        <Row label="Recuo da 1.ª linha"><Num value={value.indent} placeholder={defaults?.indent} unit="em" min={-10} max={20} step={0.1} onChange={indent => onChange({ indent })} /></Row>
-        <Row label="Margem esquerda"><Num value={value.marginLeft} placeholder={defaults?.marginLeft} unit="em" min={0} max={20} step={0.1} onChange={marginLeft => onChange({ marginLeft })} /></Row>
-        <Row label="Tamanho do texto"><Num value={value.fontSize} placeholder={defaults?.fontSize} unit="em" min={0.5} max={4} step={0.05} onChange={fontSize => onChange({ fontSize })} /></Row>
-        <Row label="Entrelinha"><Num value={value.lineHeight} placeholder={defaults?.lineHeight} unit="em" min={0.8} max={4} step={0.1} onChange={lineHeight => onChange({ lineHeight })} /></Row>
-        <Row label="Margem em cima"><Num value={value.marginTop} placeholder={defaults?.marginTop} unit="em" min={0} max={10} step={0.1} onChange={marginTop => onChange({ marginTop })} /></Row>
-        <Row label="Margem em baixo"><Num value={value.marginBottom} placeholder={defaults?.marginBottom} unit="em" min={0} max={10} step={0.1} onChange={marginBottom => onChange({ marginBottom })} /></Row>
+        <Row label="Recuo da 1.ª linha"><LenInput value={value.indent} placeholder={defaults?.indent} minEm={-10} maxEm={20} stepEm={0.1} onChange={indent => onChange({ indent: indent })} /></Row>
+        <Row label="Margem esquerda"><LenInput value={value.marginLeft} placeholder={defaults?.marginLeft} minEm={0} maxEm={20} stepEm={0.1} onChange={marginLeft => onChange({ marginLeft: marginLeft })} /></Row>
+        <Row label="Tamanho do texto"><LenInput value={value.fontSize} placeholder={defaults?.fontSize} minEm={0.5} maxEm={4} stepEm={0.05} onChange={fontSize => onChange({ fontSize: fontSize })} /></Row>
+        <Row label="Entrelinha"><LenInput value={value.lineHeight} placeholder={defaults?.lineHeight} minEm={0.8} maxEm={4} stepEm={0.1} onChange={lineHeight => onChange({ lineHeight: lineHeight })} /></Row>
+        <Row label="Margem em cima"><LenInput value={value.marginTop} placeholder={defaults?.marginTop} minEm={0} maxEm={10} stepEm={0.1} onChange={marginTop => onChange({ marginTop: marginTop })} /></Row>
+        <Row label="Margem em baixo"><LenInput value={value.marginBottom} placeholder={defaults?.marginBottom} minEm={0} maxEm={10} stepEm={0.1} onChange={marginBottom => onChange({ marginBottom: marginBottom })} /></Row>
         <Row label="Cor do texto"><Color value={value.color} fallback="#000000" onChange={color => onChange({ color })} /></Row>
     </>
 );
@@ -176,13 +237,16 @@ const MODES = [['block', 'Este bloco'], ['style', 'Estilo']] as const;
 const TextSection: React.FC<{
     text: NonNullable<BlockInfo['text']>; css: string;
     onInline: (patch: Partial<TextProps>) => void; onStyle: (selector: string, patch: Partial<TextProps>) => void;
-    onBlockStyle: (format: string) => void;
-}> = ({ text, css, onInline, onStyle, onBlockStyle }) => {
+    onToggleClass: (cls: string, on: boolean) => void;
+}> = ({ text, css, onInline, onStyle, onToggleClass }) => {
     const [mode, setMode] = useState<'block' | 'style'>('block');
     const [picked, setPicked] = useState('');
-    // Alvos do modo "Estilo": classes do bloco com regra no livro + todos os blocos da mesma tag.
+    // Alvos do modo "Estilo": estilos conhecidos do bloco (a regra cria-se se faltar) ou com regra no livro + todos os blocos da mesma tag.
     const targets: Array<readonly [string, string]> = [
-        ...text.classes.map((c) => `.${c}`).filter((sel) => hasRule(css, sel)).map((sel) => [sel, `Estilo ${sel}`] as const),
+        ...text.classes.flatMap((c) => {
+            const label = COMBINABLE_STYLES.find(([f]) => f === c)?.[1] ?? (hasRule(css, `.${c}`) ? `.${c}` : null);
+            return label ? [[`.${c}`, label] as const] : [];
+        }),
         [text.tag, `Todos os <${text.tag}>`],
     ];
     const selector = targets.some(([sel]) => sel === picked) ? picked : targets[0][0];
@@ -191,10 +255,10 @@ const TextSection: React.FC<{
     const tagRule = textPropsFrom(readRule(css, text.tag));
     const bodyRule = textPropsFrom(readRule(css, 'body'));
     const defaults: Partial<TextProps> = {
-        indent: tagRule.indent ?? 0, marginLeft: tagRule.marginLeft ?? 0,
-        fontSize: tagRule.fontSize ?? HEADING_EM[text.tag] ?? bodyRule.fontSize ?? 0,
-        lineHeight: tagRule.lineHeight ?? bodyRule.lineHeight ?? 0,
-        marginTop: tagRule.marginTop ?? 0, marginBottom: tagRule.marginBottom ?? 0,
+        indent: tagRule.indent ?? em(0), marginLeft: tagRule.marginLeft ?? em(0),
+        fontSize: tagRule.fontSize ?? (HEADING_EM[text.tag] ? em(HEADING_EM[text.tag]) : bodyRule.fontSize) ?? em(0),
+        lineHeight: tagRule.lineHeight ?? bodyRule.lineHeight ?? em(0),
+        marginTop: tagRule.marginTop ?? em(0), marginBottom: tagRule.marginBottom ?? em(0),
     };
     return (
         <div className="flex flex-col gap-4">
@@ -208,15 +272,7 @@ const TextSection: React.FC<{
             </div>
             {mode === 'style' && <p className="text-xs text-text-muted -mt-2">Altera todos os blocos com este estilo, no CSS do livro.</p>}
             <Section title={`Bloco · ${text.tag}${text.classes.length ? ' · ' + text.classes.join(' ') : ''}`}>
-                {(/^h[123]$/.test(text.tag) || text.tag === 'p' || text.tag === 'li') && (
-                    <Row label="Estilo">
-                        <Select
-                            value={/^h[123]$/.test(text.tag) ? text.tag : BLOCK_STYLE_OPTIONS.find(([f]) => text.classes.includes(f))?.[0] ?? 'p'}
-                            options={BLOCK_STYLE_OPTIONS}
-                            onChange={onBlockStyle}
-                        />
-                    </Row>
-                )}
+                {mode === 'block' && (text.tag === 'p' || text.tag === 'li') && <StyleChips classes={text.classes} onToggle={onToggleClass} />}
                 {mode === 'block' ? (
                     <>
                         <TextFields value={text.inline} defaults={defaults} onChange={onInline} />
@@ -224,7 +280,7 @@ const TextSection: React.FC<{
                     </>
                 ) : (
                     <>
-                        <Row label="Editar"><Select value={selector} options={targets} onChange={setPicked} /></Row>
+                        <StyleEditChips targets={targets} selected={selector} onPick={setPicked} />
                         <TextFields value={textPropsFrom(readRule(css, selector))} defaults={defaults} onChange={(patch) => onStyle(selector, patch)} />
                         </>
                 )}
@@ -247,7 +303,7 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
         ) : (
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
                 {info.image && <ImageSection image={info.image} onChange={(patch) => onEdit({ target: 'image', patch })} />}
-                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onBlockStyle={(format) => onEdit({ target: 'style', format })} />}
+                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
                 {info.grid && <GridSection grid={info.grid} onChange={(patch) => onEdit({ target: 'grid', patch })} onApplyToCells={() => onEdit({ target: 'gridCells' })} />}
                 {info.box && <BoxSection box={info.box} onChange={(patch) => onEdit({ target: 'box', patch })} />}
             </div>

@@ -25,6 +25,7 @@ export type BlockEdit =
     | { target: 'image'; patch: Partial<ImageProps> }
     | { target: 'grid'; patch: Partial<GridProps> }
     | { target: 'gridCells' }                          // copia contorno/fundo da grelha às suas células
+    | { target: 'class'; cls: string; on: boolean }   // liga/desliga UM estilo de parágrafo (combinável com outros)
     | { target: 'style'; format: string };            // troca o estilo (Título 1-3, Padrão, Citação…)
 
 /** O que o module pede ao editor (seam). Adapters: TinyMCE (produção) e um fake em memória (testes). */
@@ -93,6 +94,11 @@ export function applyBlockEdit(ed: EditorLike, edit: BlockEdit): void {
         case 'text': {
             const el = ed.closest(node, TEXT_BLOCK_SELECTOR);
             if (el) ed.transact(() => applyTextProps({ setStyle: (e, n, v) => ed.setImportantStyle(e, n, v) }, el, edit.patch));
+            return;
+        }
+        case 'class': {
+            const el = ed.closest(node, TEXT_BLOCK_SELECTOR);
+            if (el) ed.transact(() => (edit.on ? ed.addClass(el, edit.cls) : ed.removeClass(el, edit.cls)));
             return;
         }
         case 'style':

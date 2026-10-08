@@ -73,7 +73,7 @@ test('watcher só emite quando a informação muda', () => {
     const w = createBlockWatcher(ed, (i) => seen.push(i));
     w.update(); w.update();
     expect(seen.length).toBe(1);
-    applyBlockEdit(ed, { target: 'text', patch: { indent: 2 } });
+    applyBlockEdit(ed, { target: 'text', patch: { indent: { n: 2, u: 'em' } } });
     w.update();
     expect(seen.length).toBe(2);
 });
@@ -86,4 +86,12 @@ test('caixa/grelha selecionada pelo clique tem prioridade sobre o que rodeia o c
     applyBlockEdit(ed, { target: 'gridCells' });
     expect((ed.root.querySelector('.col') as HTMLElement).style.borderWidth).toBe('2px');
     expect((ed.root.querySelector('.grid > p') as HTMLElement).style.borderStyle).toBe('solid');
+});
+
+test('apply class: junta e tira estilos sem afetar os outros', () => {
+    const ed = fakeEditor('<p class="p-indent">x</p>', (r) => r.querySelector('p')!);
+    applyBlockEdit(ed, { target: 'class', cls: 'p-bold', on: true });
+    expect(ed.root.querySelector('p')!.className).toBe('p-indent p-bold');
+    applyBlockEdit(ed, { target: 'class', cls: 'p-indent', on: false });
+    expect(ed.root.querySelector('p')!.className).toBe('p-bold');
 });
