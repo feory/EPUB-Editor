@@ -6,7 +6,7 @@ import { test, expect } from 'bun:test';
 // IMPORTAR o ficheiro, mesmo sem chamar nada relacionado com PDF. Stub minimo + import()
 // dinamico (adia a avaliacao do modulo para depois do stub existir) em vez de import estatico.
 (globalThis as { DOMMatrix?: unknown }).DOMMatrix ??= class {};
-const { cleanText, collapseHyphenBreaks } = await import('./importer');
+const { cleanText, collapseHyphenBreaks, stripRedundantEmphasis } = await import('./importer');
 
 test('cleanText: tira hifen mole (U+00AD) e normaliza separadores de linha/tab', () => {
     expect(cleanText('Romano­-Germanico')).toBe('Romano-Germanico');
@@ -28,4 +28,11 @@ test('collapseHyphenBreaks: palavra partida entre dois CharacterStyleRange (conc
 test('collapseHyphenBreaks: nao mexe num hifen a separar duas palavras distintas', () => {
     expect(collapseHyphenBreaks('cafe - cha')).toBe('cafe - cha');
     expect(collapseHyphenBreaks('um hifen - so')).toBe('um hifen - so');
+});
+
+test('stripRedundantEmphasis: p-bold/p-italic tiram strong/b e em/i; sem a classe não mexe', () => {
+    expect(stripRedundantEmphasis('<strong>a</strong> <em>b</em>', ['p-bold'])).toBe('a <em>b</em>');
+    expect(stripRedundantEmphasis('<b class="x">a</b> <i>b</i>', ['p-italic p-top'])).toBe('<b class="x">a</b> b');
+    expect(stripRedundantEmphasis('<strong>a</strong><em>b</em><br>', ['p-bold-italic'])).toBe('ab<br>');
+    expect(stripRedundantEmphasis('<strong>a</strong>', ['p-indent'])).toBe('<strong>a</strong>');
 });

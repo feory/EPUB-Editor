@@ -720,7 +720,7 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
             const classes = isAsterisk ? ['p-asterisk'] : baseClasses;
             const attr = (classes.length ? ` class="${classes.join(' ')}"` : '')
                 + (isAsterisk ? '' : styleAttr) + (blankCandidate ? ' data-blank-top="1"' : '');
-            out.push(`<${tag}${attr}>${seg.text}</${tag}>`);
+            out.push(`<${tag}${attr}>${tag === 'p' ? stripRedundantEmphasis(seg.text, classes) : seg.text}</${tag}>`);
             // definições de nota logo a seguir ao parágrafo que as referencia (mesmo capítulo)
             for (const def of seg.notes) out.push(def);
         }
@@ -730,6 +730,18 @@ function renderStory(xml: string, counter: NoteCounter, mapping: DocxStyleMappin
         out.push(`<${pendingLabelTag}${attr}>${pendingLabel}</${pendingLabelTag}>`);
     }
     return out.join('\n');
+}
+
+// Parágrafo com p-bold/p-italic/p-bold-italic: o estilo já dá o negrito/itálico, por isso o
+// <strong>/<b>/<em>/<i> que o IDML emitiu (estilo de carácter/fonte) é redundante e sobrepunha-se
+// ao estilo (ex. tirar o p-bold no editor deixava o texto a negrito).
+export function stripRedundantEmphasis(html: string, classes: (string | undefined)[]): string {
+    const has = (c: string) => classes.some(x => x?.split(/\s+/).includes(c));
+    const bold = has('p-bold') || has('p-bold-italic');
+    const italic = has('p-italic') || has('p-bold-italic');
+    if (bold) html = html.replace(/<\/?(?:strong|b)\b[^>]*>/gi, '');
+    if (italic) html = html.replace(/<\/?(?:em|i)\b[^>]*>/gi, '');
+    return html;
 }
 
 // A Ficha Técnica (colofão) é uma story sem estilo nomeado (NormalParagraphStyle), por isso
