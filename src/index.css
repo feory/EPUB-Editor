@@ -213,6 +213,7 @@ body {
 .tox .tox-editor-header::after {
   content: ""; grid-column: 1 / -1; height: 20px; margin-bottom: -20px; /* o header é um grid */
 }
+.toolbar-pinned .tox .tox-editor-header,
 .tox .tox-editor-header:hover,
 .tox .tox-editor-header:focus-within,
 .tox .tox-editor-header:has([aria-expanded="true"]) {
@@ -255,3 +256,16 @@ body {
 /* Toolbar do editor sem sombra (normal e sticky) */
 .tox:not(.tox-tinymce-inline) .tox-editor-header,
 .tox:not(.tox-tinymce-inline).tox-tinymce--toolbar-sticky-on .tox-editor-header { box-shadow: none; }
+
+/* Botões da barra/mini-menu: ativo (toggle), premido ou com foco = cinzento claro, não o azul do TinyMCE. */
+.tox .tox-tbtn--enabled,
+.tox .tox-tbtn--enabled:hover,
+.tox .tox-tbtn:active,
+.tox .tox-tbtn:focus-visible {
+  background: #e2e8f0 !important;
+  color: #334155 !important;
+}
+.tox .tox-tbtn--enabled svg,
+.tox .tox-tbtn:active svg {
+  fill: #334155 !important;
+}

@@ -756,6 +756,23 @@ export function createEditorSetup(deps: SetupDeps) {
             },
         });
 
+        // Barra de formatação fixa (padrão) vs. oculta (aparece com o rato): classe no <html> → index.css.
+        // A barra vive no documento principal, por isso a classe é do `document`, não do iframe.
+        const PIN_KEY = 'wp-toolbar-pinned';
+        const readPinned = () => { try { return localStorage.getItem(PIN_KEY) !== '0'; } catch { return true; } };
+        document.documentElement.classList.toggle('toolbar-pinned', readPinned());
+        editor.ui.registry.addToggleButton('pintoolbar', {
+            icon: 'ps-pin',
+            tooltip: 'Fixar a barra de formatação',
+            onAction: (api) => {
+                const pinned = !api.isActive();
+                document.documentElement.classList.toggle('toolbar-pinned', pinned);
+                try { localStorage.setItem(PIN_KEY, pinned ? '1' : '0'); } catch { /* sem storage */ }
+                api.setActive(pinned);
+            },
+            onSetup: (api) => { api.setActive(readPinned()); return () => {}; },
+        });
+
         editor.ui.registry.addToggleButton('noBreak', {
             icon: 'ps-union',
             tooltip: 'União entre título e o parágrafo',
