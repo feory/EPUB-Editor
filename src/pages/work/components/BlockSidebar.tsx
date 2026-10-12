@@ -44,9 +44,9 @@ const Select = <T extends string>({ value, options, onChange }: { value: T; opti
     </>
 );
 
-const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+const Section: React.FC<{ title?: string; children: React.ReactNode }> = ({ title, children }) => (
     <section className="flex flex-col gap-4">
-        <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{title}</h4>
+        {title && <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{title}</h4>}
         {children}
     </section>
 );
@@ -270,8 +270,7 @@ const TextSection: React.FC<{
                     </button>
                 ))}
             </div>
-            {mode === 'style' && <p className="text-xs text-text-muted -mt-2">Altera todos os blocos com este estilo, no CSS do livro.</p>}
-            <Section title={`Bloco · ${text.tag}${text.classes.length ? ' · ' + text.classes.join(' ') : ''}`}>
+            <Section>
                 {mode === 'block' && (text.tag === 'p' || text.tag === 'li') && <StyleChips classes={text.classes} onToggle={onToggleClass} />}
                 {mode === 'block' ? (
                     <>
