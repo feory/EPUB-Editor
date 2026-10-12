@@ -550,6 +550,8 @@ export function prependFichaTecnica(html: string): string {
     if (el.tagName === 'P') styleFichaParagraph(el);
     else if (el.tagName === 'DIV') el.querySelectorAll('p').forEach(styleFichaParagraph);
   }
+  // Já abre com uma quebra de capítulo (ex. IDML: Frontespício + Ficha Técnica próprios) → não duplicar.
+  if (doc.body.firstElementChild?.classList.contains('chapter-break')) return doc.body.innerHTML;
   return '<p class="chapter-break" data-title="Ficha Técnica"></p>' + doc.body.innerHTML;
 }
 

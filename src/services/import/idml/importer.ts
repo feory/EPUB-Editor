@@ -898,6 +898,8 @@ function titleBlockNum(xml: string): number | null {
 // ver extractChapterAnchors): o título sozinho pode ser uma frase comum que ocorre à-toa no
 // corpo (ex. "A guerra" num livro sobre guerra); "II A guerra" junto só ocorre na página de
 // abertura (e no Índice, filtrado à parte por conter também os OUTROS títulos).
+const PART_TITLE_RE = /^parte\s+([ivxlcdm]+|\d+)\b/i;
+
 function titleBlockSearchKey(xml: string): string {
     const story = new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('Story')[0];
     if (!story) return '';
@@ -1040,6 +1042,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     const titleBlocks: { num: number; html: string; searchKey: string }[] = []; // títulos de artigo (coletânea)
     const frontImageIds: string[] = []; // frontespício: imagens (capa/rosto) antes da Ficha Técnica
     const frontTexts: string[] = []; // frontespício: texto solto heurístico (título vivo, caso raro)
+    const partBlocks: { html: string; searchKey: string }[] = []; // divisórias "PARTE N" a repor por âncora do PDF
     let fichaDone = false;
 
     // Livros divididos em vários docs InDesign → processar cada .idml por ordem e concatenar.
@@ -1105,7 +1108,13 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
                 continue;
             }
             const html = renderStory(xml, counter, mapping);
-            if (html) parts.push(html);
+            if (!html) continue;
+            // Divisória "PARTE N" (story de 1 frame): o corpo é uma só story encadeada, emitida na
+            // 1.ª página dela — esta ficaria depois de todos os capítulos. Com PDF, é reposta no sítio
+            // pela página de abertura (ver partBlocks abaixo).
+            const partKey = !threaded && pdf ? titleBlockSearchKey(xml) : '';
+            if (PART_TITLE_RE.test(partKey)) { partBlocks.push({ html, searchKey: partKey }); continue; }
+            parts.push(html);
         }
     }
 
@@ -1133,6 +1142,19 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
             .filter((a): a is { anchor: string; headingHtml: string } => !!a.headingHtml);
         html = insertChapterHeadings(html, withHtml).html;
     }
+    // Divisórias de Parte: inseridas antes do 1.º bloco da página que se segue à sua abertura no PDF;
+    // as que não encontrarem âncora vão para o fim (como antes) em vez de se perderem.
+    if (partBlocks.length > 0 && pdf) {
+        const anchors = await extractChapterAnchors(pdf.slice(0), partBlocks.map(b => b.searchKey));
+        const tagged = partBlocks.map((b, i) => ({ ...b, html: b.html.replace(/^<(h[1-6])/, `<$1 data-part-block="${i}"`) }));
+        html = insertChapterHeadings(html, anchors.flatMap(a => {
+            const b = tagged.find(t => t.searchKey === a.title);
+            return b ? [{ anchor: a.anchor, headingHtml: b.html }] : [];
+        })).html;
+        const missing = tagged.filter((_, i) => !html.includes(`data-part-block="${i}"`));
+        if (missing.length) html += '\n' + missing.map(m => m.html).join('\n');
+        html = html.replace(/ data-part-block="\d+"/g, '');
+    } else if (partBlocks.length > 0) html += '\n' + partBlocks.map(b => b.html).join('\n');
     // Linhas em branco manuais (candidatas a p-top, ver renderStory/data-blank-top) só confirmam
     // espaçamento real com o PDF de impressão como árbitro (gap vs. entrelinha normal da página)
     // — sem PDF ficam sem p-top (mais seguro que assumir; muitos livros têm linhas em branco no
