@@ -9,7 +9,7 @@
 // qualquer `<a>` em cada load/save/export (regex `links`), por isso um link real morreria na
 // próxima gravação. Só viram `<a href>` no export (ver src/services/export/epub/index-links.ts).
 
-import { classifyChapterPart, matchChapterMarkerElement, flattenHeadingText } from './html-cleaner';
+import { classifyChapterPart, matchChapterMarkerElement, flattenHeadingText } from './chapters';
 import { decodeEntities } from './entities';
 
 // Cópia deliberada do normalize() de page-list.ts (não está exportado de lá, e esse ficheiro é

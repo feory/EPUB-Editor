@@ -3,7 +3,8 @@ import { Editor } from '@tinymce/tinymce-react';
 import type { RawEditorOptions } from 'tinymce';
 import { useStyles } from '../../../context/StyleContext';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { applyImportOptions, convertListsToDialogue, CHAPTER_SPLIT_PATTERN } from '../../../utils/html-cleaner';
+import { applyImportOptions, convertListsToDialogue } from '../../../utils/html-cleaner';
+import { splitChapterSegments } from '../../../utils/chapters';
 import type { ImportOptions } from '../../../utils/html-cleaner';
 import { cleanIndexText, linkIndexPages, wrapPageLinks, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
 import { sanitizeImageFilename } from '../../../utils/format';
@@ -855,7 +856,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const channel = channelRef.current;
             if (!channel) return newFullHtml;
             if (chapterIndex === -1) return channel.load(newFullHtml, { undo: 'keep' });
-            const segments = newFullHtml.split(CHAPTER_SPLIT_PATTERN);
+            const segments = splitChapterSegments(newFullHtml);
             let nonEmptyIdx = -1;
             const targetSegIdx = segments.findIndex(s => s.trim().length > 0 && ++nonEmptyIdx === chapterIndex);
             if (targetSegIdx === -1) return newFullHtml; // índice fora de alcance — nada a sincronizar

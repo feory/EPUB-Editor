@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { fillFolioGaps } from './folio';
 import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from './marker';
-import { CHAPTER_SPLIT_PATTERN } from '../../utils/html-cleaner';
+import { splitChapterSegments } from '../../utils/chapters';
 
 // Worker partilhado com o pdf-service (já configurado lá); reconfigurar é idempotente.
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -457,7 +457,7 @@ export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: s
     if (remaining.length === 0) return { html: pass1.html, inserted: pass1.inserted, total: anchors.length };
 
     let extraInserted = 0;
-    const outSegments = pass1.html.split(CHAPTER_SPLIT_PATTERN).map(seg => {
+    const outSegments = splitChapterSegments(pass1.html).map(seg => {
         if (remaining.length === 0) return seg;
         const r = insertPageBreaksInSegment(seg, remaining);
         if (r.inserted === 0) return seg;

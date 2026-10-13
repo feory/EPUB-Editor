@@ -1,6 +1,6 @@
 import { decodeHtmlEntities } from './html-utils';
 import type { Section } from './types';
-import { CHAPTER_SPLIT_PATTERN, HR_BREAK_PATTERN, HR_DATA_TITLE_PATTERN, matchChapterMarkerElement, flattenHeadingText } from '../../../utils/html-cleaner';
+import { splitChapterSegments, matchChapterBoundary, flattenHeadingText } from '../../../utils/chapters';
 
 const relocateFootnotes = (html: string): string => {
     const footnoteRegex = /<(p|aside)[^>]*class="[^"]*footnote[^"]*"[^>]*>.*?<\/\1>/gs;
@@ -37,7 +37,7 @@ export function buildSections(processedContent: string): Section[] {
 
     // Split on chapter-break MARKERS (and legacy hr.chapter-break). The marker — not the
     // heading — is the boundary; it is editor-only and stripped from the exported body.
-    const parts = processedContent.split(CHAPTER_SPLIT_PATTERN);
+    const parts = splitChapterSegments(processedContent);
 
     parts.forEach((part) => {
         let content = part.trim();
@@ -45,16 +45,14 @@ export function buildSections(processedContent: string): Section[] {
 
         const thisSectionIdx = sections.length;
 
-        const hrMatch = content.match(HR_BREAK_PATTERN);
-        if (hrMatch) {
-            const titleMatch = hrMatch[0].match(HR_DATA_TITLE_PATTERN);
-            const title = decodeHtmlEntities(titleMatch ? titleMatch[1] : '');
-            content = content.slice(hrMatch[0].length).trim();
+        const marker = matchChapterBoundary(content);
+        if (marker?.legacyHr) {
+            const title = decodeHtmlEntities(marker.title);
+            content = content.slice(marker.raw.length).trim();
             pushBreakSection(title, `Quebra ${thisSectionIdx + 1}`, content, thisSectionIdx);
             return;
         }
 
-        const marker = matchChapterMarkerElement(content);
         if (marker) {
             const dtTitle = decodeHtmlEntities(marker.title);
             content = content.slice(marker.raw.length).trim(); // strip the editor-only marker

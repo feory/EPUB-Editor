@@ -1,5 +1,6 @@
 import type { TinyMCEEditor } from './types';
-import { CHAPTER_SPLIT_PATTERN, countOccurrences } from '../../../utils/html-cleaner';
+import { countOccurrences } from '../../../utils/html-cleaner';
+import { splitChapterSegments } from '../../../utils/chapters';
 
 // Aplica o novo HTML do body + regista undo + volta a mostrar o bloco que estava a ser
 // editado (índice entre os filhos de topo — sobrevive à troca porque replace de texto não
@@ -60,7 +61,7 @@ export function replaceInBook(
     const body = editor.getBody();
 
     // Documento Completo mas o utilizador quer só o capítulo do bloco aberto: isola o
-    // segmento (CHAPTER_SPLIT_PATTERN, o mesmo regex partilhado pelo resto da app) que
+    // segmento (splitChapterSegments, o mesmo split do resto da app) que
     // contém esse bloco, troca só ali, e reescreve o body com TODOS os segmentos (os
     // outros capítulos ficam bit-a-bit iguais) — Documento Completo continua carregado.
     // Sem .filter() de segmentos vazios (ao contrário de splitHtmlIntoParts): aqui o
@@ -69,7 +70,7 @@ export function replaceInBook(
     // com chapters[]/splitHtmlIntoParts, só serve para join() de volta.
     const anchorHtml = scope === 'chapter' && activeChapterIndex === -1 && anchorBlock
         ? editor.dom.getOuterHTML(anchorBlock) : null;
-    const segments = anchorHtml ? editor.getContent().split(CHAPTER_SPLIT_PATTERN) : null;
+    const segments = anchorHtml ? splitChapterSegments(editor.getContent()) : null;
     const segIndex = segments ? segments.findIndex((s: string) => s.includes(anchorHtml!)) : -1;
     if (segments && segIndex !== -1) {
         const count = countOccurrences(segments[segIndex], find);
