@@ -84,13 +84,20 @@ function unwrapSections(body: HTMLElement) {
 function reverseFootnotes(body: HTMLElement) {
     // Refs no corpo
     body.querySelectorAll('sup').forEach(sup => {
-        const a = sup.querySelector('a');
-        if (a && (a.getAttribute('epub:type') === 'noteref' || a.getAttribute('role') === 'doc-noteref')) {
-            sup.removeAttribute('id');
-            const trailing = (sup.textContent || '').match(/\s+$/)?.[0]; // espaço dentro do <sup> (InDesign) → fora
-            sup.textContent = a.textContent || '';
-            if (trailing) sup.after(trailing);
+        const refs = Array.from(sup.querySelectorAll('a')).filter(a => a.getAttribute('epub:type') === 'noteref' || a.getAttribute('role') === 'doc-noteref');
+        if (!refs.length) return;
+        sup.removeAttribute('id');
+        const trailing = (sup.textContent || '').match(/\s+$/)?.[0]; // espaço dentro do <sup> (InDesign) → fora
+        sup.textContent = refs[0].textContent || '';
+        // Várias chamadas seguidas no mesmo <sup> ("100 101"): um <sup> por nota, senão só a 1.ª ficava ligada.
+        let last: Element = sup;
+        for (const a of refs.slice(1)) {
+            const next = body.ownerDocument.createElement('sup');
+            next.textContent = a.textContent || '';
+            last.after(' ', next);
+            last = next;
         }
+        if (trailing) last.after(trailing);
     });
     // Separador das notas
     body.querySelectorAll('hr.footnote-sep').forEach(hr => hr.remove());

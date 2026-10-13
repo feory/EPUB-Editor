@@ -50,3 +50,7 @@ _Avoid_: setProps, editor de atributos
 **Importação**:
 O module (`services/import/import-file.ts`) que transforma um ficheiro (PDF, Word, HTML, IDML/zip, EPUB) mais as decisões do utilizador em HTML canónico do editor. É dono da deteção de formato e da política "estruturado vs heurístico" (IDML/EPUB não levam Ficha Técnica automática nem conversões heurísticas). `extractFile` + `finalizeImport` são as duas metades de `importFile`; separadas porque criar um ebook novo tem de criar o registo antes de subir as imagens. Não inclui os pré-passos que alimentam modais (`scan*`, `analyzeBook`) nem a gravação no servidor.
 _Avoid_: upload, conversão
+
+**Notas**:
+O module (`services/notes/notes.ts`) dono da convenção das notas de rodapé: modelo do editor (`<sup>N</sup>` no corpo, `<p id="footnote-N" class="footnote"><sup>N</sup> texto</p>`) ↔ EPUB semântico (`noteref`/`doc-noteref`, `aside` `doc-footnote` com backlink). `linkFootnotes` faz o sentido do export; o inverso é `reverseFootnotes` (import EPUB). Cada importador continua a ler o seu formato (Word, IDML, InDesign, PDF) e a produzir o modelo do editor.
+_Avoid_: rodapés, anotações (Comment é outra coisa)

@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { ebooksApi } from '../../api/ebooks-api';
-import { linkFootnotes } from '../import/pdf/post-processor';
+import { linkFootnotes } from '../notes/notes';
 import { cleanHtmlForXhtml, linkUrls } from './epub/html-utils';
 import { removeInaccessibleColors, removeInaccessibleCssColors } from './epub/color-utils';
 import { replaceImageUrlsInContent, stripPlaceholderImages, addImagesToArchive } from './epub/image-utils';
