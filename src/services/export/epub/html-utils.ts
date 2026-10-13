@@ -87,3 +87,26 @@ export const cleanHtmlForXhtml = (html: string): string => {
         .replace(/\s+>/g, '>')
         .replace(/&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[a-f0-9]+);)/gi, '&amp;');
 };
+
+// URLs soltas no texto → <a href> clicável. O editor apaga todo o <a> (cleanHtml), por isso os links só
+// nascem aqui, no export. Ignora o que já está dentro de <a>; a pontuação final não entra no link.
+export const linkUrls = (html: string): string => {
+    let inLink = 0;
+    return html.split(/(<[^>]+>)/).map(part => {
+        if (part.startsWith('<')) {
+            if (/^<a[\s>]/i.test(part)) inLink++;
+            else if (/^<\/a>/i.test(part)) inLink--;
+            return part;
+        }
+        if (inLink > 0) return part;
+        return part.replace(/https?:\/\/(?:(?!&nbsp;)[^\s<>"])+/g, (raw) => {
+            let url = raw;
+            for (;;) {
+                const last = url.slice(-1);
+                if (/[.,;:!?»]/.test(last) || (last === ')' && url.split(')').length > url.split('(').length)) url = url.slice(0, -1);
+                else break;
+            }
+            return `<a href="${url}">${url}</a>${raw.slice(url.length)}`;
+        });
+    }).join('');
+};

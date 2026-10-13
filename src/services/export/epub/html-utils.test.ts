@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { cleanHtmlForXhtml } from './html-utils';
+import { cleanHtmlForXhtml, linkUrls } from './html-utils';
 
 test('cleanHtmlForXhtml auto-fecha <col> sem tocar em <colgroup>', () => {
     const out = cleanHtmlForXhtml('<table><colgroup><col><col span="2"></colgroup><tr><td>a</td></tr></table>');
@@ -14,4 +14,10 @@ test('cleanHtmlForXhtml dá epub:type + role às variantes de caixa e ignora .bo
     const out = cleanHtmlForXhtml('<div class="box box--aviso"><p>a</p></div><div class="box"><p>b</p></div>');
     expect(out).toContain('<div class="box box--aviso" epub:type="warning" role="note"><p>a</p></div>');
     expect(out).toContain('<div class="box"><p>b</p></div>');
+});
+
+test('linkUrls: URL solto vira link sem a pontuação final; não toca em URLs já ligados', () => {
+    expect(linkUrls('<p>Ver https://doi.org/10.1/x.</p>')).toBe('<p>Ver <a href="https://doi.org/10.1/x">https://doi.org/10.1/x</a>.</p>');
+    expect(linkUrls('<p>(http://a.pt/b_(c))</p>')).toBe('<p>(<a href="http://a.pt/b_(c)">http://a.pt/b_(c)</a>)</p>');
+    expect(linkUrls('<p><a href="http://a.pt">http://a.pt</a></p>')).toBe('<p><a href="http://a.pt">http://a.pt</a></p>');
 });

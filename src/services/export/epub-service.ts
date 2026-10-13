@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { ebooksApi } from '../../api/ebooks-api';
 import { linkFootnotes } from '../import/pdf/post-processor';
-import { cleanHtmlForXhtml } from './epub/html-utils';
+import { cleanHtmlForXhtml, linkUrls } from './epub/html-utils';
 import { removeInaccessibleColors, removeInaccessibleCssColors } from './epub/color-utils';
 import { replaceImageUrlsInContent, stripPlaceholderImages, addImagesToArchive } from './epub/image-utils';
 import { buildSections } from './epub/chapters';
@@ -241,10 +241,10 @@ export const generateEpubBlob = async (htmlContent: string, metadata: BookMetada
         const sectionLinked = linkFootnotes(section.content, `s${i + 1}-`);
 
         const asideBlocks: string[] = [];
-        const mainContent = convertIndexLinks(convertPageBreaks(sectionLinked.replace(
+        const mainContent = linkUrls(convertIndexLinks(convertPageBreaks(sectionLinked.replace(
             /<div class="footnotes-section">([\s\S]*?)<\/div>/g,
             (_, inner) => { asideBlocks.push(inner.trim()); return ''; },
-        ).trim(), i + 1, pageEntries), idToSection, i + 1);
+        ).trim(), i + 1, pageEntries), idToSection, i + 1));
         const hasFootnotes = asideBlocks.length > 0 && asideBlocks.some(b => b.trim().length > 0);
 
         oebps.file(`section${i + 1}.xhtml`, `<?xml version="1.0" encoding="UTF-8"?>
