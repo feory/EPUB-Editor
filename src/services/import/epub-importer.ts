@@ -378,6 +378,37 @@ export async function scanEpubClasses(file: File): Promise<{ legacy: boolean; cl
     return { legacy: true, classes: [...info.values()].sort((a, b) => b.count - a.count) };
 }
 
+// Links internos (ex. Índice → capítulos/subsecções do InDesign) → modelo da app: o cleanEditorHtml apaga
+// todo o <a>, por isso a entrada vira span.idx-link (data-target) e o destino ganha p.chapter-anchor com o id;
+// só no export voltam a ser <a> (ver export/epub/index-links.ts). Depois de um título (o marcador de
+// capítulo é inserido ANTES dele, a âncora ficaria no capítulo anterior); nos restantes, antes do bloco.
+export function adaptInternalLinks(html: string): string {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const ids = new Map<string, string>(); // id original → data-target
+    for (const a of Array.from(doc.querySelectorAll('a[href]'))) {
+        const id = a.getAttribute('href')!.split('#')[1];
+        if (!id || /^\w+:/.test(a.getAttribute('href')!)) continue;
+        const target = doc.getElementById(id);
+        const block = target?.closest('p, h1, h2, h3, h4, h5, h6, li');
+        if (!block) continue;
+        let anchorId = ids.get(id);
+        if (!anchorId) {
+            anchorId = `idx-anchor-ep${ids.size + 1}`;
+            ids.set(id, anchorId);
+            const marker = doc.createElement('p');
+            marker.className = 'chapter-anchor';
+            marker.id = anchorId;
+            if (/^H[1-6]$/.test(block.tagName)) block.after(marker); else block.before(marker);
+        }
+        const span = doc.createElement('span');
+        span.className = 'idx-link';
+        span.setAttribute('data-target', anchorId);
+        while (a.firstChild) span.appendChild(a.firstChild);
+        a.replaceWith(span);
+    }
+    return ids.size ? doc.body.innerHTML : html;
+}
+
 export async function extractEpub(file: File, mapping?: Record<string, string>): Promise<ExtractedDocument> {
     const { zip, opfDir, opfXml, opf, manifest, spineHrefs } = await openEpub(file);
 
@@ -447,6 +478,7 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
 
     let html = bodies.join('\n');
     if (isLegacy) html = adaptLegacyFootnotes(html); // renumera notas (* + ids → sequencial)
+    else html = adaptInternalLinks(html);
 
     const fallbackIsbn = file.name.replace(/\.epub$/i, '');
     const metadata = parseOpfMetadata(opfXml, fallbackIsbn);
