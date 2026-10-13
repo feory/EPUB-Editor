@@ -3,9 +3,24 @@ import { X, Save, Replace } from 'lucide-react';
 import type { TinyMCEEditor } from '../types';
 import { countInBook, replaceInBook } from '../book-find-replace';
 import { editBlocks } from '../blockEdit';
-import { chromeBounds } from '../editorChrome'; // a caixa fica entre a barra de ferramentas e a de estado
 import { useNotification } from '../../../../context/NotificationContext';
 import { MARK } from '../ephemeral';
+
+/**
+ * Espaço útil para overlays fixos (pega, caixa de editar HTML) em coords da janela: ENTRE o
+ * fundo da barra de ferramentas e o topo da barra de estado do TinyMCE. Os overlays pintavam
+ * por cima das duas (sem z-index próprio, só ordem no DOM) — em vez de uma guerra de z-index
+ * com o skin, cada overlay limita-se a este espaço.
+ */
+const GAP = 8;
+function chromeBounds(editor: TinyMCEEditor): { minTop: number; maxBottom: number } {
+    const container = editor.getContainer() as HTMLElement | null;
+    const header = container?.querySelector('.tox-editor-header') as HTMLElement | null;
+    const statusbar = container?.querySelector('.tox-statusbar') as HTMLElement | null;
+    const minTop = header ? header.getBoundingClientRect().bottom + GAP : 0;
+    const maxBottom = statusbar ? statusbar.getBoundingClientRect().top - GAP : window.innerHeight;
+    return { minTop, maxBottom };
+}
 
 /**
  * Edição de HTML inline de um bloco de topo: esconde o bloco (data-mce-htmledit) e mostra um
