@@ -8,6 +8,19 @@ import { BOX_VARIANTS } from './boxProps';
 import { inspectBlock, applyBlockEdit, createBlockWatcher, TEXT_BLOCK_SELECTOR, type BlockInfo } from './blockEditing';
 import { tinymceEditorLike } from './blockEditingTinymce';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
+import { registerBlockFormats } from './formats';
+import { registerImageTools } from './imageTools';
+import { MARK, registerEphemeralMarks } from './ephemeral';
+
+export interface SetupLive {
+    onBlockChange?: (info: BlockInfo) => void;      // caixa e bloco de texto sob o cursor (painel lateral)
+    ebookLabel: string;                             // título do ebook no canto direito da barra de estado
+    onToggleFocusMode?: () => void;
+    onTogglePrintPdf?: () => void;
+    chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
+    activeChapterIndex: number;
+    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void;
+}
 
 interface SetupDeps {
     onGrammarClick?: (index: number) => void;
@@ -18,19 +31,9 @@ interface SetupDeps {
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
     onEditBoxStyle: () => void;
-    // Caixa e bloco de texto sob o cursor (painel lateral) — por ref: setup() só corre 1x.
-    onBlockChangeRef: React.MutableRefObject<((info: BlockInfo) => void) | undefined>;
-    // Título do ebook no canto direito da barra de estado (ref: setup() só corre 1x).
-    ebookLabelRef: React.MutableRefObject<string>;
-    onToggleFocusModeRef: React.MutableRefObject<(() => void) | undefined>;
-    onTogglePrintPdfRef: React.MutableRefObject<(() => void) | undefined>;
-    // Capítulos do livro + índice do capítulo aberto — via ref (setup() só corre 1x no mount,
-    // ver comentário junto ao botão idxlinktarget) para ler sempre os valores mais recentes.
-    chaptersRef: React.MutableRefObject<{ title: string; level: string }[]>;
-    activeChapterIndexRef: React.MutableRefObject<number>;
-    // Por ref (não a função direta): setup() só corre 1x no mount — uma prop direta ficava presa
-    // à closure desse 1º render (livro ainda vazio nessa altura), nunca via as edições seguintes.
-    onLinkIndiceEntryRef: React.MutableRefObject<((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void) | undefined>;
+    // Props que mudam a cada render, lidas por ref: setup() só corre 1x no mount, uma prop direta ficava presa à
+    // closure desse 1.º render (livro ainda vazio nessa altura) e nunca via as edições seguintes.
+    live: React.MutableRefObject<SetupLive>;
     wireOverlays: (
         editor: TinyMCEEditor,
         ctx: { blockOf: (n: Node | null) => Element | null; activeBlock: ActiveBlock },
@@ -40,11 +43,12 @@ interface SetupDeps {
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
     const { onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
-        chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment, onEditBoxStyle, onBlockChangeRef } = deps;
+        live, wireOverlays, onCropImage, onAddComment, onEditBoxStyle } = deps;
 
     return (editor: Editor) => {
         // Ação de menu/atalho como edição de bloco (blockEdit.ts): passo de undo + change + nodeChanged.
         const undoable = (fn: () => void) => () => editBlocks(editor, fn);
+        registerEphemeralMarks(editor); // marcas de UI que o serializer nunca emite (ephemeral.ts)
         editor.addCommand('mceChapterBreak', () => {
             const bookmark = editor.selection.getBookmark(2, true);
             editor.windowManager.open({
@@ -132,194 +136,8 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', undoable(() => editor.formatter.toggle('p-indent')));
         editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', undoable(() => editor.formatter.toggle('p-top')));
 
-        editor.on('init', () => {
-            // selector (não block): aplica a classe ao bloco existente sem lhe trocar a tag —
-            // block:'p' não fazia nada dentro de um <li> (o TinyMCE não troca a tag de um item
-            // de lista por um <p>, quebraria a lista), impossibilitando estilo de parágrafo em
-            // bullets. selector:'p,li' cobre ambos.
-            editor.formatter.register('p-indent', { selector: 'p,li', classes: 'p-indent' });
-            editor.formatter.register('p-top', { selector: 'p,li', classes: 'p-top' });
-            editor.formatter.register('p-space', { selector: 'p,li', classes: 'p-space' });
-            editor.formatter.register('footnote', { selector: 'p,li', classes: 'footnote' });
-            editor.formatter.register('drop-cap', { selector: 'p,li', classes: 'drop-cap' });
-            editor.formatter.register('p-small', { selector: 'p,li', classes: 'p-small' });
-            editor.formatter.register('p-legendas', { selector: 'p,li', classes: 'p-legendas' });
-            editor.formatter.register('p-bold', { selector: 'p,li', classes: 'p-bold' });
-            editor.formatter.register('p-italic', { selector: 'p,li', classes: 'p-italic' });
-            editor.formatter.register('p-bold-italic', { selector: 'p,li', classes: 'p-bold-italic' });
-            editor.formatter.register('p-uppercase', { selector: 'p,li', classes: 'p-uppercase' });
-            editor.formatter.register('p-quote', { selector: 'p,li', classes: 'p-quote' });
-            editor.formatter.register('p-asterisk', { selector: 'p,li', classes: 'p-asterisk' });
-            editor.formatter.register('p-border-top', { selector: 'p,li', classes: 'p-border-top' });
-            editor.formatter.register('p-border-bottom', { selector: 'p,li', classes: 'p-border-bottom' });
-            editor.formatter.register('p-border-sides', { selector: 'p,li', classes: 'p-border-sides' });
-            editor.formatter.register('small-text', { inline: 'small' });
-            // Override do formato nativo (senão sai <span style="text-decoration:underline">) —
-            // <u> é o que o import de EPUB já produz (reverseUnderline), consistente e sem CSS.
-            editor.formatter.register('underline', { inline: 'u' });
-            editor.formatter.register('small-caps', { inline: 'span', classes: 'small-caps' });
-            // Reusa a classe do formato de parágrafo p-uppercase (CSS já existe, sem seletor de
-            // tag — ver StyleContext.tsx) num <span> inline, para poder aplicar-se a uma SELEÇÃO
-            // dentro de um título (p-uppercase de bloco é removido de headings — ver PARA_STYLE_CLASSES).
-            editor.formatter.register('uppercase', { inline: 'span', classes: 'p-uppercase' });
-            editor.formatter.register('box', { block: 'div', classes: 'box', wrapper: true });
-        });
-
-        const setImgAlign = (cls: string) => {
-            const node = editor.selection.getNode();
-            if (node.nodeName !== 'IMG') return;
-            editBlocks(editor, () => {
-                ['img-left', 'img-center', 'img-right', 'img-inline'].forEach((c) => editor.dom.removeClass(node, c));
-                editor.dom.addClass(node, cls);
-            });
-        };
-        ([
-            ['imgalignleft', 'img-left', 'align-left', 'Imagem à esquerda'],
-            ['imgaligncenter', 'img-center', 'align-center', 'Imagem centrada'],
-            ['imgalignright', 'img-right', 'align-right', 'Imagem à direita'],
-            ['imgaligninline', 'img-inline', 'ps-imginline', 'Imagem na linha'],
-        ] as const).forEach(([name, cls, icon, tooltip]) => {
-            editor.ui.registry.addToggleButton(name, {
-                icon,
-                tooltip,
-                onAction: () => setImgAlign(cls),
-                onSetup: (api) => {
-                    const update = () => {
-                        const node = editor.selection.getNode();
-                        api.setActive(node.nodeName === 'IMG' && editor.dom.hasClass(node, cls));
-                    };
-                    editor.on('NodeChange', update);
-                    return () => editor.off('NodeChange', update);
-                },
-            });
-        });
-        // Ajuste fino de posição vertical (ex. imagem em linha que não fica bem alinhada ao
-        // texto por omissão) — translateY em px, aplicado por cima do resto do style inline
-        // (transform é só mais uma propriedade; largura/altura do resize do TinyMCE mantêm-se).
-        const getTranslateY = (el: HTMLElement) => parseFloat(/translateY\((-?[\d.]+)px\)/.exec(el.style.transform)?.[1] || '0');
-        editor.ui.registry.addButton('imgvoffset', {
-            icon: 'ps-imgvoffset',
-            tooltip: 'Ajustar posição vertical',
-            onAction: () => {
-                const node = editor.selection.getNode();
-                if (node.nodeName !== 'IMG') return;
-                const current = String(getTranslateY(node as HTMLElement));
-                editor.windowManager.open({
-                    title: 'Ajustar posição vertical',
-                    body: {
-                        type: 'panel',
-                        items: [{ type: 'input', name: 'offset', label: 'Deslocação vertical (px, negativo = para cima)' }],
-                    },
-                    initialData: { offset: current },
-                    buttons: [
-                        { type: 'cancel', text: 'Cancelar' },
-                        { type: 'submit', text: 'Aplicar', primary: true },
-                    ],
-                    onSubmit: (api: { getData: () => { offset: string }; close: () => void }) => {
-                        const value = parseFloat(api.getData().offset);
-                        api.close();
-                        editBlocks(editor, () => {
-                            (node as HTMLElement).style.transform = value ? `translateY(${value}px)` : '';
-                        });
-                    },
-                });
-            },
-        });
-        editor.ui.registry.addContextToolbar('imagealign', {
-            predicate: (node: Element) => node.nodeName === 'IMG',
-            position: 'node',
-            scope: 'node',
-            items: 'imgalignleft imgaligncenter imgalignright imgaligninline imgvoffset',
-        });
-
-        // Pega de arrasto para a posição vertical (translateY) de uma imagem selecionada.
-        // Vive DENTRO do próprio iframe (mesmo sistema de coordenadas da imagem) — ao contrário
-        // do botão "+"/pega de bloco (overlay React fora do iframe), aqui não há scroll da
-        // página exterior a compensar, por isso não precisa desse mecanismo mais pesado.
-        editor.on('init', () => {
-            const doc = editor.getDoc();
-            if (!doc) return;
-            const grip = doc.createElement('div');
-            grip.setAttribute('data-mce-bogus', 'all'); // nunca serializa/exporta
-            // position:fixed (não absolute): getBoundingClientRect() é relativo ao VIEWPORT, e o
-            // body do iframe não tem position:relative (de propósito, ver span.pagebreak acima) —
-            // absolute sem ancestral posicionado ficava relativo ao topo do documento inteiro,
-            // invisível assim que havia scroll no capítulo.
-            grip.style.cssText = 'position:fixed;width:22px;height:14px;background:#475569;'
-                + 'border-radius:4px;cursor:ns-resize;display:none;z-index:1000;box-shadow:0 1px 3px rgba(0,0,0,.3);';
-            grip.innerHTML = '<svg width="22" height="14" viewBox="0 0 22 14"><path fill="none" stroke="#fff" '
-                + 'stroke-width="1.5" stroke-linecap="round" d="M6 4l5-3 5 3M6 10l5 3 5-3"/></svg>';
-            doc.body.appendChild(grip);
-
-            let dragging = false;
-            let dragImg: HTMLImageElement | null = null;
-            let startY = 0;
-            let startOffset = 0;
-
-            const positionGrip = (img: HTMLImageElement) => {
-                // Fora da caixa da imagem (por baixo, centrado) — nos cantos ficava tapado
-                // pelas pegas nativas de resize do TinyMCE.
-                const r = img.getBoundingClientRect();
-                grip.style.left = `${r.left + r.width / 2 - 11}px`;
-                grip.style.top = `${r.bottom + 4}px`;
-                grip.style.display = 'block';
-            };
-            const hideGrip = () => { grip.style.display = 'none'; };
-            let selectedImg: HTMLImageElement | null = null;
-
-            editor.on('NodeChange', () => {
-                if (dragging) return;
-                const node = editor.selection.getNode();
-                if (node.nodeName === 'IMG' && editor.hasFocus()) {
-                    selectedImg = node as HTMLImageElement;
-                    positionGrip(selectedImg);
-                } else {
-                    selectedImg = null;
-                    hideGrip();
-                }
-            });
-            // Scroll não dispara NodeChange — sem isto o grip ficava parado no sítio antigo
-            // (fixed) enquanto o conteúdo (e a imagem) deslizava por baixo.
-            editor.getWin().addEventListener('scroll', () => {
-                if (selectedImg && !dragging) positionGrip(selectedImg);
-            }, { passive: true });
-
-            grip.addEventListener('mousedown', (e: MouseEvent) => {
-                const node = editor.selection.getNode();
-                if (node.nodeName !== 'IMG') return;
-                e.preventDefault();
-                dragging = true;
-                dragImg = node as HTMLImageElement;
-                startY = e.clientY;
-                startOffset = getTranslateY(dragImg);
-                doc.body.style.userSelect = 'none';
-            });
-            const endDrag = () => {
-                if (!dragging) return;
-                dragging = false;
-                doc.body.style.userSelect = '';
-                // O deslocamento já foi escrito durante o arrasto: aqui só se regista o resultado
-                // como UM passo de undo (o arrasto inteiro), não um por cada mousemove.
-                editBlocks(editor, () => {});
-                dragImg = null;
-            };
-            doc.addEventListener('mousemove', (e: MouseEvent) => {
-                if (!dragging || !dragImg) return;
-                const delta = e.clientY - startY;
-                dragImg.style.transform = `translateY(${startOffset + delta}px)`;
-                positionGrip(dragImg);
-            });
-            doc.addEventListener('mouseup', endDrag);
-            // ponytail: largar o botão FORA do iframe (a mais provável ao arrastar rápido) não
-            // dispara mouseup dentro do doc do iframe — apanhado pela janela exterior; suficiente
-            // para o uso normal (ajuste vertical pequeno), sem replicar o sistema de captura de
-            // ponteiro do drag de blocos.
-            window.addEventListener('mouseup', endDrag);
-            editor.on('remove', () => {
-                window.removeEventListener('mouseup', endDrag);
-                grip.remove();
-            });
-        });
+        registerBlockFormats(editor);
+        registerImageTools(editor);
 
         // Botão direito em cima de uma imagem → "Recorte" (corte, mesmo mecanismo da
         // Galeria: grava sobre o mesmo data-image-id). Grupo dinâmico (addContextMenu): só
@@ -358,7 +176,7 @@ export function createEditorSetup(deps: SetupDeps) {
             })),
         });
         // Painel lateral: acompanha o que está sob o cursor (só emite quando muda).
-        const watcher = createBlockWatcher(blocks, (info) => onBlockChangeRef.current?.(info));
+        const watcher = createBlockWatcher(blocks, (info) => live.current.onBlockChange?.(info));
         editor.on('NodeChange', watcher.update);
         // Parágrafos/títulos/itens: abre o painel de edição do bloco.
         editor.ui.registry.addMenuItem('blockedit-item', {
@@ -424,19 +242,14 @@ export function createEditorSetup(deps: SetupDeps) {
         // Bloco ativo (anel, "+", pega; recolhido pelo 2.º clique) — activeBlock.ts.
         const activeBlock = attachActiveBlock(editor, { blockOf });
 
-        // Marcadores de UI puros: o serializer nunca os emite (getContent/autosave/EPUB saem limpos).
-        editor.on('PreInit', () => {
-            editor.serializer.addTempAttr('data-mce-empty'); // placeholder de bloco vazio (nunca exporta)
-            editor.serializer.addTempAttr('data-mce-htmledit'); // bloco escondido durante edição de HTML inline
-        });
         // Placeholder: marca o <p> vazio focado (CSS mostra "Escreve algo…" via ::before).
         const refreshEmptyMarker = () => {
-            editor.dom.select('[data-mce-empty]').forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-empty', null));
+            editor.dom.select(`[${MARK.empty}]`).forEach((el: HTMLElement) => editor.dom.setAttrib(el, MARK.empty, null));
             if (!editor.hasFocus()) return;
             const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
             if (block && block.nodeName === 'P' && !/\bchapter-break/.test(block.className)
                 && !(block.textContent || '').replace(/\u00a0/g, '').trim() && !block.querySelector('img')) {
-                editor.dom.setAttrib(block, 'data-mce-empty', '1');
+                editor.dom.setAttrib(block, MARK.empty, '1');
             }
         };
         editor.on('NodeChange', refreshEmptyMarker);
@@ -561,8 +374,8 @@ export function createEditorSetup(deps: SetupDeps) {
                 sb.insertBefore(cssInfoEl, sb.firstChild);
                 const labelEl = document.createElement('div');
                 labelEl.dataset.psEbookLabel = '1';
-                labelEl.textContent = deps.ebookLabelRef.current;
-                labelEl.title = deps.ebookLabelRef.current;
+                labelEl.textContent = live.current.ebookLabel;
+                labelEl.title = live.current.ebookLabel;
                 labelEl.style.cssText = 'flex:0 1 auto;max-width:40%;padding:0 8px;font-size:11px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
                 sb.insertBefore(labelEl, sb.querySelector('.tox-statusbar__resize-handle'));
             }
@@ -592,14 +405,14 @@ export function createEditorSetup(deps: SetupDeps) {
             icon: 'link',
             tooltip: 'Ligar a capítulo',
             fetch: (callback) => {
-                const own = activeChapterIndexRef.current;
+                const own = live.current.activeChapterIndex;
                 // Já ligada? idx-link já existente no parágrafo diz o capítulo atual (ver
                 // marcação `idx-anchor-<chapterIndex>` / `idx-anchor-<chapterIndex>-<seq>`, tanto
                 // manual como do automático em lote) — marca-o com check no dropdown.
                 const curBlock = blockOf(editor.selection.getNode()) as HTMLElement | null;
                 const curTarget = curBlock?.querySelector('span.idx-link')?.getAttribute('data-target') || '';
                 const currentChapterIndex = Number(curTarget.match(/^idx-anchor-(\d+)/)?.[1] ?? -1);
-                const items = chaptersRef.current
+                const items = live.current.chapters
                     .map((c, i) => ({ c, i }))
                     .filter(({ c, i }) => i !== own && c.level !== 'break')
                     .map(({ c, i }) => ({
@@ -614,13 +427,13 @@ export function createEditorSetup(deps: SetupDeps) {
                             const pIndex = (Array.from(editor.getBody().children) as HTMLElement[])
                                 .filter((el) => el.nodeName === 'P').indexOf(block);
                             if (pIndex === -1) return;
-                            onLinkIndiceEntryRef.current?.(pIndex, own, i);
+                            live.current.onLinkIndiceEntry?.(pIndex, own, i);
                         },
                     }));
                 callback(items);
             },
             onSetup: (api) => {
-                const update = () => api.setEnabled(isIndiceChapterTitle(chaptersRef.current[activeChapterIndexRef.current]?.title || ''));
+                const update = () => api.setEnabled(isIndiceChapterTitle(live.current.chapters[live.current.activeChapterIndex]?.title || ''));
                 update();
                 editor.on('NodeChange', update);
                 return () => editor.off('NodeChange', update);
@@ -724,11 +537,11 @@ export function createEditorSetup(deps: SetupDeps) {
 
         editor.ui.registry.addButton('pdfview', {
             icon: 'document-properties', tooltip: 'Ver PDF',
-            onAction: () => deps.onTogglePrintPdfRef.current?.(),
+            onAction: () => live.current.onTogglePrintPdf?.(),
         });
         editor.ui.registry.addButton('focusmode', {
             icon: 'fullscreen', tooltip: 'Modo Foco',
-            onAction: () => deps.onToggleFocusModeRef.current?.(),
+            onAction: () => live.current.onToggleFocusMode?.(),
         });
 
         editor.ui.registry.addToggleButton('box', {

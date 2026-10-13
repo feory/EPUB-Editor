@@ -54,3 +54,11 @@ _Avoid_: upload, conversão
 **Notas**:
 O module (`services/notes/notes.ts`) dono da convenção das notas de rodapé: modelo do editor (`<sup>N</sup>` no corpo, `<p id="footnote-N" class="footnote"><sup>N</sup> texto</p>`) ↔ EPUB semântico (`noteref`/`doc-noteref`, `aside` `doc-footnote` com backlink). `linkFootnotes` faz o sentido do export; o inverso é `reverseFootnotes` (import EPUB). Cada importador continua a ler o seu formato (Word, IDML, InDesign, PDF) e a produzir o modelo do editor.
 _Avoid_: rodapés, anotações (Comment é outra coisa)
+
+**Capítulos**:
+O module (`utils/chapters.ts`) que sabe como o livro se divide em capítulos: a fronteira é o MARCADOR `<p class="chapter-break[-hN]" data-title>` antes do heading (ou `<hr class="chapter-break">` legacy). `splitChapters` (sem partes vazias, índice = `chapters[]`), `splitChapterSegments` (`join` devolve o HTML original), `matchChapterBoundary`, `classifyChapterPart`. O padrão de divisão não é exportado.
+_Avoid_: secções, quebras (a quebra sem título é só um nível, `break`)
+
+**Marcas efémeras**:
+Atributos (`data-mce-ps*`, `data-mce-empty`, …) e classes do body (`ps-*`) que existem só no DOM do editor e nunca no conteúdo gravado nem exportado. `editor/ephemeral.ts` é o único dono dos nomes (`MARK`, `BODY_CLASS`) e do registo no serializer; o CSS e o JS importam daí.
+_Avoid_: classes de UI, atributos temporários

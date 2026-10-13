@@ -10,7 +10,9 @@ import { applyBoxProps, readBoxProps, type BoxVariant } from './boxProps';
 import { GRID_HTML, removeElement } from '../../../utils/containers';
 import * as bm from './blockMenu';
 import type { ActiveBlock } from './activeBlock';
-import { plusCenterY, PLUS_HIT, PLUS_SIZE, gripZoneAt, gripTop, nearGripLine } from './blockGeometry';
+import { plusCenterY, PLUS_SIZE } from './blockGeometry';
+import { topLevelBlock, hitsPlus, gripState, gripZone, dropTargetAt, changeDetector } from './blockInteraction';
+import { MARK, BODY_CLASS } from './ephemeral';
 
 // readOnly atravessa de fora; tudo o resto em BlockOverlaysProps só alimenta o render interno.
 type BlockOverlaysInternal = Omit<BlockOverlaysProps, 'readOnly'>;
@@ -58,7 +60,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     // scroll) → voltam.
     useEffect(() => {
         miniMenuRef.current?.suppress('gripMenu', !!gripMenu || !!elMenu);
-        editorRef.current?.getBody()?.classList.toggle('ps-grip-menu', !!gripMenu || !!elMenu);
+        editorRef.current?.getBody()?.classList.toggle(BODY_CLASS.gripMenu, !!gripMenu || !!elMenu);
     }, [gripMenu, elMenu, editorRef]);
     // "Mais estilos" (mini-menu ⋮): overlay React em 2 colunas, ancorado ao pop do mini-menu.
     const [styleMenu, setStyleMenu] = useState<{ top: number; left: number; kind: 'para' | 'head' } | null>(null);
@@ -126,7 +128,6 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     // ações do elemento (copiar, duplicar, inserir, estilos, agrupar, eliminar) e do contentor à volta.
     const [menuBtn, setMenuBtn] = useState<Pos | null>(null);
     const menuTargetRef = useRef<HTMLElement | null>(null);
-    const lastMenuBtnRef = useRef(''); // última posição emitida (evita setState repetido)
     const clearBoxRef = useRef<() => void>(() => {}); // posto no wireEditor
     const selectBoxRef = useRef<(box: HTMLElement) => void>(() => {}); // idem
     const styleClipRef = useRef<bm.StyleSnapshot | null>(null); // "Copiar estilos" → "Colar estilos"
@@ -147,11 +148,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
     // "+" interno da grelha (coluna / texto / imagem) — posição e menu.
     const gridTargetRef = useRef<HTMLElement | null>(null);
-    const lastGridPlusRef = useRef('');
     const [gridPlus, setGridPlus] = useState<Pos | null>(null);
     // Pega "selecionar grelha/caixa": difícil acertar na área do contentor quando as células o enchem.
     const parentTargetRef = useRef<HTMLElement | null>(null);
-    const lastParentRef = useRef('');
     const [parentHandle, setParentHandle] = useState<(Pos & { kind: 'box' | 'grid' }) | null>(null);
     const [gridMenu, setGridMenu] = useState<(Pos & { up: boolean }) | null>(null);
     const openGridMenu = (rect: DOMRect) => {
@@ -220,9 +219,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const editor = editorRef.current;
         const block = gripBlockRef.current;
         if (!editor || !block) return;
-        const body = editor.getBody();
-        let top = block;
-        while (top.parentElement && top.parentElement !== body) top = top.parentElement;
+        const top = topLevelBlock(block, editor.getBody());
         const sib = (dir === 'up' ? top.previousElementSibling : top.nextElementSibling) as HTMLElement | null;
         const parent = top.parentNode;
         if (!sib || !parent) return;
@@ -261,9 +258,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const editor = editorRef.current;
         const block = gripBlockRef.current;
         if (!editor || !block) return;
-        const body = editor.getBody();
-        let top = block;
-        while (top.parentElement && top.parentElement !== body) top = top.parentElement;
+        const top = topLevelBlock(block, editor.getBody());
         editBlocks(editor, () => {
             if (action === 'duplicate') top.parentNode?.insertBefore(top.cloneNode(true), top.nextSibling);
             else top.remove();
@@ -278,7 +273,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const closePlusMenu = () => {
         plusMenuOpenRef.current = false;
         miniMenuRef.current?.suppress('plusMenu', false);
-        plusBlockRef.current?.removeAttribute('data-mce-plusopen');
+        plusBlockRef.current?.removeAttribute(MARK.plusOpen);
         setPlusMenu(null);
         editorRef.current?.nodeChanged(); // reavalia mini-menu + grip (voltam a aparecer)
     };
@@ -286,7 +281,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const openPlusMenu = (block: HTMLElement, pos: Pos) => {
         plusMenuOpenRef.current = true;
         plusBlockRef.current = block;
-        block.setAttribute('data-mce-plusopen', '1'); // mantém o "+" visível sem :hover (rato vai para o menu)
+        block.setAttribute(MARK.plusOpen, '1'); // mantém o "+" visível sem :hover (rato vai para o menu)
         miniMenuRef.current?.suppress('plusMenu', true);
         setPlusMenu(pos); // acima do "+"
     };
@@ -354,8 +349,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const body = editor.getBody();
         // Arrastar o bloco de TOPO (filho direto do body) — insertBefore no body fica sempre válido,
         // mesmo que o bloco ativo esteja aninhado (ex. dentro de div.box).
-        let top = block;
-        while (top.parentElement && top.parentElement !== body) top = top.parentElement;
+        const top = topLevelBlock(block, body);
         dragBlockRef.current = top;
         let moved = false;
         document.body.style.userSelect = 'none';
@@ -367,13 +361,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const ir = iframe.getBoundingClientRect();
             const y = clientY - ir.top; // coords do iframe
             const blocks = (Array.from(body.children) as HTMLElement[]).filter((b) => b !== dragBlockRef.current);
-            if (!blocks.length) { dropTargetRef.current = null; setDropLine(null); return; }
-            let target = blocks[0]; let pos: 'before' | 'after' = 'before';
-            for (const b of blocks) {
-                const r = b.getBoundingClientRect();
-                if (y < (r.top + r.bottom) / 2) { target = b; pos = 'before'; break; }
-                target = b; pos = 'after';
-            }
+            const drop = dropTargetAt(y, blocks.map(b => b.getBoundingClientRect()));
+            if (!drop) { dropTargetRef.current = null; setDropLine(null); return; }
+            const target = blocks[drop.index]; const pos = drop.pos;
             dropTargetRef.current = { block: target, pos };
             const r = target.getBoundingClientRect();
             setDropLine({ top: ir.top + (pos === 'before' ? r.top : r.bottom), left: ir.left + r.left, width: r.width });
@@ -432,7 +422,6 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         // Botão "+": desenhado só em CSS (::after do bloco sob o rato, ver contentStyles.ts).
         // Pseudo-elementos não recebem eventos → o clique chega ao próprio bloco e é reconhecido
         // pela posição (círculo de 20px centrado na borda inferior).
-        editor.on('PreInit', () => editor.serializer.addTempAttr('data-mce-plusopen'));
         // Centro do círculo (blockGeometry.ts, a mesma conta que gera o CSS): fim do conteúdo,
         // mais o desvio do bloco ativo.
         const centerOfPlus = (block: HTMLElement) => plusCenterY(
@@ -452,7 +441,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const block = e.target as HTMLElement;
             if (e.button !== 0 || editor.mode.isReadOnly() || block.parentNode !== editor.getBody() || !isPlusBlock(block)) return;
             const br = block.getBoundingClientRect();
-            if (Math.abs(e.clientX - (br.left + br.width / 2)) > PLUS_HIT || Math.abs(e.clientY - centerOfPlus(block)) > PLUS_HIT) return;
+            if (!hitsPlus(e.clientX, e.clientY, br, centerOfPlus(block))) return;
             // Com outro bloco ativo o "+" deste está escondido (CSS) → clique normal.
             const active = activeBlock.current();
             if (active && active !== block) return;
@@ -478,24 +467,16 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         let gripTopY: number | null = null; // topo da pega (coords do iframe) quando visível
         const gripBlock = () => {
             const block = activeBlock.current();
-            return isPlusBlock(block) && block.parentNode === editor.getBody() && !block.hasAttribute('data-mce-empty') ? block : null;
+            return isPlusBlock(block) && block.parentNode === editor.getBody() && !block.hasAttribute(MARK.empty) ? block : null;
         };
         const updateGrip = () => {
             const body = editor.getBody();
             const block = dragBlockRef.current ? null : gripBlock();
-            let top: number | null = null;
-            let overGrip = false;
-            if (block) {
-                const br = block.getBoundingClientRect();
-                const onGrip = gripTopY !== null && !!gripZoneAt(lastX, lastY, br.left, gripTopY);
-                if (onGrip || nearGripLine(lastX, lastY, br)) top = gripTop(br.top, br.bottom, 0, editor.getWin().innerHeight);
-                if (top !== null) {
-                    body.style.setProperty('--grip-y', `${top - br.top}px`);
-                    overGrip = !!gripZoneAt(lastX, lastY, br.left, top);
-                }
-            }
+            const br = block?.getBoundingClientRect() ?? null;
+            const { top, overGrip } = gripState({ x: lastX, y: lastY }, br, gripTopY, editor.getWin().innerHeight);
+            if (br && top !== null) body.style.setProperty('--grip-y', `${top - br.top}px`);
             gripTopY = top;
-            body.classList.toggle('ps-grip-near', top !== null);
+            body.classList.toggle(BODY_CLASS.gripNear, top !== null);
             // Rato em cima da pega → mini-menu escondido (fica por cima dela). A arrastar, só o fim
             // do arrasto o repõe.
             if (!dragBlockRef.current) miniMenuRef.current?.suppress('grip', overGrip);
@@ -509,7 +490,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const block = gripBlock();
             const iframe = iframeOf(editor);
             if (!block || !iframe) return;
-            const zone = gripZoneAt(e.clientX, e.clientY, block.getBoundingClientRect().left, gripTopY);
+            const zone = gripZone({ x: e.clientX, y: e.clientY }, block.getBoundingClientRect().left, gripTopY);
             if (!zone) return;
             e.preventDefault();
             swallowClick = true; // o click a seguir não conta como 2.º clique no bloco
@@ -539,14 +520,12 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
 
         // Caixa selecionada: marca de UI (nunca exporta) + classe no body (esconde o anel do parágrafo) +
         // mini-menu do parágrafo escondido. Dura até novo clique, tecla, ou o cursor sair da caixa.
-        editor.on('PreInit', () => editor.serializer.addTempAttr('data-mce-psbox'));
-        editor.on('init', () => editor.dom.select('[data-mce-psbox]').forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-psbox', null)));
         const clearBox = () => {
             const box = selectedBoxRef.current;
             if (!box) return;
             selectedBoxRef.current = null;
-            if (box.isConnected) editor.dom.setAttrib(box, 'data-mce-psbox', null);
-            editor.getBody().classList.remove('ps-box-selected');
+            if (box.isConnected) editor.dom.setAttrib(box, MARK.box, null);
+            editor.getBody().classList.remove(BODY_CLASS.boxSelected);
             miniMenuRef.current?.suppress('boxSelected', false);
         };
         clearBoxRef.current = clearBox;
@@ -554,8 +533,8 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             if (selectedBoxRef.current !== box) {
                 clearBox();
                 selectedBoxRef.current = box;
-                editor.dom.setAttrib(box, 'data-mce-psbox', '1');
-                editor.getBody().classList.add('ps-box-selected');
+                editor.dom.setAttrib(box, MARK.box, '1');
+                editor.getBody().classList.add(BODY_CLASS.boxSelected);
                 miniMenuRef.current?.suppress('boxSelected', true);
             }
             // A seleção dura até novo clique/tecla (a grelha vazia não tem onde pôr o cursor).
@@ -572,6 +551,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
 
         // Posição do botão "⋮" (ou da barra da caixa): acompanha NodeChange/scroll/resize; escondido sem foco,
         // em leitura, a arrastar ou com o elemento fora da área visível do editor.
+        const menuBtnChanged = changeDetector(); // só faz setState quando a posição mudou
+        const gridPlusChanged = changeDetector();
+        const parentChanged = changeDetector();
         const updateMenuBtn = () => {
             const iframe = iframeOf(editor);
             const node = editor.selection.getNode();
@@ -594,8 +576,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             menuTargetRef.current = pos || bar ? el : null;
             const variant = box && box.matches('.box') ? readBoxProps(box).variant : '';
             const key = `${pos ? `${pos.top}|${pos.left}` : ''}#${bar ? `${bar.top}|${bar.left}|${variant}|${box?.nodeName}${box?.className}` : ''}`;
-            if (key === `${lastMenuBtnRef.current}`) return;
-            lastMenuBtnRef.current = key;
+            if (!menuBtnChanged(key)) return;
             setMenuBtn(pos);
             setBoxBar(bar ? { ...bar, kind: box?.matches('.grid') ? 'grid' : 'box', variant } : null);
         };
@@ -611,8 +592,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             }) : null;
             gridTargetRef.current = pos ? grid : null;
             const key = pos ? `${pos.top}|${pos.left}` : '';
-            if (key === lastGridPlusRef.current) return;
-            lastGridPlusRef.current = key;
+            if (!gridPlusChanged(key)) return;
             setGridPlus(pos);
         };
         const updateParentHandle = () => {
@@ -629,8 +609,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             parentTargetRef.current = pos ? container : null;
             const kind = container?.matches('.grid') ? 'grid' : 'box';
             const key = pos ? `${pos.top}|${pos.left}|${kind}` : '';
-            if (key === lastParentRef.current) return;
-            lastParentRef.current = key;
+            if (!parentChanged(key)) return;
             setParentHandle(pos ? { ...pos, kind } : null);
         };
         const updateOverlays = () => { updateMenuBtn(); updateGridPlus(); updateParentHandle(); };

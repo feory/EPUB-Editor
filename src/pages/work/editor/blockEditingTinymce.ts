@@ -1,13 +1,14 @@
 import type { TinyMCEEditor } from './types';
 import type { EditorLike } from './blockEditing';
 import { editBlocks } from './blockEdit';
+import { MARK } from './ephemeral';
 
 /** Adapter TinyMCE do seam EditorLike (blockEditing.ts). */
 export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
     return {
         selectionNode: () => editor.selection.getNode(),
         // marcado por useBlockOverlays (data-mce-psbox) ao clicar na área da caixa/grelha
-        selectedContainer: () => editor.getBody().querySelector('[data-mce-psbox]') as HTMLElement | null,
+        selectedContainer: () => editor.getBody().querySelector(`[${MARK.box}]`) as HTMLElement | null,
         closest: (node, selector) => editor.dom.getParent(node, selector) as HTMLElement | null,
         setStyle: (el, name, value) => editor.dom.setStyle(el, name, value),
         setImportantStyle: (el, name, value) => {

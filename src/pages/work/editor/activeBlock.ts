@@ -1,4 +1,5 @@
 import type { TinyMCEEditor } from './types';
+import { MARK, BODY_CLASS } from './ephemeral';
 
 /**
  * Bloco ativo (ver Design/CONTEXT.md): o parágrafo/título onde está o cursor, com o editor
@@ -41,10 +42,8 @@ export function attachActiveBlock(
         prevClicked = block;
     });
 
-    // Marcador de UI puro: o serializer nunca o emite (getContent/autosave/EPUB saem limpos).
-    editor.on('PreInit', () => editor.serializer.addTempAttr('data-mce-psactive'));
-    const clearMarks = () => editor.dom.select('[data-mce-psactive]')
-        .forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-psactive', null));
+    const clearMarks = () => editor.dom.select(`[${MARK.active}]`)
+        .forEach((el: HTMLElement) => editor.dom.setAttrib(el, MARK.active, null));
     editor.on('init', clearMarks); // marcadores que vieram no conteúdo carregado
 
     editor.on('NodeChange', () => {
@@ -61,14 +60,14 @@ export function attachActiveBlock(
                 const bs = editor.getBody().style;
                 bs.setProperty('--ps-ml', cs.marginLeft);
                 bs.setProperty('--ps-mr', cs.marginRight);
-                editor.dom.setAttrib(block, 'data-mce-psactive', '1');
+                editor.dom.setAttrib(block, MARK.active, '1');
                 current = block;
             }
         }
         // Classe em vez de body:has([data-mce-psactive]): com milhares de blocos o :has era
         // reavaliado a cada nó inserido/removido (dropdown de estilos ~1,4s → ~25ms).
         // toggle com force não mexe no DOM se o estado não mudou.
-        editor.getBody().classList.toggle('ps-has-active', !!current);
+        editor.getBody().classList.toggle(BODY_CLASS.hasActive, !!current);
     }, true);
 
     return {
