@@ -5,7 +5,7 @@ import { importEpub, type ImportEpubApi } from './import-epub';
 
 beforeAll(() => {
     const win = new Window();
-    Object.assign(globalThis, { DOMParser: win.DOMParser, document: win.document, NodeFilter: win.NodeFilter });
+    Object.assign(globalThis, { DOMParser: win.DOMParser, document: win.document, NodeFilter: win.NodeFilter, window: win }); // window: DOMPurify (document-importer)
 });
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]);

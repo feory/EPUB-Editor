@@ -9,6 +9,7 @@ import { PagelistUpdateModal } from './work/modals/PagelistUpdateModal';
 import type { PageAnchor } from '../services/page-list/page-list';
 import { EpubMappingModal } from './EpubMappingModal';
 import { scanEpubClasses } from '../services/import/epub-importer';
+import { detectFormat } from '../services/import/import-file';
 import type { EpubClassInfo } from '../services/import/epub-importer';
 import type { ImportOptions } from '../utils/html-cleaner';
 import type { DocxStyleMapping } from '../services/import/document-importer';
@@ -246,16 +247,12 @@ export function WorkPage() {
   // classes primeiro; EPUB da própria app → segue direto para as Opções de Importação, como
   // os outros formatos. scanEpubClasses só faz algo em EPUBs de plataforma antiga.
   const processFile = useCallback((file: File) => {
-    const isPdf = file.type === 'application/pdf';
-    const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx');
-    const isHtml = file.type === 'text/html' || file.name.endsWith('.html') || file.name.endsWith('.htm');
-    const isIdml = file.name.endsWith('.idml') || file.name.endsWith('.zip');
-    const isEpub = file.name.endsWith('.epub');
-    if (!(isPdf || isDocx || isHtml || isIdml || isEpub)) {
+    const format = detectFormat(file);
+    if (!format) {
       showNotification('error', 'Formato não suportado. Use PDF, DOCX, IDML/ZIP, EPUB ou HTML.');
       return;
     }
-    if (!isEpub) { setPendingImportFile(file); return; }
+    if (format !== 'epub') { setPendingImportFile(file); return; }
     scanEpubClasses(file)
       .then(({ legacy, classes }) => {
         if (legacy && classes.length) setEpubMapping({ file, classes });
@@ -268,7 +265,7 @@ export function WorkPage() {
     const file = pendingImportFile;
     setPendingImportFile(null);
     if (!file) return;
-    if (file.type === 'application/pdf') {
+    if (detectFormat(file) === 'pdf') {
       setImportOptions(options);
       setCurrentFile(file);
       setShowPreview(true);

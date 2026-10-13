@@ -46,3 +46,7 @@ _Avoid_: sidebar de caixa, modal de edição
 **Edição de bloco**:
 O module (`editor/blockEditing.ts`) que sabe o que está sob o cursor e como ler/alterar cada alvo. É o único interface que o Painel de edição usa: `inspect` → `BlockInfo`, `apply(alvo, alteração)`. Modo "Este bloco" = style inline; modo "Estilo" = regra CSS do livro (fora deste module).
 _Avoid_: setProps, editor de atributos
+
+**Importação**:
+O module (`services/import/import-file.ts`) que transforma um ficheiro (PDF, Word, HTML, IDML/zip, EPUB) mais as decisões do utilizador em HTML canónico do editor. É dono da deteção de formato e da política "estruturado vs heurístico" (IDML/EPUB não levam Ficha Técnica automática nem conversões heurísticas). `extractFile` + `finalizeImport` são as duas metades de `importFile`; separadas porque criar um ebook novo tem de criar o registo antes de subir as imagens. Não inclui os pré-passos que alimentam modais (`scan*`, `analyzeBook`) nem a gravação no servidor.
+_Avoid_: upload, conversão

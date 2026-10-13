@@ -1,12 +1,9 @@
 import { useMutation } from '@tanstack/react-query';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { extractHtmlFromPdf } from '../../../services/import/pdf/pdf-service';
-import { extractDocument } from '../../../services/import/document-importer';
+import { importFile } from '../../../services/import/import-file';
 import type { DocxStyleMapping } from '../../../services/import/document-importer';
-import { cleanEditorHtml, applyImportOptions, prependFichaTecnica } from '../../../utils/html-cleaner';
 import type { ImportOptions } from '../../../utils/html-cleaner';
 import type { ImageSettings } from '../../../components/MarginPreview';
-import { uploadExtractedImages } from '../../../services/import/extracted-images';
 import type { NotificationType } from '../../../context/NotificationContext';
 
 interface UseEbookImportOptions {
@@ -16,25 +13,18 @@ interface UseEbookImportOptions {
 }
 
 export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImportOptions) {
+    const ports = () => ({ isbn: isbn!, uploadImages: (fd: FormData) => ebooksApi.uploadImages(isbn!, fd) });
+
     const importPdfMutation = useMutation({
-        mutationFn: async ({
-            file,
-            headerMargin,
-            footerMargin,
-            imageSettings,
-        }: {
+        mutationFn: async ({ file, headerMargin, footerMargin, imageSettings, options }: {
             file: File;
             headerMargin: number;
             footerMargin: number;
             imageSettings: ImageSettings;
             options: ImportOptions;
-        }) => {
-            const result = await extractHtmlFromPdf(file, { headerMargin, footerMargin, imageSettings });
-            const blobs = new Map([...result.images].map(([id, img]) => [id, img.blob]));
-            return uploadExtractedImages(isbn!, result.html, blobs, fd => ebooksApi.uploadImages(isbn!, fd));
-        },
-        onSuccess: (newHtml, variables) => {
-            onImport(prependFichaTecnica(applyImportOptions(cleanEditorHtml(newHtml), variables.options)));
+        }) => importFile(file, { options, pdf: { headerMargin, footerMargin, imageSettings } }, ports()),
+        onSuccess: ({ html }) => {
+            onImport(html);
             showNotification('success', 'PDF importado com sucesso!');
         },
         onError: (error) => {
@@ -45,21 +35,12 @@ export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImp
 
     const importDocumentMutation = useMutation({
         mutationFn: async ({ file, options, styleMapping, epubClassMapping }: { file: File; options: ImportOptions; styleMapping?: DocxStyleMapping; epubClassMapping?: Record<string, string> }) => {
-            const result = await extractDocument(file, { convertListsToDialogue: options.convertListsToDialogue, styleMapping, detectParagraphSpacing: options.detectParagraphSpacing, epubClassMapping });
+            const result = await importFile(file, { options, styleMapping, epubClassMapping }, ports());
             // Fire-and-forget: PDF de impressão do zip IDML, para o viewer lado a lado no editor.
             if (result.printPdf) ebooksApi.uploadPrintPdf(isbn!, result.printPdf).catch(() => {});
-
-            const finalHtml = await uploadExtractedImages(isbn!, result.html, result.images, fd => ebooksApi.uploadImages(isbn!, fd));
-            return { html: finalHtml, pageBreaks: result.pageBreaks, figuresPlaced: result.figuresPlaced };
+            return result;
         },
-        onSuccess: ({ html: newHtml, pageBreaks, figuresPlaced }, variables) => {
-            // IDML/EPUB já vêm estruturados (estilos/classes nomeados, começam por heading
-            // ou pela própria Ficha Técnica): saltar as conversões heurísticas e a Ficha
-            // Técnica automática (que criaria um capítulo 0 vazio / duplicaria a ficha).
-            const isStructured = /\.(idml|zip|epub)$/.test(variables.file.name.toLowerCase());
-            const html = isStructured
-                ? cleanEditorHtml(newHtml)
-                : prependFichaTecnica(applyImportOptions(cleanEditorHtml(newHtml), variables.options));
+        onSuccess: ({ html, pageBreaks, figuresPlaced }) => {
             onImport(html);
             showNotification('success', 'Documento importado com sucesso!');
             if (pageBreaks) {
