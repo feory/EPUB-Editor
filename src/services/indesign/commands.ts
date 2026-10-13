@@ -40,8 +40,9 @@ function suggest(tag: string, cls: string, p: Props, base: number): string {
     if (/legenda/i.test(cls)) return 'p-legendas';
     const size = (em(p['font-size']) || base) / base;
     if (size >= 1.6) return 'h1';
-    // subtítulo dentro do capítulo → h3 (h2 viraria capítulo no editor)
-    if (size >= 1.1 || /t-?tulo|titulo|^subs?[-_\d]|^sub\d/i.test(cls)) return 'h3';
+    // subtítulo dentro do capítulo → h3 (h2 viraria capítulo no editor); só pelo tamanho, nunca pelo nome:
+    // texto ao tamanho do corpo fica automático (negrito/itálico → p-bold/p-italic na tradução)
+    if (size >= 1.1) return 'h3';
     return '';
 }
 
@@ -303,8 +304,8 @@ function convertBody(doc: Document, map: BookMap, resolve: Resolve, base: number
             if (referenced.has(id) && first && !first.hasAttribute('id')) first.setAttribute('id', id);
             if (!referenced.has(id) || first?.getAttribute('id') === id) unwrap(el);
         }
-        // âncoras de texto vazias do InDesign que nada referencia
-        if (tag === 'a' && !el.hasAttribute('href') && !el.childNodes.length && !referenced.has(el.getAttribute('id') ?? '')) el.remove();
+        // âncoras de texto vazias sem id (as com id ficam: são pontos de ligação)
+        if (tag === 'a' && !el.hasAttribute('href') && !el.childNodes.length && !el.hasAttribute('id')) el.remove(); // âncora com id fica, referenciada ou não
     }
 
     // Modelo de notas da app: o nº (noteref/backlink) tem de estar dentro de <sup>

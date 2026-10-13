@@ -92,7 +92,7 @@ CSS resolvido (estilo + overrides + `#id`, shorthands expandidos):
   - título sem letras/números (`*`) → `p-asterisk`.
 - `span.X`: `i b u sup sub small-caps drop-cap` (combináveis), só com efeito real no CSS; resto desembrulhado.
 - `__remove__`: apaga elemento **e** conteúdo; só lixo comprovado e confirmado.
-- Sugestões: corpo ≥ 1.6× → `h1`; ≥ 1.1× ou nome título/subt/sub → `h3`; "legenda" → `p-legendas`; spans pelo CSS.
+- Sugestões: corpo ≥ 1.6× → `h1`; ≥ 1.1× → `h3` (só pelo tamanho, nunca pelo nome do estilo); "legenda" → `p-legendas`; spans pelo CSS.
 - Checklist:
   - `h1` só para títulos do TOC original (aforismos, rosto, autor, "FIM" → `""`/`h3`; centenas de `h1` = erro);
   - subtítulos `h3`, legendas `p-legendas`, citações `p-quote`;
@@ -121,7 +121,7 @@ CSS resolvido (estilo + overrides + `#id`, shorthands expandidos):
   - hífen no fim da linha → junta, mantém o hífen;
   - no início/fim do parágrafo → sai;
   - na app: caixa no modal, desligada por omissão.
-- **Sai**: CSS/fontes do InDesign, `style=""`, classes de tabelas/imagens/listas/links, `<div>` contentores (id referenciado passa ao 1.º filho), âncoras `_idTextAnchor` vazias não referenciadas, hífenes discricionários (`U+00AD`), `nav` do spine.
+- **Sai**: CSS/fontes do InDesign, `style=""`, classes de tabelas/imagens/listas/links, `<div>` contentores (id referenciado passa ao 1.º filho), hífenes discricionários (`U+00AD`), `nav` do spine.
 - **Fica**: nomes dos ficheiros, imagens, capa, OPF/metadados, `toc.ncx`, `nav` (com page-list).
 
 ## Verificação — diferenças esperadas
