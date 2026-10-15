@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { TinyMCEEditor } from '../types';
 import { chapterOfTarget } from '../../../../utils/indice-marker';
+import { usePopupDismiss } from './popupDismiss';
 
 export interface IndiceLinkSubtitle { chapterIndex: number; index: number; text: string; anchor?: true; id?: string }
 export interface IndiceLinkChapter { title: string; level: string }
@@ -8,7 +9,7 @@ export interface IndiceLinkChapter { title: string; level: string }
 interface Props {
     top: number;
     left: number;
-    editor: TinyMCEEditor | null;
+    editorRef: React.MutableRefObject<TinyMCEEditor | null>;
     chapters: IndiceLinkChapter[];
     subtitles: IndiceLinkSubtitle[];
     ownIndex: number;           // capítulo Índice (não é destino)
@@ -21,35 +22,13 @@ interface Props {
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 /** "Ligar a…" do Índice: capítulos recolhidos, clicar na seta expande os subtítulos; pesquisa filtra e expande. */
-export function IndiceLinkPanel({ top, left, editor, chapters, subtitles, ownIndex, currentTarget, onPick, onClose }: Props) {
+export function IndiceLinkPanel({ top, left, editorRef, chapters, subtitles, ownIndex, currentTarget, onPick, onClose }: Props) {
     const [query, setQuery] = useState('');
     const currentChapterIndex = chapterOfTarget(currentTarget);
     const [open, setOpen] = useState<Set<number>>(() => new Set(currentChapterIndex >= 0 ? [currentChapterIndex] : subtitles.filter((t) => t.id === currentTarget).map((t) => t.chapterIndex)));
     const rootRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const inside = (e: Event) => !!rootRef.current?.contains(e.target as Node);
-        const onDown = (e: MouseEvent) => { if (!inside(e)) onClose(); };
-        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-        const onScroll = (e: Event) => { if (!inside(e)) onClose(); }; // o scroll da própria lista não fecha
-        const win = editor?.getWin();
-        document.addEventListener('mousedown', onDown, true);
-        document.addEventListener('keydown', onKey);
-        window.addEventListener('scroll', onScroll, true);
-        win?.addEventListener('scroll', onClose);
-        window.addEventListener('resize', onClose);
-        // Cliques/teclas DENTRO do iframe do editor não chegam ao document da app — sem isto o
-        // painel ficava aberto ao clicar noutro parágrafo (e a ligar o parágrafo antigo, já guardado por pIndex).
-        editor?.on('mousedown keydown', onClose);
-        return () => {
-            document.removeEventListener('mousedown', onDown, true);
-            document.removeEventListener('keydown', onKey);
-            window.removeEventListener('scroll', onScroll, true);
-            win?.removeEventListener('scroll', onClose);
-            window.removeEventListener('resize', onClose);
-            editor?.off('mousedown keydown', onClose);
-        };
-    }, [editor, onClose]);
+    usePopupDismiss(true, editorRef, (t) => !!rootRef.current?.contains(t), onClose); // o scroll da própria lista não fecha
 
     const rows = useMemo(() => {
         const q = fold(query.trim());

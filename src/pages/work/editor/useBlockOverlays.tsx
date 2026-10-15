@@ -13,6 +13,7 @@ import type { ActiveBlock } from './activeBlock';
 import { plusCenterY, PLUS_SIZE } from './blockGeometry';
 import { topLevelBlock, hitsPlus, gripState, gripZone, dropTargetAt, changeDetector } from './blockInteraction';
 import { MARK, BODY_CLASS } from './ephemeral';
+import { miniMenuAnchor, usePopupDismiss } from './overlays/popupDismiss';
 
 // readOnly atravessa de fora; tudo o resto em BlockOverlaysProps só alimenta o render interno.
 type BlockOverlaysInternal = Omit<BlockOverlaysProps, 'readOnly'>;
@@ -68,22 +69,14 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const styleMenuGuardRef = useRef(0);
     const openStyleMenu = (kind: 'para' | 'head') => {
         if (Date.now() < styleMenuGuardRef.current) return; // acabou de fechar (2º clique no ⋮) → não reabrir
-        const pop = document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null;
-        const r = pop?.getBoundingClientRect();
-        setStyleMenu({ top: r ? r.bottom + 4 : 120, left: r ? r.left : 120, kind });
+        setStyleMenu({ ...miniMenuAnchor(), kind });
     };
-    // Fechar ao clicar fora do menu (⋮ novamente, outro botão do mini-menu, ou qualquer sítio).
-    // Listener global porque o pop do mini-menu (TinyMCE aux) fica acima de um backdrop React.
-    useEffect(() => {
-        if (!styleMenu) return;
-        const onDown = (e: MouseEvent) => {
-            if ((e.target as HTMLElement).closest?.('[data-style-menu]')) return; // clique dentro do menu
-            setStyleMenu(null);
-            styleMenuGuardRef.current = Date.now() + 300; // click do ⋮ que se segue não reabre
-        };
-        document.addEventListener('mousedown', onDown, true);
-        return () => document.removeEventListener('mousedown', onDown, true);
-    }, [styleMenu]);
+    // Fechar ao clicar fora (⋮ novamente, outro botão do mini-menu, o iframe do editor, Esc, scroll). O pop do
+    // mini-menu (TinyMCE aux) fica acima de um backdrop React — daí o listener global em usePopupDismiss.
+    usePopupDismiss(!!styleMenu, editorRef, (t) => !!(t as HTMLElement).closest?.('[data-style-menu]'), () => {
+        setStyleMenu(null);
+        styleMenuGuardRef.current = Date.now() + 300; // click do ⋮ que se segue não reabre
+    });
     const styleAction = (format: string) => {
         setStyleMenu(null);
         const editor = editorRef.current;

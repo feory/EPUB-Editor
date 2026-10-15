@@ -20,7 +20,6 @@ export interface SetupLive {
     onTogglePrintPdf?: () => void;
     chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
     activeChapterIndex: number;
-    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) => void; // null = remover ligação
 }
 
 interface SetupDeps {

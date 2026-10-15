@@ -1,4 +1,4 @@
-import React, { useRef, forwardRef, useImperativeHandle, useEffect, useCallback, useState } from 'react';
+import React, { useRef, forwardRef, useImperativeHandle, useEffect, useCallback } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import type { RawEditorOptions } from 'tinymce';
 import { useStyles } from '../../../context/StyleContext';
@@ -52,7 +52,8 @@ import 'tinymce/skins/ui/oxide/content.css';
 import type { TinyMCEEditor } from '../editor/types';
 import { attachContentChannel, type ContentChannel } from '../editor/contentChannel';
 import { normalizeEditorBody } from '../editor/normalizeBody';
-import { IndiceLinkPanel, type IndiceLinkSubtitle } from '../editor/overlays/IndiceLinkPanel';
+import type { IndiceLinkSubtitle } from '../editor/overlays/IndiceLinkPanel';
+import { useIndiceLinkPanel } from '../editor/overlays/useIndiceLinkPanel';
 import type { GrammarMatch } from '../hooks/useEbookGrammar';
 
 type FilePickerCallback = NonNullable<RawEditorOptions['file_picker_callback']>;
@@ -174,17 +175,10 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     const ebookLabel = `${isbn ?? ''}${title ? ` - ${title}` : ''}`;
     const live = useLive({
         htmlContent, setHtmlContent, grammarCache, onGrammarCheck, onImageUploaded, onVisiblePageChange,
-        onToggleFocusMode, onTogglePrintPdf, ebookLabel, chapters, activeChapterIndex, onLinkIndiceEntry, getIndiceSubtitles,
+        onToggleFocusMode, onTogglePrintPdf, ebookLabel, chapters, activeChapterIndex,
         onEditBox, onBlockChange, readOnly,
     });
-    // Painel "Ligar a…" do Índice (mini-menu): subtítulos lidos ao abrir (split do livro, não a cada edição).
-    const [indiceLink, setIndiceLink] = useState<{ top: number; left: number; pIndex: number; currentTarget: string; subtitles: IndiceLinkSubtitle[] } | null>(null);
-    const closeIndiceLink = useCallback(() => setIndiceLink(null), []);
-    useEffect(closeIndiceLink, [activeChapterIndex, closeIndiceLink]); // pIndex deixa de valer noutro capítulo
-    const openIndiceLinkPanel = (pIndex: number, currentTarget: string) => {
-        const r = (document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null)?.getBoundingClientRect();
-        setIndiceLink({ top: r ? r.bottom + 4 : 120, left: r ? r.left : 120, pIndex, currentTarget, subtitles: live.current.getIndiceSubtitles?.() ?? [] });
-    };
+    const indiceLinkPanel = useIndiceLinkPanel(editorRef, { chapters, activeChapterIndex, getSubtitles: getIndiceSubtitles, onLink: onLinkIndiceEntry });
     const syncEditorHeightRef = useRef<() => void>(() => {});
     const overlays = useBlockOverlays(editorRef, {
         activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook,
@@ -991,7 +985,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
                             openStyleMenu: overlays.openStyleMenu,
-                            openIndiceLinkPanel,
+                            openIndiceLinkPanel: indiceLinkPanel.open,
                             live,
                             wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
@@ -1056,16 +1050,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     }}
                 />
                 {overlays.render}
-                {indiceLink && (
-                    <IndiceLinkPanel
-                        {...indiceLink}
-                        editor={editorRef.current}
-                        chapters={chapters}
-                        ownIndex={activeChapterIndex}
-                        onPick={(target, sub) => { onLinkIndiceEntry?.(indiceLink.pIndex, activeChapterIndex, target, sub); setIndiceLink(null); }}
-                        onClose={closeIndiceLink}
-                    />
-                )}
+                {indiceLinkPanel.element}
             </div>
             {imageCrop.cropImage && (
                 <ImageCropModal
