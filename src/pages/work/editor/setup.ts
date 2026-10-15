@@ -50,6 +50,26 @@ export function createEditorSetup(deps: SetupDeps) {
         // Ação de menu/atalho como edição de bloco (blockEdit.ts): passo de undo + change + nodeChanged.
         const undoable = (fn: () => void) => () => editBlocks(editor, fn);
         registerEphemeralMarks(editor); // marcas de UI que o serializer nunca emite (ephemeral.ts)
+        // Âncora manual no cursor: span.manual-anchor vazio (destino de ligações do Índice, ver
+        // findSubtitles em indice-links.ts). id único pela hora (sem varrer o livro todo).
+        editor.addCommand('mceInsertAnchor', () => {
+            const bookmark = editor.selection.getBookmark(2, true);
+            const suggested = (editor.selection.getNode()?.textContent ?? '').trim().slice(0, 60);
+            editor.windowManager.open({
+                title: 'Âncora',
+                body: { type: 'panel', items: [{ type: 'input', name: 'label', label: 'Nome da âncora', placeholder: suggested || 'Âncora' }] },
+                buttons: [{ type: 'cancel', text: 'Cancelar' }, { type: 'submit', text: 'Inserir', primary: true }],
+                onSubmit: (api: { getData: () => { label: string }; close: () => void }) => {
+                    const label = (api.getData().label.trim() || suggested || 'Âncora').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                    api.close();
+                    editor.selection.moveToBookmark(bookmark);
+                    editBlocks(editor, () => {
+                        editor.insertContent(`<span class="manual-anchor" id="idx-anchor-m${Date.now().toString(36)}" data-label="${label}"></span>`);
+                        editor.focus();
+                    });
+                },
+            });
+        });
         editor.addCommand('mceChapterBreak', () => {
             const bookmark = editor.selection.getBookmark(2, true);
             editor.windowManager.open({
@@ -341,6 +361,7 @@ export function createEditorSetup(deps: SetupDeps) {
                     if (/^h[123]$/.test(value) || value === 'p') editor.execCommand('FormatBlock', false, value);
                     else if (value === 'image') editor.execCommand('mceImage');
                     else if (value === 'hr') editor.execCommand('mceInsertContent', false, '<hr>');
+                    else if (value === 'anchor') editor.execCommand('mceInsertAnchor');
                     else editor.formatter.apply(value); // p-quote, p-small, footnote
                 })();
                 editor.focus();

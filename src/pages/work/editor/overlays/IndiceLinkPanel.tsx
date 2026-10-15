@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TinyMCEEditor } from '../types';
 
-export interface IndiceLinkSubtitle { chapterIndex: number; index: number; text: string }
+export interface IndiceLinkSubtitle { chapterIndex: number; index: number; text: string; anchor?: true }
 export interface IndiceLinkChapter { title: string; level: string }
 
 interface Props {
@@ -109,7 +109,7 @@ export function IndiceLinkPanel({ top, left, editor, chapters, subtitles, ownInd
                                     type="button"
                                     onClick={() => onPick(i, t.index)}
                                     className="block w-full text-left truncate pl-9 pr-2 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100"
-                                >{t.text}</button>
+                                >{t.anchor && '⚓ '}{t.text}</button>
                             ))}
                         </div>
                     );

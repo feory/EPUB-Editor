@@ -98,4 +98,5 @@ export const SLASH_ITEMS = [
     { value: 'footnote', text: 'Nota de rodapé', icon: 'ps-smalltext' },
     { value: 'image', text: 'Imagem', icon: 'image' },
     { value: 'hr', text: 'Divisória', icon: 'horizontal-rule' },
+    { value: 'anchor', text: 'Âncora (ligar ao Índice)', icon: 'bookmark' },
 ];

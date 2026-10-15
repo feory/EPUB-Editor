@@ -59,6 +59,8 @@ body:not(.mce-content-readonly):not(.${BODY_CLASS.gripMenu}) > :is(p,h1,h2,h3,h4
 }
 hr { border: none; box-sizing: content-box; height: 1px; background: #cbd5e1; background-clip: content-box; padding: 8px 0; width: 40%; margin: 1em auto; }
 hr.divider-full { width: 100%; }
+span.manual-anchor::before { content: '⚓'; font-size: 0.8em; color: #64748b; cursor: default; } /* só-editor: marcador da âncora manual */
+span.manual-anchor:hover::after { content: ' ' attr(data-label); font: 11px system-ui, sans-serif; color: #475569; background: #f1f5f9; border-radius: 6px; padding: 0 6px; }
 /* content_css:false tira o CSS default do TinyMCE — sem isto as pegas de resize de
    imagem/tabela existem no DOM (editor.plugins.core) mas ficam invisíveis/inertes
    (sem position:absolute nem dimensão), tal como o helper de dimensões e o clone

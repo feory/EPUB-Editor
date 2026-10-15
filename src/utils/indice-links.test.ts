@@ -325,3 +325,24 @@ test('linkOneIndiceEntry: liga a um subtítulo (h2) e reaproveita a âncora ao r
     expect(again.parts[1].match(/chapter-anchor/g)).toHaveLength(1); // sem duplicar
     expect(linkOneIndiceEntry(parts, 0, 1, 1, 9).reason).toBe('target-subtitle-missing');
 });
+
+test('âncora manual: aparece em listSubtitles e é o destino (mesmo dentro de um h2)', () => {
+    const manual = '<span class="manual-anchor" id="idx-anchor-mabc" data-label="Tabela 3"></span>';
+    const parts = [
+        toc('<p>Prefácio</p><p>Ver Tabela</p>'),
+        chapter('1', 'Prefácio') + '<p>texto ' + manual + ' mais</p>',
+    ];
+    const subs = listSubtitles(parts);
+    expect(subs).toEqual([{ chapterIndex: 1, index: 0, text: 'Tabela 3', anchor: true }]);
+    const one = linkOneIndiceEntry(parts, 0, 2, 1, 0);
+    expect(one.ok).toBe(true);
+    expect(one.parts[0]).toContain('data-target="idx-anchor-mabc"');
+    expect(one.parts[1]).not.toContain('chapter-anchor'); // o span já é o destino, não cria outra
+    const inH2 = [parts[0], chapter('1', 'Prefácio') + '<h2>Subtítulo ' + manual + 'Um</h2>'];
+    expect(listSubtitles(inH2).map(s => s.text)).toEqual(['Subtítulo Um', 'Tabela 3']); // ambos, o span não é engolido pelo h2
+});
+
+test('listSubtitles: devolve texto decodificado (ç, ã), não entidades HTML', () => {
+    const parts = [toc('<p>Entrada</p>'), chapter('1', 'Capítulo A') + '<h2>Introdu&ccedil;&atilde;o &amp; Conclus&atilde;o</h2>'];
+    expect(listSubtitles(parts).map(s => s.text)).toEqual(['Introdução & Conclusão']);
+});

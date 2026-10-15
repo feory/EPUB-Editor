@@ -82,7 +82,7 @@ interface WorkEditorProps {
     onTogglePrintPdf?: () => void;
     onVisiblePageChange?: (page: number) => void;
     onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number, subIndex?: number) => void;
-    getIndiceSubtitles?: () => { chapterIndex: number; index: number; text: string }[];
+    getIndiceSubtitles?: () => IndiceLinkSubtitle[];
     onAddComment?: (anchorId: string) => void;
     onEditBox?: () => void;
     onBlockChange?: (info: BlockInfo) => void;
@@ -974,7 +974,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         // preservar o marcador de quebra de página e o de link do Índice (span vazio
                         // com classe/dados) — em TinyMCE isto SUBSTITUI, não estende, os atributos
                         // permitidos no span; sem data-target aqui, o marcador idx-link perde o alvo
-                        extended_valid_elements: 'span[class|data-page|data-target|data-comment-id|id|style]',
+                        extended_valid_elements: 'span[class|data-page|data-target|data-comment-id|data-label|id|style]',
                         plugins: EDITOR_PLUGINS,
                         // Bubble de formatação na seleção de texto (só selection; sem barras de inserção/imagem).
                         quickbars_insert_toolbar: false,

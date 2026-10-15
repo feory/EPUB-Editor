@@ -94,24 +94,32 @@ function findSubHeading(partContent: string, lineNorm: string, used: Set<number>
 // Subtítulos de UM capítulo, por ordem física: h2/h3 e pseudo-headings (p-bold/…), exceto o
 // heading do próprio capítulo (logo a seguir ao marcador). `end` = onde a âncora entra, logo
 // depois do bloco (mesma posição que o automático em lote usa, ver linkIndiceEntries).
-function findSubtitles(part: string): { text: string; end: number }[] {
+// Âncoras manuais (span.manual-anchor, inseridas no cursor — ver mceInsertAnchor em setup.ts) entram
+// também, por posição física: já SÃO o destino (`id`), não precisam de âncora nova. Lidas à parte
+// dos subtítulos porque podem estar DENTRO de um (h2, p-bold) — uma só regex engoliria o span.
+function findSubtitles(part: string): { text: string; end: number; id?: string }[] {
     const skip = headingPrefixLength(part);
     const re = /<(h[23])\b[^>]*>([\s\S]*?)<\/\1>|<p\b[^>]*\bclass="[^"]*\b(?:p-bold|p-italic|p-bold-italic|p-uppercase)\b[^"]*"[^>]*>([\s\S]*?)<\/p>/gi;
-    const out: { text: string; end: number }[] = [];
+    const found: { text: string; end: number; at: number; id?: string }[] = [];
     let m: RegExpExecArray | null;
     while ((m = re.exec(part)) !== null) {
         if (m.index < skip) continue;
-        const text = flattenHeadingText(m[2] ?? m[3]).trim();
-        if (normalizeText(text).length >= MIN_TITLE) out.push({ text, end: m.index + m[0].length });
+        const text = decodeEntities(flattenHeadingText(m[2] ?? m[3])).trim(); // o HTML guarda "&ccedil;" etc.: o painel mostra texto
+        if (normalizeText(text).length >= MIN_TITLE) found.push({ text, end: m.index + m[0].length, at: m.index });
     }
-    return out;
+    const anchors = /<span\b([^>]*\bmanual-anchor\b[^>]*)><\/span>/gi;
+    while ((m = anchors.exec(part)) !== null) {
+        const id = m[1].match(/\bid="([^"]+)"/)?.[1];
+        if (id) found.push({ text: decodeEntities(m[1].match(/\bdata-label="([^"]*)"/)?.[1] ?? '').trim() || id, end: m.index + m[0].length, at: m.index, id });
+    }
+    return found.sort((x, y) => x.at - y.at);
 }
 
 // Subtítulos de todos os capítulos, para o dropdown "Ligar a…" do Índice (`index` = posição em
 // findSubtitles desse capítulo, o que linkOneIndiceEntry recebe como `subIndex`).
-export function listSubtitles(rawParts: string[]): { chapterIndex: number; index: number; text: string }[] {
+export function listSubtitles(rawParts: string[]): { chapterIndex: number; index: number; text: string; anchor?: true }[] {
     return rawParts.flatMap((part, chapterIndex) =>
-        findSubtitles(stripPart(part)).map((s, index) => ({ chapterIndex, index, text: s.text })));
+        findSubtitles(part).map((s, index) => ({ chapterIndex, index, text: s.text, ...(s.id ? { anchor: true as const } : {}) })));
 }
 
 export interface LinkIndiceResult {
@@ -286,8 +294,8 @@ export function linkOneIndiceEntry(rawParts: string[], indiceChapterIndex: numbe
     if (subIndex !== undefined) {
         const sub = findSubtitles(targetContent)[subIndex];
         if (!sub) return { parts: rawParts, ok: false, reason: 'target-subtitle-missing' };
-        const existing = targetContent.slice(sub.end).match(/^\s*<p\b(?=[^>]*\bclass="chapter-anchor")[^>]*\bid="([^"]+)"[^>]*><\/p>/);
-        if (existing) id = existing[1];
+        const existing = sub.id ?? targetContent.slice(sub.end).match(/^\s*<p\b(?=[^>]*\bclass="chapter-anchor")[^>]*\bid="([^"]+)"[^>]*><\/p>/)?.[1];
+        if (existing) id = existing;
         else {
             const used = [...targetContent.matchAll(new RegExp(`id="${id}-m(\\d+)"`, 'g'))].map(x => Number(x[1]));
             id = `${id}-m${Math.max(0, ...used) + 1}`;
