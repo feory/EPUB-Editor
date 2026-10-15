@@ -1,5 +1,5 @@
 import type { Editor } from 'tinymce';
-import { isIndiceChapterTitle } from '../../../utils/indice-links';
+import { isIndiceChapterTitle, entryIndexOf } from '../../../utils/indice-links';
 import { MANUAL_ANCHOR_CLASS, manualAnchorHtml, newManualAnchorId } from '../../../utils/indice-marker';
 import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
@@ -431,8 +431,7 @@ export function createEditorSetup(deps: SetupDeps) {
                 // Já ligada? o data-target do idx-link no parágrafo é o destino atual — o painel marca-o com visto.
                 const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
                 if (!block || block.nodeName !== 'P') return;
-                const pIndex = (Array.from(editor.getBody().children) as HTMLElement[])
-                    .filter((el) => el.nodeName === 'P').indexOf(block);
+                const pIndex = entryIndexOf(editor.getBody(), block);
                 if (pIndex === -1) return;
                 const curTarget = block.querySelector('span.idx-link')?.getAttribute('data-target') || '';
                 openIndiceLinkPanel(pIndex, curTarget);

@@ -261,9 +261,15 @@ export interface LinkOneEntryResult {
     reason?: 'index-out-of-range' | 'entry-paragraph-not-found' | 'target-marker-missing' | 'target-subtitle-missing' | 'entry-not-linked';
 }
 
-// <p> nº `pIndex` (0-based, só <p>) de um capítulo — mesma contagem do mini-menu sobre editor.getBody().
+// Endereço de uma entrada do Índice = nº (0-based) do <p> em ORDEM DE DOCUMENTO, contando TODOS os <p>
+// (também os dentro de caixas, células, itens de lista). Duas metades que têm de bater: `entryIndexOf`
+// (o editor, sobre o DOM) e `findEntryParagraph` (as parts, sobre a string) — testadas juntas.
+export function entryIndexOf(root: ParentNode, block: Element): number {
+    return Array.from(root.querySelectorAll('p')).indexOf(block as HTMLParagraphElement);
+}
+
 function findEntryParagraph(content: string, pIndex: number): { start: number; end: number; attrs: string; inner: string } | null {
-    const re = /<p([^>]*)>([\s\S]*?)<\/p>/gi;
+    const re = /<p\b([^>]*)>([\s\S]*?)<\/p>/gi; // \b: não apanhar <pre>
     let m: RegExpExecArray | null;
     let count = -1;
     while ((m = re.exec(content)) !== null) {

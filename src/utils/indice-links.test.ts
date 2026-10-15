@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles, unlinkOneIndiceEntry } from './indice-links';
+import '../services/indesign/happy-dom'; // DOMParser no bun
+import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles, unlinkOneIndiceEntry, entryIndexOf } from './indice-links';
 import { chapterOfTarget, chapterTargetId, subTargetId, pickedSubTargetId, newManualAnchorId, manualAnchorHtml, unwrapTrailingIdxLink, idxLinkHtml } from './indice-marker';
 
 const toc = (body: string) => `<p class="chapter-break-h1" data-title="Índice"></p><h1>Índice</h1>${body}`;
@@ -372,4 +373,17 @@ test('listSubtitles: âncora manual expõe o id (o painel marca o destino atual)
     const manual = manualAnchorHtml('idx-anchor-mabc', 'Tabela 3');
     const subs = listSubtitles([toc('<p>x</p>'), chapter('1', 'Capítulo A') + '<p>t ' + manual + '</p>']);
     expect(subs[0]).toMatchObject({ anchor: true, id: 'idx-anchor-mabc' });
+});
+
+test('entryIndexOf (DOM) e findEntryParagraph (string) apontam para o mesmo <p>, mesmo com <p> aninhados e <pre>', () => {
+    const html = toc('<p>A</p><div><p>B dentro de caixa</p></div><pre>código</pre><table><tr><td><p>C na célula</p></td></tr></table><p>D</p>');
+    const root = new DOMParser().parseFromString(html, 'text/html').body;
+    const ps = Array.from(root.querySelectorAll('p')).filter(p => (p.textContent ?? '').trim() && !p.className);
+    expect(ps.map(p => p.textContent)).toEqual(['A', 'B dentro de caixa', 'C na célula', 'D']);
+    for (const p of ps) {
+        const out = linkOneIndiceEntry([html, chapter('1', 'Capítulo A')], 0, entryIndexOf(root, p), 1);
+        expect(out.ok).toBe(true);
+        expect(out.parts[0]).toContain(`<span class="idx-link" data-target="idx-anchor-1">${p.textContent}</span>`); // ligou ESTA entrada
+        expect(out.parts[0].match(/idx-link/g)).toHaveLength(1);
+    }
 });
