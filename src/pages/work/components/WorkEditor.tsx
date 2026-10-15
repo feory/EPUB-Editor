@@ -1,4 +1,4 @@
-import React, { useRef, forwardRef, useImperativeHandle, useEffect, useCallback } from 'react';
+import React, { useRef, forwardRef, useImperativeHandle, useEffect, useCallback, useState } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import type { RawEditorOptions } from 'tinymce';
 import { useStyles } from '../../../context/StyleContext';
@@ -52,6 +52,7 @@ import 'tinymce/skins/ui/oxide/content.css';
 import type { TinyMCEEditor } from '../editor/types';
 import { attachContentChannel, type ContentChannel } from '../editor/contentChannel';
 import { normalizeEditorBody } from '../editor/normalizeBody';
+import { IndiceLinkPanel, type IndiceLinkSubtitle } from '../editor/overlays/IndiceLinkPanel';
 import type { GrammarMatch } from '../hooks/useEbookGrammar';
 
 type FilePickerCallback = NonNullable<RawEditorOptions['file_picker_callback']>;
@@ -80,7 +81,8 @@ interface WorkEditorProps {
     isFocusMode?: boolean;
     onTogglePrintPdf?: () => void;
     onVisiblePageChange?: (page: number) => void;
-    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void;
+    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number, subIndex?: number) => void;
+    getIndiceSubtitles?: () => { chapterIndex: number; index: number; text: string }[];
     onAddComment?: (anchorId: string) => void;
     onEditBox?: () => void;
     onBlockChange?: (info: BlockInfo) => void;
@@ -163,7 +165,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onVisiblePageChange, onLinkIndiceEntry, onAddComment, onEditBox, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onEditBox, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -172,9 +174,17 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     const ebookLabel = `${isbn ?? ''}${title ? ` - ${title}` : ''}`;
     const live = useLive({
         htmlContent, setHtmlContent, grammarCache, onGrammarCheck, onImageUploaded, onVisiblePageChange,
-        onToggleFocusMode, onTogglePrintPdf, ebookLabel, chapters, activeChapterIndex, onLinkIndiceEntry,
+        onToggleFocusMode, onTogglePrintPdf, ebookLabel, chapters, activeChapterIndex, onLinkIndiceEntry, getIndiceSubtitles,
         onEditBox, onBlockChange, readOnly,
     });
+    // Painel "Ligar a…" do Índice (mini-menu): subtítulos lidos ao abrir (split do livro, não a cada edição).
+    const [indiceLink, setIndiceLink] = useState<{ top: number; left: number; pIndex: number; currentChapterIndex: number; subtitles: IndiceLinkSubtitle[] } | null>(null);
+    const closeIndiceLink = useCallback(() => setIndiceLink(null), []);
+    useEffect(closeIndiceLink, [activeChapterIndex, closeIndiceLink]); // pIndex deixa de valer noutro capítulo
+    const openIndiceLinkPanel = (pIndex: number, currentChapterIndex: number) => {
+        const r = (document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null)?.getBoundingClientRect();
+        setIndiceLink({ top: r ? r.bottom + 4 : 120, left: r ? r.left : 120, pIndex, currentChapterIndex, subtitles: live.current.getIndiceSubtitles?.() ?? [] });
+    };
     const syncEditorHeightRef = useRef<() => void>(() => {});
     const overlays = useBlockOverlays(editorRef, {
         activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook,
@@ -981,6 +991,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
                             openStyleMenu: overlays.openStyleMenu,
+                            openIndiceLinkPanel,
                             live,
                             wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
@@ -1045,6 +1056,16 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     }}
                 />
                 {overlays.render}
+                {indiceLink && (
+                    <IndiceLinkPanel
+                        {...indiceLink}
+                        editor={editorRef.current}
+                        chapters={chapters}
+                        ownIndex={activeChapterIndex}
+                        onPick={(target, sub) => { onLinkIndiceEntry?.(indiceLink.pIndex, activeChapterIndex, target, sub); setIndiceLink(null); }}
+                        onClose={closeIndiceLink}
+                    />
+                )}
             </div>
             {imageCrop.cropImage && (
                 <ImageCropModal

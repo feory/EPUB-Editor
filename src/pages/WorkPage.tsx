@@ -520,6 +520,7 @@ export function WorkPage() {
                 showPrintPdfPanel={sidebars.showPrintPdfSidebar}
                 onVisiblePageChange={setEditorVisiblePage}
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
+                getIndiceSubtitles={work.getIndiceSubtitles}
                 onAddComment={(anchorId) => { comments.setDraftAnchorId(anchorId); sidebars.openPanel('comments'); }}
                 onEditBox={() => sidebars.openPanel('box')}
                 onBlockChange={setBlockInfo}

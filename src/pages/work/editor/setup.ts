@@ -19,7 +19,7 @@ export interface SetupLive {
     onTogglePrintPdf?: () => void;
     chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
     activeChapterIndex: number;
-    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void;
+    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number, subIndex?: number) => void;
 }
 
 interface SetupDeps {
@@ -28,6 +28,7 @@ interface SetupDeps {
     onExport?: () => void;
     startHtmlEdit: (top: HTMLElement) => void;
     openStyleMenu: (kind: 'para' | 'head') => void;
+    openIndiceLinkPanel: (pIndex: number, currentChapterIndex: number) => void;
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
     onEditBoxStyle: () => void;
@@ -42,7 +43,7 @@ interface SetupDeps {
 
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
-    const { onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
+    const { onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu, openIndiceLinkPanel,
         live, wireOverlays, onCropImage, onAddComment, onEditBoxStyle } = deps;
 
     return (editor: Editor) => {
@@ -396,41 +397,24 @@ export function createEditorSetup(deps: SetupDeps) {
                 startHtmlEdit(top);
             },
         });
-        // "Ligar a capítulo…" no mini-menu do Índice: dropdown com os capítulos do livro — cobre
-        // as entradas que o automático (Criação Links Índice, ver indice-links.ts) não apanha,
-        // ex. título da entrada e do capítulo não batem por texto (só entradas de topo; ver
-        // linkOneIndiceEntry). Só ativo dentro do capítulo classificado como Índice; chapters/
-        // activeChapterIndex vêm por ref porque este setup() só corre uma vez, no mount.
-        editor.ui.registry.addMenuButton('idxlinktarget', {
+        // "Ligar a…" no mini-menu do Índice: abre o painel React (overlays/IndiceLinkPanel.tsx) com
+        // capítulos e subtítulos — cobre as entradas que o automático (Criação Links Índice, ver
+        // indice-links.ts) não apanha, ex. título da entrada e do capítulo não batem por texto. Só
+        // ativo dentro do capítulo classificado como Índice; chapters/activeChapterIndex vêm por
+        // ref porque este setup() só corre uma vez, no mount.
+        editor.ui.registry.addButton('idxlinktarget', {
             icon: 'link',
-            tooltip: 'Ligar a capítulo',
-            fetch: (callback) => {
-                const own = live.current.activeChapterIndex;
-                // Já ligada? idx-link já existente no parágrafo diz o capítulo atual (ver
-                // marcação `idx-anchor-<chapterIndex>` / `idx-anchor-<chapterIndex>-<seq>`, tanto
-                // manual como do automático em lote) — marca-o com check no dropdown.
-                const curBlock = blockOf(editor.selection.getNode()) as HTMLElement | null;
-                const curTarget = curBlock?.querySelector('span.idx-link')?.getAttribute('data-target') || '';
-                const currentChapterIndex = Number(curTarget.match(/^idx-anchor-(\d+)/)?.[1] ?? -1);
-                const items = live.current.chapters
-                    .map((c, i) => ({ c, i }))
-                    .filter(({ c, i }) => i !== own && c.level !== 'break')
-                    .map(({ c, i }) => ({
-                        type: 'togglemenuitem' as const,
-                        // Indentação por nível (h2/h3 mais para dentro) — U+00A0 (nbsp),
-                        // um espaço normal colapsa no texto do menuitem.
-                        text: (c.level === 'h3' ? ' '.repeat(8) : c.level === 'h2' ? ' '.repeat(4) : '') + c.title,
-                        active: i === currentChapterIndex,
-                        onAction: () => {
-                            const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
-                            if (!block || block.nodeName !== 'P') return;
-                            const pIndex = (Array.from(editor.getBody().children) as HTMLElement[])
-                                .filter((el) => el.nodeName === 'P').indexOf(block);
-                            if (pIndex === -1) return;
-                            live.current.onLinkIndiceEntry?.(pIndex, own, i);
-                        },
-                    }));
-                callback(items);
+            tooltip: 'Ligar a…',
+            onAction: () => {
+                // Já ligada? idx-link já existente no parágrafo diz o capítulo atual (marcação
+                // `idx-anchor-<chapterIndex>[-…]`, manual ou do automático) — o painel marca-o com visto.
+                const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
+                if (!block || block.nodeName !== 'P') return;
+                const pIndex = (Array.from(editor.getBody().children) as HTMLElement[])
+                    .filter((el) => el.nodeName === 'P').indexOf(block);
+                if (pIndex === -1) return;
+                const curTarget = block.querySelector('span.idx-link')?.getAttribute('data-target') || '';
+                openIndiceLinkPanel(pIndex, Number(curTarget.match(/^idx-anchor-(\d+)/)?.[1] ?? -1));
             },
             onSetup: (api) => {
                 const update = () => api.setEnabled(isIndiceChapterTitle(live.current.chapters[live.current.activeChapterIndex]?.title || ''));

@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { linkIndiceEntries, linkOneIndiceEntry } from './indice-links';
+import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles } from './indice-links';
 
 const toc = (body: string) => `<p class="chapter-break-h1" data-title="Índice"></p><h1>Índice</h1>${body}`;
 const chapter = (_n: string, title: string, body = '<p>corpo</p>') =>
@@ -309,4 +309,19 @@ test('linkIndiceEntries: nº de página depois de uma tag que fecha ("</strong>3
     ];
     const { parts: out } = linkIndiceEntries(parts);
     expect(out[0]).toContain('<strong>Direitos da natureza</strong></span>');
+});
+
+test('linkOneIndiceEntry: liga a um subtítulo (h2) e reaproveita a âncora ao religar', () => {
+    const parts = [
+        toc('<p>Entrada</p>'),
+        chapter('1', 'Capítulo A') + '<h2>Subtítulo Um</h2><p>texto</p><h2>Subtítulo Dois</h2><p>fim</p>',
+    ];
+    expect(listSubtitles(parts).map(s => s.text)).toEqual(['Subtítulo Um', 'Subtítulo Dois']); // sem o heading do capítulo
+    const first = linkOneIndiceEntry(parts, 0, 1, 1, 1);
+    expect(first.ok).toBe(true);
+    expect(first.parts[0]).toContain('data-target="idx-anchor-1-m1"');
+    expect(first.parts[1]).toContain('<h2>Subtítulo Dois</h2><p class="chapter-anchor" id="idx-anchor-1-m1"></p>');
+    const again = linkOneIndiceEntry(first.parts, 0, 1, 1, 1);
+    expect(again.parts[1].match(/chapter-anchor/g)).toHaveLength(1); // sem duplicar
+    expect(linkOneIndiceEntry(parts, 0, 1, 1, 9).reason).toBe('target-subtitle-missing');
 });

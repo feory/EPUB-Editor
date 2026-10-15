@@ -11,7 +11,7 @@ import { compressHtml, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml, applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { moveChapters, renameChapterPart, deleteChapterPart, changeChapterLevel } from '../../utils/toc';
-import { linkIndiceEntries, linkOneIndiceEntry } from '../../utils/indice-links';
+import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles } from '../../utils/indice-links';
 import type { DocxStyleMapping } from '../../services/import/document-importer';
 import { insertPageBreaks } from '../../services/page-list/page-list';
 import type { PageAnchor } from '../../services/page-list/page-list';
@@ -354,23 +354,33 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
 
     // --- Ligar UMA entrada do Índice ao capítulo escolhido manualmente (mini-menu do editor,
     // botão "Ligar a capítulo…") — para o que o automático acima não apanha por texto. ---
-    const handleLinkIndiceEntryManual = useCallback((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => {
+    const handleLinkIndiceEntryManual = useCallback((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number, subIndex?: number) => {
         const syncedHtml = chapterSync.getLatestHtmlContent();
         const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
-        const { parts: updatedParts, ok, reason } = linkOneIndiceEntry(parts, indiceChapterIndex, pIndex, targetChapterIndex);
+        const { parts: updatedParts, ok, reason } = linkOneIndiceEntry(parts, indiceChapterIndex, pIndex, targetChapterIndex, subIndex);
         if (!ok) {
             const reasonMsg = reason === 'entry-paragraph-not-found'
                 ? 'não encontrei o parágrafo do Índice onde tinhas o cursor.'
                 : reason === 'target-marker-missing'
                     ? 'o capítulo escolhido não tem marcador de capítulo válido.'
+                    : reason === 'target-subtitle-missing'
+                        ? 'o subtítulo escolhido já não existe.'
                     : 'tenta de novo.';
             showNotification('error', 'Não foi possível ligar esta entrada: ' + reasonMsg);
             return;
         }
         commitHtml(updatedParts.join(''));
-        const targetTitle = chapterSync.chapters[targetChapterIndex]?.title;
+        const targetTitle = subIndex !== undefined
+            ? listSubtitles(parts).find(s => s.chapterIndex === targetChapterIndex && s.index === subIndex)?.text
+            : chapterSync.chapters[targetChapterIndex]?.title;
         showNotification('success', targetTitle ? `Entrada ligada a "${targetTitle}".` : 'Entrada ligada.');
     }, [chapterSync, commitHtml, showNotification]);
+
+    // Lido só ao abrir o dropdown "Ligar a…" (split do livro inteiro — não corre a cada edição).
+    const getIndiceSubtitles = useCallback(
+        () => listSubtitles(chapterSync.splitHtmlIntoParts(chapterSync.getLatestHtmlContent())),
+        [chapterSync],
+    );
 
     // --- Corrigir espaçamento de links (livro inteiro, independente do capítulo aberto no
     // editor — a validação já corre sobre o livro todo, ver useEbookValidation, mas o fix
@@ -506,6 +516,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         handleApplyDropCaps,
         handleLinkIndiceEntries,
         handleLinkIndiceEntryManual,
+        getIndiceSubtitles,
         handleFixLinks,
         handleGeneratePageList,
         countInWholeBook,
