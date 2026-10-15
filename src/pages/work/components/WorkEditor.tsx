@@ -81,7 +81,7 @@ interface WorkEditorProps {
     isFocusMode?: boolean;
     onTogglePrintPdf?: () => void;
     onVisiblePageChange?: (page: number) => void;
-    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number, subIndex?: number) => void;
+    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) => void; // null = remover ligação
     getIndiceSubtitles?: () => IndiceLinkSubtitle[];
     onAddComment?: (anchorId: string) => void;
     onEditBox?: () => void;
@@ -178,12 +178,12 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         onEditBox, onBlockChange, readOnly,
     });
     // Painel "Ligar a…" do Índice (mini-menu): subtítulos lidos ao abrir (split do livro, não a cada edição).
-    const [indiceLink, setIndiceLink] = useState<{ top: number; left: number; pIndex: number; currentChapterIndex: number; subtitles: IndiceLinkSubtitle[] } | null>(null);
+    const [indiceLink, setIndiceLink] = useState<{ top: number; left: number; pIndex: number; currentChapterIndex: number; linked: boolean; subtitles: IndiceLinkSubtitle[] } | null>(null);
     const closeIndiceLink = useCallback(() => setIndiceLink(null), []);
     useEffect(closeIndiceLink, [activeChapterIndex, closeIndiceLink]); // pIndex deixa de valer noutro capítulo
-    const openIndiceLinkPanel = (pIndex: number, currentChapterIndex: number) => {
+    const openIndiceLinkPanel = (pIndex: number, currentChapterIndex: number, linked: boolean) => {
         const r = (document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null)?.getBoundingClientRect();
-        setIndiceLink({ top: r ? r.bottom + 4 : 120, left: r ? r.left : 120, pIndex, currentChapterIndex, subtitles: live.current.getIndiceSubtitles?.() ?? [] });
+        setIndiceLink({ top: r ? r.bottom + 4 : 120, left: r ? r.left : 120, pIndex, currentChapterIndex, linked, subtitles: live.current.getIndiceSubtitles?.() ?? [] });
     };
     const syncEditorHeightRef = useRef<() => void>(() => {});
     const overlays = useBlockOverlays(editorRef, {

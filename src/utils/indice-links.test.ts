@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles } from './indice-links';
+import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles, unlinkOneIndiceEntry } from './indice-links';
 
 const toc = (body: string) => `<p class="chapter-break-h1" data-title="Índice"></p><h1>Índice</h1>${body}`;
 const chapter = (_n: string, title: string, body = '<p>corpo</p>') =>
@@ -345,4 +345,15 @@ test('âncora manual: aparece em listSubtitles e é o destino (mesmo dentro de u
 test('listSubtitles: devolve texto decodificado (ç, ã), não entidades HTML', () => {
     const parts = [toc('<p>Entrada</p>'), chapter('1', 'Capítulo A') + '<h2>Introdu&ccedil;&atilde;o &amp; Conclus&atilde;o</h2>'];
     expect(listSubtitles(parts).map(s => s.text)).toEqual(['Introdução & Conclusão']);
+});
+
+test('unlinkOneIndiceEntry: volta a texto simples e não toca nas outras entradas', () => {
+    const parts = [toc('<p>Um</p><p>Dois</p>'), chapter('1', 'Capítulo A'), chapter('2', 'Capítulo B')];
+    const a = linkOneIndiceEntry(parts, 0, 1, 1);
+    const b = linkOneIndiceEntry(a.parts, 0, 2, 2);
+    const out = unlinkOneIndiceEntry(b.parts, 0, 1);
+    expect(out.ok).toBe(true);
+    expect(out.parts[0]).toContain('<p>Um</p>');
+    expect(out.parts[0]).toContain('data-target="idx-anchor-2"'); // a outra mantém-se
+    expect(unlinkOneIndiceEntry(out.parts, 0, 1).reason).toBe('entry-not-linked');
 });

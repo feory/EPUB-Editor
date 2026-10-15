@@ -12,7 +12,8 @@ interface Props {
     subtitles: IndiceLinkSubtitle[];
     ownIndex: number;           // capítulo Índice (não é destino)
     currentChapterIndex: number; // destino atual da entrada (-1 = nenhum)
-    onPick: (chapterIndex: number, subIndex?: number) => void;
+    linked: boolean;             // a entrada já tem ligação (qualquer destino) → oferece removê-la
+    onPick: (chapterIndex: number | null, subIndex?: number) => void; // null = remover ligação
     onClose: () => void;
 }
 
@@ -20,7 +21,7 @@ interface Props {
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 /** "Ligar a…" do Índice: capítulos recolhidos, clicar na seta expande os subtítulos; pesquisa filtra e expande. */
-export function IndiceLinkPanel({ top, left, editor, chapters, subtitles, ownIndex, currentChapterIndex, onPick, onClose }: Props) {
+export function IndiceLinkPanel({ top, left, editor, chapters, subtitles, ownIndex, currentChapterIndex, linked, onPick, onClose }: Props) {
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState<Set<number>>(() => new Set(currentChapterIndex >= 0 ? [currentChapterIndex] : []));
     const rootRef = useRef<HTMLDivElement>(null);
@@ -85,6 +86,11 @@ export function IndiceLinkPanel({ top, left, editor, chapters, subtitles, ownInd
                 />
             </div>
             <div className="max-h-80 overflow-y-auto p-1.5">
+                {linked && (
+                    <button type="button" onClick={() => onPick(null)} className="block w-full text-left px-2 py-1.5 mb-1 rounded-lg text-red-600 hover:bg-red-50">
+                        Remover ligação
+                    </button>
+                )}
                 {rows.length === 0 && <div className="px-2 py-3 text-slate-400">Sem resultados.</div>}
                 {rows.map(({ c, i, subs }) => {
                     const expanded = !!query.trim() || open.has(i); // pesquisa expande os capítulos com resultados

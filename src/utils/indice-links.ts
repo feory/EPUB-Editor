@@ -261,7 +261,19 @@ export interface LinkOneEntryResult {
     ok: boolean;
     // Só presente quando ok:false — diz qual verificação falhou (mostrado na notificação, ver
     // handleLinkIndiceEntryManual em useEbookWork.ts), para diagnosticar sem adivinhar.
-    reason?: 'index-out-of-range' | 'entry-paragraph-not-found' | 'target-marker-missing' | 'target-subtitle-missing';
+    reason?: 'index-out-of-range' | 'entry-paragraph-not-found' | 'target-marker-missing' | 'target-subtitle-missing' | 'entry-not-linked';
+}
+
+// <p> nº `pIndex` (0-based, só <p>) de um capítulo — mesma contagem do mini-menu sobre editor.getBody().
+function findEntryParagraph(content: string, pIndex: number): { start: number; end: number; attrs: string; inner: string } | null {
+    const re = /<p([^>]*)>([\s\S]*?)<\/p>/gi;
+    let m: RegExpExecArray | null;
+    let count = -1;
+    while ((m = re.exec(content)) !== null) {
+        count++;
+        if (count === pIndex) return { start: m.index, end: m.index + m[0].length, attrs: m[1], inner: m[2] };
+    }
+    return null;
 }
 
 // Liga UMA entrada do Índice ao capítulo `targetChapterIndex`, escolhida manualmente no editor
@@ -279,14 +291,7 @@ export function linkOneIndiceEntry(rawParts: string[], indiceChapterIndex: numbe
     const targetContent = rawParts[targetChapterIndex];
     if (entryContent === undefined || targetContent === undefined) return { parts: rawParts, ok: false, reason: 'index-out-of-range' };
 
-    const re = /<p([^>]*)>([\s\S]*?)<\/p>/gi;
-    let m: RegExpExecArray | null;
-    let count = -1;
-    let found: { start: number; end: number; attrs: string; inner: string } | null = null;
-    while ((m = re.exec(entryContent)) !== null) {
-        count++;
-        if (count === pIndex) { found = { start: m.index, end: m.index + m[0].length, attrs: m[1], inner: m[2] }; break; }
-    }
+    const found = findEntryParagraph(entryContent, pIndex);
     if (!found) return { parts: rawParts, ok: false, reason: 'entry-paragraph-not-found' };
 
     let id = `idx-anchor-${targetChapterIndex}`;
@@ -322,5 +327,19 @@ export function linkOneIndiceEntry(rawParts: string[], indiceChapterIndex: numbe
     }
     if (anchorPos >= 0) parts[targetChapterIndex] = targetContent.slice(0, anchorPos) + `<p class="chapter-anchor" id="${id}"></p>` + targetContent.slice(anchorPos);
 
+    return { parts, ok: true };
+}
+
+// Tira a ligação de UMA entrada do Índice (volta a texto simples). A âncora no destino fica —
+// pode ter outras ligações; apagá-la é à parte (botão "Remover âncora" no editor).
+export function unlinkOneIndiceEntry(rawParts: string[], indiceChapterIndex: number, pIndex: number): LinkOneEntryResult {
+    const entryContent = rawParts[indiceChapterIndex];
+    if (entryContent === undefined) return { parts: rawParts, ok: false, reason: 'index-out-of-range' };
+    const found = findEntryParagraph(entryContent, pIndex);
+    if (!found) return { parts: rawParts, ok: false, reason: 'entry-paragraph-not-found' };
+    const inner = found.inner.replace(/<span\b[^>]*\bclass="[^"]*\bidx-link\b[^"]*"[^>]*>([\s\S]*?)<\/span>\s*$/, '$1');
+    if (inner === found.inner) return { parts: rawParts, ok: false, reason: 'entry-not-linked' };
+    const parts = rawParts.slice();
+    parts[indiceChapterIndex] = entryContent.slice(0, found.start) + `<p${found.attrs}>${inner}</p>` + entryContent.slice(found.end);
     return { parts, ok: true };
 }

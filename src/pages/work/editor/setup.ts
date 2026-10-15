@@ -19,7 +19,7 @@ export interface SetupLive {
     onTogglePrintPdf?: () => void;
     chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
     activeChapterIndex: number;
-    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number, subIndex?: number) => void;
+    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) => void; // null = remover ligação
 }
 
 interface SetupDeps {
@@ -28,7 +28,7 @@ interface SetupDeps {
     onExport?: () => void;
     startHtmlEdit: (top: HTMLElement) => void;
     openStyleMenu: (kind: 'para' | 'head') => void;
-    openIndiceLinkPanel: (pIndex: number, currentChapterIndex: number) => void;
+    openIndiceLinkPanel: (pIndex: number, currentChapterIndex: number, linked: boolean) => void;
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
     onEditBoxStyle: () => void;
@@ -435,7 +435,7 @@ export function createEditorSetup(deps: SetupDeps) {
                     .filter((el) => el.nodeName === 'P').indexOf(block);
                 if (pIndex === -1) return;
                 const curTarget = block.querySelector('span.idx-link')?.getAttribute('data-target') || '';
-                openIndiceLinkPanel(pIndex, Number(curTarget.match(/^idx-anchor-(\d+)/)?.[1] ?? -1));
+                openIndiceLinkPanel(pIndex, Number(curTarget.match(/^idx-anchor-(\d+)/)?.[1] ?? -1), !!curTarget);
             },
             onSetup: (api) => {
                 const update = () => api.setEnabled(isIndiceChapterTitle(live.current.chapters[live.current.activeChapterIndex]?.title || ''));
@@ -443,6 +443,25 @@ export function createEditorSetup(deps: SetupDeps) {
                 editor.on('NodeChange', update);
                 return () => editor.off('NodeChange', update);
             },
+        });
+
+        // Âncora manual: clicar no ⚓ (pseudo-elemento do span) seleciona-a e mostra "Remover âncora".
+        // Ligações do Índice que lhe apontem ficam só como texto no export (ver convertIndexLinks).
+        const isManualAnchor = (n: Node | null) => !!n && n.nodeName === 'SPAN' && (n as HTMLElement).classList.contains('manual-anchor');
+        editor.on('click', (e: MouseEvent) => { if (isManualAnchor(e.target as Node)) editor.selection.select(e.target as Node); });
+        editor.ui.registry.addButton('removeanchor', {
+            icon: 'remove',
+            text: 'Remover âncora',
+            onAction: () => {
+                const node = editor.selection.getNode();
+                if (isManualAnchor(node)) editBlocks(editor, () => editor.dom.remove(node));
+            },
+        });
+        editor.ui.registry.addContextToolbar('manualanchor', {
+            predicate: isManualAnchor,
+            position: 'node',
+            scope: 'node',
+            items: 'removeanchor',
         });
 
         // Botão (ícone ¶) de estilo de parágrafo — redundante de propósito com os botões psX (acesso

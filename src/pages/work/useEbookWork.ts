@@ -11,7 +11,7 @@ import { compressHtml, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml, applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { moveChapters, renameChapterPart, deleteChapterPart, changeChapterLevel } from '../../utils/toc';
-import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles } from '../../utils/indice-links';
+import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles, unlinkOneIndiceEntry } from '../../utils/indice-links';
 import type { DocxStyleMapping } from '../../services/import/document-importer';
 import { insertPageBreaks } from '../../services/page-list/page-list';
 import type { PageAnchor } from '../../services/page-list/page-list';
@@ -354,9 +354,16 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
 
     // --- Ligar UMA entrada do Índice ao capítulo escolhido manualmente (mini-menu do editor,
     // botão "Ligar a capítulo…") — para o que o automático acima não apanha por texto. ---
-    const handleLinkIndiceEntryManual = useCallback((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number, subIndex?: number) => {
+    const handleLinkIndiceEntryManual = useCallback((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) => {
         const syncedHtml = chapterSync.getLatestHtmlContent();
         const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
+        if (targetChapterIndex === null) { // "Remover ligação"
+            const res = unlinkOneIndiceEntry(parts, indiceChapterIndex, pIndex);
+            if (!res.ok) { showNotification('error', 'Não foi possível remover a ligação desta entrada.'); return; }
+            commitHtml(res.parts.join(''));
+            showNotification('success', 'Ligação removida.');
+            return;
+        }
         const { parts: updatedParts, ok, reason } = linkOneIndiceEntry(parts, indiceChapterIndex, pIndex, targetChapterIndex, subIndex);
         if (!ok) {
             const reasonMsg = reason === 'entry-paragraph-not-found'
