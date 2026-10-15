@@ -77,6 +77,14 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         setStyleMenu(null);
         styleMenuGuardRef.current = Date.now() + 300; // click do ⋮ que se segue não reabre
     });
+    // Âncora no cursor: o menu fecha, o editor recupera o foco e o comando abre o diálogo do nome.
+    const anchorAction = () => {
+        setStyleMenu(null);
+        const editor = editorRef.current;
+        if (!editor) return;
+        editor.focus();
+        editor.execCommand('mceInsertAnchor');
+    };
     const styleAction = (format: string) => {
         setStyleMenu(null);
         const editor = editorRef.current;
@@ -630,7 +638,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         plusMenu, gripMenu, hrCtl, dropLine, styleMenu, menuBtn, boxBar, setBoxVariant, parentHandle, selectParent: () => { const c = parentTargetRef.current; if (c) selectBoxRef.current(c); }, openGridPanel: () => onOpenPanel?.(), gridPlus, gridMenu, openGridMenu, closeGridMenu: () => setGridMenu(null), gridAction, elMenu, openElementMenu, elementAction, closeElementMenu: () => setElMenu(null),
         closePlusMenu, plusAction,
         dismissGripMenu, gripAction, setHrWidth, deleteHr,
-        styleAction, setStyleMenu,
+        styleAction, anchorAction, setStyleMenu,
     };
     const render = <><BlockOverlays {...internal} readOnly={readOnly} />{htmlEdit.element}</>;
 
