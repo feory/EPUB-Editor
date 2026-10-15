@@ -81,6 +81,7 @@ interface WorkEditorProps {
     onToggleFocusMode?: () => void;
     isFocusMode?: boolean;
     onTogglePrintPdf?: () => void;
+    showPrintPdfPanel?: boolean;
     onVisiblePageChange?: (page: number) => void;
     onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) => void; // null = remover ligação
     getIndiceSubtitles?: () => IndiceLinkSubtitle[];
@@ -166,7 +167,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onEditBox, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onEditBox, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -175,7 +176,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     const ebookLabel = `${isbn ?? ''}${title ? ` - ${title}` : ''}`;
     const live = useLive({
         htmlContent, setHtmlContent, grammarCache, onGrammarCheck, onImageUploaded, onVisiblePageChange,
-        onToggleFocusMode, onTogglePrintPdf, ebookLabel, chapters, activeChapterIndex,
+        onToggleFocusMode, onTogglePrintPdf, showPrintPdfPanel, ebookLabel, chapters, activeChapterIndex,
         onEditBox, onBlockChange, readOnly,
     });
     const indiceLinkPanel = useIndiceLinkPanel(editorRef, { chapters, activeChapterIndex, getSubtitles: getIndiceSubtitles, onLink: onLinkIndiceEntry });
@@ -193,8 +194,9 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     // Troca de capítulo / carregamento: o reducer mudou o conteúdo → carregar com o undo a zero
     // (desfazer não pode trazer outro capítulo). Eco de um report (estado → prop) não recarrega.
     useEffect(() => { channelRef.current?.load(htmlContent, { undo: 'reset' }); }, [htmlContent]);
+    useEffect(() => { editorRef.current?.dispatch('pdfpanelchange'); }, [showPrintPdfPanel]); // o botão "Ver PDF" relê live.showPrintPdfPanel
     useEffect(() => {
-        const el = editorRef.current?.getContainer()?.querySelector<HTMLElement>('[data-ps-ebook-label]');
+        const el = editorRef.current?.getContainer()?.querySelector('[data-ps-ebook-label]') as HTMLElement | null;
         if (el) { el.textContent = ebookLabel; el.title = ebookLabel; }
     }, [ebookLabel]);
     const { getCurrentCss } = useStyles();

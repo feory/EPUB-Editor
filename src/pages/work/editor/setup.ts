@@ -18,6 +18,7 @@ export interface SetupLive {
     ebookLabel: string;                             // título do ebook no canto direito da barra de estado
     onToggleFocusMode?: () => void;
     onTogglePrintPdf?: () => void;
+    showPrintPdfPanel?: boolean;                    // painel de PDF aberto → botão "Ver PDF" ativo
     chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
     activeChapterIndex: number;
 }
@@ -557,9 +558,15 @@ export function createEditorSetup(deps: SetupDeps) {
             },
         });
 
-        editor.ui.registry.addButton('pdfview', {
+        editor.ui.registry.addToggleButton('pdfview', {
             icon: 'document-properties', tooltip: 'Ver PDF',
             onAction: () => live.current.onTogglePrintPdf?.(),
+            onSetup: (api) => {
+                const update = () => api.setActive(!!live.current.showPrintPdfPanel);
+                update();
+                editor.on('pdfpanelchange', update); // despachado pelo WorkEditor quando a prop muda
+                return () => editor.off('pdfpanelchange', update);
+            },
         });
         editor.ui.registry.addButton('focusmode', {
             icon: 'fullscreen', tooltip: 'Modo Foco',
