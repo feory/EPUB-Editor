@@ -62,3 +62,11 @@ _Avoid_: secções, quebras (a quebra sem título é só um nível, `break`)
 **Marcas efémeras**:
 Atributos (`data-mce-ps*`, `data-mce-empty`, …) e classes do body (`ps-*`) que existem só no DOM do editor e nunca no conteúdo gravado nem exportado. `editor/ephemeral.ts` é o único dono dos nomes (`MARK`, `BODY_CLASS`) e do registo no serializer; o CSS e o JS importam daí.
 _Avoid_: classes de UI, atributos temporários
+
+**Ligação do Índice**:
+Uma entrada do capítulo Índice ligada a um **Destino de ligação** (capítulo, subtítulo ou ponto livre). No editor é `span.idx-link[data-target]` (nunca `<a>`: o cleaner apaga `<a>`); só no export vira `<a href>`. `utils/indice-marker.ts` é o único dono da forma HTML (classes, ids, construtores, regex); `utils/indice-links.ts` faz as operações sobre `parts[]` (lote, ligar, desligar, listar destinos).
+_Avoid_: link, hiperligação
+
+**Destino de ligação**:
+Aquilo a que uma Ligação do Índice aponta: `p.chapter-anchor` (capítulo/subtítulo) ou `span.manual-anchor[data-label]` (ponto livre, inserido no cursor pelo menu "/"). Persiste no EPUB como `id`; não confundir com **Anchor** (de Comment), que só existe no editor.
+_Avoid_: âncora (já é o Anchor do Comment), marcador

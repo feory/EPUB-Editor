@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
 import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles, unlinkOneIndiceEntry } from './indice-links';
+import { chapterOfTarget, chapterTargetId, subTargetId, pickedSubTargetId, newManualAnchorId, manualAnchorHtml, unwrapTrailingIdxLink, idxLinkHtml } from './indice-marker';
 
 const toc = (body: string) => `<p class="chapter-break-h1" data-title="Índice"></p><h1>Índice</h1>${body}`;
 const chapter = (_n: string, title: string, body = '<p>corpo</p>') =>
@@ -333,7 +334,7 @@ test('âncora manual: aparece em listSubtitles e é o destino (mesmo dentro de u
         chapter('1', 'Prefácio') + '<p>texto ' + manual + ' mais</p>',
     ];
     const subs = listSubtitles(parts);
-    expect(subs).toEqual([{ chapterIndex: 1, index: 0, text: 'Tabela 3', anchor: true }]);
+    expect(subs).toEqual([{ chapterIndex: 1, index: 0, text: 'Tabela 3', anchor: true, id: 'idx-anchor-mabc' }]);
     const one = linkOneIndiceEntry(parts, 0, 2, 1, 0);
     expect(one.ok).toBe(true);
     expect(one.parts[0]).toContain('data-target="idx-anchor-mabc"');
@@ -356,4 +357,19 @@ test('unlinkOneIndiceEntry: volta a texto simples e não toca nas outras entrada
     expect(out.parts[0]).toContain('<p>Um</p>');
     expect(out.parts[0]).toContain('data-target="idx-anchor-2"'); // a outra mantém-se
     expect(unlinkOneIndiceEntry(out.parts, 0, 1).reason).toBe('entry-not-linked');
+});
+
+test('indice-marker: ids e construtores batem com o que o lote e o export esperam', () => {
+    expect(chapterOfTarget(chapterTargetId(7))).toBe(7);
+    expect(chapterOfTarget(subTargetId(7, 3))).toBe(7);
+    expect(chapterOfTarget(pickedSubTargetId(7, 2))).toBe(7);
+    expect(chapterOfTarget(newManualAnchorId())).toBe(-1); // manual: o id não diz o capítulo
+    expect(manualAnchorHtml('x', 'A "B" <c>')).toBe('<span class="manual-anchor" id="x" data-label="A &quot;B&quot; &lt;c>"></span>');
+    expect(unwrapTrailingIdxLink(idxLinkHtml('t', 'texto'))).toBe('texto');
+});
+
+test('listSubtitles: âncora manual expõe o id (o painel marca o destino atual)', () => {
+    const manual = manualAnchorHtml('idx-anchor-mabc', 'Tabela 3');
+    const subs = listSubtitles([toc('<p>x</p>'), chapter('1', 'Capítulo A') + '<p>t ' + manual + '</p>']);
+    expect(subs[0]).toMatchObject({ anchor: true, id: 'idx-anchor-mabc' });
 });

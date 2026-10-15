@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TinyMCEEditor } from '../types';
+import { chapterOfTarget } from '../../../../utils/indice-marker';
 
-export interface IndiceLinkSubtitle { chapterIndex: number; index: number; text: string; anchor?: true }
+export interface IndiceLinkSubtitle { chapterIndex: number; index: number; text: string; anchor?: true; id?: string }
 export interface IndiceLinkChapter { title: string; level: string }
 
 interface Props {
@@ -11,8 +12,7 @@ interface Props {
     chapters: IndiceLinkChapter[];
     subtitles: IndiceLinkSubtitle[];
     ownIndex: number;           // capítulo Índice (não é destino)
-    currentChapterIndex: number; // destino atual da entrada (-1 = nenhum)
-    linked: boolean;             // a entrada já tem ligação (qualquer destino) → oferece removê-la
+    currentTarget: string;       // data-target atual da entrada ('' = sem ligação → sem "Remover ligação")
     onPick: (chapterIndex: number | null, subIndex?: number) => void; // null = remover ligação
     onClose: () => void;
 }
@@ -21,9 +21,10 @@ interface Props {
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 /** "Ligar a…" do Índice: capítulos recolhidos, clicar na seta expande os subtítulos; pesquisa filtra e expande. */
-export function IndiceLinkPanel({ top, left, editor, chapters, subtitles, ownIndex, currentChapterIndex, linked, onPick, onClose }: Props) {
+export function IndiceLinkPanel({ top, left, editor, chapters, subtitles, ownIndex, currentTarget, onPick, onClose }: Props) {
     const [query, setQuery] = useState('');
-    const [open, setOpen] = useState<Set<number>>(() => new Set(currentChapterIndex >= 0 ? [currentChapterIndex] : []));
+    const currentChapterIndex = chapterOfTarget(currentTarget);
+    const [open, setOpen] = useState<Set<number>>(() => new Set(currentChapterIndex >= 0 ? [currentChapterIndex] : subtitles.filter((t) => t.id === currentTarget).map((t) => t.chapterIndex)));
     const rootRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -86,7 +87,7 @@ export function IndiceLinkPanel({ top, left, editor, chapters, subtitles, ownInd
                 />
             </div>
             <div className="max-h-80 overflow-y-auto p-1.5">
-                {linked && (
+                {currentTarget && (
                     <button type="button" onClick={() => onPick(null)} className="block w-full text-left px-2 py-1.5 mb-1 rounded-lg text-red-600 hover:bg-red-50">
                         Remover ligação
                     </button>
@@ -115,7 +116,7 @@ export function IndiceLinkPanel({ top, left, editor, chapters, subtitles, ownInd
                                     type="button"
                                     onClick={() => onPick(i, t.index)}
                                     className="block w-full text-left truncate pl-9 pr-2 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100"
-                                >{t.anchor && '⚓ '}{t.text}</button>
+                                >{t.anchor && '⚓ '}{t.text}{t.id && t.id === currentTarget && ' ✓'}</button>
                             ))}
                         </div>
                     );

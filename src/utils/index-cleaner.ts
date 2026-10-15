@@ -4,6 +4,8 @@
 // separadas pela quebra de linha original (quando existe) ou, em último caso,
 // por heurística de dicionário (corta no termo conhecido mais longo).
 
+import { idxLinkHtml } from './indice-marker';
+
 // Marcador interno de fronteira de entrada (vinda de quebra de linha do original).
 const SEP = '';
 
@@ -132,7 +134,7 @@ export function cleanIndexText(raw: string): string[] {
 // morto). Reusado por WorkEditor.tsx (linkIndexPagesSelection) — único sítio a saber a forma
 // do idx-link.
 export function wrapPageLinks(pages: string): string {
-    return pages.replace(/\d+/g, (n) => `<span class="idx-link" data-target="page-${n}">${n}</span>`);
+    return pages.replace(/\d+/g, (n) => idxLinkHtml(`page-${n}`, n));
 }
 
 // Como cleanIndexText, mas em vez de descartar a lista de páginas de cada entrada, mantém-na —

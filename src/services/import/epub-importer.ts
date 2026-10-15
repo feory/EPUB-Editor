@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import type { ExtractedDocument } from './document-importer';
 import { toNCName } from '../export/epub/image-utils';
 import { chapterTitleOf } from '../../utils/chapter-title';
+import { CHAPTER_ANCHOR_CLASS, IDX_LINK_CLASS, epubTargetId } from '../../utils/indice-marker';
 
 export interface EpubMetadata {
     ebook_isbn: string;
@@ -400,15 +401,15 @@ export function adaptInternalLinks(html: string): string {
         if (!block) continue;
         let anchorId = ids.get(id);
         if (!anchorId) {
-            anchorId = `idx-anchor-ep${ids.size + 1}`;
+            anchorId = epubTargetId(ids.size + 1);
             ids.set(id, anchorId);
             const marker = doc.createElement('p');
-            marker.className = 'chapter-anchor';
+            marker.className = CHAPTER_ANCHOR_CLASS;
             marker.id = anchorId;
             if (/^H[1-6]$/.test(block.tagName)) block.after(marker); else block.before(marker);
         }
         const span = doc.createElement('span');
-        span.className = 'idx-link';
+        span.className = IDX_LINK_CLASS;
         span.setAttribute('data-target', anchorId);
         while (a.firstChild) span.appendChild(a.firstChild);
         a.replaceWith(span);

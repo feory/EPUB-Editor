@@ -178,12 +178,12 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         onEditBox, onBlockChange, readOnly,
     });
     // Painel "Ligar a…" do Índice (mini-menu): subtítulos lidos ao abrir (split do livro, não a cada edição).
-    const [indiceLink, setIndiceLink] = useState<{ top: number; left: number; pIndex: number; currentChapterIndex: number; linked: boolean; subtitles: IndiceLinkSubtitle[] } | null>(null);
+    const [indiceLink, setIndiceLink] = useState<{ top: number; left: number; pIndex: number; currentTarget: string; subtitles: IndiceLinkSubtitle[] } | null>(null);
     const closeIndiceLink = useCallback(() => setIndiceLink(null), []);
     useEffect(closeIndiceLink, [activeChapterIndex, closeIndiceLink]); // pIndex deixa de valer noutro capítulo
-    const openIndiceLinkPanel = (pIndex: number, currentChapterIndex: number, linked: boolean) => {
+    const openIndiceLinkPanel = (pIndex: number, currentTarget: string) => {
         const r = (document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null)?.getBoundingClientRect();
-        setIndiceLink({ top: r ? r.bottom + 4 : 120, left: r ? r.left : 120, pIndex, currentChapterIndex, linked, subtitles: live.current.getIndiceSubtitles?.() ?? [] });
+        setIndiceLink({ top: r ? r.bottom + 4 : 120, left: r ? r.left : 120, pIndex, currentTarget, subtitles: live.current.getIndiceSubtitles?.() ?? [] });
     };
     const syncEditorHeightRef = useRef<() => void>(() => {});
     const overlays = useBlockOverlays(editorRef, {

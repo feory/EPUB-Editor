@@ -11,6 +11,10 @@
 
 import { classifyChapterPart, matchChapterMarkerElement, flattenHeadingText } from './chapters';
 import { decodeEntities } from './entities';
+import {
+    chapterTargetId, subTargetId, pickedSubTargetId, pickedSubIdPattern, idxLinkHtml, chapterAnchorHtml,
+    unwrapTrailingIdxLink, stripAutoMarkers, chapterAnchorIdAfter, manualAnchorRe,
+} from './indice-marker';
 
 // Cópia deliberada do normalize() de page-list.ts (não está exportado de lá, e esse ficheiro é
 // conceptualmente sobre PDF/páginas, não texto genérico). classifyChapterPart já faz
@@ -54,16 +58,9 @@ export function isIndiceChapterTitle(title: string): boolean {
     return TOC_TITLE.test(title.trim());
 }
 
-function stripPart(part: string): string {
-    return part
-        // Lookahead até ao </p> (não só o 1º </span>): uma entrada do Índice pode ter um <span>
-        // aninhado dentro do idx-link (ex. marcador de página "pagebreak" antes do título, ver
-        // insertPageBreaks) — sem o lookahead, o [\s\S]*? não-guloso parava no </span> desse
-        // marcador em vez do do próprio idx-link, cortava o resto do título fora do "$1" e
-        // deixava a marcação por fechar (títulos a "colar-se" ao nº do pagelist na reexecução).
-        .replace(/<span\b[^>]*\bclass="[^"]*\bidx-link\b[^"]*"[^>]*>([\s\S]*?)<\/span>(?=\s*<\/p>)/g, '$1')
-        .replace(/<p\b[^>]*\bclass="[^"]*\bchapter-anchor\b[^"]*"[^>]*>[\s\S]*?<\/p>/g, '');
-}
+// Lookahead até ao </p> (não só o 1º </span>): ver stripAutoMarkers (indice-marker.ts) — um idx-link
+// pode ter um <span> aninhado (marcador de página) e cortar a meio deixava a marcação por fechar.
+const stripPart = stripAutoMarkers;
 
 // Comprimento do prefixo "marcador + heading" no início de uma part h1/h2/h3 — 0 se não houver
 // heading real a seguir ao marcador (quebra sem título / marcador corrompido). Usada para filtrar
@@ -107,7 +104,7 @@ function findSubtitles(part: string): { text: string; end: number; id?: string }
         const text = decodeEntities(flattenHeadingText(m[2] ?? m[3])).trim(); // o HTML guarda "&ccedil;" etc.: o painel mostra texto
         if (normalizeText(text).length >= MIN_TITLE) found.push({ text, end: m.index + m[0].length, at: m.index });
     }
-    const anchors = /<span\b([^>]*\bmanual-anchor\b[^>]*)><\/span>/gi;
+    const anchors = manualAnchorRe();
     while ((m = anchors.exec(part)) !== null) {
         const id = m[1].match(/\bid="([^"]+)"/)?.[1];
         if (id) found.push({ text: decodeEntities(m[1].match(/\bdata-label="([^"]*)"/)?.[1] ?? '').trim() || id, end: m.index + m[0].length, at: m.index, id });
@@ -117,9 +114,9 @@ function findSubtitles(part: string): { text: string; end: number; id?: string }
 
 // Subtítulos de todos os capítulos, para o dropdown "Ligar a…" do Índice (`index` = posição em
 // findSubtitles desse capítulo, o que linkOneIndiceEntry recebe como `subIndex`).
-export function listSubtitles(rawParts: string[]): { chapterIndex: number; index: number; text: string; anchor?: true }[] {
+export function listSubtitles(rawParts: string[]): { chapterIndex: number; index: number; text: string; anchor?: true; id?: string }[] {
     return rawParts.flatMap((part, chapterIndex) =>
-        findSubtitles(part).map((s, index) => ({ chapterIndex, index, text: s.text, ...(s.id ? { anchor: true as const } : {}) })));
+        findSubtitles(part).map((s, index) => ({ chapterIndex, index, text: s.text, ...(s.id ? { anchor: true as const, id: s.id } : {}) })));
 }
 
 export interface LinkIndiceResult {
@@ -206,14 +203,14 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
             // Linha mais curta que o título (1ª metade de um título partido, "Capítulo 2") nunca
             // leva strip — o dígito final é do título, não um nº de página.
             const text = lineNorm.length <= topTargetNorm.length ? inner : stripTrailingPageNum(inner);
-            return `<p${attrs}><span class="idx-link" data-target="idx-anchor-${topTarget.i}">${text}</span></p>`;
+            return `<p${attrs}>${idxLinkHtml(chapterTargetId(topTarget.i), text)}</p>`;
         }
 
         const continuing = titleContinuation;
         titleContinuation = false;
         if (continuing && currentChapter && titlesMatch(normalizeText(stripTrailingPageNum(flattenHeadingText(inner))), normalizeText(currentChapter.title))) {
             linked++;
-            return `<p${attrs}><span class="idx-link" data-target="idx-anchor-${currentChapter.i}">${stripTrailingPageNum(inner)}</span></p>`;
+            return `<p${attrs}>${idxLinkHtml(chapterTargetId(currentChapter.i), stripTrailingPageNum(inner))}</p>`;
         }
 
         // 2. sub-entrada — só procura DENTRO do capítulo corrente (mesmo texto repete-se entre capítulos)
@@ -224,13 +221,13 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
                 used.add(match.start);
                 usedSubHeadings.set(currentChapter.i, used);
                 anchorSeq++;
-                const id = `idx-anchor-${currentChapter.i}-${anchorSeq}`;
+                const id = subTargetId(currentChapter.i, anchorSeq);
                 const list = subAnchorsByChapter.get(currentChapter.i) ?? [];
                 list.push({ pos: match.end, id });
                 subAnchorsByChapter.set(currentChapter.i, list);
                 linked++;
                 const text = lineNorm === match.headingNorm ? inner : stripTrailingPageNum(inner);
-                return `<p${attrs}><span class="idx-link" data-target="${id}">${text}</span></p>`;
+                return `<p${attrs}>${idxLinkHtml(id, text)}</p>`;
             }
         }
         return m;
@@ -244,11 +241,11 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
     const chaptersToPatch = new Set([...anchoredChapters, ...subAnchorsByChapter.keys()]);
     for (const chapterIdx of chaptersToPatch) {
         const insertions = (subAnchorsByChapter.get(chapterIdx) ?? []).slice();
-        if (anchoredChapters.has(chapterIdx)) insertions.push({ pos: prefixLen.get(chapterIdx)!, id: `idx-anchor-${chapterIdx}` });
+        if (anchoredChapters.has(chapterIdx)) insertions.push({ pos: prefixLen.get(chapterIdx)!, id: chapterTargetId(chapterIdx) });
         insertions.sort((a, b) => b.pos - a.pos);
         let content = parts[chapterIdx];
         for (const { pos, id } of insertions) {
-            content = content.slice(0, pos) + `<p class="chapter-anchor" id="${id}"></p>` + content.slice(pos);
+            content = content.slice(0, pos) + chapterAnchorHtml(id) + content.slice(pos);
         }
         parts[chapterIdx] = content;
     }
@@ -294,23 +291,22 @@ export function linkOneIndiceEntry(rawParts: string[], indiceChapterIndex: numbe
     const found = findEntryParagraph(entryContent, pIndex);
     if (!found) return { parts: rawParts, ok: false, reason: 'entry-paragraph-not-found' };
 
-    let id = `idx-anchor-${targetChapterIndex}`;
+    let id = chapterTargetId(targetChapterIndex);
     let anchorPos = -1; // -1 = nada a inserir (âncora já existe)
     if (subIndex !== undefined) {
         const sub = findSubtitles(targetContent)[subIndex];
         if (!sub) return { parts: rawParts, ok: false, reason: 'target-subtitle-missing' };
-        const existing = sub.id ?? targetContent.slice(sub.end).match(/^\s*<p\b(?=[^>]*\bclass="chapter-anchor")[^>]*\bid="([^"]+)"[^>]*><\/p>/)?.[1];
+        const existing = sub.id ?? chapterAnchorIdAfter(targetContent, sub.end);
         if (existing) id = existing;
         else {
-            const used = [...targetContent.matchAll(new RegExp(`id="${id}-m(\\d+)"`, 'g'))].map(x => Number(x[1]));
-            id = `${id}-m${Math.max(0, ...used) + 1}`;
+            const used = [...targetContent.matchAll(pickedSubIdPattern(targetChapterIndex))].map(x => Number(x[1]));
+            id = pickedSubTargetId(targetChapterIndex, Math.max(0, ...used) + 1);
             anchorPos = sub.end;
         }
     }
     // religar: tira um idx-link já existente neste parágrafo antes de pôr o novo (mesmo padrão
     // de stripPart, mas só neste <p> — nunca toca nas outras entradas do Índice).
-    const inner = found.inner.replace(/<span\b[^>]*\bclass="[^"]*\bidx-link\b[^"]*"[^>]*>([\s\S]*?)<\/span>\s*$/, '$1');
-    const newP = `<p${found.attrs}><span class="idx-link" data-target="${id}">${inner}</span></p>`;
+    const newP = `<p${found.attrs}>${idxLinkHtml(id, unwrapTrailingIdxLink(found.inner))}</p>`;
     const parts = rawParts.slice();
     parts[indiceChapterIndex] = entryContent.slice(0, found.start) + newP + entryContent.slice(found.end);
 
@@ -325,7 +321,7 @@ export function linkOneIndiceEntry(rawParts: string[], indiceChapterIndex: numbe
         if (!marker) return { parts: rawParts, ok: false, reason: 'target-marker-missing' }; // marcador corrompido/ausente
         anchorPos = marker.raw.length;
     }
-    if (anchorPos >= 0) parts[targetChapterIndex] = targetContent.slice(0, anchorPos) + `<p class="chapter-anchor" id="${id}"></p>` + targetContent.slice(anchorPos);
+    if (anchorPos >= 0) parts[targetChapterIndex] = targetContent.slice(0, anchorPos) + chapterAnchorHtml(id) + targetContent.slice(anchorPos);
 
     return { parts, ok: true };
 }
@@ -337,7 +333,7 @@ export function unlinkOneIndiceEntry(rawParts: string[], indiceChapterIndex: num
     if (entryContent === undefined) return { parts: rawParts, ok: false, reason: 'index-out-of-range' };
     const found = findEntryParagraph(entryContent, pIndex);
     if (!found) return { parts: rawParts, ok: false, reason: 'entry-paragraph-not-found' };
-    const inner = found.inner.replace(/<span\b[^>]*\bclass="[^"]*\bidx-link\b[^"]*"[^>]*>([\s\S]*?)<\/span>\s*$/, '$1');
+    const inner = unwrapTrailingIdxLink(found.inner);
     if (inner === found.inner) return { parts: rawParts, ok: false, reason: 'entry-not-linked' };
     const parts = rawParts.slice();
     parts[indiceChapterIndex] = entryContent.slice(0, found.start) + `<p${found.attrs}>${inner}</p>` + entryContent.slice(found.end);

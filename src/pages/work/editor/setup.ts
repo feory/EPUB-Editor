@@ -1,5 +1,6 @@
 import type { Editor } from 'tinymce';
 import { isIndiceChapterTitle } from '../../../utils/indice-links';
+import { MANUAL_ANCHOR_CLASS, manualAnchorHtml, newManualAnchorId } from '../../../utils/indice-marker';
 import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
 import type { TinyMCEEditor } from './types';
@@ -28,7 +29,7 @@ interface SetupDeps {
     onExport?: () => void;
     startHtmlEdit: (top: HTMLElement) => void;
     openStyleMenu: (kind: 'para' | 'head') => void;
-    openIndiceLinkPanel: (pIndex: number, currentChapterIndex: number, linked: boolean) => void;
+    openIndiceLinkPanel: (pIndex: number, currentTarget: string) => void; // '' = entrada sem ligação
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
     onEditBoxStyle: () => void;
@@ -60,11 +61,11 @@ export function createEditorSetup(deps: SetupDeps) {
                 body: { type: 'panel', items: [{ type: 'input', name: 'label', label: 'Nome da âncora', placeholder: suggested || 'Âncora' }] },
                 buttons: [{ type: 'cancel', text: 'Cancelar' }, { type: 'submit', text: 'Inserir', primary: true }],
                 onSubmit: (api: { getData: () => { label: string }; close: () => void }) => {
-                    const label = (api.getData().label.trim() || suggested || 'Âncora').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                    const label = api.getData().label.trim() || suggested || 'Âncora';
                     api.close();
                     editor.selection.moveToBookmark(bookmark);
                     editBlocks(editor, () => {
-                        editor.insertContent(`<span class="manual-anchor" id="idx-anchor-m${Date.now().toString(36)}" data-label="${label}"></span>`);
+                        editor.insertContent(manualAnchorHtml(newManualAnchorId(), label));
                         editor.focus();
                     });
                 },
@@ -427,15 +428,14 @@ export function createEditorSetup(deps: SetupDeps) {
             icon: 'link',
             tooltip: 'Ligar a…',
             onAction: () => {
-                // Já ligada? idx-link já existente no parágrafo diz o capítulo atual (marcação
-                // `idx-anchor-<chapterIndex>[-…]`, manual ou do automático) — o painel marca-o com visto.
+                // Já ligada? o data-target do idx-link no parágrafo é o destino atual — o painel marca-o com visto.
                 const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
                 if (!block || block.nodeName !== 'P') return;
                 const pIndex = (Array.from(editor.getBody().children) as HTMLElement[])
                     .filter((el) => el.nodeName === 'P').indexOf(block);
                 if (pIndex === -1) return;
                 const curTarget = block.querySelector('span.idx-link')?.getAttribute('data-target') || '';
-                openIndiceLinkPanel(pIndex, Number(curTarget.match(/^idx-anchor-(\d+)/)?.[1] ?? -1), !!curTarget);
+                openIndiceLinkPanel(pIndex, curTarget);
             },
             onSetup: (api) => {
                 const update = () => api.setEnabled(isIndiceChapterTitle(live.current.chapters[live.current.activeChapterIndex]?.title || ''));
@@ -447,7 +447,7 @@ export function createEditorSetup(deps: SetupDeps) {
 
         // Âncora manual: clicar no ⚓ (pseudo-elemento do span) seleciona-a e mostra "Remover âncora".
         // Ligações do Índice que lhe apontem ficam só como texto no export (ver convertIndexLinks).
-        const isManualAnchor = (n: Node | null) => !!n && n.nodeName === 'SPAN' && (n as HTMLElement).classList.contains('manual-anchor');
+        const isManualAnchor = (n: Node | null) => !!n && n.nodeName === 'SPAN' && (n as HTMLElement).classList.contains(MANUAL_ANCHOR_CLASS);
         editor.on('click', (e: MouseEvent) => { if (isManualAnchor(e.target as Node)) editor.selection.select(e.target as Node); });
         editor.ui.registry.addButton('removeanchor', {
             icon: 'remove',
