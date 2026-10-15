@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { fillFolioGaps } from './folio';
 import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from './marker';
-import { CHAPTER_SPLIT_PATTERN } from '../../utils/html-cleaner';
+import { splitChapterSegments } from '../../utils/chapters';
 
 // Worker partilhado com o pdf-service (já configurado lá); reconfigurar é idempotente.
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -210,8 +210,9 @@ export async function extractChapterAnchors(data: ArrayBuffer, titles: string[])
             if (!pageTexts[p].includes(nt)) continue;
             const hasOther = normTitles.some((other, oi) => oi !== ti && other.length >= 3 && pageTexts[p].includes(other));
             if (hasOther) continue; // página de índice/TOC (lista vários títulos) — não é a abertura
-            pageIdx = p;
-            break;
+            if (pageIdx === -1) pageIdx = p;
+            // Página só com o título = abertura dedicada; vence uma página de Índice que liste só este título.
+            if (pageTexts[p].length <= nt.length * 2) { pageIdx = p; break; }
         }
         if (pageIdx === -1) continue;
         // Saltar página(s) em branco a seguir à abertura (comum: capítulo começa em página
@@ -250,12 +251,22 @@ export function insertChapterHeadings(html: string, anchors: { anchor: string; h
         }
     }
 
-    const hits: { pos: number; headingHtml: string }[] = [];
+    const hits: { pos: number; headingHtml: string; anchor: string }[] = [];
     for (const { anchor, headingHtml } of anchors) {
         const pos = flat.indexOf(anchor);
-        if (pos >= 0) hits.push({ pos, headingHtml });
+        if (pos >= 0) hits.push({ pos, headingHtml, anchor });
     }
-    const keep = longestIncreasing(hits.map(h => h.pos)).map(i => hits[i]);
+    const keptIdx = new Set(longestIncreasing(hits.map(h => h.pos)));
+    // Âncora também presente antes (ex. título repetido no Índice): 1.ª ocorrência fora de ordem foi
+    // descartada → repetir a busca depois do último hit mantido, sem passar o seguinte.
+    let from = -1;
+    const keep: { pos: number; headingHtml: string; anchor: string }[] = [];
+    for (let i = 0; i < hits.length; i++) {
+        if (keptIdx.has(i)) { from = hits[i].pos; keep.push(hits[i]); continue; }
+        const next = hits.findIndex((_, k) => k > i && keptIdx.has(k));
+        const p = flat.indexOf(hits[i].anchor, from + 1);
+        if (p >= 0 && (next === -1 || p < hits[next].pos)) { from = p; keep.push({ ...hits[i], pos: p }); }
+    }
     const points = keep.map(h => ({ ...map[h.pos], headingHtml: h.headingHtml }));
     for (let i = points.length - 1; i >= 0; i--) {
         let el: Node | null = points[i].node.parentNode;
@@ -446,7 +457,7 @@ export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: s
     if (remaining.length === 0) return { html: pass1.html, inserted: pass1.inserted, total: anchors.length };
 
     let extraInserted = 0;
-    const outSegments = pass1.html.split(CHAPTER_SPLIT_PATTERN).map(seg => {
+    const outSegments = splitChapterSegments(pass1.html).map(seg => {
         if (remaining.length === 0) return seg;
         const r = insertPageBreaksInSegment(seg, remaining);
         if (r.inserted === 0) return seg;

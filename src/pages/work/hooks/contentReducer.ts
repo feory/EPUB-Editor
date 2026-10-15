@@ -1,4 +1,5 @@
-import { cleanHeadings, CHAPTER_SPLIT_PATTERN } from '../../../utils/html-cleaner';
+import { cleanHeadings } from '../../../utils/html-cleaner';
+import { splitChapters } from '../../../utils/chapters';
 
 // Desfazer/refazer é do undoManager do TinyMCE (botões da toolbar E ⌘Z, desde 0.9.5.6).
 // Existia aqui uma 2ª pilha (past/future, snapshots do livro inteiro) ligada só ao atalho:
@@ -31,7 +32,7 @@ export const initialContentState: ContentState = {
 // a limpeza do livro inteiro a cada chamada mesmo com o cache disponível.
 export function replaceChapterContent(fullHtml: string, content: string, chapterIndex: number, cleanedFullHtml?: string): string | null {
     if (chapterIndex === -1) return content;
-    const parts = (cleanedFullHtml ?? cleanHeadings(fullHtml)).split(CHAPTER_SPLIT_PATTERN).filter(p => p.trim().length > 0);
+    const parts = splitChapters(cleanedFullHtml ?? cleanHeadings(fullHtml));
     if (parts[chapterIndex] === undefined) return null;
     parts[chapterIndex] = content;
     return cleanHeadings(parts.join(''));

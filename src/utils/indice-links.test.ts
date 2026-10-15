@@ -1,5 +1,7 @@
 import { test, expect } from 'bun:test';
-import { linkIndiceEntries, linkOneIndiceEntry } from './indice-links';
+import '../services/indesign/happy-dom'; // DOMParser no bun
+import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles, unlinkOneIndiceEntry, entryIndexOf } from './indice-links';
+import { chapterOfTarget, chapterTargetId, subTargetId, pickedSubTargetId, newManualAnchorId, manualAnchorHtml, unwrapTrailingIdxLink, idxLinkHtml } from './indice-marker';
 
 const toc = (body: string) => `<p class="chapter-break-h1" data-title="Índice"></p><h1>Índice</h1>${body}`;
 const chapter = (_n: string, title: string, body = '<p>corpo</p>') =>
@@ -309,4 +311,79 @@ test('linkIndiceEntries: nº de página depois de uma tag que fecha ("</strong>3
     ];
     const { parts: out } = linkIndiceEntries(parts);
     expect(out[0]).toContain('<strong>Direitos da natureza</strong></span>');
+});
+
+test('linkOneIndiceEntry: liga a um subtítulo (h2) e reaproveita a âncora ao religar', () => {
+    const parts = [
+        toc('<p>Entrada</p>'),
+        chapter('1', 'Capítulo A') + '<h2>Subtítulo Um</h2><p>texto</p><h2>Subtítulo Dois</h2><p>fim</p>',
+    ];
+    expect(listSubtitles(parts).map(s => s.text)).toEqual(['Subtítulo Um', 'Subtítulo Dois']); // sem o heading do capítulo
+    const first = linkOneIndiceEntry(parts, 0, 1, 1, 1);
+    expect(first.ok).toBe(true);
+    expect(first.parts[0]).toContain('data-target="idx-anchor-1-m1"');
+    expect(first.parts[1]).toContain('<h2>Subtítulo Dois</h2><p class="chapter-anchor" id="idx-anchor-1-m1"></p>');
+    const again = linkOneIndiceEntry(first.parts, 0, 1, 1, 1);
+    expect(again.parts[1].match(/chapter-anchor/g)).toHaveLength(1); // sem duplicar
+    expect(linkOneIndiceEntry(parts, 0, 1, 1, 9).reason).toBe('target-subtitle-missing');
+});
+
+test('âncora manual: aparece em listSubtitles e é o destino (mesmo dentro de um h2)', () => {
+    const manual = '<span class="manual-anchor" id="idx-anchor-mabc" data-label="Tabela 3"></span>';
+    const parts = [
+        toc('<p>Prefácio</p><p>Ver Tabela</p>'),
+        chapter('1', 'Prefácio') + '<p>texto ' + manual + ' mais</p>',
+    ];
+    const subs = listSubtitles(parts);
+    expect(subs).toEqual([{ chapterIndex: 1, index: 0, text: 'Tabela 3', anchor: true, id: 'idx-anchor-mabc' }]);
+    const one = linkOneIndiceEntry(parts, 0, 2, 1, 0);
+    expect(one.ok).toBe(true);
+    expect(one.parts[0]).toContain('data-target="idx-anchor-mabc"');
+    expect(one.parts[1]).not.toContain('chapter-anchor'); // o span já é o destino, não cria outra
+    const inH2 = [parts[0], chapter('1', 'Prefácio') + '<h2>Subtítulo ' + manual + 'Um</h2>'];
+    expect(listSubtitles(inH2).map(s => s.text)).toEqual(['Subtítulo Um', 'Tabela 3']); // ambos, o span não é engolido pelo h2
+});
+
+test('listSubtitles: devolve texto decodificado (ç, ã), não entidades HTML', () => {
+    const parts = [toc('<p>Entrada</p>'), chapter('1', 'Capítulo A') + '<h2>Introdu&ccedil;&atilde;o &amp; Conclus&atilde;o</h2>'];
+    expect(listSubtitles(parts).map(s => s.text)).toEqual(['Introdução & Conclusão']);
+});
+
+test('unlinkOneIndiceEntry: volta a texto simples e não toca nas outras entradas', () => {
+    const parts = [toc('<p>Um</p><p>Dois</p>'), chapter('1', 'Capítulo A'), chapter('2', 'Capítulo B')];
+    const a = linkOneIndiceEntry(parts, 0, 1, 1);
+    const b = linkOneIndiceEntry(a.parts, 0, 2, 2);
+    const out = unlinkOneIndiceEntry(b.parts, 0, 1);
+    expect(out.ok).toBe(true);
+    expect(out.parts[0]).toContain('<p>Um</p>');
+    expect(out.parts[0]).toContain('data-target="idx-anchor-2"'); // a outra mantém-se
+    expect(unlinkOneIndiceEntry(out.parts, 0, 1).reason).toBe('entry-not-linked');
+});
+
+test('indice-marker: ids e construtores batem com o que o lote e o export esperam', () => {
+    expect(chapterOfTarget(chapterTargetId(7))).toBe(7);
+    expect(chapterOfTarget(subTargetId(7, 3))).toBe(7);
+    expect(chapterOfTarget(pickedSubTargetId(7, 2))).toBe(7);
+    expect(chapterOfTarget(newManualAnchorId())).toBe(-1); // manual: o id não diz o capítulo
+    expect(manualAnchorHtml('x', 'A "B" <c>')).toBe('<span class="manual-anchor" id="x" data-label="A &quot;B&quot; &lt;c>"></span>');
+    expect(unwrapTrailingIdxLink(idxLinkHtml('t', 'texto'))).toBe('texto');
+});
+
+test('listSubtitles: âncora manual expõe o id (o painel marca o destino atual)', () => {
+    const manual = manualAnchorHtml('idx-anchor-mabc', 'Tabela 3');
+    const subs = listSubtitles([toc('<p>x</p>'), chapter('1', 'Capítulo A') + '<p>t ' + manual + '</p>']);
+    expect(subs[0]).toMatchObject({ anchor: true, id: 'idx-anchor-mabc' });
+});
+
+test('entryIndexOf (DOM) e findEntryParagraph (string) apontam para o mesmo <p>, mesmo com <p> aninhados e <pre>', () => {
+    const html = toc('<p>A</p><div><p>B dentro de caixa</p></div><pre>código</pre><table><tr><td><p>C na célula</p></td></tr></table><p>D</p>');
+    const root = new DOMParser().parseFromString(html, 'text/html').body;
+    const ps = Array.from(root.querySelectorAll('p')).filter(p => (p.textContent ?? '').trim() && !p.className);
+    expect(ps.map(p => p.textContent)).toEqual(['A', 'B dentro de caixa', 'C na célula', 'D']);
+    for (const p of ps) {
+        const out = linkOneIndiceEntry([html, chapter('1', 'Capítulo A')], 0, entryIndexOf(root, p), 1);
+        expect(out.ok).toBe(true);
+        expect(out.parts[0]).toContain(`<span class="idx-link" data-target="idx-anchor-1">${p.textContent}</span>`); // ligou ESTA entrada
+        expect(out.parts[0].match(/idx-link/g)).toHaveLength(1);
+    }
 });

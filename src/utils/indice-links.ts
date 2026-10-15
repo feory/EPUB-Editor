@@ -9,8 +9,12 @@
 // qualquer `<a>` em cada load/save/export (regex `links`), por isso um link real morreria na
 // próxima gravação. Só viram `<a href>` no export (ver src/services/export/epub/index-links.ts).
 
-import { classifyChapterPart, matchChapterMarkerElement, flattenHeadingText } from './html-cleaner';
+import { classifyChapterPart, matchChapterMarkerElement, flattenHeadingText } from './chapters';
 import { decodeEntities } from './entities';
+import {
+    chapterTargetId, subTargetId, pickedSubTargetId, pickedSubIdPattern, idxLinkHtml, chapterAnchorHtml,
+    unwrapTrailingIdxLink, stripAutoMarkers, chapterAnchorIdAfter, manualAnchorRe,
+} from './indice-marker';
 
 // Cópia deliberada do normalize() de page-list.ts (não está exportado de lá, e esse ficheiro é
 // conceptualmente sobre PDF/páginas, não texto genérico). classifyChapterPart já faz
@@ -54,16 +58,9 @@ export function isIndiceChapterTitle(title: string): boolean {
     return TOC_TITLE.test(title.trim());
 }
 
-function stripPart(part: string): string {
-    return part
-        // Lookahead até ao </p> (não só o 1º </span>): uma entrada do Índice pode ter um <span>
-        // aninhado dentro do idx-link (ex. marcador de página "pagebreak" antes do título, ver
-        // insertPageBreaks) — sem o lookahead, o [\s\S]*? não-guloso parava no </span> desse
-        // marcador em vez do do próprio idx-link, cortava o resto do título fora do "$1" e
-        // deixava a marcação por fechar (títulos a "colar-se" ao nº do pagelist na reexecução).
-        .replace(/<span\b[^>]*\bclass="[^"]*\bidx-link\b[^"]*"[^>]*>([\s\S]*?)<\/span>(?=\s*<\/p>)/g, '$1')
-        .replace(/<p\b[^>]*\bclass="[^"]*\bchapter-anchor\b[^"]*"[^>]*>[\s\S]*?<\/p>/g, '');
-}
+// Lookahead até ao </p> (não só o 1º </span>): ver stripAutoMarkers (indice-marker.ts) — um idx-link
+// pode ter um <span> aninhado (marcador de página) e cortar a meio deixava a marcação por fechar.
+const stripPart = stripAutoMarkers;
 
 // Comprimento do prefixo "marcador + heading" no início de uma part h1/h2/h3 — 0 se não houver
 // heading real a seguir ao marcador (quebra sem título / marcador corrompido). Usada para filtrar
@@ -89,6 +86,37 @@ function findSubHeading(partContent: string, lineNorm: string, used: Set<number>
         if (titlesMatch(lineNorm, headingNorm)) return { start: m.index, end: m.index + m[0].length, headingNorm };
     }
     return null;
+}
+
+// Subtítulos de UM capítulo, por ordem física: h2/h3 e pseudo-headings (p-bold/…), exceto o
+// heading do próprio capítulo (logo a seguir ao marcador). `end` = onde a âncora entra, logo
+// depois do bloco (mesma posição que o automático em lote usa, ver linkIndiceEntries).
+// Âncoras manuais (span.manual-anchor, inseridas no cursor — ver mceInsertAnchor em setup.ts) entram
+// também, por posição física: já SÃO o destino (`id`), não precisam de âncora nova. Lidas à parte
+// dos subtítulos porque podem estar DENTRO de um (h2, p-bold) — uma só regex engoliria o span.
+function findSubtitles(part: string): { text: string; end: number; id?: string }[] {
+    const skip = headingPrefixLength(part);
+    const re = /<(h[23])\b[^>]*>([\s\S]*?)<\/\1>|<p\b[^>]*\bclass="[^"]*\b(?:p-bold|p-italic|p-bold-italic|p-uppercase)\b[^"]*"[^>]*>([\s\S]*?)<\/p>/gi;
+    const found: { text: string; end: number; at: number; id?: string }[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(part)) !== null) {
+        if (m.index < skip) continue;
+        const text = decodeEntities(flattenHeadingText(m[2] ?? m[3])).trim(); // o HTML guarda "&ccedil;" etc.: o painel mostra texto
+        if (normalizeText(text).length >= MIN_TITLE) found.push({ text, end: m.index + m[0].length, at: m.index });
+    }
+    const anchors = manualAnchorRe();
+    while ((m = anchors.exec(part)) !== null) {
+        const id = m[1].match(/\bid="([^"]+)"/)?.[1];
+        if (id) found.push({ text: decodeEntities(m[1].match(/\bdata-label="([^"]*)"/)?.[1] ?? '').trim() || id, end: m.index + m[0].length, at: m.index, id });
+    }
+    return found.sort((x, y) => x.at - y.at);
+}
+
+// Subtítulos de todos os capítulos, para o dropdown "Ligar a…" do Índice (`index` = posição em
+// findSubtitles desse capítulo, o que linkOneIndiceEntry recebe como `subIndex`).
+export function listSubtitles(rawParts: string[]): { chapterIndex: number; index: number; text: string; anchor?: true; id?: string }[] {
+    return rawParts.flatMap((part, chapterIndex) =>
+        findSubtitles(part).map((s, index) => ({ chapterIndex, index, text: s.text, ...(s.id ? { anchor: true as const, id: s.id } : {}) })));
 }
 
 export interface LinkIndiceResult {
@@ -175,14 +203,14 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
             // Linha mais curta que o título (1ª metade de um título partido, "Capítulo 2") nunca
             // leva strip — o dígito final é do título, não um nº de página.
             const text = lineNorm.length <= topTargetNorm.length ? inner : stripTrailingPageNum(inner);
-            return `<p${attrs}><span class="idx-link" data-target="idx-anchor-${topTarget.i}">${text}</span></p>`;
+            return `<p${attrs}>${idxLinkHtml(chapterTargetId(topTarget.i), text)}</p>`;
         }
 
         const continuing = titleContinuation;
         titleContinuation = false;
         if (continuing && currentChapter && titlesMatch(normalizeText(stripTrailingPageNum(flattenHeadingText(inner))), normalizeText(currentChapter.title))) {
             linked++;
-            return `<p${attrs}><span class="idx-link" data-target="idx-anchor-${currentChapter.i}">${stripTrailingPageNum(inner)}</span></p>`;
+            return `<p${attrs}>${idxLinkHtml(chapterTargetId(currentChapter.i), stripTrailingPageNum(inner))}</p>`;
         }
 
         // 2. sub-entrada — só procura DENTRO do capítulo corrente (mesmo texto repete-se entre capítulos)
@@ -193,13 +221,13 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
                 used.add(match.start);
                 usedSubHeadings.set(currentChapter.i, used);
                 anchorSeq++;
-                const id = `idx-anchor-${currentChapter.i}-${anchorSeq}`;
+                const id = subTargetId(currentChapter.i, anchorSeq);
                 const list = subAnchorsByChapter.get(currentChapter.i) ?? [];
                 list.push({ pos: match.end, id });
                 subAnchorsByChapter.set(currentChapter.i, list);
                 linked++;
                 const text = lineNorm === match.headingNorm ? inner : stripTrailingPageNum(inner);
-                return `<p${attrs}><span class="idx-link" data-target="${id}">${text}</span></p>`;
+                return `<p${attrs}>${idxLinkHtml(id, text)}</p>`;
             }
         }
         return m;
@@ -213,11 +241,11 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
     const chaptersToPatch = new Set([...anchoredChapters, ...subAnchorsByChapter.keys()]);
     for (const chapterIdx of chaptersToPatch) {
         const insertions = (subAnchorsByChapter.get(chapterIdx) ?? []).slice();
-        if (anchoredChapters.has(chapterIdx)) insertions.push({ pos: prefixLen.get(chapterIdx)!, id: `idx-anchor-${chapterIdx}` });
+        if (anchoredChapters.has(chapterIdx)) insertions.push({ pos: prefixLen.get(chapterIdx)!, id: chapterTargetId(chapterIdx) });
         insertions.sort((a, b) => b.pos - a.pos);
         let content = parts[chapterIdx];
         for (const { pos, id } of insertions) {
-            content = content.slice(0, pos) + `<p class="chapter-anchor" id="${id}"></p>` + content.slice(pos);
+            content = content.slice(0, pos) + chapterAnchorHtml(id) + content.slice(pos);
         }
         parts[chapterIdx] = content;
     }
@@ -230,7 +258,25 @@ export interface LinkOneEntryResult {
     ok: boolean;
     // Só presente quando ok:false — diz qual verificação falhou (mostrado na notificação, ver
     // handleLinkIndiceEntryManual em useEbookWork.ts), para diagnosticar sem adivinhar.
-    reason?: 'index-out-of-range' | 'entry-paragraph-not-found' | 'target-marker-missing';
+    reason?: 'index-out-of-range' | 'entry-paragraph-not-found' | 'target-marker-missing' | 'target-subtitle-missing' | 'entry-not-linked';
+}
+
+// Endereço de uma entrada do Índice = nº (0-based) do <p> em ORDEM DE DOCUMENTO, contando TODOS os <p>
+// (também os dentro de caixas, células, itens de lista). Duas metades que têm de bater: `entryIndexOf`
+// (o editor, sobre o DOM) e `findEntryParagraph` (as parts, sobre a string) — testadas juntas.
+export function entryIndexOf(root: ParentNode, block: Element): number {
+    return Array.from(root.querySelectorAll('p')).indexOf(block as HTMLParagraphElement);
+}
+
+function findEntryParagraph(content: string, pIndex: number): { start: number; end: number; attrs: string; inner: string } | null {
+    const re = /<p\b([^>]*)>([\s\S]*?)<\/p>/gi; // \b: não apanhar <pre>
+    let m: RegExpExecArray | null;
+    let count = -1;
+    while ((m = re.exec(content)) !== null) {
+        count++;
+        if (count === pIndex) return { start: m.index, end: m.index + m[0].length, attrs: m[1], inner: m[2] };
+    }
+    return null;
 }
 
 // Liga UMA entrada do Índice ao capítulo `targetChapterIndex`, escolhida manualmente no editor
@@ -240,26 +286,33 @@ export interface LinkOneEntryResult {
 // restantes ligações já feitas (automáticas ou manuais). `pIndex` é a posição (0-based) do <p>
 // dentro do capítulo Índice, contando só <p> (mesma contagem que o botão do mini-menu faz no DOM
 // sobre editor.getBody() — ver idxlinktarget em setup.ts).
-export function linkOneIndiceEntry(rawParts: string[], indiceChapterIndex: number, pIndex: number, targetChapterIndex: number): LinkOneEntryResult {
+//
+// `subIndex` (opcional): em vez do início do capítulo, liga ao subtítulo nº `subIndex` dele (ver
+// listSubtitles) — a âncora entra logo depois do bloco do subtítulo, ou reaproveita a que lá estiver.
+export function linkOneIndiceEntry(rawParts: string[], indiceChapterIndex: number, pIndex: number, targetChapterIndex: number, subIndex?: number): LinkOneEntryResult {
     const entryContent = rawParts[indiceChapterIndex];
     const targetContent = rawParts[targetChapterIndex];
     if (entryContent === undefined || targetContent === undefined) return { parts: rawParts, ok: false, reason: 'index-out-of-range' };
 
-    const re = /<p([^>]*)>([\s\S]*?)<\/p>/gi;
-    let m: RegExpExecArray | null;
-    let count = -1;
-    let found: { start: number; end: number; attrs: string; inner: string } | null = null;
-    while ((m = re.exec(entryContent)) !== null) {
-        count++;
-        if (count === pIndex) { found = { start: m.index, end: m.index + m[0].length, attrs: m[1], inner: m[2] }; break; }
-    }
+    const found = findEntryParagraph(entryContent, pIndex);
     if (!found) return { parts: rawParts, ok: false, reason: 'entry-paragraph-not-found' };
 
-    const id = `idx-anchor-${targetChapterIndex}`;
+    let id = chapterTargetId(targetChapterIndex);
+    let anchorPos = -1; // -1 = nada a inserir (âncora já existe)
+    if (subIndex !== undefined) {
+        const sub = findSubtitles(targetContent)[subIndex];
+        if (!sub) return { parts: rawParts, ok: false, reason: 'target-subtitle-missing' };
+        const existing = sub.id ?? chapterAnchorIdAfter(targetContent, sub.end);
+        if (existing) id = existing;
+        else {
+            const used = [...targetContent.matchAll(pickedSubIdPattern(targetChapterIndex))].map(x => Number(x[1]));
+            id = pickedSubTargetId(targetChapterIndex, Math.max(0, ...used) + 1);
+            anchorPos = sub.end;
+        }
+    }
     // religar: tira um idx-link já existente neste parágrafo antes de pôr o novo (mesmo padrão
     // de stripPart, mas só neste <p> — nunca toca nas outras entradas do Índice).
-    const inner = found.inner.replace(/<span\b[^>]*\bclass="[^"]*\bidx-link\b[^"]*"[^>]*>([\s\S]*?)<\/span>\s*$/, '$1');
-    const newP = `<p${found.attrs}><span class="idx-link" data-target="${id}">${inner}</span></p>`;
+    const newP = `<p${found.attrs}>${idxLinkHtml(id, unwrapTrailingIdxLink(found.inner))}</p>`;
     const parts = rawParts.slice();
     parts[indiceChapterIndex] = entryContent.slice(0, found.start) + newP + entryContent.slice(found.end);
 
@@ -269,12 +322,26 @@ export function linkOneIndiceEntry(rawParts: string[], indiceChapterIndex: numbe
     // adjacência dos seus candidatos — aqui o alvo já foi escolhido explicitamente pelo
     // utilizador no dropdown, por isso não pode falhar só por, p.ex., haver uma imagem entre o
     // marcador e o heading).
-    if (!targetContent.includes(`id="${id}"`)) {
+    if (subIndex === undefined && !targetContent.includes(`id="${id}"`)) {
         const marker = matchChapterMarkerElement(targetContent);
         if (!marker) return { parts: rawParts, ok: false, reason: 'target-marker-missing' }; // marcador corrompido/ausente
-        const pos = marker.raw.length;
-        parts[targetChapterIndex] = targetContent.slice(0, pos) + `<p class="chapter-anchor" id="${id}"></p>` + targetContent.slice(pos);
+        anchorPos = marker.raw.length;
     }
+    if (anchorPos >= 0) parts[targetChapterIndex] = targetContent.slice(0, anchorPos) + chapterAnchorHtml(id) + targetContent.slice(anchorPos);
 
+    return { parts, ok: true };
+}
+
+// Tira a ligação de UMA entrada do Índice (volta a texto simples). A âncora no destino fica —
+// pode ter outras ligações; apagá-la é à parte (botão "Remover âncora" no editor).
+export function unlinkOneIndiceEntry(rawParts: string[], indiceChapterIndex: number, pIndex: number): LinkOneEntryResult {
+    const entryContent = rawParts[indiceChapterIndex];
+    if (entryContent === undefined) return { parts: rawParts, ok: false, reason: 'index-out-of-range' };
+    const found = findEntryParagraph(entryContent, pIndex);
+    if (!found) return { parts: rawParts, ok: false, reason: 'entry-paragraph-not-found' };
+    const inner = unwrapTrailingIdxLink(found.inner);
+    if (inner === found.inner) return { parts: rawParts, ok: false, reason: 'entry-not-linked' };
+    const parts = rawParts.slice();
+    parts[indiceChapterIndex] = entryContent.slice(0, found.start) + `<p${found.attrs}>${inner}</p>` + entryContent.slice(found.end);
     return { parts, ok: true };
 }

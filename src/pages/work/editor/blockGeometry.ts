@@ -1,3 +1,5 @@
+import { MARK, BODY_CLASS } from './ephemeral';
+
 /**
  * Geometria do Bloco ativo (ver Design/CONTEXT.md) — fonte única dos números que alinham o
  * anel, o botão "+", o Mini-menu e a pega entre si. O CSS (contentStyles.ts) é gerado daqui e
@@ -16,6 +18,12 @@ export const RING = RING_GAP + RING_LINE; // distância da caixa do bloco à lin
 
 export const ACTIVE_PAD_Y = 5;
 export const ACTIVE_PAD_X = 8;
+
+// Dentro de colunas o anel não pode passar o limite da coluna: padding lateral mínimo (alcance lateral
+// = COL_PAD_X + RING) e o limite tracejado fica COL_OUTLINE_GAP px por fora do alcance MAIOR do anel.
+export const COL_PAD_X = 2;
+export const COL_OUTLINE_GAP = 3;
+export const COL_OUTLINE_OFFSET = Math.max(ACTIVE_PAD_Y, COL_PAD_X) + RING + COL_OUTLINE_GAP;
 
 export const PLUS_SIZE = 20;
 export const PLUS_HIT = PLUS_SIZE / 2 + 1; // tolerância do clique (raio + 1)
@@ -71,14 +79,14 @@ const GRIP_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='${GRIP_WIDTH}' 
 /**
  * Pega de mover: ::before do bloco ativo de topo, em CSS como o "+" (dentro do editor — nunca
  * por cima das barras). Centrada na linha esquerda do anel; a altura vem de --grip-y (posto no
- * body pelo JS: a pega fica a meio da parte visível do bloco). Só aparece com body.ps-grip-near
+ * body pelo JS: a pega fica a meio da parte visível do bloco). Só aparece com body.${BODY_CLASS.gripNear}
  * (rato perto da linha — o CSS não sabe onde está o rato) e não com o menu do "+" aberto.
  * Cortes brancos acima/abaixo na linha (como o "+"). Absoluta (posição estática no início do
  * conteúdo): fora do fluxo — no fluxo (ex. sticky) fazia perder a indentação da 1.ª linha.
  * Bloco vazio fica de fora: o ::before é o placeholder "Escreve algo…".
  */
 export const gripCss = () => {
-    const sel = ':is(p,h1,h2,h3,h4,h5,h6)[data-mce-psactive]:not([class*="chapter-break"]):not([data-mce-empty])';
+    const sel = `:is(p,h1,h2,h3,h4,h5,h6)[${MARK.active}]:not([class*="chapter-break"]):not([${MARK.empty}])`;
     return `body:not(.mce-content-readonly) > ${sel}::before {
   content: ""; position: absolute; z-index: 2; display: block; box-sizing: border-box;
   width: ${GRIP_WIDTH}px; height: ${GRIP_HEIGHT}px;
@@ -90,7 +98,7 @@ export const gripCss = () => {
   visibility: hidden; opacity: 0;
   transition: opacity .2s ease-in, visibility 0s linear .2s;
 }
-body.ps-grip-near:not(.mce-content-readonly) > ${sel}:not([data-mce-plusopen])::before {
+body.${BODY_CLASS.gripNear}:not(.mce-content-readonly) > ${sel}:not([${MARK.plusOpen}])::before {
   visibility: visible; opacity: 1;
   transition: opacity .22s ease-out .06s, visibility 0s linear .06s;
 }`;
@@ -100,7 +108,7 @@ body.ps-grip-near:not(.mce-content-readonly) > ${sel}:not([data-mce-plusopen])::
  * Centro vertical do "+": o ::after fica no fim do CONTEÚDO do bloco e desce --plus-dy; no
  * bloco ativo isso põe-no em cima da linha do anel (padding + RING abaixo do conteúdo).
  */
-export const PLUS_DY_ACTIVE = ACTIVE_PAD_Y + RING;
+export const PLUS_DY_ACTIVE = ACTIVE_PAD_Y + RING_GAP + RING_LINE / 2; // meio da linha do anel (não do pixel abaixo dela)
 export const plusCenterY = (contentBottom: number, isActive: boolean) =>
     contentBottom + (isActive ? PLUS_DY_ACTIVE : 0);
 
@@ -110,12 +118,18 @@ export const plusCenterY = (contentBottom: number, isActive: boolean) =>
  * Padding/margem não se aplicam aos marcadores de capítulo: têm geometria própria
  * (p.chapter-break*, mais específica, sempre ganhou à regra antiga) — senão saltavam.
  */
-export const activeBlockCss = () => `[data-mce-psactive] {
+export const activeBlockCss = () => `[${MARK.active}] {
   --plus-dy: ${PLUS_DY_ACTIVE}px;
   border-radius: 2px !important;
   box-shadow: 0 0 0 ${RING_GAP}px #fff, 0 0 0 ${RING}px #dbe2ea !important;
 }
-[data-mce-psactive]:not([class*="chapter-break"]) {
+[${MARK.active}]:not([class*="chapter-break"]) {
   padding: ${ACTIVE_PAD_Y}px ${ACTIVE_PAD_X}px !important;
   margin-left: calc(var(--ps-ml, 0px) - ${ACTIVE_PAD_X}px) !important; margin-right: calc(var(--ps-mr, 0px) - ${ACTIVE_PAD_X}px) !important;
+}`;
+
+/** Bloco ativo dentro de uma célula da grelha (coluna ou parágrafo): padding lateral reduzido (texto não mexe — margem compensa). */
+export const gridActiveCss = () => `.grid > [${MARK.active}]:not([class*="chapter-break"]), .grid > .col > [${MARK.active}]:not([class*="chapter-break"]) {
+  padding-left: ${COL_PAD_X}px !important; padding-right: ${COL_PAD_X}px !important;
+  margin-left: calc(var(--ps-ml, 0px) - ${COL_PAD_X}px) !important; margin-right: calc(var(--ps-mr, 0px) - ${COL_PAD_X}px) !important;
 }`;

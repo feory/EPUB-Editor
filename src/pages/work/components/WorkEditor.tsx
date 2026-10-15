@@ -1,9 +1,10 @@
-import React, { useRef, forwardRef, useImperativeHandle, useEffect, useState, useCallback } from 'react';
+import React, { useRef, forwardRef, useImperativeHandle, useEffect, useCallback } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import type { RawEditorOptions } from 'tinymce';
 import { useStyles } from '../../../context/StyleContext';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { applyImportOptions, convertListsToDialogue, CHAPTER_SPLIT_PATTERN } from '../../../utils/html-cleaner';
+import { applyImportOptions, convertListsToDialogue } from '../../../utils/html-cleaner';
+import { splitChapterSegments } from '../../../utils/chapters';
 import type { ImportOptions } from '../../../utils/html-cleaner';
 import { cleanIndexText, linkIndexPages, wrapPageLinks, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
 import { sanitizeImageFilename } from '../../../utils/format';
@@ -16,8 +17,10 @@ import { editorFontCss } from '../utils/editorFonts';
 import { useBlockOverlays } from '../editor/useBlockOverlays';
 import { useImageCrop } from './images/useImageCrop';
 import { ImageCropModal } from './images/ImageCropModal';
-import { BoxStyleModal } from '../modals/BoxStyleModal';
+import { applyBlockEdit, type BlockEdit, type BlockInfo } from '../editor/blockEditing';
+import { tinymceEditorLike } from '../editor/blockEditingTinymce';
 import { createEditorSetup } from '../editor/setup';
+import { useLive } from '../editor/liveProps';
 import { editBlocks } from '../editor/blockEdit';
 import { buildContentStyle } from '../editor/contentStyles';
 import { EDITOR_PLUGINS, EDITOR_TOOLBAR, QUICKBARS_SELECTION_TOOLBAR, STYLE_FORMATS, TEXT_PATTERNS } from '../editor/config';
@@ -49,6 +52,8 @@ import 'tinymce/skins/ui/oxide/content.css';
 import type { TinyMCEEditor } from '../editor/types';
 import { attachContentChannel, type ContentChannel } from '../editor/contentChannel';
 import { normalizeEditorBody } from '../editor/normalizeBody';
+import type { IndiceLinkSubtitle } from '../editor/overlays/IndiceLinkPanel';
+import { useIndiceLinkPanel } from '../editor/overlays/useIndiceLinkPanel';
 import type { GrammarMatch } from '../hooks/useEbookGrammar';
 
 type FilePickerCallback = NonNullable<RawEditorOptions['file_picker_callback']>;
@@ -76,9 +81,13 @@ interface WorkEditorProps {
     onToggleFocusMode?: () => void;
     isFocusMode?: boolean;
     onTogglePrintPdf?: () => void;
+    showPrintPdfPanel?: boolean;
     onVisiblePageChange?: (page: number) => void;
-    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void;
+    onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) => void; // null = remover ligação
+    getIndiceSubtitles?: () => IndiceLinkSubtitle[];
     onAddComment?: (anchorId: string) => void;
+    onEditBox?: () => void;
+    onBlockChange?: (info: BlockInfo) => void;
     readOnly?: boolean;
     editorFont?: string;
     editorFontSize?: string;
@@ -135,6 +144,9 @@ export interface WorkEditorRef {
     cleanIndexSelection: () => void;
     linkIndexPagesSelection: () => void;
     applyConversions: (options: ImportOptions) => void;
+
+    // Edita o que está sob o cursor (painel lateral): caixa, bloco de texto, imagem, colunas, estilo
+    editBlock: (edit: BlockEdit) => void;
 }
 
 // Corte/substituição gravam os bytes SOBRE o mesmo imageId (mesmo src) — o <img> já montado no
@@ -155,63 +167,44 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onVisiblePageChange, onLinkIndiceEntry, onAddComment, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onEditBox, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
+    // Props lidas por código que corre uma só vez (setup() do TinyMCE, listeners): sempre as mais recentes.
+    // chapters/activeChapterIndex só chegam ao botão "Ligar a capítulo…" do Índice por aqui.
+    const ebookLabel = `${isbn ?? ''}${title ? ` - ${title}` : ''}`;
+    const live = useLive({
+        htmlContent, setHtmlContent, grammarCache, onGrammarCheck, onImageUploaded, onVisiblePageChange,
+        onToggleFocusMode, onTogglePrintPdf, showPrintPdfPanel, ebookLabel, chapters, activeChapterIndex,
+        onEditBox, onBlockChange, readOnly,
+    });
+    const indiceLinkPanel = useIndiceLinkPanel(editorRef, { chapters, activeChapterIndex, getSubtitles: getIndiceSubtitles, onLink: onLinkIndiceEntry });
     const syncEditorHeightRef = useRef<() => void>(() => {});
     const overlays = useBlockOverlays(editorRef, {
         activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook,
         readOnly, wholeBookLoaded: activeChapterIndex === -1, chapterLabel: chapters[activeChapterIndex]?.title || 'Capítulo',
+        onOpenPanel: () => live.current.onEditBox?.(),
     });
     const isDiffHighlightingRef = useRef(false);
     // Canal de conteúdo (editor/contentChannel.ts): o ÚNICO caminho de entrada (load) e saída
     // (report → setHtmlContent) do HTML. O <Editor> é não controlado — sem value/onEditorChange,
     // logo sem depender do estado interno do tinymce-react. Criado no init_instance_callback.
     const channelRef = useRef<ContentChannel | null>(null);
-    const htmlContentRef = useRef(htmlContent);
-    htmlContentRef.current = htmlContent;
-    const setHtmlContentRef = useRef(setHtmlContent);
-    setHtmlContentRef.current = setHtmlContent;
     // Troca de capítulo / carregamento: o reducer mudou o conteúdo → carregar com o undo a zero
     // (desfazer não pode trazer outro capítulo). Eco de um report (estado → prop) não recarrega.
     useEffect(() => { channelRef.current?.load(htmlContent, { undo: 'reset' }); }, [htmlContent]);
-    const grammarCacheRef = useRef(grammarCache);
-    grammarCacheRef.current = grammarCache;
-    const onGrammarCheckRef = useRef(onGrammarCheck);
-    onGrammarCheckRef.current = onGrammarCheck;
-    const onImageUploadedRef = useRef(onImageUploaded);
-    onImageUploadedRef.current = onImageUploaded;
-    const onVisiblePageChangeRef = useRef(onVisiblePageChange);
-    onVisiblePageChangeRef.current = onVisiblePageChange;
-    // Ligação manual do Índice (setup.ts, botão idxlinktarget): setup() só corre 1x no mount,
-    // por isso chapters/activeChapterIndex (mudam a cada render) só lá chegam por ref.
-    const onToggleFocusModeRef = useRef(onToggleFocusMode);
-    onToggleFocusModeRef.current = onToggleFocusMode;
-    const onTogglePrintPdfRef = useRef(onTogglePrintPdf);
-    onTogglePrintPdfRef.current = onTogglePrintPdf;
-    const ebookLabel = `${isbn ?? ''}${title ? ` - ${title}` : ''}`;
-    const ebookLabelRef = useRef(ebookLabel);
-    ebookLabelRef.current = ebookLabel;
+    useEffect(() => { editorRef.current?.dispatch('pdfpanelchange'); }, [showPrintPdfPanel]); // o botão "Ver PDF" relê live.showPrintPdfPanel
     useEffect(() => {
-        const el = editorRef.current?.getContainer()?.querySelector<HTMLElement>('[data-ps-ebook-label]');
+        const el = editorRef.current?.getContainer()?.querySelector('[data-ps-ebook-label]') as HTMLElement | null;
         if (el) { el.textContent = ebookLabel; el.title = ebookLabel; }
     }, [ebookLabel]);
-    const chaptersRef = useRef(chapters);
-    chaptersRef.current = chapters;
-    const activeChapterIndexRef = useRef(activeChapterIndex);
-    activeChapterIndexRef.current = activeChapterIndex;
-    const onLinkIndiceEntryRef = useRef(onLinkIndiceEntry);
-    onLinkIndiceEntryRef.current = onLinkIndiceEntry;
-    const { getCurrentCss, setCustomCss } = useStyles();
+    const { getCurrentCss } = useStyles();
     const currentCss = getCurrentCss();
-    const [showBoxStyleModal, setShowBoxStyleModal] = useState(false);
     const imageCrop = useImageCrop(isbn ?? '', (imageId) => refreshImageInEditor(editorRef.current, imageId));
 
 
     // Modo leitura (2º utilizador no mesmo projeto) — alterna o editor em runtime
-    const readOnlyRef = useRef(readOnly);
-    readOnlyRef.current = readOnly;
     useEffect(() => {
         editorRef.current?.mode?.set(readOnly ? 'readonly' : 'design');
     }, [readOnly]);
@@ -531,6 +524,10 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             });
         },
 
+        editBlock: (edit) => {
+            if (editorRef.current) applyBlockEdit(tinymceEditorLike(editorRef.current), edit);
+        },
+
         applyConversions: (options: ImportOptions) => {
             const editor = editorRef.current;
             if (!editor) return;
@@ -841,7 +838,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const channel = channelRef.current;
             if (!channel) return newFullHtml;
             if (chapterIndex === -1) return channel.load(newFullHtml, { undo: 'keep' });
-            const segments = newFullHtml.split(CHAPTER_SPLIT_PATTERN);
+            const segments = splitChapterSegments(newFullHtml);
             let nonEmptyIdx = -1;
             const targetSegIdx = segments.findIndex(s => s.trim().length > 0 && ++nonEmptyIdx === chapterIndex);
             if (targetSegIdx === -1) return newFullHtml; // índice fora de alcance — nada a sincronizar
@@ -854,8 +851,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             if (!editor) return;
             runGrammarCheck(
                 editor.getBody(),
-                grammarCacheRef.current,
-                onGrammarCheckRef.current,
+                live.current.grammarCache,
+                live.current.onGrammarCheck,
                 (on) => editor.setProgressState(on)
             );
         },
@@ -890,7 +887,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     licenseKey="gpl"
                     onInit={(_evt, editor) => {
                         editorRef.current = editor;
-                        if (readOnlyRef.current) editor.mode.set('readonly');
+                        if (live.current.readOnly) editor.mode.set('readonly');
                         applyCustomStyles(editor);
                         // toolbar_sticky não recalcula a largura quando o CONTENTOR muda de
                         // tamanho por razão que não é resize da janela (ex. painel Estrutura a
@@ -941,7 +938,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                                     current = Number((el as HTMLElement).getAttribute('data-page'));
                                 }
                             });
-                            if (current !== null) onVisiblePageChangeRef.current?.(current);
+                            if (current !== null) live.current.onVisiblePageChange?.(current);
                         };
                         const onEditorScroll = () => {
                             clearTimeout(pageScrollTimer);
@@ -958,11 +955,11 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         // ligar o canal e carregar o conteúdo ATUAL (pode ter mudado desde o mount).
                         init_instance_callback: (editor: TinyMCEEditor) => {
                             channelRef.current = attachContentChannel(editor, {
-                                onReport: (html) => setHtmlContentRef.current(html),
+                                onReport: (html) => live.current.setHtmlContent(html),
                                 shouldReport: () => !isDiffHighlightingRef.current,
                                 normalize: () => normalizeEditorBody(editor.getBody()),
                             });
-                            channelRef.current.load(htmlContentRef.current, { undo: 'reset' });
+                            channelRef.current.load(live.current.htmlContent, { undo: 'reset' });
                         },
                         height: 700,
                         menubar: false,
@@ -973,7 +970,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         // preservar o marcador de quebra de página e o de link do Índice (span vazio
                         // com classe/dados) — em TinyMCE isto SUBSTITUI, não estende, os atributos
                         // permitidos no span; sem data-target aqui, o marcador idx-link perde o alvo
-                        extended_valid_elements: 'span[class|data-page|data-target|data-comment-id|id|style]',
+                        extended_valid_elements: 'span[class|data-page|data-target|data-comment-id|data-label|id|style]',
                         plugins: EDITOR_PLUGINS,
                         // Bubble de formatação na seleção de texto (só selection; sem barras de inserção/imagem).
                         quickbars_insert_toolbar: false,
@@ -985,17 +982,17 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         toolbar_sticky_offset: 57, // altura da navbar da app (WorkToolbar), sem folga
                         // "imagecrop" à frente do default do TinyMCE (link linkchecker image editimage
                         // table spellchecker configurepermanentpen) — só acrescenta, não troca nada.
-                        contextmenu: 'imagecrop boxedit link linkchecker image editimage table spellchecker configurepermanentpen',
+                        contextmenu: 'imagecrop imageedit boxedit blockedit link linkchecker image editimage table spellchecker configurepermanentpen',
                         setup: createEditorSetup({
                             onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
                             openStyleMenu: overlays.openStyleMenu,
-                            chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, ebookLabelRef,
-                            onToggleFocusModeRef, onTogglePrintPdfRef,
+                            openIndiceLinkPanel: indiceLinkPanel.open,
+                            live,
                             wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
                             onAddComment,
-                            onEditBoxStyle: () => setShowBoxStyleModal(true),
+                            onEditBoxStyle: () => live.current.onEditBox?.(),
                         }),
                         automatic_uploads: true,
                         paste_data_images: true,
@@ -1034,7 +1031,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             formData.append('images', blobInfo.blob(), filename);
                             if (!isbn) throw new Error('ISBN não disponível');
                             await ebooksApi.uploadImages(isbn, formData);
-                            onImageUploadedRef.current?.();
+                            live.current.onImageUploaded?.();
                             return `/api/ebooks/${isbn}/images/${imageId}`;
                         },
                         // Só os extras estáticos do editor aqui — o CSS do livro é sempre o injetado
@@ -1055,6 +1052,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     }}
                 />
                 {overlays.render}
+                {indiceLinkPanel.element}
             </div>
             {imageCrop.cropImage && (
                 <ImageCropModal
@@ -1062,17 +1060,6 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     imageUrl={imageCrop.cropImage.url}
                     onSave={imageCrop.handleCropSave}
                     onCancel={imageCrop.handleCropCancel}
-                />
-            )}
-            {showBoxStyleModal && (
-                <BoxStyleModal
-                    css={currentCss}
-                    onSave={(newCss) => {
-                        setCustomCss(newCss);
-                        if (isbn) ebooksApi.saveStyle(isbn, newCss);
-                        setShowBoxStyleModal(false);
-                    }}
-                    onCancel={() => setShowBoxStyleModal(false)}
                 />
             )}
         </div>

@@ -5,6 +5,7 @@
 
 import type { Section } from './types';
 import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from '../../page-list/marker';
+import { IDX_LINK_SPAN_RE } from '../../../utils/indice-marker';
 
 const ID_PATTERN = /\bid="([^"]+)"/g;
 
@@ -40,14 +41,9 @@ export function buildIdToSectionMap(sections: Section[]): Map<string, number> {
  * (marcador dessincronizado) → mantém só o texto, nunca um `href="#"` morto.
  */
 export function convertIndexLinks(html: string, idToSection: Map<string, number>, currentSectionIdx: number): string {
-    // Tolerante à ordem de atributos (TinyMCE/DOMPurify podem reordenar, mesmo cuidado de
-    // convertPageBreaks): casa o <span> só pela classe, extrai data-target à parte da tag.
-    // O conteúdo pode ter um <span> aninhado (marcador de page-list, cai no mesmo <p> do Índice) —
-    // [\s\S]*? sozinho pararia no 1º </span>, que seria o do span aninhado, não o deste idx-link
-    // (cortava a tag a meio → "Opening and ending tag mismatch" no leitor). O grupo alternado
-    // consome qualquer <span>...</span> completo como bloco atómico antes de parar num </span>.
+    // IDX_LINK_SPAN_RE (indice-marker.ts) tolera ordem de atributos e <span> aninhado; data-target lê-se à parte da tag.
     return html.replace(
-        /<span\b[^>]*\bclass="[^"]*\bidx-link\b[^"]*"[^>]*>((?:<span\b[^>]*>[\s\S]*?<\/span>|(?!<\/span>)[\s\S])*)<\/span>/g,
+        IDX_LINK_SPAN_RE,
         (m, inner: string) => {
             const targetId = m.match(/\bdata-target="([^"]*)"/)?.[1];
             const targetSection = targetId ? idToSection.get(targetId) : undefined;

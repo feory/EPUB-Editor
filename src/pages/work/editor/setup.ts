@@ -1,10 +1,27 @@
 import type { Editor } from 'tinymce';
-import { isIndiceChapterTitle } from '../../../utils/indice-links';
+import { isIndiceChapterTitle, entryIndexOf } from '../../../utils/indice-links';
+import { MANUAL_ANCHOR_CLASS, manualAnchorHtml, newManualAnchorId } from '../../../utils/indice-marker';
 import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
 import type { TinyMCEEditor } from './types';
 import { editBlocks } from './blockEdit';
+import { BOX_VARIANTS } from './boxProps';
+import { inspectBlock, applyBlockEdit, createBlockWatcher, TEXT_BLOCK_SELECTOR, type BlockInfo } from './blockEditing';
+import { tinymceEditorLike } from './blockEditingTinymce';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
+import { registerBlockFormats } from './formats';
+import { registerImageTools } from './imageTools';
+import { MARK, registerEphemeralMarks } from './ephemeral';
+
+export interface SetupLive {
+    onBlockChange?: (info: BlockInfo) => void;      // caixa e bloco de texto sob o cursor (painel lateral)
+    ebookLabel: string;                             // título do ebook no canto direito da barra de estado
+    onToggleFocusMode?: () => void;
+    onTogglePrintPdf?: () => void;
+    showPrintPdfPanel?: boolean;                    // painel de PDF aberto → botão "Ver PDF" ativo
+    chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
+    activeChapterIndex: number;
+}
 
 interface SetupDeps {
     onGrammarClick?: (index: number) => void;
@@ -12,20 +29,13 @@ interface SetupDeps {
     onExport?: () => void;
     startHtmlEdit: (top: HTMLElement) => void;
     openStyleMenu: (kind: 'para' | 'head') => void;
+    openIndiceLinkPanel: (pIndex: number, currentTarget: string) => void; // '' = entrada sem ligação
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
     onEditBoxStyle: () => void;
-    // Título do ebook no canto direito da barra de estado (ref: setup() só corre 1x).
-    ebookLabelRef: React.MutableRefObject<string>;
-    onToggleFocusModeRef: React.MutableRefObject<(() => void) | undefined>;
-    onTogglePrintPdfRef: React.MutableRefObject<(() => void) | undefined>;
-    // Capítulos do livro + índice do capítulo aberto — via ref (setup() só corre 1x no mount,
-    // ver comentário junto ao botão idxlinktarget) para ler sempre os valores mais recentes.
-    chaptersRef: React.MutableRefObject<{ title: string; level: string }[]>;
-    activeChapterIndexRef: React.MutableRefObject<number>;
-    // Por ref (não a função direta): setup() só corre 1x no mount — uma prop direta ficava presa
-    // à closure desse 1º render (livro ainda vazio nessa altura), nunca via as edições seguintes.
-    onLinkIndiceEntryRef: React.MutableRefObject<((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number) => void) | undefined>;
+    // Props que mudam a cada render, lidas por ref: setup() só corre 1x no mount, uma prop direta ficava presa à
+    // closure desse 1.º render (livro ainda vazio nessa altura) e nunca via as edições seguintes.
+    live: React.MutableRefObject<SetupLive>;
     wireOverlays: (
         editor: TinyMCEEditor,
         ctx: { blockOf: (n: Node | null) => Element | null; activeBlock: ActiveBlock },
@@ -34,12 +44,33 @@ interface SetupDeps {
 
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
-    const { onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu,
-        chaptersRef, activeChapterIndexRef, onLinkIndiceEntryRef, wireOverlays, onCropImage, onAddComment, onEditBoxStyle } = deps;
+    const { onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu, openIndiceLinkPanel,
+        live, wireOverlays, onCropImage, onAddComment, onEditBoxStyle } = deps;
 
     return (editor: Editor) => {
         // Ação de menu/atalho como edição de bloco (blockEdit.ts): passo de undo + change + nodeChanged.
         const undoable = (fn: () => void) => () => editBlocks(editor, fn);
+        registerEphemeralMarks(editor); // marcas de UI que o serializer nunca emite (ephemeral.ts)
+        // Âncora manual no cursor: span.manual-anchor vazio (destino de ligações do Índice, ver
+        // findSubtitles em indice-links.ts). id único pela hora (sem varrer o livro todo).
+        editor.addCommand('mceInsertAnchor', () => {
+            const bookmark = editor.selection.getBookmark(2, true);
+            const suggested = (editor.selection.getNode()?.textContent ?? '').trim().slice(0, 60);
+            editor.windowManager.open({
+                title: 'Âncora',
+                body: { type: 'panel', items: [{ type: 'input', name: 'label', label: 'Nome da âncora', placeholder: suggested || 'Âncora' }] },
+                buttons: [{ type: 'cancel', text: 'Cancelar' }, { type: 'submit', text: 'Inserir', primary: true }],
+                onSubmit: (api: { getData: () => { label: string }; close: () => void }) => {
+                    const label = api.getData().label.trim() || suggested || 'Âncora';
+                    api.close();
+                    editor.selection.moveToBookmark(bookmark);
+                    editBlocks(editor, () => {
+                        editor.insertContent(manualAnchorHtml(newManualAnchorId(), label));
+                        editor.focus();
+                    });
+                },
+            });
+        });
         editor.addCommand('mceChapterBreak', () => {
             const bookmark = editor.selection.getBookmark(2, true);
             editor.windowManager.open({
@@ -127,200 +158,14 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.addShortcut('meta+i,ctrl+i', 'Com Indentação', undoable(() => editor.formatter.toggle('p-indent')));
         editor.addShortcut('meta+t,ctrl+t', 'Parágrafo de Topo', undoable(() => editor.formatter.toggle('p-top')));
 
-        editor.on('init', () => {
-            // selector (não block): aplica a classe ao bloco existente sem lhe trocar a tag —
-            // block:'p' não fazia nada dentro de um <li> (o TinyMCE não troca a tag de um item
-            // de lista por um <p>, quebraria a lista), impossibilitando estilo de parágrafo em
-            // bullets. selector:'p,li' cobre ambos.
-            editor.formatter.register('p-indent', { selector: 'p,li', classes: 'p-indent' });
-            editor.formatter.register('p-top', { selector: 'p,li', classes: 'p-top' });
-            editor.formatter.register('p-space', { selector: 'p,li', classes: 'p-space' });
-            editor.formatter.register('footnote', { selector: 'p,li', classes: 'footnote' });
-            editor.formatter.register('drop-cap', { selector: 'p,li', classes: 'drop-cap' });
-            editor.formatter.register('p-small', { selector: 'p,li', classes: 'p-small' });
-            editor.formatter.register('p-legendas', { selector: 'p,li', classes: 'p-legendas' });
-            editor.formatter.register('p-bold', { selector: 'p,li', classes: 'p-bold' });
-            editor.formatter.register('p-italic', { selector: 'p,li', classes: 'p-italic' });
-            editor.formatter.register('p-bold-italic', { selector: 'p,li', classes: 'p-bold-italic' });
-            editor.formatter.register('p-uppercase', { selector: 'p,li', classes: 'p-uppercase' });
-            editor.formatter.register('p-quote', { selector: 'p,li', classes: 'p-quote' });
-            editor.formatter.register('p-asterisk', { selector: 'p,li', classes: 'p-asterisk' });
-            editor.formatter.register('p-border-top', { selector: 'p,li', classes: 'p-border-top' });
-            editor.formatter.register('p-border-bottom', { selector: 'p,li', classes: 'p-border-bottom' });
-            editor.formatter.register('p-border-sides', { selector: 'p,li', classes: 'p-border-sides' });
-            editor.formatter.register('small-text', { inline: 'small' });
-            // Override do formato nativo (senão sai <span style="text-decoration:underline">) —
-            // <u> é o que o import de EPUB já produz (reverseUnderline), consistente e sem CSS.
-            editor.formatter.register('underline', { inline: 'u' });
-            editor.formatter.register('small-caps', { inline: 'span', classes: 'small-caps' });
-            // Reusa a classe do formato de parágrafo p-uppercase (CSS já existe, sem seletor de
-            // tag — ver StyleContext.tsx) num <span> inline, para poder aplicar-se a uma SELEÇÃO
-            // dentro de um título (p-uppercase de bloco é removido de headings — ver PARA_STYLE_CLASSES).
-            editor.formatter.register('uppercase', { inline: 'span', classes: 'p-uppercase' });
-            editor.formatter.register('box', { block: 'div', classes: 'box', wrapper: true });
-        });
+        registerBlockFormats(editor);
+        registerImageTools(editor);
 
-        const setImgAlign = (cls: string) => {
-            const node = editor.selection.getNode();
-            if (node.nodeName !== 'IMG') return;
-            editBlocks(editor, () => {
-                ['img-left', 'img-center', 'img-right', 'img-inline'].forEach((c) => editor.dom.removeClass(node, c));
-                editor.dom.addClass(node, cls);
-            });
-        };
-        ([
-            ['imgalignleft', 'img-left', 'align-left', 'Imagem à esquerda'],
-            ['imgaligncenter', 'img-center', 'align-center', 'Imagem centrada'],
-            ['imgalignright', 'img-right', 'align-right', 'Imagem à direita'],
-            ['imgaligninline', 'img-inline', 'ps-imginline', 'Imagem na linha'],
-        ] as const).forEach(([name, cls, icon, tooltip]) => {
-            editor.ui.registry.addToggleButton(name, {
-                icon,
-                tooltip,
-                onAction: () => setImgAlign(cls),
-                onSetup: (api) => {
-                    const update = () => {
-                        const node = editor.selection.getNode();
-                        api.setActive(node.nodeName === 'IMG' && editor.dom.hasClass(node, cls));
-                    };
-                    editor.on('NodeChange', update);
-                    return () => editor.off('NodeChange', update);
-                },
-            });
-        });
-        // Ajuste fino de posição vertical (ex. imagem em linha que não fica bem alinhada ao
-        // texto por omissão) — translateY em px, aplicado por cima do resto do style inline
-        // (transform é só mais uma propriedade; largura/altura do resize do TinyMCE mantêm-se).
-        const getTranslateY = (el: HTMLElement) => parseFloat(/translateY\((-?[\d.]+)px\)/.exec(el.style.transform)?.[1] || '0');
-        editor.ui.registry.addButton('imgvoffset', {
-            icon: 'ps-imgvoffset',
-            tooltip: 'Ajustar posição vertical',
-            onAction: () => {
-                const node = editor.selection.getNode();
-                if (node.nodeName !== 'IMG') return;
-                const current = String(getTranslateY(node as HTMLElement));
-                editor.windowManager.open({
-                    title: 'Ajustar posição vertical',
-                    body: {
-                        type: 'panel',
-                        items: [{ type: 'input', name: 'offset', label: 'Deslocação vertical (px, negativo = para cima)' }],
-                    },
-                    initialData: { offset: current },
-                    buttons: [
-                        { type: 'cancel', text: 'Cancelar' },
-                        { type: 'submit', text: 'Aplicar', primary: true },
-                    ],
-                    onSubmit: (api: { getData: () => { offset: string }; close: () => void }) => {
-                        const value = parseFloat(api.getData().offset);
-                        api.close();
-                        editBlocks(editor, () => {
-                            (node as HTMLElement).style.transform = value ? `translateY(${value}px)` : '';
-                        });
-                    },
-                });
-            },
-        });
-        editor.ui.registry.addContextToolbar('imagealign', {
-            predicate: (node: Element) => node.nodeName === 'IMG',
-            position: 'node',
-            scope: 'node',
-            items: 'imgalignleft imgaligncenter imgalignright imgaligninline imgvoffset',
-        });
-
-        // Pega de arrasto para a posição vertical (translateY) de uma imagem selecionada.
-        // Vive DENTRO do próprio iframe (mesmo sistema de coordenadas da imagem) — ao contrário
-        // do botão "+"/pega de bloco (overlay React fora do iframe), aqui não há scroll da
-        // página exterior a compensar, por isso não precisa desse mecanismo mais pesado.
-        editor.on('init', () => {
-            const doc = editor.getDoc();
-            if (!doc) return;
-            const grip = doc.createElement('div');
-            grip.setAttribute('data-mce-bogus', 'all'); // nunca serializa/exporta
-            // position:fixed (não absolute): getBoundingClientRect() é relativo ao VIEWPORT, e o
-            // body do iframe não tem position:relative (de propósito, ver span.pagebreak acima) —
-            // absolute sem ancestral posicionado ficava relativo ao topo do documento inteiro,
-            // invisível assim que havia scroll no capítulo.
-            grip.style.cssText = 'position:fixed;width:22px;height:14px;background:#475569;'
-                + 'border-radius:4px;cursor:ns-resize;display:none;z-index:1000;box-shadow:0 1px 3px rgba(0,0,0,.3);';
-            grip.innerHTML = '<svg width="22" height="14" viewBox="0 0 22 14"><path fill="none" stroke="#fff" '
-                + 'stroke-width="1.5" stroke-linecap="round" d="M6 4l5-3 5 3M6 10l5 3 5-3"/></svg>';
-            doc.body.appendChild(grip);
-
-            let dragging = false;
-            let dragImg: HTMLImageElement | null = null;
-            let startY = 0;
-            let startOffset = 0;
-
-            const positionGrip = (img: HTMLImageElement) => {
-                // Fora da caixa da imagem (por baixo, centrado) — nos cantos ficava tapado
-                // pelas pegas nativas de resize do TinyMCE.
-                const r = img.getBoundingClientRect();
-                grip.style.left = `${r.left + r.width / 2 - 11}px`;
-                grip.style.top = `${r.bottom + 4}px`;
-                grip.style.display = 'block';
-            };
-            const hideGrip = () => { grip.style.display = 'none'; };
-            let selectedImg: HTMLImageElement | null = null;
-
-            editor.on('NodeChange', () => {
-                if (dragging) return;
-                const node = editor.selection.getNode();
-                if (node.nodeName === 'IMG' && editor.hasFocus()) {
-                    selectedImg = node as HTMLImageElement;
-                    positionGrip(selectedImg);
-                } else {
-                    selectedImg = null;
-                    hideGrip();
-                }
-            });
-            // Scroll não dispara NodeChange — sem isto o grip ficava parado no sítio antigo
-            // (fixed) enquanto o conteúdo (e a imagem) deslizava por baixo.
-            editor.getWin().addEventListener('scroll', () => {
-                if (selectedImg && !dragging) positionGrip(selectedImg);
-            }, { passive: true });
-
-            grip.addEventListener('mousedown', (e: MouseEvent) => {
-                const node = editor.selection.getNode();
-                if (node.nodeName !== 'IMG') return;
-                e.preventDefault();
-                dragging = true;
-                dragImg = node as HTMLImageElement;
-                startY = e.clientY;
-                startOffset = getTranslateY(dragImg);
-                doc.body.style.userSelect = 'none';
-            });
-            const endDrag = () => {
-                if (!dragging) return;
-                dragging = false;
-                doc.body.style.userSelect = '';
-                // O deslocamento já foi escrito durante o arrasto: aqui só se regista o resultado
-                // como UM passo de undo (o arrasto inteiro), não um por cada mousemove.
-                editBlocks(editor, () => {});
-                dragImg = null;
-            };
-            doc.addEventListener('mousemove', (e: MouseEvent) => {
-                if (!dragging || !dragImg) return;
-                const delta = e.clientY - startY;
-                dragImg.style.transform = `translateY(${startOffset + delta}px)`;
-                positionGrip(dragImg);
-            });
-            doc.addEventListener('mouseup', endDrag);
-            // ponytail: largar o botão FORA do iframe (a mais provável ao arrastar rápido) não
-            // dispara mouseup dentro do doc do iframe — apanhado pela janela exterior; suficiente
-            // para o uso normal (ajuste vertical pequeno), sem replicar o sistema de captura de
-            // ponteiro do drag de blocos.
-            window.addEventListener('mouseup', endDrag);
-            editor.on('remove', () => {
-                window.removeEventListener('mouseup', endDrag);
-                grip.remove();
-            });
-        });
-
-        // Botão direito em cima de uma imagem → "Editar Imagem" (corte, mesmo mecanismo da
+        // Botão direito em cima de uma imagem → "Recorte" (corte, mesmo mecanismo da
         // Galeria: grava sobre o mesmo data-image-id). Grupo dinâmico (addContextMenu): só
         // aparece quando o nó clicado é mesmo a imagem.
         editor.ui.registry.addMenuItem('imagecrop-item', {
-            text: 'Editar Imagem',
+            text: 'Recorte',
             icon: 'crop',
             onAction: () => {
                 const node = editor.selection.getNode();
@@ -337,11 +182,44 @@ export function createEditorSetup(deps: SetupDeps) {
         // aparece quando o nó clicado está mesmo dentro de uma .box.
         editor.ui.registry.addMenuItem('boxedit-item', {
             text: 'Edição',
-            icon: 'ps-box',
+            icon: 'edit-block',
             onAction: () => onEditBoxStyle(),
         });
+        // Variante da caixa (classe box--X; o CSS vive no livro e o export dá-lhe epub:type).
+        const blocks = tinymceEditorLike(editor);
+        editor.ui.registry.addNestedMenuItem('boxvariant-item', {
+            text: 'Tipo de caixa',
+            icon: 'ps-box',
+            getSubmenuItems: () => BOX_VARIANTS.map(([variant, text]) => ({
+                type: 'togglemenuitem' as const,
+                text,
+                onSetup: (api: { setActive: (state: boolean) => void }) => { api.setActive(inspectBlock(blocks).box?.variant === variant); return () => {}; },
+                onAction: () => applyBlockEdit(blocks, { target: 'box', patch: { variant } }),
+            })),
+        });
+        // Painel lateral: acompanha o que está sob o cursor (só emite quando muda).
+        const watcher = createBlockWatcher(blocks, (info) => live.current.onBlockChange?.(info));
+        editor.on('NodeChange', watcher.update);
+        // Parágrafos/títulos/itens: abre o painel de edição do bloco.
+        editor.ui.registry.addMenuItem('blockedit-item', {
+            text: 'Editar bloco',
+            icon: 'edit-block',
+            onAction: () => onEditBoxStyle(),
+        });
+        // Imagem selecionada: abre o painel (alinhamento, largura, margens, alt).
+        editor.ui.registry.addMenuItem('imageedit-item', {
+            text: 'Editar imagem',
+            icon: 'edit-image',
+            onAction: () => onEditBoxStyle(),
+        });
+        editor.ui.registry.addContextMenu('imageedit', {
+            update: (element) => element.nodeName === 'IMG' ? ['imageedit-item'] : [],
+        });
+        editor.ui.registry.addContextMenu('blockedit', {
+            update: (element) => editor.dom.getParent(element, TEXT_BLOCK_SELECTOR) && !editor.dom.getParent(element, '.box') ? ['blockedit-item'] : [],
+        });
         editor.ui.registry.addContextMenu('boxedit', {
-            update: (element) => editor.dom.getParent(element, '.box') ? ['boxedit-item'] : [],
+            update: (element) => editor.dom.getParent(element, '.box') ? ['boxedit-item', 'boxvariant-item'] : [],
         });
 
         registerEditorIcons(editor);
@@ -386,19 +264,14 @@ export function createEditorSetup(deps: SetupDeps) {
         // Bloco ativo (anel, "+", pega; recolhido pelo 2.º clique) — activeBlock.ts.
         const activeBlock = attachActiveBlock(editor, { blockOf });
 
-        // Marcadores de UI puros: o serializer nunca os emite (getContent/autosave/EPUB saem limpos).
-        editor.on('PreInit', () => {
-            editor.serializer.addTempAttr('data-mce-empty'); // placeholder de bloco vazio (nunca exporta)
-            editor.serializer.addTempAttr('data-mce-htmledit'); // bloco escondido durante edição de HTML inline
-        });
         // Placeholder: marca o <p> vazio focado (CSS mostra "Escreve algo…" via ::before).
         const refreshEmptyMarker = () => {
-            editor.dom.select('[data-mce-empty]').forEach((el: HTMLElement) => editor.dom.setAttrib(el, 'data-mce-empty', null));
+            editor.dom.select(`[${MARK.empty}]`).forEach((el: HTMLElement) => editor.dom.setAttrib(el, MARK.empty, null));
             if (!editor.hasFocus()) return;
             const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
             if (block && block.nodeName === 'P' && !/\bchapter-break/.test(block.className)
                 && !(block.textContent || '').replace(/\u00a0/g, '').trim() && !block.querySelector('img')) {
-                editor.dom.setAttrib(block, 'data-mce-empty', '1');
+                editor.dom.setAttrib(block, MARK.empty, '1');
             }
         };
         editor.on('NodeChange', refreshEmptyMarker);
@@ -489,6 +362,7 @@ export function createEditorSetup(deps: SetupDeps) {
                     if (/^h[123]$/.test(value) || value === 'p') editor.execCommand('FormatBlock', false, value);
                     else if (value === 'image') editor.execCommand('mceImage');
                     else if (value === 'hr') editor.execCommand('mceInsertContent', false, '<hr>');
+                    else if (value === 'anchor') editor.execCommand('mceInsertAnchor');
                     else editor.formatter.apply(value); // p-quote, p-small, footnote
                 })();
                 editor.focus();
@@ -523,8 +397,8 @@ export function createEditorSetup(deps: SetupDeps) {
                 sb.insertBefore(cssInfoEl, sb.firstChild);
                 const labelEl = document.createElement('div');
                 labelEl.dataset.psEbookLabel = '1';
-                labelEl.textContent = deps.ebookLabelRef.current;
-                labelEl.title = deps.ebookLabelRef.current;
+                labelEl.textContent = live.current.ebookLabel;
+                labelEl.title = live.current.ebookLabel;
                 labelEl.style.cssText = 'flex:0 1 auto;max-width:40%;padding:0 8px;font-size:11px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
                 sb.insertBefore(labelEl, sb.querySelector('.tox-statusbar__resize-handle'));
             }
@@ -545,48 +419,48 @@ export function createEditorSetup(deps: SetupDeps) {
                 startHtmlEdit(top);
             },
         });
-        // "Ligar a capítulo…" no mini-menu do Índice: dropdown com os capítulos do livro — cobre
-        // as entradas que o automático (Criação Links Índice, ver indice-links.ts) não apanha,
-        // ex. título da entrada e do capítulo não batem por texto (só entradas de topo; ver
-        // linkOneIndiceEntry). Só ativo dentro do capítulo classificado como Índice; chapters/
-        // activeChapterIndex vêm por ref porque este setup() só corre uma vez, no mount.
-        editor.ui.registry.addMenuButton('idxlinktarget', {
+        // "Ligar a…" no mini-menu do Índice: abre o painel React (overlays/IndiceLinkPanel.tsx) com
+        // capítulos e subtítulos — cobre as entradas que o automático (Criação Links Índice, ver
+        // indice-links.ts) não apanha, ex. título da entrada e do capítulo não batem por texto. Só
+        // ativo dentro do capítulo classificado como Índice; chapters/activeChapterIndex vêm por
+        // ref porque este setup() só corre uma vez, no mount.
+        editor.ui.registry.addButton('idxlinktarget', {
             icon: 'link',
-            tooltip: 'Ligar a capítulo',
-            fetch: (callback) => {
-                const own = activeChapterIndexRef.current;
-                // Já ligada? idx-link já existente no parágrafo diz o capítulo atual (ver
-                // marcação `idx-anchor-<chapterIndex>` / `idx-anchor-<chapterIndex>-<seq>`, tanto
-                // manual como do automático em lote) — marca-o com check no dropdown.
-                const curBlock = blockOf(editor.selection.getNode()) as HTMLElement | null;
-                const curTarget = curBlock?.querySelector('span.idx-link')?.getAttribute('data-target') || '';
-                const currentChapterIndex = Number(curTarget.match(/^idx-anchor-(\d+)/)?.[1] ?? -1);
-                const items = chaptersRef.current
-                    .map((c, i) => ({ c, i }))
-                    .filter(({ c, i }) => i !== own && c.level !== 'break')
-                    .map(({ c, i }) => ({
-                        type: 'togglemenuitem' as const,
-                        // Indentação por nível (h2/h3 mais para dentro) — U+00A0 (nbsp),
-                        // um espaço normal colapsa no texto do menuitem.
-                        text: (c.level === 'h3' ? ' '.repeat(8) : c.level === 'h2' ? ' '.repeat(4) : '') + c.title,
-                        active: i === currentChapterIndex,
-                        onAction: () => {
-                            const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
-                            if (!block || block.nodeName !== 'P') return;
-                            const pIndex = (Array.from(editor.getBody().children) as HTMLElement[])
-                                .filter((el) => el.nodeName === 'P').indexOf(block);
-                            if (pIndex === -1) return;
-                            onLinkIndiceEntryRef.current?.(pIndex, own, i);
-                        },
-                    }));
-                callback(items);
+            tooltip: 'Ligar a…',
+            onAction: () => {
+                // Já ligada? o data-target do idx-link no parágrafo é o destino atual — o painel marca-o com visto.
+                const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
+                if (!block || block.nodeName !== 'P') return;
+                const pIndex = entryIndexOf(editor.getBody(), block);
+                if (pIndex === -1) return;
+                const curTarget = block.querySelector('span.idx-link')?.getAttribute('data-target') || '';
+                openIndiceLinkPanel(pIndex, curTarget);
             },
             onSetup: (api) => {
-                const update = () => api.setEnabled(isIndiceChapterTitle(chaptersRef.current[activeChapterIndexRef.current]?.title || ''));
+                const update = () => api.setEnabled(isIndiceChapterTitle(live.current.chapters[live.current.activeChapterIndex]?.title || ''));
                 update();
                 editor.on('NodeChange', update);
                 return () => editor.off('NodeChange', update);
             },
+        });
+
+        // Âncora manual: clicar no ⚓ (pseudo-elemento do span) seleciona-a e mostra "Remover âncora".
+        // Ligações do Índice que lhe apontem ficam só como texto no export (ver convertIndexLinks).
+        const isManualAnchor = (n: Node | null) => !!n && n.nodeName === 'SPAN' && (n as HTMLElement).classList.contains(MANUAL_ANCHOR_CLASS);
+        editor.on('click', (e: MouseEvent) => { if (isManualAnchor(e.target as Node)) editor.selection.select(e.target as Node); });
+        editor.ui.registry.addButton('removeanchor', {
+            icon: 'remove',
+            text: 'Remover âncora',
+            onAction: () => {
+                const node = editor.selection.getNode();
+                if (isManualAnchor(node)) editBlocks(editor, () => editor.dom.remove(node));
+            },
+        });
+        editor.ui.registry.addContextToolbar('manualanchor', {
+            predicate: isManualAnchor,
+            position: 'node',
+            scope: 'node',
+            items: 'removeanchor',
         });
 
         // Botão (ícone ¶) de estilo de parágrafo — redundante de propósito com os botões psX (acesso
@@ -684,13 +558,19 @@ export function createEditorSetup(deps: SetupDeps) {
             },
         });
 
-        editor.ui.registry.addButton('pdfview', {
+        editor.ui.registry.addToggleButton('pdfview', {
             icon: 'document-properties', tooltip: 'Ver PDF',
-            onAction: () => deps.onTogglePrintPdfRef.current?.(),
+            onAction: () => live.current.onTogglePrintPdf?.(),
+            onSetup: (api) => {
+                const update = () => api.setActive(!!live.current.showPrintPdfPanel);
+                update();
+                editor.on('pdfpanelchange', update); // despachado pelo WorkEditor quando a prop muda
+                return () => editor.off('pdfpanelchange', update);
+            },
         });
         editor.ui.registry.addButton('focusmode', {
             icon: 'fullscreen', tooltip: 'Modo Foco',
-            onAction: () => deps.onToggleFocusModeRef.current?.(),
+            onAction: () => live.current.onToggleFocusMode?.(),
         });
 
         editor.ui.registry.addToggleButton('box', {
@@ -716,6 +596,23 @@ export function createEditorSetup(deps: SetupDeps) {
                 editor.on('NodeChange', handler);
                 return () => editor.off('NodeChange', handler);
             },
+        });
+
+        // Barra de formatação fixa (padrão) vs. oculta (aparece com o rato): classe no <html> → index.css.
+        // A barra vive no documento principal, por isso a classe é do `document`, não do iframe.
+        const PIN_KEY = 'wp-toolbar-pinned';
+        const readPinned = () => { try { return localStorage.getItem(PIN_KEY) !== '0'; } catch { return true; } };
+        document.documentElement.classList.toggle('toolbar-pinned', readPinned());
+        editor.ui.registry.addToggleButton('pintoolbar', {
+            icon: 'ps-pin',
+            tooltip: 'Fixar a barra de formatação',
+            onAction: (api) => {
+                const pinned = !api.isActive();
+                document.documentElement.classList.toggle('toolbar-pinned', pinned);
+                try { localStorage.setItem(PIN_KEY, pinned ? '1' : '0'); } catch { /* sem storage */ }
+                api.setActive(pinned);
+            },
+            onSetup: (api) => { api.setActive(readPinned()); return () => {}; },
         });
 
         editor.ui.registry.addToggleButton('noBreak', {

@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import type { ExtractedDocument } from './document-importer';
 import { toNCName } from '../export/epub/image-utils';
 import { chapterTitleOf } from '../../utils/chapter-title';
+import { CHAPTER_ANCHOR_CLASS, IDX_LINK_CLASS, epubTargetId } from '../../utils/indice-marker';
 
 export interface EpubMetadata {
     ebook_isbn: string;
@@ -84,13 +85,20 @@ function unwrapSections(body: HTMLElement) {
 function reverseFootnotes(body: HTMLElement) {
     // Refs no corpo
     body.querySelectorAll('sup').forEach(sup => {
-        const a = sup.querySelector('a');
-        if (a && (a.getAttribute('epub:type') === 'noteref' || a.getAttribute('role') === 'doc-noteref')) {
-            sup.removeAttribute('id');
-            const trailing = (sup.textContent || '').match(/\s+$/)?.[0]; // espaço dentro do <sup> (InDesign) → fora
-            sup.textContent = a.textContent || '';
-            if (trailing) sup.after(trailing);
+        const refs = Array.from(sup.querySelectorAll('a')).filter(a => a.getAttribute('epub:type') === 'noteref' || a.getAttribute('role') === 'doc-noteref');
+        if (!refs.length) return;
+        sup.removeAttribute('id');
+        const trailing = (sup.textContent || '').match(/\s+$/)?.[0]; // espaço dentro do <sup> (InDesign) → fora
+        sup.textContent = refs[0].textContent || '';
+        // Várias chamadas seguidas no mesmo <sup> ("100 101"): um <sup> por nota, senão só a 1.ª ficava ligada.
+        let last: Element = sup;
+        for (const a of refs.slice(1)) {
+            const next = body.ownerDocument.createElement('sup');
+            next.textContent = a.textContent || '';
+            last.after(' ', next);
+            last = next;
         }
+        if (trailing) last.after(trailing);
     });
     // Separador das notas
     body.querySelectorAll('hr.footnote-sep').forEach(hr => hr.remove());
@@ -378,6 +386,37 @@ export async function scanEpubClasses(file: File): Promise<{ legacy: boolean; cl
     return { legacy: true, classes: [...info.values()].sort((a, b) => b.count - a.count) };
 }
 
+// Links internos (ex. Índice → capítulos/subsecções do InDesign) → modelo da app: o cleanEditorHtml apaga
+// todo o <a>, por isso a entrada vira span.idx-link (data-target) e o destino ganha p.chapter-anchor com o id;
+// só no export voltam a ser <a> (ver export/epub/index-links.ts). Depois de um título (o marcador de
+// capítulo é inserido ANTES dele, a âncora ficaria no capítulo anterior); nos restantes, antes do bloco.
+export function adaptInternalLinks(html: string): string {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const ids = new Map<string, string>(); // id original → data-target
+    for (const a of Array.from(doc.querySelectorAll('a[href]'))) {
+        const id = a.getAttribute('href')!.split('#')[1];
+        if (!id || /^\w+:/.test(a.getAttribute('href')!)) continue;
+        const target = doc.getElementById(id);
+        const block = target?.closest('p, h1, h2, h3, h4, h5, h6, li');
+        if (!block) continue;
+        let anchorId = ids.get(id);
+        if (!anchorId) {
+            anchorId = epubTargetId(ids.size + 1);
+            ids.set(id, anchorId);
+            const marker = doc.createElement('p');
+            marker.className = CHAPTER_ANCHOR_CLASS;
+            marker.id = anchorId;
+            if (/^H[1-6]$/.test(block.tagName)) block.after(marker); else block.before(marker);
+        }
+        const span = doc.createElement('span');
+        span.className = IDX_LINK_CLASS;
+        span.setAttribute('data-target', anchorId);
+        while (a.firstChild) span.appendChild(a.firstChild);
+        a.replaceWith(span);
+    }
+    return ids.size ? doc.body.innerHTML : html;
+}
+
 export async function extractEpub(file: File, mapping?: Record<string, string>): Promise<ExtractedDocument> {
     const { zip, opfDir, opfXml, opf, manifest, spineHrefs } = await openEpub(file);
 
@@ -447,6 +486,7 @@ export async function extractEpub(file: File, mapping?: Record<string, string>):
 
     let html = bodies.join('\n');
     if (isLegacy) html = adaptLegacyFootnotes(html); // renumera notas (* + ids → sequencial)
+    else html = adaptInternalLinks(html);
 
     const fallbackIsbn = file.name.replace(/\.epub$/i, '');
     const metadata = parseOpfMetadata(opfXml, fallbackIsbn);

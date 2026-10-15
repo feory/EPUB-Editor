@@ -1,4 +1,5 @@
 import { cleanEditorDOM } from '../../../utils/html-cleaner';
+import { PLACEHOLDER_ALT } from '../../../utils/image-alt';
 
 /**
  * Limpeza do corpo do editor depois de cada setContent (carregamento, colar, inserir) — corre
@@ -15,7 +16,7 @@ export function normalizeEditorBody(body: HTMLElement): boolean {
         if (!match?.[1]) return;
         img.setAttribute('data-image-id', match[1]);
         img.setAttribute('loading', 'lazy');
-        img.setAttribute('alt', 'Imagem');
+        img.setAttribute('alt', PLACEHOLDER_ALT);
         if (!img.style.maxWidth) img.style.maxWidth = '100%';
         if (!img.style.height) img.style.height = 'auto';
     });

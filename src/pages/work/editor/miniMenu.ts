@@ -27,7 +27,7 @@ import { RING } from './blockGeometry'; // linha do anel do bloco ativo — o me
  */
 
 /** Motivos de fora para esconder o mini-menu. ('toolbar' é interno: o módulo ouve o hover.) */
-export type MiniMenuSuppressReason = 'grip' | 'plusMenu' | 'gripMenu';
+export type MiniMenuSuppressReason = 'grip' | 'plusMenu' | 'gripMenu' | 'boxSelected';
 type Reason = MiniMenuSuppressReason | 'toolbar';
 
 export interface MiniMenu {
@@ -96,7 +96,10 @@ export function attachMiniMenu(
         const iframe = iframeOf(editor);
         if (!iframe) return;
         const ir = iframe.getBoundingClientRect();
-        const br = block.getBoundingClientRect();
+        // Dentro de uma caixa (ou grelha numa caixa) o mini-menu fica por cima da caixa mais exterior, não do bloco.
+        let anchor: HTMLElement = block;
+        for (let box = block.closest('.box'); box; box = box.parentElement?.closest('.box') ?? null) anchor = box as HTMLElement;
+        const br = anchor.getBoundingClientRect();
         const parentRect = (pop.offsetParent as HTMLElement | null)?.getBoundingClientRect();
 
         pop.style.bottom = '';

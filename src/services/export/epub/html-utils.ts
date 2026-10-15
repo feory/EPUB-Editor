@@ -66,10 +66,17 @@ for (const [entity, char] of Object.entries({
 // no-semicolon variant reproduces the old `(?![a-zA-Z0-9])` guard (&nbspX → token not in map).
 const ENTITY_TOKEN = /&[a-zA-Z][a-zA-Z0-9]*;?/g;
 
+// Variantes de caixa (editor: div.box.box--X) → semântica EPUB; o resto da caixa não muda.
+const BOX_EPUB_TYPE: Record<string, string> = { aviso: 'warning', nota: 'notice', destaque: 'sidebar' };
+const BOX_VARIANT_DIV = /<div\b([^>]*\bclass="[^"]*\bbox--(aviso|nota|destaque)\b[^"]*"[^>]*)>/g;
+const addBoxSemantics = (html: string): string =>
+    html.replace(BOX_VARIANT_DIV, (tag, attrs: string, variant: string) =>
+        /\bepub:type=/.test(attrs) ? tag : `<div${attrs} epub:type="${BOX_EPUB_TYPE[variant]}" role="note">`);
+
 export const cleanHtmlForXhtml = (html: string): string => {
     let cleaned = html.replace(ENTITY_TOKEN, (tok) => ENTITY_MAP.get(tok) ?? tok);
 
-    cleaned = cleanEpubHtml(cleaned);
+    cleaned = addBoxSemantics(cleanEpubHtml(cleaned));
 
     return cleaned
         .replace(/<(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)\b([^>]*)>/gi, (_match, tag, attrs) => {
@@ -79,4 +86,27 @@ export const cleanHtmlForXhtml = (html: string): string => {
         })
         .replace(/\s+>/g, '>')
         .replace(/&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[a-f0-9]+);)/gi, '&amp;');
+};
+
+// URLs soltas no texto → <a href> clicável. O editor apaga todo o <a> (cleanHtml), por isso os links só
+// nascem aqui, no export. Ignora o que já está dentro de <a>; a pontuação final não entra no link.
+export const linkUrls = (html: string): string => {
+    let inLink = 0;
+    return html.split(/(<[^>]+>)/).map(part => {
+        if (part.startsWith('<')) {
+            if (/^<a[\s>]/i.test(part)) inLink++;
+            else if (/^<\/a>/i.test(part)) inLink--;
+            return part;
+        }
+        if (inLink > 0) return part;
+        return part.replace(/https?:\/\/(?:(?!&nbsp;)[^\s<>"])+/g, (raw) => {
+            let url = raw;
+            for (;;) {
+                const last = url.slice(-1);
+                if (/[.,;:!?»]/.test(last) || (last === ')' && url.split(')').length > url.split('(').length)) url = url.slice(0, -1);
+                else break;
+            }
+            return `<a href="${url}">${url}</a>${raw.slice(url.length)}`;
+        });
+    }).join('');
 };

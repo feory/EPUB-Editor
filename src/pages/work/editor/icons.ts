@@ -24,6 +24,7 @@ export function registerEditorIcons(editor: TinyMCEEditor) {
         ['ps-box', '<svg width="24" height="24" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" fill="none" stroke="currentColor" stroke-width="2"/></svg>'],
         ['ps-union', '<svg width="24" height="24" viewBox="0 0 24 24"><rect x="4" y="4" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>'],
         ['ps-htmledit', '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 8l-4 4 4 4m6-8l4 4-4 4"/></svg>'],
+        ['ps-pin', '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 17v5M9 3h6l-1 7 3 3v2H7v-2l3-3z"/></svg>'],
         ['ps-vdots', '<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg>'],
         // Substitui o ícone nativo do forecolor ("A" com barra) por uma esfera: a classe
         // "tox-icon-text-color__color" é a mesma que o TinyMCE core repinta via setIconFill

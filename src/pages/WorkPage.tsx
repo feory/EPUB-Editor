@@ -9,6 +9,7 @@ import { PagelistUpdateModal } from './work/modals/PagelistUpdateModal';
 import type { PageAnchor } from '../services/page-list/page-list';
 import { EpubMappingModal } from './EpubMappingModal';
 import { scanEpubClasses } from '../services/import/epub-importer';
+import { detectFormat } from '../services/import/import-file';
 import type { EpubClassInfo } from '../services/import/epub-importer';
 import type { ImportOptions } from '../utils/html-cleaner';
 import type { DocxStyleMapping } from '../services/import/document-importer';
@@ -23,6 +24,11 @@ import { TocModal } from './work/components/TocModal';
 import { FocusModeBar } from './work/components/FocusModeBar';
 import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { CommentSidebar } from './work/components/CommentSidebar';
+import { BlockSidebar } from './work/components/BlockSidebar';
+import type { BlockInfo } from './work/editor/blockEditing';
+import type { TextProps } from './work/editor/textProps';
+import { textPatchToDecls } from './work/editor/textProps';
+import { applyRule } from './work/editor/cssRule';
 import { useComments } from './work/hooks/useComments';
 import { useCommentEditorSync } from './work/hooks/useCommentEditorSync';
 import { useAuth } from '../context/AuthContext';
@@ -38,6 +44,7 @@ import { useStyles, DEFAULT_CSS, patchLoadedCss } from '../context/StyleContext'
 import { sanitizeImageFilename } from '../utils/format';
 import { getStoredFont, storeFont, getStoredFontSize, storeFontSize } from './work/utils/editorFonts';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { PLACEHOLDER_ALT } from '../utils/image-alt';
 
 const HistoryModal = lazy(() => import('./work/modals/HistoryModal').then(m => ({ default: m.HistoryModal })));
 const CompareModal = lazy(() => import('./work/modals/CompareModal').then(m => ({ default: m.CompareModal })));
@@ -59,8 +66,9 @@ export function WorkPage() {
   const { isbn } = useParams<{ isbn: string }>();
   const navigate = useNavigate();
   const { showNotification } = useNotification();
-  const { setCustomCss } = useStyles();
+  const { setCustomCss, getCurrentCss } = useStyles();
   const editorRef = useRef<WorkEditorRef>(null);
+  const [blockInfo, setBlockInfo] = useState<BlockInfo>({ box: null, text: null, image: null, grid: null });
   const work = useEbookWork(isbn, editorRef);
   const { user } = useAuth();
   const comments = useComments(isbn);
@@ -239,16 +247,12 @@ export function WorkPage() {
   // classes primeiro; EPUB da própria app → segue direto para as Opções de Importação, como
   // os outros formatos. scanEpubClasses só faz algo em EPUBs de plataforma antiga.
   const processFile = useCallback((file: File) => {
-    const isPdf = file.type === 'application/pdf';
-    const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx');
-    const isHtml = file.type === 'text/html' || file.name.endsWith('.html') || file.name.endsWith('.htm');
-    const isIdml = file.name.endsWith('.idml') || file.name.endsWith('.zip');
-    const isEpub = file.name.endsWith('.epub');
-    if (!(isPdf || isDocx || isHtml || isIdml || isEpub)) {
+    const format = detectFormat(file);
+    if (!format) {
       showNotification('error', 'Formato não suportado. Use PDF, DOCX, IDML/ZIP, EPUB ou HTML.');
       return;
     }
-    if (!isEpub) { setPendingImportFile(file); return; }
+    if (format !== 'epub') { setPendingImportFile(file); return; }
     scanEpubClasses(file)
       .then(({ legacy, classes }) => {
         if (legacy && classes.length) setEpubMapping({ file, classes });
@@ -261,7 +265,7 @@ export function WorkPage() {
     const file = pendingImportFile;
     setPendingImportFile(null);
     if (!file) return;
-    if (file.type === 'application/pdf') {
+    if (detectFormat(file) === 'pdf') {
       setImportOptions(options);
       setCurrentFile(file);
       setShowPreview(true);
@@ -283,7 +287,7 @@ export function WorkPage() {
     formData.append('images', file, filename);
     await ebooksApi.uploadImages(isbn, formData);
     editorRef.current?.insertContent(
-      `<img data-image-id="${imageId}" src="/api/ebooks/${isbn}/images/${imageId}" alt="Imagem" style="max-width: 100%; height: auto;" loading="lazy" />`
+      `<img data-image-id="${imageId}" src="/api/ebooks/${isbn}/images/${imageId}" alt="${PLACEHOLDER_ALT}" style="max-width: 100%; height: auto;" loading="lazy" />`
     );
     refreshGallery();
   }, [isbn, refreshGallery]);
@@ -384,6 +388,15 @@ export function WorkPage() {
       const timeClean = timePart.replace(/-/g, ':').replace(/:(\d{3}Z)$/, '.$1');
       return new Date(`${datePart}T${timeClean}`).toLocaleString('pt-PT');
     } catch { return ts; }
+  };
+
+  // Modo "Estilo" do painel de bloco: edita a regra no CSS do livro (aplica já; grava com debounce).
+  const styleSaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleTextStyle = (selector: string, patch: Partial<TextProps>) => {
+    const next = applyRule(getCurrentCss(), selector, textPatchToDecls(patch));
+    setCustomCss(next);
+    clearTimeout(styleSaveTimer.current);
+    if (isbn) styleSaveTimer.current = setTimeout(() => ebooksApi.saveStyle(isbn, next), 600);
   };
 
   const anySidebarOpen = !!sidebars.activePanel || diff.showDiffSidebar || work.versionDiff.open;
@@ -507,7 +520,10 @@ export function WorkPage() {
                 showPrintPdfPanel={sidebars.showPrintPdfSidebar}
                 onVisiblePageChange={setEditorVisiblePage}
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
+                getIndiceSubtitles={work.getIndiceSubtitles}
                 onAddComment={(anchorId) => { comments.setDraftAnchorId(anchorId); sidebars.openPanel('comments'); }}
+                onEditBox={() => sidebars.openPanel('box')}
+                onBlockChange={setBlockInfo}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
                 activeChapterIndex={work.activeChapterIndex}
@@ -569,6 +585,18 @@ export function WorkPage() {
           currentUserId={user.id}
           currentUserRole={user.role}
           onClose={() => sidebars.setShowCommentsSidebar(false)}
+          width={panelWidth}
+          onResize={handlePanelResize}
+        />
+      )}
+
+      {sidebars.showBoxSidebar && (
+        <BlockSidebar
+          info={blockInfo}
+          css={getCurrentCss()}
+          onEdit={(edit) => editorRef.current?.editBlock(edit)}
+          onTextStyle={handleTextStyle}
+          onClose={() => sidebars.setShowBoxSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}
         />

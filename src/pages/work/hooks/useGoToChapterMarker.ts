@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
-import { CHAPTER_SPLIT_PATTERN } from '../../../utils/html-cleaner';
+import { splitChapters } from '../../../utils/chapters';
 import type { WorkEditorRef } from '../components/WorkEditor';
 
 /**
@@ -22,7 +22,7 @@ export function useGoToChapterMarker<T>(
     const goTo = useCallback((value: T): boolean => {
         if (editorRef.current && scrollTo(editorRef.current, value)) return true;
         const needle = marker(value);
-        const parts = fullHtmlContent.split(CHAPTER_SPLIT_PATTERN).filter(p => p.trim().length > 0);
+        const parts = splitChapters(fullHtmlContent);
         const chapterIndex = parts.findIndex(p => p.includes(needle));
         if (chapterIndex === -1) return false;
         pendingRef.current = value;

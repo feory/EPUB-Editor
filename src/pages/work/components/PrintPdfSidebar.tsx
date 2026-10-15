@@ -156,7 +156,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
                     <p className="text-sm text-rose-500">Erro ao carregar o PDF.</p>
                 )}
                 {status === 'missing' && (
-                    <div className="flex flex-col items-center gap-3 text-slate-400 text-center px-6">
+                    <div className="m-auto flex flex-col items-center gap-3 text-slate-400 text-center px-6">
                         <FileText size={28} />
                         <p className="text-sm font-semibold text-slate-600">Sem PDF guardado</p>
                         <p className="text-xs">Carregue o PDF de impressão deste livro para o ver aqui.</p>

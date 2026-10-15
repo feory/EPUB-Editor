@@ -3,98 +3,14 @@
  * for optimal performance across the application
  */
 
-import { decodeEntities } from './entities';
+import { insertChapterMarkers, refreshChapterMarkers } from './chapters';
+import { isColumnPlaceholder } from './containers';
 
-// ---------------------------------------------------------------------------
-// Chapter structure patterns (shared with useEbookWork)
-// ---------------------------------------------------------------------------
-
-// A chapter break is a standalone MARKER paragraph placed BEFORE each heading
-// (<p class="chapter-break-h1|-h2" data-title="…">) — the marker, not the heading,
-// is the split boundary. Plain <p class="chapter-break"> = titleless break.
-// Legacy hr.chapter-break kept for old books. Raw h1/h2 no longer split on their own.
-export const CHAPTER_SPLIT_PATTERN = /(?=<p[^>]*class=["'][^"']*chapter-break[^"']*["']|<hr[^>]*class=["']chapter-break["'])/i;
 // Ocorrências de uma substring literal (split/join, não RegExp — sem escaping de caracteres
 // especiais). Partilhado pelas várias contagens/substituições do find/replace do editor
 // (useBlockOverlays.ts, useEbookWork.ts) para não repetir a fórmula em cada sítio.
 export const countOccurrences = (haystack: string, needle: string): number =>
     needle ? haystack.split(needle).length - 1 : 0;
-// Counts chapter-start markers (detect a split appearing mid-edit).
-export const CHAPTER_MARKER_COUNT_PATTERN = /<p[^>]*class=["'][^"']*chapter-break[^"']*["']/gi;
-export const HR_BREAK_PATTERN = /^<hr[^>]*class=["']chapter-break["'][^>]*>/i;
-export const HR_DATA_TITLE_PATTERN = /data-title=["']([^"']+)["']/i;
-
-// Flatten heading inner HTML to plain title text (<br>→space, strip tags, collapse).
-export function flattenHeadingText(inner: string): string {
-    return inner
-        .replace(/\(?\s*<sup\b[^>]*>\s*(?:<a\b[^>]*>)?\s*[\d*]+\s*(?:<\/a>)?\s*<\/sup>\s*\)?/gi, '') // chamada de nota — "(143)" — não entra no nome
-        .replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-}
-const escapeAttr = (s: string) => s.replace(/"/g, '&quot;');
-
-/**
- * Matches a chapter-break <p> marker as a WHOLE element (open tag through </p>) at the
- * start of `content` — non-greedy, since the marker doesn't always serialize empty
- * (TinyMCE can fill it with &nbsp;/<br> to keep the block focusable). Shared by
- * classifyChapterPart below and toc.ts's changeChapterLevel — the one place that knows
- * what a marker element looks like. `title` is the RAW (still HTML-escaped) attribute
- * value — callers that display it must decodeEntities(); callers that reinsert it into
- * new markup (changeChapterLevel) must NOT, or they'll break the attribute's escaping.
- */
-export function matchChapterMarkerElement(content: string): { raw: string; level: 'h1' | 'h2' | 'h3' | null; title: string } | null {
-    const m = content.match(/^<p[^>]*class=["'][^"']*chapter-break(?:-h([123]))?[^"']*["'][^>]*>[\s\S]*?<\/p>/i);
-    if (!m) return null;
-    const level = m[1] === '1' ? 'h1' : m[1] === '2' ? 'h2' : m[1] === '3' ? 'h3' : null;
-    const dt = m[0].match(HR_DATA_TITLE_PATTERN);
-    return { raw: m[0], level, title: dt ? dt[1] : '' };
-}
-
-/**
- * Classify one split part (a chapter) into { title, level }.
- * Shared by the sidebar (useChapterSync) and the index linker (indice-links.ts).
- */
-export function classifyChapterPart(content: string, index: number): { title: string; level: 'h1' | 'h2' | 'h3' | 'break'; hrTag?: string } {
-    const hrMatch = content.match(HR_BREAK_PATTERN);
-    if (hrMatch) {
-        const titleMatch = hrMatch[0].match(HR_DATA_TITLE_PATTERN);
-        const title = decodeEntities(titleMatch ? titleMatch[1] : `Quebra ${index + 1}`);
-        return { title, level: 'break', hrTag: hrMatch[0] };
-    }
-    const marker = matchChapterMarkerElement(content);
-    if (marker) {
-        const level = marker.level ?? 'break';
-        let title = marker.title ? decodeEntities(marker.title) : '';
-        if (!title) {
-            const hMatch = content.slice(marker.raw.length).match(/^\s*<(h[123])[^>]*>([\s\S]*?)<\/\1>/i);
-            if (hMatch) title = decodeEntities(flattenHeadingText(hMatch[2]));
-        }
-        if (!title) title = level === 'break' ? `Quebra ${index + 1}` : `Sem Título ${index + 1}`;
-        return { title, level };
-    }
-    return { title: `Secção ${index + 1}`, level: 'h1' };
-}
-
-/**
- * Insert chapter-break markers before headings (import + legacy-book migration).
- * Idempotent-by-gate: if the content already carries titled markers it is assumed
- * to be in the new model and left untouched, so a manually-removed marker (an h2
- * demoted to an in-body subheading) is not re-added on reload.
- */
-export function insertChapterMarkers(html: string): string {
-    // Só h1/h2 continuam a auto-promover a capítulo no import — h3 fica disponível como nível
-    // (via Editor de TOC), mas não se torna quebra sozinho só por aparecer no documento
-    // (continua a poder ser um subtítulo normal dentro do corpo).
-    if (/class=["'][^"']*chapter-break-h[12][^"']*["']/i.test(html)) return html;
-    // Legacy titleless break headings → titleless break markers.
-    let out = html.replace(/<(h[12])[^>]*class=["'][^"']*chapter-break[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi,
-        (_m, _tag, inner) => `<p class="chapter-break" data-title="${escapeAttr(flattenHeadingText(inner))}"></p>`);
-    // Marker before every remaining heading (the heading itself stays intact).
-    out = out.replace(/<(h[12])([^>]*)>([\s\S]*?)<\/\1>/gi, (m, tag, _attrs, inner) => {
-        const level = (tag as string).toLowerCase();
-        return `<p class="chapter-break-${level}" data-title="${escapeAttr(flattenHeadingText(inner))}"></p>${m}`;
-    });
-    return out;
-}
 
 const EMPTY_HEADING_PATTERN = /<h[1-6][^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/h[1-6]>/gi;
 const DUPLICATE_HEADING_PATTERN = /<(h[12])[^>]*>([^<]+)<\/\1>\s*<\1[^>]*>\2<\/\1>/gi;
@@ -113,17 +29,6 @@ export function cleanHeadings(html: string): string {
         if (before === cleaned) break;
     }
     return refreshChapterMarkers(cleaned);
-}
-
-// Keep chapter markers in sync WITHOUT creating split boundaries (that is
-// insertChapterMarkers' job, run only at import/migration). Runs on every sync:
-//  - a stray titleless break heading (h*.chapter-break, e.g. from the old toolbar) → break marker.
-// Does NOT refresh -h1/-h2/-h3 markers' data-title from the heading text: editing a heading
-// in the body must never change the Estrutura/TOC entry — that's only editable via the
-// panel's own rename action (renameChapterPart).
-function refreshChapterMarkers(html: string): string {
-    return html.replace(/<(h[12])[^>]*class=["'][^"']*chapter-break[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi,
-        (_m, _tag, inner) => `<p class="chapter-break" data-title="${escapeAttr(flattenHeadingText(inner))}"></p>`);
 }
 
 // Pre-compiled regex patterns (compiled once, reused many times)
@@ -549,6 +454,8 @@ export function prependFichaTecnica(html: string): string {
     if (el.tagName === 'P') styleFichaParagraph(el);
     else if (el.tagName === 'DIV') el.querySelectorAll('p').forEach(styleFichaParagraph);
   }
+  // Já abre com uma quebra de capítulo (ex. IDML: Frontespício + Ficha Técnica próprios) → não duplicar.
+  if (doc.body.firstElementChild?.classList.contains('chapter-break')) return doc.body.innerHTML;
   return '<p class="chapter-break" data-title="Ficha Técnica"></p>' + doc.body.innerHTML;
 }
 
@@ -614,6 +521,8 @@ export function cleanEditorDOM(body: HTMLElement): void {
     // sem heading a seguir) — mantém, é onde o utilizador vai escrever o conteúdo.
     const prev = p.previousElementSibling;
     if (prev && /\bchapter-break\b/.test(prev.className)) return;
+    // Único parágrafo de uma coluna (bloco .grid): sem ele a coluna deixa de ser editável.
+    if (isColumnPlaceholder(p)) return;
     const text = p.textContent || '';
     const html = p.innerHTML || '';
     if (text.trim() === '' || /^(&nbsp;|\s|&#160;|&#xa0;)+$/.test(html.trim())) {

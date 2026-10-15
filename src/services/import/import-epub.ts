@@ -1,7 +1,5 @@
 import type { ebooksApi } from '../../api/ebooks-api';
-import { extractEpub } from './epub-importer';
-import { uploadExtractedImages } from './extracted-images';
-import { cleanEditorHtml } from '../../utils/html-cleaner';
+import { extractFile, finalizeImport } from './import-file';
 import { compressHtml } from '../../utils/compression';
 
 export type ImportEpubApi = Pick<typeof ebooksApi, 'create' | 'uploadCover' | 'uploadImages' | 'saveContent' | 'updateMetadata'>;
@@ -27,7 +25,8 @@ async function coverForUpload(blob: Blob): Promise<Blob> {
 // Importa um EPUB como ebook novo: cria o registo, capa, imagens, conteúdo e metadados. Devolve o ISBN.
 // Erros da API propagam (ex. 409 = ISBN já existe), exceto a capa, que nunca bloqueia a importação.
 export async function importEpub(file: File, mapping: Record<string, string> | undefined, api: ImportEpubApi): Promise<string> {
-    const { html, images, metadata, cover } = await extractEpub(file, mapping);
+    const extracted = await extractFile(file, { epubClassMapping: mapping });
+    const { metadata, cover } = extracted;
     const isbn = metadata?.ebook_isbn || file.name.replace(/\.epub$/i, '');
     // O servidor exige title+author não-vazios; fallback quando o OPF não os traz.
     const title = metadata?.title || file.name.replace(/\.epub$/i, '');
@@ -41,7 +40,7 @@ export async function importEpub(file: File, mapping: Record<string, string> | u
             await api.uploadCover(isbn, fd);
         } catch { /* sem capa: o utilizador pode pô-la depois no botão de capa */ }
     }
-    const finalHtml = await uploadExtractedImages(isbn, cleanEditorHtml(html), images, fd => api.uploadImages(isbn, fd));
+    const { html: finalHtml } = await finalizeImport(extracted, {}, { isbn, uploadImages: fd => api.uploadImages(isbn, fd) });
     await api.saveContent(isbn, compressHtml(finalHtml));
     if (metadata) await api.updateMetadata(isbn, {
         title, author, description: metadata.description,

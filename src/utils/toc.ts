@@ -1,7 +1,7 @@
 // Operações puras do Editor de TOC: reordenar (por subárvore) e renomear capítulos.
 // Trabalham sobre as `parts` do split de capítulos (1:1 com `chapters[]`), sem tocar no DOM.
 
-import { HR_BREAK_PATTERN, matchChapterMarkerElement } from './html-cleaner';
+import { matchChapterBoundary } from './chapters';
 
 type Level = 'h1' | 'h2' | 'h3' | 'break';
 
@@ -65,13 +65,11 @@ export function renameChapterPart(part: string, newTitle: string): string {
  * `<hr class="chapter-break">` legacy é normalizado para o marcador `<p>` ao mudar de nível.
  */
 export function changeChapterLevel(part: string, newLevel: Level): string {
-    const hrMatch = part.match(HR_BREAK_PATTERN);
-    const marker = hrMatch ? null : matchChapterMarkerElement(part);
-    const rawMarker = hrMatch?.[0] ?? marker?.raw;
-    if (!rawMarker) return part;
+    const boundary = matchChapterBoundary(part);
+    if (!boundary) return part;
 
-    const title = marker ? marker.title : (part.match(/data-title=["']([^"']*)["']/i)?.[1] ?? '');
-    const rest = part.slice(rawMarker.length);
+    const title = boundary.title;
+    const rest = part.slice(boundary.raw.length);
     const headingMatch = rest.match(/^\s*<(h[123])[^>]*>([\s\S]*?)<\/\1>/i);
 
     if (newLevel === 'break') {

@@ -9,10 +9,10 @@ import {
 } from '../blockGeometry';
 import { buildContentStyle } from '../contentStyles';
 
-test('"+" do bloco ativo fica em cima da linha do anel (RING abaixo da caixa do bloco)', () => {
+test('"+" do bloco ativo fica no meio da linha do anel (de RING_GAP a RING abaixo da caixa do bloco)', () => {
     const borderBottom = 300;
     const contentBottom = borderBottom - ACTIVE_PAD_Y; // padding do bloco ativo
-    expect(plusCenterY(contentBottom, true)).toBe(borderBottom + RING);
+    expect(plusCenterY(contentBottom, true)).toBe(borderBottom + RING - 0.5);
 });
 
 test('"+" de um bloco não ativo fica na aresta inferior do conteúdo', () => {

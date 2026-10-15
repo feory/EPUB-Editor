@@ -1,8 +1,8 @@
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { ebooksApi } from '../../api/ebooks-api';
-import { linkFootnotes } from '../import/pdf/post-processor';
-import { cleanHtmlForXhtml } from './epub/html-utils';
+import { linkFootnotes } from '../notes/notes';
+import { cleanHtmlForXhtml, linkUrls } from './epub/html-utils';
 import { removeInaccessibleColors, removeInaccessibleCssColors } from './epub/color-utils';
 import { replaceImageUrlsInContent, stripPlaceholderImages, addImagesToArchive } from './epub/image-utils';
 import { buildSections } from './epub/chapters';
@@ -13,6 +13,7 @@ import { prepareTextForXml } from './epub/html-utils';
 
 export type { BookMetadata } from './epub/types';
 import type { BookMetadata } from './epub/types';
+import { ensureBaselineCss } from '../../utils/baseline-css';
 
 // Mantido para compatibilidade - usar DEFAULT_CSS do StyleContext para customização
 export const EPUB_CSS = `
@@ -153,29 +154,9 @@ const stripEditorOnlyCss = (css: string): string => {
 };
 
 // CSS de exportação: corta a secção editor-only e garante classes utilitárias recentes
-// que podem faltar no style.css de livros antigos (ex.: versaletes, p-italic).
+// que podem faltar no style.css de livros antigos (utils/baseline-css).
 const exportCss = (css: string): string => {
-    let out = stripEditorOnlyCss(css);
-    if (!out.includes('.small-caps')) {
-        out += '\n.small-caps { font-variant: small-caps; }';
-    }
-    if (!out.includes('.p-italic')) {
-        out += '\n.p-bold { font-weight: bold !important; }\n.p-italic { font-style: italic !important; }\n.p-bold-italic { font-weight: bold !important; font-style: italic !important; }';
-    }
-    if (!out.includes('.p-uppercase')) {
-        out += '\n.p-uppercase { text-transform: uppercase !important; }';
-    }
-    if (!out.includes('.p-asterisk')) {
-        out += '\n.p-asterisk { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }';
-    }
-    if (!out.includes('.img-inline')) {
-        out += '\nimg.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }';
-    }
-    if (!out.includes('.divider-full')) {
-        // Livros antigos sem regra de `hr`: UA default do e-reader é ~100% largura,
-        // fazendo a divisória "Pequena" (sem classe) exportar como larga.
-        out += '\nhr { border: none; height: 1px; background: #ccc; width: 40%; margin: 1.5em auto; }\nhr.divider-full { width: 100%; }';
-    }
+    let out = ensureBaselineCss(stripEditorOnlyCss(css), 'export');
     // Notas: marcador (sup a) e backlink (.footnote a) herdam a cor do texto.
     // SEMPRE anexado no fim (vence a cascata) — livros antigos podem ter
     // `.footnote a { text-decoration: none }` SEM `color`, deixando o link na
@@ -260,10 +241,10 @@ export const generateEpubBlob = async (htmlContent: string, metadata: BookMetada
         const sectionLinked = linkFootnotes(section.content, `s${i + 1}-`);
 
         const asideBlocks: string[] = [];
-        const mainContent = convertIndexLinks(convertPageBreaks(sectionLinked.replace(
+        const mainContent = linkUrls(convertIndexLinks(convertPageBreaks(sectionLinked.replace(
             /<div class="footnotes-section">([\s\S]*?)<\/div>/g,
             (_, inner) => { asideBlocks.push(inner.trim()); return ''; },
-        ).trim(), i + 1, pageEntries), idToSection, i + 1);
+        ).trim(), i + 1, pageEntries), idToSection, i + 1));
         const hasFootnotes = asideBlocks.length > 0 && asideBlocks.some(b => b.trim().length > 0);
 
         oebps.file(`section${i + 1}.xhtml`, `<?xml version="1.0" encoding="UTF-8"?>

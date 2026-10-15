@@ -1,11 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback, startTransition } from 'react';
 import type React from 'react';
-import {
-    cleanHeadings,
-    CHAPTER_SPLIT_PATTERN,
-    CHAPTER_MARKER_COUNT_PATTERN,
-    classifyChapterPart,
-} from '../../../utils/html-cleaner';
+import { cleanHeadings } from '../../../utils/html-cleaner';
+import { splitChapters, countChapterMarkers, classifyChapterPart } from '../../../utils/chapters';
 import { replaceChapterContent } from './contentReducer';
 import type { ContentState, ContentAction } from './contentReducer';
 
@@ -33,7 +29,7 @@ export function useChapterSync(
 
     const splitHtmlIntoParts = useCallback((html: string): string[] => {
         if (splitCacheRef.current?.html === html) return splitCacheRef.current.parts;
-        const parts = html.split(CHAPTER_SPLIT_PATTERN).filter(p => p.trim().length > 0);
+        const parts = splitChapters(html);
         splitCacheRef.current = { html, parts };
         return parts;
     }, []);
@@ -44,7 +40,7 @@ export function useChapterSync(
     // chamadores fora do render, ver efeito abaixo que mantém a cache quente para eles).
     const cleanedFullHtml = useMemo(() => cleanHeadings(fullHtml), [fullHtml]);
     const filteredParts = useMemo(
-        () => cleanedFullHtml.split(CHAPTER_SPLIT_PATTERN).filter(content => content.trim().length > 0),
+        () => splitChapters(cleanedFullHtml),
         [cleanedFullHtml]
     );
 
@@ -159,7 +155,7 @@ export function useChapterSync(
 
             if (activeChapterIndex !== -1) {
                 // A chapter part begins with its own marker; a 2nd marker means a new chapter was created mid-edit
-                const markerCount = (localEditorContent.match(CHAPTER_MARKER_COUNT_PATTERN) || []).length;
+                const markerCount = countChapterMarkers(localEditorContent);
                 if (markerCount > 1) {
                     dispatch({ type: 'UPDATE_CONTENT', content: localEditorContent, chapterIndex: activeChapterIndex });
                     syncedContentRef.current = localEditorContent;

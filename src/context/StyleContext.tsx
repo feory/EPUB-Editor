@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
+import { ensureBaselineCss, GRID_CSS } from '../utils/baseline-css';
 
 export const DEFAULT_CSS = `
     /* === TIPOGRAFIA === */
@@ -84,6 +85,12 @@ export const DEFAULT_CSS = `
 
     /* === CAIXAS === */
     .box { border: 2px solid #000; padding: 0.8em 1em; margin: 1em 0; }
+    .box--destaque { background-color: #f3f4f6; }
+    .box--aviso { border-color: #b91c1c; }
+    .box--nota { border-style: dashed; }
+
+    /* === COLUNAS === */
+${GRID_CSS}
 
     /* === QUEBRAS === */
     .noBreak { page-break-inside: avoid; break-inside: avoid; }
@@ -199,29 +206,7 @@ export const DEFAULT_CSS = `
     }
 `;
 
-const MISSING_PARAGRAPH_STYLES = `    .p-bold       { font-weight: bold !important; }
-    .p-italic     { font-style: italic !important; }
-    .p-bold-italic { font-weight: bold !important; font-style: italic !important; }
-`;
-
-const MISSING_UPPERCASE_STYLE = `    .p-uppercase  { text-transform: uppercase !important; }
-`;
-
-const MISSING_IMG_INLINE_STYLE = `    img.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }
-`;
-
-function insertParagraphStyleRule(css: string, rule: string): string {
-  const marker = '/* === ESTILOS DE PARÁGRAFO === */';
-  const idx = css.indexOf(marker);
-  if (idx !== -1) {
-    const lineEnd = css.indexOf('\n', idx);
-    const insertAt = lineEnd === -1 ? css.length : lineEnd + 1;
-    return css.slice(0, insertAt) + rule + '\n' + css.slice(insertAt);
-  }
-  return `${css.trimEnd()}\n\n${rule}`;
-}
-
-/** Insere estilos de parágrafo em falta no style.css guardado (livros anteriores a p-italic/p-uppercase). */
+/** Corrige o style.css guardado de livros antigos (marcador de capítulo, fontes) e acrescenta as regras-base em falta. */
 export function patchLoadedCss(css: string): string {
   // Marcador de capítulo: retirar o prefixo "Capítulo - " (livros antigos guardaram-no no CSS).
   css = css.replace(/content:\s*"Cap[íi]tulo - "\s+attr\(data-title\)/g, 'content: attr(data-title)');
@@ -230,10 +215,7 @@ export function patchLoadedCss(css: string): string {
   // os .ttf realmente estão servidos). Só troca ESTE ficheiro específico (não generaliza a outros
   // url("Fonts/…") que possam existir, ex. os do export EPUB).
   css = css.replace(/url\(["']?Fonts\/(CrimsonText-[\w]+\.ttf)["']?\)/g, 'url("/$1")');
-  if (!css.includes('.p-italic')) css = insertParagraphStyleRule(css, MISSING_PARAGRAPH_STYLES);
-  if (!css.includes('.p-uppercase')) css = insertParagraphStyleRule(css, MISSING_UPPERCASE_STYLE);
-  if (!css.includes('.img-inline')) css = insertParagraphStyleRule(css, MISSING_IMG_INLINE_STYLE);
-  return css;
+  return ensureBaselineCss(css, 'editor');
 }
 
 interface StyleContextType {
