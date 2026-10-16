@@ -7,6 +7,14 @@ import { debugLog } from '../log.js';
 
 const MAX_CONTENT_SIZE = 50_000_000;
 
+// Versão mais recente do histórico (nomes com timestamp ISO → ordem lexicográfica), ou null.
+async function latestContentFile(dir) {
+  const files = (await readdir(dir))
+    .filter(f => f.startsWith('content_') && (f.endsWith('.html') || f.endsWith('.html.gz')))
+    .sort();
+  return files.length ? files[files.length - 1] : null;
+}
+
 export async function saveContent(req, isbn) {
   const { content } = await req.json();
   if (typeof content !== 'string') return Response.json({ error: 'Invalid content' }, { status: 400, headers: corsHeaders });
@@ -22,6 +30,12 @@ export async function saveContent(req, isbn) {
     } catch (err) {
       debugLog('⚠️ [Compression] Detecção falhou:', err.message);
     }
+  }
+
+  // Igual à última versão → não escreve outra (cada save guarda o livro inteiro: ~600 KB).
+  const latest = await latestContentFile(historyDir);
+  if (latest && await Bun.file(join(historyDir, latest)).text() === content) {
+    return Response.json({ message: 'Unchanged', filename: latest }, { headers: corsHeaders });
   }
 
   const extension = isCompressed ? '.html.gz' : '.html';
@@ -51,12 +65,8 @@ export async function getContent(req, isbn, url) {
     }
   }
   if (!target) {
-    const files = (await readdir(dir))
-      .filter(f => f.startsWith('content_') && (f.endsWith('.html') || f.endsWith('.html.gz')))
-      .sort()
-      .reverse();
-    if (files.length === 0) return Response.json({ message: 'No content' }, { status: 404, headers: corsHeaders });
-    target = files[0];
+    target = await latestContentFile(dir);
+    if (!target) return Response.json({ message: 'No content' }, { status: 404, headers: corsHeaders });
   }
 
   const file = Bun.file(join(dir, target));
