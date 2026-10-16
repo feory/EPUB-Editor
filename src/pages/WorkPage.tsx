@@ -37,6 +37,7 @@ import { ImageGallerySidebar } from './work/components/ImageGallerySidebar';
 import { DiffSidebar } from './work/components/DiffSidebar';
 import { PrintPdfSidebar } from './work/components/PrintPdfSidebar';
 import { useDiffComparison } from './work/hooks/useDiffComparison';
+import { useWorkPanels } from './work/hooks/useWorkPanels';
 import { useWorkPageSidebars } from './work/hooks/useWorkPageSidebars';
 import { useGoToChapterMarker } from './work/hooks/useGoToChapterMarker';
 import { useNotification } from '../context/NotificationContext';
@@ -167,6 +168,8 @@ export function WorkPage() {
     },
   });
 
+  const panels = useWorkPanels({ sidebars, diff, versionDiff: work.versionDiff, fullHtml: work.fullHtmlContent });
+
   const handleToggleSidebar = useCallback(() => {
     sidebars.setIsSidebarOpen(v => !v);
   }, [sidebars]);
@@ -175,13 +178,12 @@ export function WorkPage() {
   const handleToggleFocusMode = useCallback(() => {
     setIsFocusMode(prev => {
       if (!prev) {
-        sidebars.closeAllPanels();
+        panels.closeAll();
         sidebars.setIsSidebarOpen(false);
-        diff.closeDiffSidebar();
       }
       return !prev;
     });
-  }, [sidebars, diff]);
+  }, [sidebars, panels]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -197,7 +199,8 @@ export function WorkPage() {
 
   // Auto-open validation sidebar when results arrive; close it when they clear
   // (e.g. another validator returns no errors) so the reserved space is released.
-  const { openPanel, closeAllPanels } = sidebars;
+  const { closeAllPanels } = sidebars;
+  const openPanel = panels.open;
   useEffect(() => {
     if (work.validationResults || work.footnoteValidation || work.linkValidation) {
       openPanel('validation');
@@ -226,21 +229,6 @@ export function WorkPage() {
       editorRef.current.filterGrammarHighlights(grammarFilter);
     }
   }, [grammarFilter, sidebars.showGrammarSidebar]);
-
-  // Abrir um painel lateral (gramática/validação/galeria) esconde os painéis de diff.
-  const closeDiffSidebar = diff.closeDiffSidebar;
-  const closeVersionDiff = work.versionDiff.close;
-  useEffect(() => {
-    if (sidebars.activePanel) {
-      closeDiffSidebar();
-      closeVersionDiff();
-    }
-  }, [sidebars.activePanel, closeDiffSidebar, closeVersionDiff]);
-
-  // Inverso: abrir a comparação (diff de ficheiro ou de versões) fecha os painéis laterais.
-  useEffect(() => {
-    if (diff.showDiffSidebar || work.versionDiff.open) closeAllPanels();
-  }, [diff.showDiffSidebar, work.versionDiff.open, closeAllPanels]);
 
   // File handling
   // EPUB antigo (mesma plataforma legacy que a HomePage já trata) → modal de mapeamento de
@@ -344,18 +332,17 @@ export function WorkPage() {
   const handleGrammarCheck = (matches: GrammarMatch[], cache?: Record<string, GrammarMatch[]>) => {
     work.setGrammarIssues(matches);
     if (cache !== undefined) work.handleSaveGrammar(matches, cache);
-    if (!sidebars.showGrammarSidebar) sidebars.openPanel('grammar');
+    if (!sidebars.showGrammarSidebar) panels.open('grammar');
   };
 
   const handleGrammarValidation = useCallback(() => {
     if (work.grammarIssues.length > 0) {
       setGrammarChoiceOpen(true);
     } else {
-      sidebars.openPanel('grammar');
-      diff.closeDiffSidebar();
+      panels.open('grammar');
       editorRef.current?.triggerGrammarCheck();
     }
-  }, [work.grammarIssues.length, sidebars, diff]);
+  }, [work.grammarIssues.length, panels]);
 
   // Callbacks estáveis de useEbookGrammar (via work) — deps estáveis para os useCallback.
   const { handleResolveIssue: resolveIssue, handleResolveMultiple: resolveMultiple } = work;
@@ -399,7 +386,7 @@ export function WorkPage() {
     if (isbn) styleSaveTimer.current = setTimeout(() => ebooksApi.saveStyle(isbn, next), 600);
   };
 
-  const anySidebarOpen = !!sidebars.activePanel || diff.showDiffSidebar || work.versionDiff.open;
+  const anySidebarOpen = panels.anyOpen;
 
   const presence = work.presence;
   const presenceBanner = work.readOnly
@@ -427,7 +414,7 @@ export function WorkPage() {
         <div className="w-full px-6 py-2 text-sm font-semibold text-center bg-amber-100 text-amber-800 border-b border-amber-200">
           Há alterações não gravadas de {new Date(work.draft.ts).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })}.{' '}
           <button className="underline mx-2" onClick={work.restoreDraft}>Recuperar</button>
-          <button className="underline mr-2" onClick={() => work.versionDiff.compareDraft(work.draft!, work.fullHtmlContent)}>Ver alterações</button>
+          <button className="underline mr-2" onClick={() => panels.compareWithDraft(work.draft!)}>Ver alterações</button>
           <button className="underline" onClick={work.discardDraft}>Descartar</button>
         </div>
       )}
@@ -447,10 +434,9 @@ export function WorkPage() {
           onFileSelect={handleFileUpload}
           onToggleGrammar={handleGrammarValidation}
           onToggleImageGallery={() => {
-            sidebars.togglePanel('imageGallery');
-            if (!sidebars.showImageGallerySidebar) diff.closeDiffSidebar();
+            panels.toggle('imageGallery');
           }}
-          onToggleComments={() => sidebars.togglePanel('comments')}
+          onToggleComments={() => panels.toggle('comments')}
           unresolvedCommentsCount={comments.unresolvedCount}
           onOpenCompare={() => { setShowCompare(true); work.refetchHistory(); }}
           onShowShortcuts={() => setShowShortcuts(true)}
@@ -524,13 +510,13 @@ export function WorkPage() {
                 title={work.title}
                 onToggleFocusMode={handleToggleFocusMode}
                 isFocusMode={isFocusMode}
-                onTogglePrintPdf={() => sidebars.togglePanel('printPdf')}
+                onTogglePrintPdf={() => panels.toggle('printPdf')}
                 showPrintPdfPanel={sidebars.showPrintPdfSidebar}
                 onVisiblePageChange={setEditorVisiblePage}
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 getIndiceSubtitles={work.getIndiceSubtitles}
-                onAddComment={(anchorId) => { comments.setDraftAnchorId(anchorId); sidebars.openPanel('comments'); }}
-                onEditBox={() => sidebars.openPanel('box')}
+                onAddComment={(anchorId) => { comments.setDraftAnchorId(anchorId); panels.open('comments'); }}
+                onEditBox={() => panels.open('box')}
                 onBlockChange={setBlockInfo}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
@@ -654,8 +640,8 @@ export function WorkPage() {
           <CompareModal
             files={work.historyFiles}
             formatTimestamp={formatTimestamp}
-            onCompareFile={(file) => { work.versionDiff.close(); diff.handleCompareFile(file); }}
-            onCompareHistory={(file) => { diff.closeDiffSidebar(); work.versionDiff.compareWithEditor(file, work.fullHtmlContent); }}
+            onCompareFile={panels.compareFile}
+            onCompareHistory={panels.compareHistory}
             onClose={() => setShowCompare(false)}
           />
         </Suspense></ErrorBoundary>
@@ -800,13 +786,13 @@ export function WorkPage() {
             <div className="flex gap-3">
               <button
                 className="flex-1 py-2 px-4 border border-border rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors"
-                onClick={() => { setGrammarChoiceOpen(false); sidebars.openPanel('grammar'); diff.closeDiffSidebar(); }}
+                onClick={() => { setGrammarChoiceOpen(false); panels.open('grammar'); }}
               >
                 Carregar anterior
               </button>
               <button
                 className="flex-1 py-2 px-4 bg-slate-700 text-white rounded-xl text-sm font-bold hover:bg-slate-600 transition-colors"
-                onClick={() => { setGrammarChoiceOpen(false); sidebars.openPanel('grammar'); diff.closeDiffSidebar(); editorRef.current?.triggerGrammarCheck(); }}
+                onClick={() => { setGrammarChoiceOpen(false); panels.open('grammar'); editorRef.current?.triggerGrammarCheck(); }}
               >
                 Nova revisão
               </button>

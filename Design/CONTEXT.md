@@ -78,3 +78,7 @@ _Avoid_: autosave (é só um dos caminhos), persistência
 **Rascunho local**:
 Cópia do texto ainda não confirmada pelo servidor, no IndexedDB (`utils/local-draft.ts`). Apaga-se quando o save é confirmado; se sobrar ao abrir e diferir do servidor, oferece-se Recuperar / Ver alterações / Descartar.
 _Avoid_: backup, cache
+
+**Painéis laterais**:
+O que ocupa a coluna da direita do editor: gramática, validação, galeria, PDF de impressão, comentários, painel de edição de caixa e as duas comparações (com ficheiro, entre versões/rascunho). No máximo um aberto. `hooks/useWorkPanels.ts` é o único dono dessa exclusão (`open`/`toggle`/`closeAll`/`compare*`); a página não fecha painéis à mão. Não confundir com o **Painel de edição** (um dos painéis).
+_Avoid_: sidebars, modais (os modais bloqueiam a página, os painéis não)
