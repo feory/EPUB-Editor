@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { TinyMCEEditor } from './types';
-import { BlockOverlays, type BlockOverlaysProps, type ElementAction, type ElementMenuState } from './overlays/BlockOverlays';
+import { BlockOverlays, type BlockOverlaysProps, type ElementAction } from './overlays/BlockOverlays';
 import { useHtmlEdit } from './overlays/HtmlEdit';
 import { attachMiniMenu, type MiniMenu } from './miniMenu';
 import { editBlocks } from './blockEdit';
@@ -14,13 +14,12 @@ import { plusCenterY, PLUS_SIZE } from './blockGeometry';
 import { topLevelBlock, hitsPlus, gripState, gripZone, dropTargetAt, changeDetector } from './blockInteraction';
 import { MARK, BODY_CLASS } from './ephemeral';
 import { miniMenuAnchor, usePopupDismiss } from './overlays/popupDismiss';
+import { createMenus, type OpenMenu, type Pos } from './openMenu';
 
 // readOnly atravessa de fora; tudo o resto em BlockOverlaysProps só alimenta o render interno.
 type BlockOverlaysInternal = Omit<BlockOverlaysProps, 'readOnly'>;
 
 const noop0 = () => 0;
-
-type Pos = { top: number; left: number };
 
 // iframe do editor (dentro do container); todas as posições de overlay derivam do seu rect.
 const iframeOf = (editor: TinyMCEEditor) =>
@@ -54,39 +53,44 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const gripBlockRef = useRef<HTMLElement | null>(null);
     // Mini-menu (miniMenu.ts): o único que mexe no pop; aqui só se pede para o esconder.
     const miniMenuRef = useRef<MiniMenu | null>(null);
-    const [gripMenu, setGripMenu] = useState<Pos | null>(null); // menu ao clicar na pega
-    const [elMenu, setElMenu] = useState<ElementMenuState | null>(null); // menu "⋮" do elemento selecionado
-    // Menu da pega aberto → tudo o resto escondido: mini-menu (motivo próprio, o hover da pega
-    // não o repõe), "+" (body.ps-grip-menu → contentStyles.ts). Fechou (escolha, clique fora,
-    // scroll) → voltam.
-    useEffect(() => {
-        miniMenuRef.current?.suppress('gripMenu', !!gripMenu || !!elMenu);
-        editorRef.current?.getBody()?.classList.toggle(BODY_CLASS.gripMenu, !!gripMenu || !!elMenu);
-    }, [gripMenu, elMenu, editorRef]);
-    // "Mais estilos" (mini-menu ⋮): overlay React em 2 colunas, ancorado ao pop do mini-menu.
-    const [styleMenu, setStyleMenu] = useState<{ top: number; left: number; kind: 'para' | 'head' } | null>(null);
+    // Menus flutuantes (inserção "+", pega, elemento ⋮, grelha, "Mais estilos"): no máximo um aberto;
+    // o que se esconde enquanto abertos deriva do menu (openMenu.ts). Os adapters leem refs só quando
+    // chamados (eventos), nunca no render.
+    const [menu, setMenu] = useState<OpenMenu | null>(null);
+    // eslint-disable-next-line react-hooks/refs
+    const [menus] = useState(() => createMenus({
+        suppressMiniMenu: (reason, on) => miniMenuRef.current?.suppress(reason, on),
+        setGripMenuClass: (on) => editorRef.current?.getBody()?.classList.toggle(BODY_CLASS.gripMenu, on),
+        markPlusBlock: (block, on) => { if (on) block.setAttribute(MARK.plusOpen, '1'); else block.removeAttribute(MARK.plusOpen); },
+        reevaluate: () => editorRef.current?.nodeChanged(),
+    }, setMenu));
+    const gripMenu = menu?.kind === 'grip' ? menu.pos : null;
+    const plusMenu = menu?.kind === 'plus' ? menu.pos : null;
+    const elMenu = menu?.kind === 'element' ? menu.state : null;
+    const gridMenu = menu?.kind === 'grid' ? menu.state : null;
+    const styleMenu = menu?.kind === 'style' ? menu.state : null;
     // Impede o clique no próprio ⋮ de reabrir o menu logo a seguir ao mousedown o ter fechado.
     const styleMenuGuardRef = useRef(0);
     const openStyleMenu = (kind: 'para' | 'head') => {
         if (Date.now() < styleMenuGuardRef.current) return; // acabou de fechar (2º clique no ⋮) → não reabrir
-        setStyleMenu({ ...miniMenuAnchor(), kind });
+        menus.show({ kind: 'style', state: { ...miniMenuAnchor(), kind } });
     };
     // Fechar ao clicar fora (⋮ novamente, outro botão do mini-menu, o iframe do editor, Esc, scroll). O pop do
     // mini-menu (TinyMCE aux) fica acima de um backdrop React — daí o listener global em usePopupDismiss.
     usePopupDismiss(!!styleMenu, editorRef, (t) => !!(t as HTMLElement).closest?.('[data-style-menu]'), () => {
-        setStyleMenu(null);
+        menus.close('style');
         styleMenuGuardRef.current = Date.now() + 300; // click do ⋮ que se segue não reabre
     });
     // Âncora no cursor: o menu fecha, o editor recupera o foco e o comando abre o diálogo do nome.
     const anchorAction = () => {
-        setStyleMenu(null);
+        menus.close('style');
         const editor = editorRef.current;
         if (!editor) return;
         editor.focus();
         editor.execCommand('mceInsertAnchor');
     };
     const styleAction = (format: string) => {
-        setStyleMenu(null);
+        menus.close('style');
         const editor = editorRef.current;
         if (!editor) return;
         editor.focus();
@@ -141,11 +145,11 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         if (!el) return;
         const container = bm.containerOf(el);
         const up = window.innerHeight - rect.bottom < 380; // sem espaço por baixo → abre para cima
-        setElMenu({
+        menus.show({ kind: 'element', state: {
             top: up ? rect.top - 4 : rect.bottom + 4, left: rect.right, up,
             hasStyles: !!styleClipRef.current, boxed: !!bm.boxOf(el),
             container: container ? (container.classList.contains('grid') ? 'grid' : 'box') : null,
-        });
+        } });
     };
     // "+" interno da grelha (coluna / texto / imagem) — posição e menu.
     const gridTargetRef = useRef<HTMLElement | null>(null);
@@ -153,14 +157,13 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     // Pega "selecionar grelha/caixa": difícil acertar na área do contentor quando as células o enchem.
     const parentTargetRef = useRef<HTMLElement | null>(null);
     const [parentHandle, setParentHandle] = useState<(Pos & { kind: 'box' | 'grid' }) | null>(null);
-    const [gridMenu, setGridMenu] = useState<(Pos & { up: boolean }) | null>(null);
     const openGridMenu = (rect: DOMRect) => {
         const up = window.innerHeight - rect.bottom < 190;
-        setGridMenu({ top: up ? rect.top - 4 : rect.bottom + 4, left: rect.left + rect.width / 2, up });
+        menus.show({ kind: 'grid', state: { top: up ? rect.top - 4 : rect.bottom + 4, left: rect.left + rect.width / 2, up } });
     };
     const gridAction = (kind: GridCellKind) => {
         const editor = editorRef.current; const grid = gridTargetRef.current;
-        setGridMenu(null);
+        menus.close('grid');
         if (!editor || !grid?.isConnected) return;
         clearBoxRef.current();
         const after = cellOf(grid, editor.selection.getNode()); // depois da célula onde está o cursor, senão no fim
@@ -178,7 +181,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
     const elementAction = (action: ElementAction) => {
         const editor = editorRef.current; const el = menuTargetRef.current;
-        setElMenu(null);
+        menus.close('element');
         if (!editor || !el?.isConnected) return;
         const container = bm.containerOf(el);
         if (action === 'selectContainer') { if (container) selectBoxRef.current(container); return; }
@@ -236,7 +239,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     // esse ponto (o parágrafo volta a ficar ativo) — o fundo do menu apanhava o clique e o editor
     // ficava sem seleção. Fora do editor só fecha. Não é um 'click' no bloco: não o recolhe.
     const dismissGripMenu = (x: number, y: number) => {
-        setGripMenu(null);
+        menus.close('grip');
         const editor = editorRef.current;
         const iframe = editor && iframeOf(editor);
         if (!editor || !iframe) return;
@@ -255,7 +258,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
     // Menu da pega: só duplicar/eliminar o bloco de topo.
     const gripAction = (action: 'duplicate' | 'delete') => {
-        setGripMenu(null);
+        menus.close('grip');
         const editor = editorRef.current;
         const block = gripBlockRef.current;
         if (!editor || !block) return;
@@ -268,28 +271,12 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
 
     // Botão "+" → abre um menu de inserção; escolher insere um novo bloco a seguir ao bloco-âncora.
-    const [plusMenu, setPlusMenu] = useState<Pos | null>(null);
-    const plusMenuOpenRef = useRef(false); // menu aberto → pega/mini-menu escondidos
-    const plusBlockRef = useRef<HTMLElement | null>(null); // bloco-âncora do menu
-    const closePlusMenu = () => {
-        plusMenuOpenRef.current = false;
-        miniMenuRef.current?.suppress('plusMenu', false);
-        plusBlockRef.current?.removeAttribute(MARK.plusOpen);
-        setPlusMenu(null);
-        editorRef.current?.nodeChanged(); // reavalia mini-menu + grip (voltam a aparecer)
-    };
     // Chamado pelo clique no "+" (CSS ::after do bloco, ver contentStyles.ts); pos em coords da viewport.
-    const openPlusMenu = (block: HTMLElement, pos: Pos) => {
-        plusMenuOpenRef.current = true;
-        plusBlockRef.current = block;
-        block.setAttribute(MARK.plusOpen, '1'); // mantém o "+" visível sem :hover (rato vai para o menu)
-        miniMenuRef.current?.suppress('plusMenu', true);
-        setPlusMenu(pos); // acima do "+"
-    };
+    const openPlusMenu = (block: HTMLElement, pos: Pos) => menus.show({ kind: 'plus', pos, block });
     const plusAction = (type: string) => {
-        closePlusMenu();
+        const block = menus.current?.kind === 'plus' ? menus.current.block : null;
+        menus.close('plus');
         const editor = editorRef.current;
-        const block = plusBlockRef.current;
         if (!editor || !block || !block.parentNode) return;
         if (type === 'hr') { // divisória: só o <hr> (sem parágrafo extra)
             const parent = block.parentNode;
@@ -384,12 +371,10 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
             const drag = dragBlockRef.current;
             const tgt = dropTargetRef.current;
             dragBlockRef.current = null; dropTargetRef.current = null;
-            // Clique → menu da pega, sozinho: fecham-se os outros menus (efeito do gripMenu esconde o resto).
+            // Clique → menu da pega, sozinho: abrir substitui qualquer outro menu.
             if (!moved) {
-                if (plusMenuOpenRef.current) closePlusMenu();
-                setStyleMenu(null);
                 hrRef.current = null; setHrCtl(null);
-                setGripMenu({ top: startY, left: startX + 14 });
+                menus.show({ kind: 'grip', pos: { top: startY, left: startX + 14 } });
                 return;
             }
             miniMenuRef.current?.suppress('grip', false); // o rato já pode não estar na pega
@@ -619,7 +604,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         // Scroll de contentor EXTERNO (fora do iframe) / resize da janela: reavaliar ambos os overlays.
         // Capture=true apanha scroll de qualquer ancestral com overflow. Removido no 'remove'.
         // Scroll com o menu de inserção aberto → fechá-lo (o menu é fixed e separar-se-ia do "+").
-        const closeMenuIfOpen = () => { if (plusMenuOpenRef.current) closePlusMenu(); setGripMenu(null); setElMenu(null); setGridMenu(null); setStyleMenu(null); if (hrRef.current) { hrRef.current = null; setHrCtl(null); } };
+        const closeMenuIfOpen = () => { menus.close(); if (hrRef.current) { hrRef.current = null; setHrCtl(null); } };
         const onScroll = () => { closeMenuIfOpen(); updateGrip(); updateOverlays(); if (htmlEdit.isOpen()) htmlEdit.reposition(); };
         const evalOverlays = onScroll;
         editor.on('init', () => {
@@ -635,10 +620,10 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
 
     const internal: BlockOverlaysInternal = {
-        plusMenu, gripMenu, hrCtl, dropLine, styleMenu, menuBtn, boxBar, setBoxVariant, parentHandle, selectParent: () => { const c = parentTargetRef.current; if (c) selectBoxRef.current(c); }, openGridPanel: () => onOpenPanel?.(), gridPlus, gridMenu, openGridMenu, closeGridMenu: () => setGridMenu(null), gridAction, elMenu, openElementMenu, elementAction, closeElementMenu: () => setElMenu(null),
-        closePlusMenu, plusAction,
+        plusMenu, gripMenu, hrCtl, dropLine, styleMenu, menuBtn, boxBar, setBoxVariant, parentHandle, selectParent: () => { const c = parentTargetRef.current; if (c) selectBoxRef.current(c); }, openGridPanel: () => onOpenPanel?.(), gridPlus, gridMenu, openGridMenu, closeGridMenu: () => menus.close('grid'), gridAction, elMenu, openElementMenu, elementAction, closeElementMenu: () => menus.close('element'),
+        closePlusMenu: () => menus.close('plus'), plusAction,
         dismissGripMenu, gripAction, setHrWidth, deleteHr,
-        styleAction, anchorAction, setStyleMenu,
+        styleAction, anchorAction, closeStyleMenu: () => menus.close('style'),
     };
     const render = <><BlockOverlays {...internal} readOnly={readOnly} />{htmlEdit.element}</>;
 

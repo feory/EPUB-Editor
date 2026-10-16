@@ -86,3 +86,7 @@ _Avoid_: sidebars, modais (os modais bloqueiam a página, os painéis não)
 **Edição do livro**:
 O module (`pages/work/bookEdit.ts`, puro) das operações de livro inteiro: renomear/mover/eliminar/criar capítulo, nível, capitulares, Índice, links, page-list, substituir. Recebe o livro (`html`, `parts`, `chapters`) e devolve um `BookEdit` — HTML novo, o tipo de commit e o aviso — ou `null` (nada a fazer, em silêncio). Dois commits: `keep` (mantém o capítulo ativo; o editor sincroniza-se sem perder o undo) e `reset` (reorder/eliminar/criar: o índice ativo deixa de valer). `useEbookWork.applyEdit` é o único que commita.
 _Avoid_: handlers de capítulo, transformações
+
+**Menu aberto**:
+Qual dos menus flutuantes do editor está aberto — inserção ("+"), pega, elemento ⋮, grelha ou "Mais estilos". No máximo um: `editor/openMenu.ts` (`createMenus`) é o único que abre/fecha, e o que se esconde enquanto está aberto (Mini-menu, botão "+", marca do bloco) deriva dele através de um adapter (`MenuHost`). O hover da divisória (`hrCtl`) e a edição de HTML não são menus abertos.
+_Avoid_: popup, dropdown, overlay (o overlay é só o render)

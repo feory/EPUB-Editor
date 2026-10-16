@@ -45,7 +45,7 @@ export interface BlockOverlaysProps {
     deleteHr: () => void;
     styleAction: (format: string) => void;
     anchorAction: () => void;                        // "Âncora" no menu ⋮ (mceInsertAnchor no cursor)
-    setStyleMenu: React.Dispatch<React.SetStateAction<{ top: number; left: number; kind: 'para' | 'head' } | null>>;
+    closeStyleMenu: () => void;
     readOnly?: boolean;
 }
 
@@ -55,7 +55,7 @@ type Props = BlockOverlaysProps;
 export function BlockOverlays({
     plusMenu, gripMenu, hrCtl, menuBtn, parentHandle, selectParent, boxBar, setBoxVariant, openGridPanel, gridPlus, gridMenu, openGridMenu, closeGridMenu, gridAction, elMenu, openElementMenu, closeElementMenu, elementAction, dropLine, closePlusMenu, plusAction,
     dismissGripMenu, gripAction, setHrWidth, deleteHr,
-    styleMenu, styleAction, anchorAction, setStyleMenu, readOnly,
+    styleMenu, styleAction, anchorAction, closeStyleMenu, readOnly,
 }: Props) {
     return (
         <>
@@ -116,7 +116,7 @@ export function BlockOverlays({
                 <>
                     <div
                         data-style-menu
-                        onMouseLeave={() => setStyleMenu(null)}
+                        onMouseLeave={closeStyleMenu}
                         style={{ position: 'fixed', top: styleMenu.top, left: styleMenu.left, zIndex: 1401 }}
                         className="w-72 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
                     >
