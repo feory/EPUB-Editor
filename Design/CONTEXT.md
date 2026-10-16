@@ -70,3 +70,11 @@ _Avoid_: link, hiperligação
 **Destino de ligação**:
 Aquilo a que uma Ligação do Índice aponta: `p.chapter-anchor` (capítulo/subtítulo) ou `span.manual-anchor[data-label]` (ponto livre, inserido no cursor pelo menu "/"). Persiste no EPUB como `id`; não confundir com **Anchor** (de Comment), que só existe no editor.
 _Avoid_: âncora (já é o Anchor do Comment), marcador
+
+**Gravação**:
+O module (`pages/work/saver.ts`, sem React) dono do ciclo de vida do save de um ebook: "por gravar" (texto atual ≠ o que o servidor já tem, na forma que o save envia), autosave, retry quando a rede volta, saída do editor/separador e **Rascunho local**. O transporte (axios, keepalive), os rascunhos e o getter do texto entram como adapters; `useEbookWork` só liga isto ao React e à cache.
+_Avoid_: autosave (é só um dos caminhos), persistência
+
+**Rascunho local**:
+Cópia do texto ainda não confirmada pelo servidor, no IndexedDB (`utils/local-draft.ts`). Apaga-se quando o save é confirmado; se sobrar ao abrir e diferir do servidor, oferece-se Recuperar / Ver alterações / Descartar.
+_Avoid_: backup, cache

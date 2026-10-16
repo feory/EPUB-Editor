@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback, useReducer } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
 import type { RefObject } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { ebooksApi } from '../../api/ebooks-api';
 import { getAccessToken, clientId } from '../../api/client';
@@ -10,7 +10,7 @@ import type { ImageSettings } from '../../components/MarginPreview';
 import { compressHtml, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml, applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
-import { drafts, isRecoverable } from '../../utils/local-draft';
+import { drafts } from '../../utils/local-draft';
 import type { Draft } from '../../utils/local-draft';
 import { moveChapters, renameChapterPart, deleteChapterPart, changeChapterLevel } from '../../utils/toc';
 import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles, unlinkOneIndiceEntry } from '../../utils/indice-links';
@@ -19,6 +19,7 @@ import { insertPageBreaks } from '../../services/page-list/page-list';
 import type { PageAnchor } from '../../services/page-list/page-list';
 import { fixLinks, validateLinks } from '../../services/validation/link-validator';
 
+import { createSaver } from './saver';
 import { contentReducer, initialContentState } from './hooks/contentReducer';
 import { useChapterSync } from './hooks/useChapterSync';
 import { useEbookImport } from './hooks/useEbookImport';
@@ -29,6 +30,23 @@ import { useVersionDiff } from './hooks/useVersionDiff';
 import { useEbookGrammar } from './hooks/useEbookGrammar';
 import { usePresence } from './hooks/usePresence';
 import type { WorkEditorRef } from './components/WorkEditor';
+
+// Fechar/recarregar o separador: keepalive porque o pedido tem de sobreviver à página.
+// sendBeacon não serve — não deixa pôr o cabeçalho Authorization.
+function sendOnUnload(isbn: string, content: string) {
+    const token = getAccessToken();
+    fetch(`/api/ebooks/${isbn}/content`, {
+        method: 'POST',
+        keepalive: true,
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Client-Id': clientId,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ content: compressHtml(content) }),
+    }).catch(() => { /* a página está a fechar */ });
+}
 
 export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<WorkEditorRef | null>) {
     const queryClient = useQueryClient();
@@ -84,178 +102,96 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         }
     }, [contentData]);
 
-    // --- Save ---
+    // --- Save --- (regras no saver.ts; aqui só se liga ao React, à cache e às notificações)
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
-    // Conteúdo que o servidor já tem, NA FORMA que o save envia (cleanHeadings do fullHtml).
-    // Comparar com o texto cru guardado dava sempre diferente (o load normaliza), e cada save
-    // escreve uma versão nova no histórico — abrir e sair sem editar poluía o histórico.
-    const savedContentRef = useRef<string | null>(null);
-
-    const saveFailedRef = useRef(false);
-
-    const saveMutation = useMutation({
-        mutationFn: ({ content }: { content: string; showNotif?: boolean }) =>
-            ebooksApi.saveContent(isbn!, compressHtml(content)),
-        onSuccess: (_, variables) => {
-            savedContentRef.current = variables.content;
-            saveFailedRef.current = false;
-            if (isbn) void drafts.clear(isbn, variables.content);
-            queryClient.setQueryData(['ebook-content', isbn], { content: variables.content, source: 'saved' });
-            setLastSaved(new Date());
-            queryClient.invalidateQueries({ queryKey: ['ebook-history', isbn] });
-            if (variables.showNotif) showNotification('success', 'Guardado com sucesso!');
-        },
-        onError: (_, variables) => {
-            console.error('[Autosave] Erro ao guardar');
-            saveFailedRef.current = true;
-            // O rascunho local já tem este texto; o autosave seguinte tenta de novo.
-            showNotification('error', variables.showNotif
-                ? 'Erro ao guardar o trabalho. Cópia guardada neste computador.'
-                : 'Sem ligação ao servidor — cópia guardada neste computador.', 6000);
-        },
-    });
-
-    // Autosave every 5 minutes via stable refs
+    const [isSaving, setIsSaving] = useState(false);
+    const [draft, setDraft] = useState<Draft | null>(null);
     // Gravar usa SEMPRE o getter "latest" (inclui a edição ainda presa no debounce) — não o
     // getSyncedHtmlContent, que só vê o que já passou pelo reducer.
     const { getLatestHtmlContent } = chapterSync;
-    const getSyncedRef = useRef(chapterSync.getLatestHtmlContent);
-    const saveMutRef = useRef(saveMutation);
+    const latestRef = useRef(getLatestHtmlContent);
+    const readOnlyRef = useRef(readOnly);
     useEffect(() => {
-        getSyncedRef.current = chapterSync.getLatestHtmlContent;
-        saveMutRef.current = saveMutation;
+        latestRef.current = getLatestHtmlContent;
+        readOnlyRef.current = readOnly;
     });
 
-    useEffect(() => {
-        if (!isbn) return;
-        if (readOnly) return; // modo leitura: nunca grava
-        const interval = setInterval(() => {
-            const content = getSyncedRef.current();
-            if (content && !saveMutRef.current.isPending) {
-                saveMutRef.current.mutate({ content, showNotif: false });
+    // As refs só são lidas dentro dos callbacks do saver (efeitos/eventos), nunca no render.
+    // eslint-disable-next-line react-hooks/refs
+    const saver = useMemo(() => !isbn ? null : createSaver({
+        isbn,
+        getContent: () => latestRef.current(),
+        send: async (content) => { await ebooksApi.saveContent(isbn, compressHtml(content)); },
+        sendOnUnload: (content) => sendOnUnload(isbn, content),
+        drafts,
+        readOnly: () => readOnlyRef.current,
+        onBusy: setIsSaving,
+        onSaved: (content, notify) => {
+            // Cache a staleTime: Infinity — sem isto reentrar no editor recarregava o texto antigo.
+            queryClient.setQueryData(['ebook-content', isbn], { content, source: 'saved' });
+            setLastSaved(new Date());
+            queryClient.invalidateQueries({ queryKey: ['ebook-history', isbn] });
+            if (notify) showNotification('success', 'Guardado com sucesso!');
+        },
+        onFailed: (notify, exit) => {
+            if (exit) { // sem UI para avisar: não deixar a cache a afirmar o que não está gravado
+                queryClient.invalidateQueries({ queryKey: ['ebook-content', isbn] });
+                return;
             }
-        }, 5 * 60 * 1000);
-        return () => clearInterval(interval);
-    }, [isbn, readOnly]);
+            console.error('[Autosave] Erro ao guardar');
+            // O rascunho local já tem este texto; o autosave seguinte (ou a rede de volta) tenta de novo.
+            showNotification('error', notify
+                ? 'Erro ao guardar o trabalho. Cópia guardada neste computador.'
+                : 'Sem ligação ao servidor — cópia guardada neste computador.', 6000);
+        },
+    }), [isbn, queryClient, showNotification]);
 
-    // Rede de volta depois de um save falhado → tenta já, sem esperar pelos 5 minutos.
+    const save = useCallback((content: string, notify = false) => { void saver?.save(content, notify); }, [saver]);
+
+    useEffect(() => saver?.start(), [saver]);
+
     useEffect(() => {
-        if (!isbn || readOnly) return;
-        const onOnline = () => {
-            if (!saveFailedRef.current || saveMutRef.current.isPending) return;
-            const content = getSyncedRef.current();
-            if (content && content !== savedContentRef.current) saveMutRef.current.mutate({ content, showNotif: false });
-        };
+        if (!saver) return;
+        const onOnline = () => void saver.onOnline();
         window.addEventListener('online', onOnline);
         return () => window.removeEventListener('online', onOnline);
-    }, [isbn, readOnly]);
+    }, [saver]);
 
-    // Linha de base do "por gravar": primeira forma sincronizada logo após o LOAD_CONTENT
-    // (é exatamente o que um save enviaria nesse instante → abrir e sair sem editar não grava).
+    // Sair do editor (voltar, ebook concluído, troca de rota): gravar o que ficou por gravar.
+    useEffect(() => () => { saver?.exit('app'); }, [saver]);
+
+    // Fechar/recarregar o separador: keepalive; o browser avisa que há alterações por gravar.
     useEffect(() => {
-        if (savedContentRef.current === null && contentState.fullHtml) {
-            savedContentRef.current = getSyncedRef.current();
-        }
-    }, [contentState.fullHtml]);
-
-    // --- Rascunho local (IndexedDB): rede cai / separador crasha entre dois saves ---
-    // Escreve 2s depois de o texto assentar (fullHtml só muda após o report diferido do canal).
-    // Com a oferta de recuperação aberta não escreve: apagaria o rascunho que se quer recuperar.
-    const [draft, setDraft] = useState<Draft | null>(null);
-    useEffect(() => {
-        if (!isbn || readOnly || draft || !contentState.fullHtml) return;
-        const t = setTimeout(() => {
-            const content = getSyncedRef.current();
-            if (content && content !== savedContentRef.current) void drafts.save(isbn, content);
-        }, 2000);
-        return () => clearTimeout(t);
-    }, [isbn, readOnly, draft, contentState.fullHtml]);
-
-    // Ao abrir: rascunho que sobrou e difere do servidor → oferece recuperar (uma vez por ebook).
-    const draftCheckedRef = useRef(false);
-    useEffect(() => {
-        if (!isbn || readOnly || !contentState.fullHtml || draftCheckedRef.current) return;
-        draftCheckedRef.current = true;
-        void drafts.load(isbn).then((d) => {
-            if (isRecoverable(d, savedContentRef.current)) setDraft(d);
-            else if (d) void drafts.clear(isbn);
-        });
-    }, [isbn, readOnly, contentState.fullHtml]);
-
-    // Sair do editor não gravava: a seta de voltar faz navigate('/') e o autosave é de 5 em 5
-    // minutos — perdia-se tudo o que fosse escrito depois do último save (ou a sessão inteira,
-    // se durasse menos de 5 min).
-    const readOnlyRef = useRef(readOnly);
-    useEffect(() => { readOnlyRef.current = readOnly; });
-
-    const pendingContent = useCallback(() => {
-        if (readOnlyRef.current || !isbn) return null;
-        const content = getSyncedRef.current();
-        if (!content || content === savedContentRef.current) return null;
-        return content;
-    }, [isbn]);
-
-    // Saída dentro da app (voltar, ebook concluído, troca de rota).
-    useEffect(() => () => {
-        const content = pendingContent();
-        if (!content || !isbn) return;
-        // Chamada direta à API, não a mutation: no unmount o observer do react-query já
-        // não corre os callbacks, mas o pedido axios segue à mesma. Como o onSuccess da
-        // mutation não corre, o cache de ['ebook-content'] (staleTime: Infinity) tem de ser
-        // reposto aqui — senão reentrar no editor dentro do gcTime recarregava o texto ANTIGO,
-        // apesar de o servidor já ter o novo.
-        ebooksApi.saveContent(isbn, compressHtml(content))
-            .then(() => {
-                void drafts.clear(isbn, content);
-                queryClient.setQueryData(['ebook-content', isbn], { content, source: 'saved' });
-                queryClient.invalidateQueries({ queryKey: ['ebook-history', isbn] });
-            })
-            .catch(() => {
-                // Falhou: não deixar o cache a afirmar o que não está gravado — força releitura.
-                queryClient.invalidateQueries({ queryKey: ['ebook-content', isbn] });
-            });
-    }, [pendingContent, isbn, queryClient]);
-
-    // Fechar/recarregar o separador: keepalive porque o pedido tem de sobreviver à página.
-    // sendBeacon não serve — não deixa pôr o cabeçalho Authorization.
-    useEffect(() => {
-        const onBeforeUnload = (e: BeforeUnloadEvent) => {
-            const content = pendingContent();
-            if (!content || !isbn) return;
-            const token = getAccessToken();
-            fetch(`/api/ebooks/${isbn}/content`, {
-                method: 'POST',
-                keepalive: true,
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Client-Id': clientId,
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify({ content: compressHtml(content) }),
-            }).catch(() => { /* a página está a fechar */ });
-            e.preventDefault(); // browser avisa que há alterações por gravar
-        };
+        const onBeforeUnload = (e: BeforeUnloadEvent) => { if (saver?.exit('unload')) e.preventDefault(); };
         window.addEventListener('beforeunload', onBeforeUnload);
         return () => window.removeEventListener('beforeunload', onBeforeUnload);
-    }, [pendingContent, isbn]);
+    }, [saver]);
+
+    // Texto assentou: linha de base (1.ª vez), rascunho local e oferta de recuperação (1.ª vez).
+    useEffect(() => {
+        if (!saver || !contentState.fullHtml) return;
+        saver.baseline();
+        saver.contentChanged();
+        void saver.checkDraft().then((d) => { if (d) setDraft(d); });
+    }, [saver, contentState.fullHtml, readOnly]);
 
     // --- Import ---
     const onImport = useCallback((html: string) => {
         dispatch({ type: 'LOAD_CONTENT', payload: html });
-        saveMutation.mutate({ content: html });
-    }, [saveMutation]);
+        save(html);
+    }, [save]);
 
     const restoreDraft = useCallback(() => {
         if (!draft || readOnly) return;
+        saver?.resolveDraft(true);
         onImport(cleanEditorHtml(draft.html)); // carrega + grava; o save confirmado apaga o rascunho
         setDraft(null);
-    }, [draft, readOnly, onImport]);
+    }, [draft, readOnly, saver, onImport]);
 
     const discardDraft = useCallback(() => {
-        if (isbn) void drafts.clear(isbn);
+        saver?.resolveDraft(false);
         setDraft(null);
-    }, [isbn]);
+    }, [saver]);
 
     const { importPdfMutation, importDocumentMutation } = useEbookImport({ isbn, onImport, showNotification });
 
@@ -303,8 +239,8 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         const syncedHtml = editorRef?.current?.syncExternalContent(html, prevIndex) ?? html;
         dispatch({ type: 'LOAD_CONTENT', payload: syncedHtml });
         if (prevIndex !== -1) dispatch({ type: 'CHANGE_CHAPTER', index: prevIndex });
-        if (isbn) saveMutation.mutate({ content: syncedHtml });
-    }, [isbn, saveMutation, contentState.activeChapterIndex, editorRef]);
+        if (isbn) save(syncedHtml);
+    }, [isbn, save, contentState.activeChapterIndex, editorRef]);
 
     // --- Edit chapter title (break, h1 e h2) ---
     const handleEditChapterTitle = useCallback((chapterIndex: number, newTitle: string) => {
@@ -339,8 +275,8 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         if (updatedHtml === parts.join('')) return; // no-op (soltar dentro da própria subárvore)
         dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
         showNotification('success', `Capítulo ${chapters[from].title} movido!`);
-        if (isbn) saveMutation.mutate({ content: updatedHtml });
-    }, [getChaptersAndParts, isbn, saveMutation, showNotification]);
+        if (isbn) save(updatedHtml);
+    }, [getChaptersAndParts, isbn, save, showNotification]);
 
     // --- Mudar nível de um capítulo (h1/h2/h3/break) ---
     const handleChangeChapterLevel = useCallback((index: number, level: 'h1' | 'h2' | 'h3' | 'break') => {
@@ -361,8 +297,8 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         const updatedHtml = deleteChapterPart(parts, levels, index);
         dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
         showNotification('success', `Capítulo ${chapters[index].title} eliminado!`);
-        if (isbn) saveMutation.mutate({ content: updatedHtml });
-    }, [getChaptersAndParts, isbn, saveMutation, showNotification]);
+        if (isbn) save(updatedHtml);
+    }, [getChaptersAndParts, isbn, save, showNotification]);
 
     // --- Criar capítulo novo (sempre como primeiro) ---
     const handleAddChapter = useCallback(() => {
@@ -371,8 +307,8 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         const updatedHtml = [newPart, ...parts].join('');
         dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
         showNotification('success', 'Capítulo criado!');
-        if (isbn) saveMutation.mutate({ content: updatedHtml });
-    }, [getChaptersAndParts, isbn, saveMutation, showNotification]);
+        if (isbn) save(updatedHtml);
+    }, [getChaptersAndParts, isbn, save, showNotification]);
 
     // --- Aplicar capitular ao 1º parágrafo real de cada capítulo (livro inteiro) ---
     const handleApplyDropCaps = useCallback(() => {
@@ -517,7 +453,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
             isLoadingContent ||
             importPdfMutation.isPending ||
             importDocumentMutation.isPending ||
-            saveMutation.isPending ||
+            isSaving ||
             exportHook.isPreviewing,
         isLoadingChapter: contentState.isLoadingChapter,
         isLargeBook: chapterSync.isLargeBook,
@@ -532,9 +468,9 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         saveContent: useCallback(
             () => {
                 if (readOnly) return; // modo leitura: nunca grava
-                saveMutation.mutate({ content: getLatestHtmlContent(), showNotif: true });
+                save(getLatestHtmlContent(), true);
             },
-            [saveMutation, getLatestHtmlContent, readOnly]
+            [save, getLatestHtmlContent, readOnly]
         ),
         // Mesmo padrão silencioso de moveChapters/deleteChapterPart/createChapter (showNotif
         // omitido) — para mutações estruturais que persistem de imediato sem ser o botão
@@ -542,9 +478,9 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         saveContentSilently: useCallback(
             () => {
                 if (readOnly) return;
-                saveMutation.mutate({ content: getLatestHtmlContent() });
+                save(getLatestHtmlContent());
             },
-            [saveMutation, getLatestHtmlContent, readOnly]
+            [save, getLatestHtmlContent, readOnly]
         ),
 
         showHistory: history.isHistoryOpen,
