@@ -82,3 +82,7 @@ _Avoid_: backup, cache
 **Painéis laterais**:
 O que ocupa a coluna da direita do editor: gramática, validação, galeria, PDF de impressão, comentários, painel de edição de caixa e as duas comparações (com ficheiro, entre versões/rascunho). No máximo um aberto. `hooks/useWorkPanels.ts` é o único dono dessa exclusão (`open`/`toggle`/`closeAll`/`compare*`); a página não fecha painéis à mão. Não confundir com o **Painel de edição** (um dos painéis).
 _Avoid_: sidebars, modais (os modais bloqueiam a página, os painéis não)
+
+**Edição do livro**:
+O module (`pages/work/bookEdit.ts`, puro) das operações de livro inteiro: renomear/mover/eliminar/criar capítulo, nível, capitulares, Índice, links, page-list, substituir. Recebe o livro (`html`, `parts`, `chapters`) e devolve um `BookEdit` — HTML novo, o tipo de commit e o aviso — ou `null` (nada a fazer, em silêncio). Dois commits: `keep` (mantém o capítulo ativo; o editor sincroniza-se sem perder o undo) e `reset` (reorder/eliminar/criar: o índice ativo deixa de valer). `useEbookWork.applyEdit` é o único que commita.
+_Avoid_: handlers de capítulo, transformações

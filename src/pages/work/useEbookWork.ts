@@ -8,18 +8,17 @@ import { useNotification } from '../../context/NotificationContext';
 import { useStyles } from '../../context/StyleContext';
 import type { ImageSettings } from '../../components/MarginPreview';
 import { compressHtml, decompressHtml } from '../../utils/compression';
-import { cleanEditorHtml, applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
+import { cleanEditorHtml } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { drafts } from '../../utils/local-draft';
 import type { Draft } from '../../utils/local-draft';
-import { moveChapters, renameChapterPart, deleteChapterPart, changeChapterLevel } from '../../utils/toc';
-import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles, unlinkOneIndiceEntry } from '../../utils/indice-links';
+import { listSubtitles } from '../../utils/indice-links';
 import type { DocxStyleMapping } from '../../services/import/document-importer';
-import { insertPageBreaks } from '../../services/page-list/page-list';
 import type { PageAnchor } from '../../services/page-list/page-list';
-import { fixLinks, validateLinks } from '../../services/validation/link-validator';
 
 import { createSaver } from './saver';
+import * as bookEdit from './bookEdit';
+import type { Book, BookEdit, Level } from './bookEdit';
 import { contentReducer, initialContentState } from './hooks/contentReducer';
 import { useChapterSync } from './hooks/useChapterSync';
 import { useEbookImport } from './hooks/useEbookImport';
@@ -242,197 +241,59 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         if (isbn) save(syncedHtml);
     }, [isbn, save, contentState.activeChapterIndex, editorRef]);
 
-    // --- Edit chapter title (break, h1 e h2) ---
-    const handleEditChapterTitle = useCallback((chapterIndex: number, newTitle: string) => {
-        const chapter = chapterSync.chapters[chapterIndex];
-        if (!chapter) return;
-
-        const syncedHtml = chapterSync.getLatestHtmlContent();
-        const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
-        if (!parts[chapterIndex]) return;
-
-        const updatedPart = renameChapterPart(parts[chapterIndex], newTitle);
-        if (updatedPart === parts[chapterIndex]) return; // sem alteração (marcador não encontrado)
-        parts[chapterIndex] = updatedPart;
-        const updatedHtml = parts.join('');
-        commitHtml(updatedHtml);
-        showNotification('success', 'Título do capítulo atualizado!');
-    }, [chapterSync, commitHtml, showNotification]);
-
-    // Setup partilhado por operações estruturais (reorder/delete): capítulos + parts do split + níveis.
-    const getChaptersAndParts = useCallback(() => {
-        const chapters = chapterSync.chapters;
-        const parts = chapterSync.splitHtmlIntoParts(chapterSync.getLatestHtmlContent());
-        const levels = chapters.map(c => c.level);
-        return { chapters, parts, levels };
+    // --- Edição do livro (bookEdit.ts decide o quê; aqui só se aplica e se avisa) ---
+    const getBook = useCallback((): Book => {
+        const html = chapterSync.getLatestHtmlContent();
+        return { html, parts: chapterSync.splitHtmlIntoParts(html), chapters: chapterSync.chapters };
     }, [chapterSync]);
 
-    // --- Reorder chapters (subárvore h1+filhos; folhas isoladas) ---
-    const handleReorderChapter = useCallback((from: number, to: number) => {
-        const { chapters, parts, levels } = getChaptersAndParts();
-        if (!chapters[from] || from === to) return;
-        const updatedHtml = moveChapters(parts, levels, from, to);
-        if (updatedHtml === parts.join('')) return; // no-op (soltar dentro da própria subárvore)
-        dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
-        showNotification('success', `Capítulo ${chapters[from].title} movido!`);
-        if (isbn) save(updatedHtml);
-    }, [getChaptersAndParts, isbn, save, showNotification]);
-
-    // --- Mudar nível de um capítulo (h1/h2/h3/break) ---
-    const handleChangeChapterLevel = useCallback((index: number, level: 'h1' | 'h2' | 'h3' | 'break') => {
-        const { chapters, parts } = getChaptersAndParts();
-        if (!chapters[index] || chapters[index].level === level) return;
-        const updatedPart = changeChapterLevel(parts[index], level);
-        if (updatedPart === parts[index]) return;
-        parts[index] = updatedPart;
-        const updatedHtml = parts.join('');
-        commitHtml(updatedHtml);
-        showNotification('success', 'Nível do capítulo atualizado!');
-    }, [getChaptersAndParts, commitHtml, showNotification]);
-
-    // --- Eliminar capítulo (subárvore h1+filhos; folhas isoladas) ---
-    const handleDeleteChapter = useCallback((index: number) => {
-        const { chapters, parts, levels } = getChaptersAndParts();
-        if (!chapters[index]) return;
-        const updatedHtml = deleteChapterPart(parts, levels, index);
-        dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
-        showNotification('success', `Capítulo ${chapters[index].title} eliminado!`);
-        if (isbn) save(updatedHtml);
-    }, [getChaptersAndParts, isbn, save, showNotification]);
-
-    // --- Criar capítulo novo (sempre como primeiro) ---
-    const handleAddChapter = useCallback(() => {
-        const { parts } = getChaptersAndParts();
-        const newPart = `${changeChapterLevel('<p class="chapter-break" data-title="Novo Capítulo"></p>', 'h1')}<p></p>`;
-        const updatedHtml = [newPart, ...parts].join('');
-        dispatch({ type: 'LOAD_CONTENT', payload: updatedHtml });
-        showNotification('success', 'Capítulo criado!');
-        if (isbn) save(updatedHtml);
-    }, [getChaptersAndParts, isbn, save, showNotification]);
-
-    // --- Aplicar capitular ao 1º parágrafo real de cada capítulo (livro inteiro) ---
-    const handleApplyDropCaps = useCallback(() => {
-        const syncedHtml = chapterSync.getLatestHtmlContent();
-        const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
-        let applied = 0, already = 0;
-        const updatedParts = parts.map((p) => {
-            const r = applyDropCapToFirstParagraph(p);
-            if (r.status === 'applied') applied++;
-            else if (r.status === 'already') already++;
-            return r.part;
-        });
-        const updatedHtml = updatedParts.join('');
-        if (updatedHtml === syncedHtml) {
-            showNotification('info', already > 0
-                ? `Todos os capítulos já tinham capitular (${already}).`
-                : 'Nenhum capítulo elegível para capitular.');
-            return;
+    const applyEdit = useCallback((edit: BookEdit | null) => {
+        if (!edit) return;
+        if (edit.html !== undefined) {
+            if (edit.commit === 'keep') commitHtml(edit.html);
+            else {
+                dispatch({ type: 'LOAD_CONTENT', payload: edit.html });
+                if (isbn) save(edit.html);
+            }
         }
-        commitHtml(updatedHtml);
-        showNotification('success', `${applied} ${applied === 1 ? 'capitular aplicada' : 'capitulares aplicadas'}${already > 0 ? `, ${already} já ${already === 1 ? 'tinha' : 'tinham'}` : ''}.`);
-    }, [chapterSync, commitHtml, showNotification]);
+        if (edit.notice) showNotification(edit.notice.type, edit.notice.text);
+    }, [commitHtml, isbn, save, showNotification]);
 
-    // --- Ligar entradas do Índice do livro aos capítulos correspondentes (livro inteiro) ---
-    const handleLinkIndiceEntries = useCallback(() => {
-        const syncedHtml = chapterSync.getLatestHtmlContent();
-        const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
-        const { parts: updatedParts, linked, anchored } = linkIndiceEntries(parts);
-        const updatedHtml = updatedParts.join('');
-        if (updatedHtml === syncedHtml) {
-            showNotification('info', 'Nenhum Índice encontrado, ou nenhuma entrada correspondeu a um capítulo.');
-            return;
-        }
-        commitHtml(updatedHtml);
-        showNotification('success', `${linked} ${linked === 1 ? 'entrada ligada' : 'entradas ligadas'} a ${anchored} ${anchored === 1 ? 'capítulo' : 'capítulos'}.`);
-    }, [chapterSync, commitHtml, showNotification]);
-
-    // --- Ligar UMA entrada do Índice ao capítulo escolhido manualmente (mini-menu do editor,
-    // botão "Ligar a capítulo…") — para o que o automático acima não apanha por texto. ---
-    const handleLinkIndiceEntryManual = useCallback((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) => {
-        const syncedHtml = chapterSync.getLatestHtmlContent();
-        const parts = chapterSync.splitHtmlIntoParts(syncedHtml);
-        if (targetChapterIndex === null) { // "Remover ligação"
-            const res = unlinkOneIndiceEntry(parts, indiceChapterIndex, pIndex);
-            if (!res.ok) { showNotification('error', 'Não foi possível remover a ligação desta entrada.'); return; }
-            commitHtml(res.parts.join(''));
-            showNotification('success', 'Ligação removida.');
-            return;
-        }
-        const { parts: updatedParts, ok, reason } = linkOneIndiceEntry(parts, indiceChapterIndex, pIndex, targetChapterIndex, subIndex);
-        if (!ok) {
-            const reasonMsg = reason === 'entry-paragraph-not-found'
-                ? 'não encontrei o parágrafo do Índice onde tinhas o cursor.'
-                : reason === 'target-marker-missing'
-                    ? 'o capítulo escolhido não tem marcador de capítulo válido.'
-                    : reason === 'target-subtitle-missing'
-                        ? 'o subtítulo escolhido já não existe.'
-                    : 'tenta de novo.';
-            showNotification('error', 'Não foi possível ligar esta entrada: ' + reasonMsg);
-            return;
-        }
-        commitHtml(updatedParts.join(''));
-        const targetTitle = subIndex !== undefined
-            ? listSubtitles(parts).find(s => s.chapterIndex === targetChapterIndex && s.index === subIndex)?.text
-            : chapterSync.chapters[targetChapterIndex]?.title;
-        showNotification('success', targetTitle ? `Entrada ligada a "${targetTitle}".` : 'Entrada ligada.');
-    }, [chapterSync, commitHtml, showNotification]);
-
+    const handleEditChapterTitle = useCallback((chapterIndex: number, newTitle: string) =>
+        applyEdit(bookEdit.renameChapter(getBook(), chapterIndex, newTitle)), [applyEdit, getBook]);
+    const handleReorderChapter = useCallback((from: number, to: number) =>
+        applyEdit(bookEdit.moveChapter(getBook(), from, to)), [applyEdit, getBook]);
+    const handleChangeChapterLevel = useCallback((index: number, level: Level) =>
+        applyEdit(bookEdit.changeLevel(getBook(), index, level)), [applyEdit, getBook]);
+    const handleDeleteChapter = useCallback((index: number) =>
+        applyEdit(bookEdit.deleteChapter(getBook(), index)), [applyEdit, getBook]);
+    const handleAddChapter = useCallback(() => applyEdit(bookEdit.addChapter(getBook())), [applyEdit, getBook]);
+    const handleApplyDropCaps = useCallback(() => applyEdit(bookEdit.applyDropCaps(getBook())), [applyEdit, getBook]);
+    const handleLinkIndiceEntries = useCallback(() => applyEdit(bookEdit.linkIndice(getBook())), [applyEdit, getBook]);
+    // Mini-menu do editor ("Ligar a…"): uma entrada, ou null no alvo = remover a ligação.
+    const handleLinkIndiceEntryManual = useCallback((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) =>
+        applyEdit(bookEdit.linkIndiceEntry(getBook(), pIndex, indiceChapterIndex, targetChapterIndex, subIndex)), [applyEdit, getBook]);
     // Lido só ao abrir o dropdown "Ligar a…" (split do livro inteiro — não corre a cada edição).
     const getIndiceSubtitles = useCallback(
         () => listSubtitles(chapterSync.splitHtmlIntoParts(chapterSync.getLatestHtmlContent())),
         [chapterSync],
     );
-
-    // --- Corrigir espaçamento de links (livro inteiro, independente do capítulo aberto no
-    // editor — a validação já corre sobre o livro todo, ver useEbookValidation, mas o fix
-    // anterior só tocava editor.getContent() = capítulo ativo). ---
     const handleFixLinks = useCallback(() => {
-        const syncedHtml = chapterSync.getLatestHtmlContent();
-        const { html: fixedHtml, fixed } = fixLinks(syncedHtml);
-        // Reanalisa sempre (mesmo sem nada corrigido) — um falso positivo da validação
-        // (heurística de texto) pode não ter contrapartida real para o fixLinks (DOM), e o
-        // painel ficava com os problemas antigos presos mesmo já não havendo nenhum.
-        const htmlToValidate = fixed > 0 ? fixedHtml : syncedHtml;
-        const report = validateLinks(htmlToValidate);
-        validation.setLinkValidation(report.issues.length > 0 ? report : null);
-        if (fixed === 0 || fixedHtml === syncedHtml) {
-            showNotification('info', 'Nenhum link para corrigir.');
-            return;
-        }
-        commitHtml(fixedHtml);
-        showNotification('success', `${fixed} ${fixed === 1 ? 'link corrigido' : 'links corrigidos'}.`);
-    }, [chapterSync, commitHtml, showNotification, validation]);
-
-    // PDF carregado DEPOIS do import (o zip IDML não tinha PDF, ou o import é antigo) — gera a
-    // page-list agora, sobre o livro já importado. anchors já vêm calculados de PrintPdfSidebar
-    // (que já corre extractPdfPageAnchors para o mapa de sync scroll↔PDF — evita fazer o parsing
-    // do PDF duas vezes). insertPageBreaks remove marcadores antigos antes de inserir.
-    const handleGeneratePageList = useCallback((anchors: PageAnchor[]) => {
-        const syncedHtml = chapterSync.getLatestHtmlContent();
-        const { html: updatedHtml, inserted, total } = insertPageBreaks(syncedHtml, anchors);
-        if (inserted === 0) {
-            showNotification('info', 'Nenhuma página do PDF foi encontrada no texto do livro.');
-            return;
-        }
-        commitHtml(updatedHtml);
-        showNotification('success', `Page-list: ${inserted} de ${total} páginas marcadas.`);
-    }, [chapterSync, commitHtml, showNotification]);
-
-    // Substituição em todo o LIVRO (não só o capítulo carregado no editor) a partir do mini
-    // find/replace da caixa de editar HTML (BlockOverlays). getLatestHtmlContent inclui a
-    // edição ainda presa no debounce (senão perdia-se a diferença entre o que se vê e o que
-    // se grava); commitHtml segue o mesmo padrão das outras transformações de livro inteiro
-    // acima (mantém o capítulo ativo, dispara autosave — o editor re-sincroniza sozinho a
-    // seguir, via a prop controlada `value` do TinyMCE).
-    const countInWholeBook = useCallback((find: string): number =>
-        countOccurrences(chapterSync.getLatestHtmlContent(), find), [chapterSync]);
+        const { edit, report } = bookEdit.fixBookLinks(getBook());
+        validation.setLinkValidation(report);
+        applyEdit(edit);
+    }, [applyEdit, getBook, validation]);
+    // PDF carregado DEPOIS do import: anchors já vêm calculados de PrintPdfSidebar.
+    const handleGeneratePageList = useCallback((anchors: PageAnchor[]) =>
+        applyEdit(bookEdit.generatePageList(getBook(), anchors)), [applyEdit, getBook]);
+    // Substituição no LIVRO todo (mini find/replace do editar HTML). getLatest inclui a edição
+    // ainda presa no debounce.
+    const countInWholeBook = useCallback((find: string): number => bookEdit.countInBook(getBook(), find), [getBook]);
     const handleReplaceInWholeBook = useCallback((find: string, replaceWith: string): number => {
-        const html = chapterSync.getLatestHtmlContent();
-        const count = countOccurrences(html, find);
-        if (count === 0) return 0;
-        commitHtml(html.split(find).join(replaceWith));
+        const { edit, count } = bookEdit.replaceInBook(getBook(), find, replaceWith);
+        applyEdit(edit);
         return count;
-    }, [chapterSync, commitHtml]);
+    }, [applyEdit, getBook]);
 
     // --- Return public API (identical shape to original) ---
     return {
