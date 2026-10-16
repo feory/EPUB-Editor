@@ -82,7 +82,7 @@ export const server = Bun.serve({
         if (parts.length >= 6 && parts[4] === 'images' && parts[5] && parts[5] !== 'batch') {
           const imageId = parts[5];
           if (!safeSegment(imageId)) return new Response("Not Found", { status: 404, headers: corsHeaders });
-          return images.getImage(isbn, imageId, url);
+          return images.getImage(isbn, imageId, url, req);
         }
         if (parts.length === 5 && parts[4] === 'cover') {
           return epub.getCover(isbn);
@@ -241,7 +241,7 @@ export const server = Bun.serve({
               return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
             }
             if (imageId === 'batch' && method === "POST") return images.batchImages(req, isbn);
-            if (method === "GET")    return images.getImage(isbn, imageId, url);
+            if (method === "GET")    return images.getImage(isbn, imageId, url, req);
             if (method === "PUT")    return images.renameImage(req, isbn, imageId);
             if (method === "DELETE") return images.deleteImage(isbn, imageId);
             if (method === "POST")   return images.saveSingleImage(req, isbn, imageId);

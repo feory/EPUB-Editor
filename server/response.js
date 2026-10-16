@@ -23,10 +23,19 @@ export function jsonResponse(data, req, baseHeaders, status = 200) {
   return Response.json(data, { status, headers: baseHeaders });
 }
 
-export async function handleGetFile(filePath, headers) {
+// Com `req`, o ficheiro leva validadores (ETag + Last-Modified) e `no-cache`: o browser guarda a cópia
+// mas pergunta sempre se mudou e recebe 304 sem corpo. Serve ficheiros mutáveis (as imagens são
+// substituídas pelo mesmo nome ao recortar/trocar) — um max-age serviria a versão antiga.
+export async function handleGetFile(filePath, headers, req) {
   const file = Bun.file(filePath);
   if (!(await file.exists())) return new Response("Not Found", { status: 404, headers });
-  return new Response(file, { headers });
+  if (!req) return new Response(file, { headers });
+  const etag = `W/"${file.size.toString(36)}-${Math.floor(file.lastModified).toString(36)}"`;
+  const validators = { ...headers, ETag: etag, 'Last-Modified': new Date(file.lastModified).toUTCString(), 'Cache-Control': 'private, no-cache' };
+  const inm = req.headers.get('If-None-Match');
+  const ims = Date.parse(req.headers.get('If-Modified-Since') ?? '');
+  const fresh = inm ? inm.split(',').some(t => t.trim() === etag || t.trim() === '*') : ims >= Math.floor(file.lastModified / 1000) * 1000;
+  return fresh ? new Response(null, { status: 304, headers: validators }) : new Response(file, { headers: validators });
 }
 
 export function getClientIp(req) {

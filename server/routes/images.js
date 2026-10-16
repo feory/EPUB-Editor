@@ -129,18 +129,18 @@ export async function listImages(req, isbn) {
   return Response.json({ images: files.sort((a, b) => b.modified - a.modified) }, { headers: corsHeaders });
 }
 
-export async function getImage(isbn, imageId, url) {
+export async function getImage(isbn, imageId, url, req) {
   const imagesDir = join(DATA_DIR, isbn, 'images');
   const thumbnailsDir = join(DATA_DIR, isbn, 'thumbnails');
   const imagePath = await findImagePath(imagesDir, imageId);
   if (!imagePath) return new Response("Image not found", { status: 404, headers: corsHeaders });
 
-  if (url.searchParams.get('thumbnail') !== 'true') return handleGetFile(imagePath, corsHeaders);
+  if (url.searchParams.get('thumbnail') !== 'true') return handleGetFile(imagePath, corsHeaders, req);
 
   if (!existsSync(thumbnailsDir)) mkdirSync(thumbnailsDir, { recursive: true });
   const imageFilename = imagePath.split('/').pop();
   const thumbPath = join(thumbnailsDir, imageFilename);
-  if (existsSync(thumbPath)) return handleGetFile(thumbPath, corsHeaders);
+  if (existsSync(thumbPath)) return handleGetFile(thumbPath, corsHeaders, req);
 
   try {
     const sharp = await import('sharp').catch(() => null);
