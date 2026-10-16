@@ -958,6 +958,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                                 onReport: (html) => live.current.setHtmlContent(html),
                                 shouldReport: () => !isDiffHighlightingRef.current,
                                 normalize: () => normalizeEditorBody(editor.getBody()),
+                                // Diagnóstico: localStorage.setItem('channel-verify', '1') compara cada report incremental com o completo.
+                                verify: localStorage.getItem('channel-verify') === '1',
                             });
                             channelRef.current.load(live.current.htmlContent, { undo: 'reset' });
                         },
