@@ -1,6 +1,6 @@
 import type { ebooksApi } from '../../api/ebooks-api';
 import { extractFile, finalizeImport } from './import-file';
-import { compressHtml } from '../../utils/compression';
+import { compressHtmlAsync } from '../../utils/compression';
 
 export type ImportEpubApi = Pick<typeof ebooksApi, 'create' | 'uploadCover' | 'uploadImages' | 'saveContent' | 'updateMetadata'>;
 
@@ -41,7 +41,7 @@ export async function importEpub(file: File, mapping: Record<string, string> | u
         } catch { /* sem capa: o utilizador pode pô-la depois no botão de capa */ }
     }
     const { html: finalHtml } = await finalizeImport(extracted, {}, { isbn, uploadImages: fd => api.uploadImages(isbn, fd) });
-    await api.saveContent(isbn, compressHtml(finalHtml));
+    await api.saveContent(isbn, await compressHtmlAsync(finalHtml));
     if (metadata) await api.updateMetadata(isbn, {
         title, author, description: metadata.description,
         publisher: metadata.publisher, language: metadata.language, subjects: metadata.subjects,

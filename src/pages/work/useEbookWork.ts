@@ -7,7 +7,7 @@ import { getAccessToken, clientId } from '../../api/client';
 import { useNotification } from '../../context/NotificationContext';
 import { useStyles } from '../../context/StyleContext';
 import type { ImageSettings } from '../../components/MarginPreview';
-import { compressHtml, decompressHtml } from '../../utils/compression';
+import { compressHtml, compressHtmlAsync, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { drafts } from '../../utils/local-draft';
@@ -120,7 +120,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     const saver = useMemo(() => !isbn ? null : createSaver({
         isbn,
         getContent: () => latestRef.current(),
-        send: async (content) => { await ebooksApi.saveContent(isbn, compressHtml(content)); },
+        send: async (content) => { await ebooksApi.saveContent(isbn, await compressHtmlAsync(content)); },
         sendOnUnload: (content) => sendOnUnload(isbn, content),
         drafts,
         readOnly: () => readOnlyRef.current,

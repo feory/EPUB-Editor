@@ -1,4 +1,25 @@
-import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
+import { gzip, gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
+
+// Base64 sem spread (evita stack overflow em buffers grandes).
+function toBase64(bytes: Uint8Array): string {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+}
+
+/**
+ * Como `compressHtml`, mas o gzip corre num worker (fflate async): num livro de 1,6 MB o
+ * `gzipSync` de nível 9 bloqueava a thread principal ~66 ms a cada save. A saída é a mesma.
+ * Onde tem de ser síncrono (beforeunload) continua a usar-se `compressHtml`.
+ */
+export function compressHtmlAsync(html: string): Promise<string> {
+    return new Promise((resolve) => {
+        gzip(strToU8(html), { level: 9 }, (err, data) => {
+            if (err) { console.error('[Compression] Erro ao comprimir:', err); resolve(`UNCOMPRESSED:${html}`); return; }
+            resolve(toBase64(data));
+        });
+    });
+}
 
 /**
  * Compress HTML string to base64 (gzip)
@@ -15,15 +36,7 @@ export function compressHtml(html: string): string {
         // Compress with gzip (level 9 = máxima compressão; mais lento a comprimir, sem custo na descompressão)
         const compressed = gzipSync(data, { level: 9 });
 
-        // Convert to base64 without spread operator (prevents stack overflow)
-        let binary = '';
-        const len = compressed.length;
-        for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(compressed[i]);
-        }
-        const base64 = btoa(binary);
-
-        return base64;
+        return toBase64(compressed);
     } catch (error) {
         console.error('[Compression] Erro ao comprimir:', error);
         // Fallback: return original (with marker for uncompressed)
