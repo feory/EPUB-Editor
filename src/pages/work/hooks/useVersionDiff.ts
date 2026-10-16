@@ -17,7 +17,7 @@ export function useVersionDiff(isbn: string | undefined) {
     const [open, setOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [diffItems, setDiffItems] = useState<DiffItem[]>([]);
-    const [labels, setLabels] = useState<{ history: string } | null>(null);
+    const [labels, setLabels] = useState<{ history: string; draft?: boolean } | null>(null);
     const workerRef = useRef<Worker | null>(null);
     const idCounterRef = useRef(0);
 
@@ -52,17 +52,17 @@ export function useVersionDiff(isbn: string | undefined) {
         });
     }, []);
 
-    const compareWithEditor = useCallback(async (file: HistoryFile, editorHtml: string) => {
-        if (!isbn) return;
+    const runDiff = useCallback(async (
+        newLabels: { history: string; draft?: boolean },
+        getHtmls: () => Promise<[editorHtml: string, refHtml: string]>,
+    ) => {
         setOpen(true);
         setIsLoading(true);
         setDiffItems([]);
-        setLabels({ history: file.timestamp });
+        setLabels(newLabels);
         try {
-            const historyHtml = await loadHtml(file.filename);
-            // editor = atual (insert/verde = adicionado), ref = histórico (delete/rose = removido)
-            const result = await runWorker(extractParagraphs(editorHtml), extractParagraphs(historyHtml));
-            setDiffItems(result);
+            const [editorHtml, refHtml] = await getHtmls();
+            setDiffItems(await runWorker(extractParagraphs(editorHtml), extractParagraphs(refHtml)));
         } catch (err) {
             console.error('Version diff error:', err);
             showNotification('error', 'Erro ao comparar com o histórico.');
@@ -70,9 +70,22 @@ export function useVersionDiff(isbn: string | undefined) {
         } finally {
             setIsLoading(false);
         }
-    }, [isbn, loadHtml, runWorker, showNotification]);
+    }, [runWorker, showNotification]);
+
+    // editor = atual (insert/verde = adicionado), ref = histórico (delete/rose = removido)
+    const compareWithEditor = useCallback(async (file: HistoryFile, editorHtml: string) => {
+        if (!isbn) return;
+        await runDiff({ history: file.timestamp }, async () => [editorHtml, await loadHtml(file.filename)]);
+    }, [isbn, loadHtml, runDiff]);
+
+    // Rascunho local (verde = o que o rascunho tem a mais) vs texto atual (rose = o que só o atual tem).
+    const compareDraft = useCallback(
+        (draft: { html: string; ts: number }, currentHtml: string) =>
+            runDiff({ history: new Date(draft.ts).toISOString(), draft: true }, async () => [draft.html, currentHtml]),
+        [runDiff],
+    );
 
     const close = useCallback(() => setOpen(false), []);
 
-    return { open, isLoading, diffItems, labels, compareWithEditor, close };
+    return { open, isLoading, diffItems, labels, compareWithEditor, compareDraft, close };
 }

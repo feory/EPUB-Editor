@@ -423,6 +423,14 @@ export function WorkPage() {
           {presenceBanner.text}
         </div>
       )}
+      {work.draft && !work.readOnly && (
+        <div className="w-full px-6 py-2 text-sm font-semibold text-center bg-amber-100 text-amber-800 border-b border-amber-200">
+          Há alterações não gravadas de {new Date(work.draft.ts).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })}.{' '}
+          <button className="underline mx-2" onClick={work.restoreDraft}>Recuperar</button>
+          <button className="underline mr-2" onClick={() => work.versionDiff.compareDraft(work.draft!, work.fullHtmlContent)}>Ver alterações</button>
+          <button className="underline" onClick={work.discardDraft}>Descartar</button>
+        </div>
+      )}
       {!isFocusMode && (
         <WorkToolbar
           isLoading={work.isLoading}
@@ -605,13 +613,13 @@ export function WorkPage() {
       {work.versionDiff.open ? (
         <DiffSidebar
           items={work.versionDiff.diffItems}
-          fileName={work.versionDiff.labels ? `${formatTimestamp(work.versionDiff.labels.history)} → atual` : 'Histórico'}
+          fileName={work.versionDiff.labels?.draft ? 'Rascunho local ↔ atual' : work.versionDiff.labels ? `${formatTimestamp(work.versionDiff.labels.history)} → atual` : 'Histórico'}
           isLoading={work.versionDiff.isLoading}
           isUpdating={false}
           onClose={work.versionDiff.close}
           onGoToItem={(editorIndex) => editorRef.current?.scrollToContent('', editorIndex)}
-          labelInsert="Atual"
-          labelDelete="Histórico"
+          labelInsert={work.versionDiff.labels?.draft ? 'Rascunho' : 'Atual'}
+          labelDelete={work.versionDiff.labels?.draft ? 'Atual' : 'Histórico'}
           width={panelWidth}
           onResize={handlePanelResize}
         />

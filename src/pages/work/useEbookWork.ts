@@ -10,6 +10,8 @@ import type { ImageSettings } from '../../components/MarginPreview';
 import { compressHtml, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml, applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
+import { drafts, isRecoverable } from '../../utils/local-draft';
+import type { Draft } from '../../utils/local-draft';
 import { moveChapters, renameChapterPart, deleteChapterPart, changeChapterLevel } from '../../utils/toc';
 import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles, unlinkOneIndiceEntry } from '../../utils/indice-links';
 import type { DocxStyleMapping } from '../../services/import/document-importer';
@@ -89,11 +91,15 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // escreve uma versão nova no histórico — abrir e sair sem editar poluía o histórico.
     const savedContentRef = useRef<string | null>(null);
 
+    const saveFailedRef = useRef(false);
+
     const saveMutation = useMutation({
         mutationFn: ({ content }: { content: string; showNotif?: boolean }) =>
             ebooksApi.saveContent(isbn!, compressHtml(content)),
         onSuccess: (_, variables) => {
             savedContentRef.current = variables.content;
+            saveFailedRef.current = false;
+            if (isbn) void drafts.clear(isbn, variables.content);
             queryClient.setQueryData(['ebook-content', isbn], { content: variables.content, source: 'saved' });
             setLastSaved(new Date());
             queryClient.invalidateQueries({ queryKey: ['ebook-history', isbn] });
@@ -101,7 +107,11 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         },
         onError: (_, variables) => {
             console.error('[Autosave] Erro ao guardar');
-            if (variables.showNotif) showNotification('error', 'Erro ao guardar o trabalho.');
+            saveFailedRef.current = true;
+            // O rascunho local já tem este texto; o autosave seguinte tenta de novo.
+            showNotification('error', variables.showNotif
+                ? 'Erro ao guardar o trabalho. Cópia guardada neste computador.'
+                : 'Sem ligação ao servidor — cópia guardada neste computador.', 6000);
         },
     });
 
@@ -128,6 +138,18 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         return () => clearInterval(interval);
     }, [isbn, readOnly]);
 
+    // Rede de volta depois de um save falhado → tenta já, sem esperar pelos 5 minutos.
+    useEffect(() => {
+        if (!isbn || readOnly) return;
+        const onOnline = () => {
+            if (!saveFailedRef.current || saveMutRef.current.isPending) return;
+            const content = getSyncedRef.current();
+            if (content && content !== savedContentRef.current) saveMutRef.current.mutate({ content, showNotif: false });
+        };
+        window.addEventListener('online', onOnline);
+        return () => window.removeEventListener('online', onOnline);
+    }, [isbn, readOnly]);
+
     // Linha de base do "por gravar": primeira forma sincronizada logo após o LOAD_CONTENT
     // (é exatamente o que um save enviaria nesse instante → abrir e sair sem editar não grava).
     useEffect(() => {
@@ -135,6 +157,30 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
             savedContentRef.current = getSyncedRef.current();
         }
     }, [contentState.fullHtml]);
+
+    // --- Rascunho local (IndexedDB): rede cai / separador crasha entre dois saves ---
+    // Escreve 2s depois de o texto assentar (fullHtml só muda após o report diferido do canal).
+    // Com a oferta de recuperação aberta não escreve: apagaria o rascunho que se quer recuperar.
+    const [draft, setDraft] = useState<Draft | null>(null);
+    useEffect(() => {
+        if (!isbn || readOnly || draft || !contentState.fullHtml) return;
+        const t = setTimeout(() => {
+            const content = getSyncedRef.current();
+            if (content && content !== savedContentRef.current) void drafts.save(isbn, content);
+        }, 2000);
+        return () => clearTimeout(t);
+    }, [isbn, readOnly, draft, contentState.fullHtml]);
+
+    // Ao abrir: rascunho que sobrou e difere do servidor → oferece recuperar (uma vez por ebook).
+    const draftCheckedRef = useRef(false);
+    useEffect(() => {
+        if (!isbn || readOnly || !contentState.fullHtml || draftCheckedRef.current) return;
+        draftCheckedRef.current = true;
+        void drafts.load(isbn).then((d) => {
+            if (isRecoverable(d, savedContentRef.current)) setDraft(d);
+            else if (d) void drafts.clear(isbn);
+        });
+    }, [isbn, readOnly, contentState.fullHtml]);
 
     // Sair do editor não gravava: a seta de voltar faz navigate('/') e o autosave é de 5 em 5
     // minutos — perdia-se tudo o que fosse escrito depois do último save (ou a sessão inteira,
@@ -160,6 +206,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         // apesar de o servidor já ter o novo.
         ebooksApi.saveContent(isbn, compressHtml(content))
             .then(() => {
+                void drafts.clear(isbn, content);
                 queryClient.setQueryData(['ebook-content', isbn], { content, source: 'saved' });
                 queryClient.invalidateQueries({ queryKey: ['ebook-history', isbn] });
             })
@@ -198,6 +245,17 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         dispatch({ type: 'LOAD_CONTENT', payload: html });
         saveMutation.mutate({ content: html });
     }, [saveMutation]);
+
+    const restoreDraft = useCallback(() => {
+        if (!draft || readOnly) return;
+        onImport(cleanEditorHtml(draft.html)); // carrega + grava; o save confirmado apaga o rascunho
+        setDraft(null);
+    }, [draft, readOnly, onImport]);
+
+    const discardDraft = useCallback(() => {
+        if (isbn) void drafts.clear(isbn);
+        setDraft(null);
+    }, [isbn]);
 
     const { importPdfMutation, importDocumentMutation } = useEbookImport({ isbn, onImport, showNotification });
 
@@ -467,6 +525,9 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
 
         readOnly,
         presence,
+        draft,
+        restoreDraft,
+        discardDraft,
 
         saveContent: useCallback(
             () => {
