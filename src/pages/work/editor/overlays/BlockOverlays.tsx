@@ -1,7 +1,7 @@
 import {
     Pilcrow, Heading1, Heading2, Heading3, Quote, Type,
     StickyNote, Image as ImageIcon, Copy, Trash2, Minus, BookMarked, Columns2, LayoutGrid, Plus, Square,
-    MoreVertical, ChevronDown, Anchor, SlidersHorizontal, Scissors, CopyPlus, ArrowUpToLine, ArrowDownToLine, Paintbrush, ClipboardPaste, Group, Ungroup,
+    MoreVertical, ChevronDown, SlidersHorizontal, Scissors, CopyPlus, ArrowUpToLine, ArrowDownToLine, Paintbrush, ClipboardPaste, Group, Ungroup,
 } from 'lucide-react';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
 import { BOX_VARIANTS, type BoxVariant } from '../boxProps';
@@ -44,7 +44,6 @@ export interface BlockOverlaysProps {
     setHrWidth: (full: boolean) => void;
     deleteHr: () => void;
     styleAction: (format: string) => void;
-    anchorAction: () => void;                        // "Âncora" no menu ⋮ (mceInsertAnchor no cursor)
     closeStyleMenu: () => void;
     readOnly?: boolean;
 }
@@ -55,7 +54,7 @@ type Props = BlockOverlaysProps;
 export function BlockOverlays({
     plusMenu, gripMenu, hrCtl, menuBtn, parentHandle, selectParent, boxBar, setBoxVariant, openGridPanel, gridPlus, gridMenu, openGridMenu, closeGridMenu, gridAction, elMenu, openElementMenu, closeElementMenu, elementAction, dropLine, closePlusMenu, plusAction,
     dismissGripMenu, gripAction, setHrWidth, deleteHr,
-    styleMenu, styleAction, anchorAction, closeStyleMenu, readOnly,
+    styleMenu, styleAction, closeStyleMenu, readOnly,
 }: Props) {
     return (
         <>
@@ -133,16 +132,6 @@ export function BlockOverlays({
                                     {label}
                                 </button>
                             ))}
-                        </div>
-                        <div className="mt-1 pt-1 border-t border-slate-100">
-                            <button
-                                type="button"
-                                onMouseDown={(ev) => ev.preventDefault()}
-                                onClick={anchorAction}
-                                className="flex w-full items-center gap-2 text-left px-2 py-1.5 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition-colors"
-                            >
-                                <Anchor size={14} className="text-slate-400" /> Âncora (ligar ao Índice)
-                            </button>
                         </div>
                     </div>
                 </>
