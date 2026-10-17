@@ -41,6 +41,12 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     // partilhadas com quem carregou o PDF (handleUpload → onPdfUploaded), em vez de o refazer.
     const anchorsRef = useRef<PageAnchor[]>([]);
 
+    // Editor → PDF, num só sítio: folio do editor → página física mais próxima (abrir e scroll).
+    const showFolio = useCallback((folio: number | null | undefined) => {
+        const target = folio != null ? nearestPdfPage(folioMapRef.current, folio) : undefined;
+        if (target) setPage(target);
+    }, []);
+
     const loadPdf = useCallback(async () => {
         setStatus('loading');
         try {
@@ -62,14 +68,12 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
             indexToFolioRef.current = new Map(anchors.map(a => [a.pdfPageIndex, a.page]));
             // Abre na página mais próxima de onde o editor está (o mapa só existe agora, depois do
             // parse das âncoras — antes ficava sempre na 1.ª e o sync só reagia a scroll).
-            const folio = getEditorFolio?.();
-            const target = folio != null ? nearestPdfPage(folioMapRef.current, folio) : undefined;
-            if (target) setPage(target);
+            showFolio(getEditorFolio?.());
         } catch {
             setStatus('error');
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- getEditorFolio só é lido ao carregar o PDF
-    }, [isbn]);
+    }, [isbn, showFolio]);
 
     // Fetch-on-mount/isbn-change: setStatus('loading') no arranque de loadPdf é síncrono de
     // propósito (mostra o loading antes do fetch), não estado derivado — sem migração para
@@ -80,10 +84,8 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     // Scroll no editor → salta para a página física correspondente ao folio visível.
     useEffect(() => {
         if (status !== 'ready' || syncFolio == null) return;
-        const target = folioMapRef.current.get(syncFolio);
-        if (target && target !== page) setPage(target);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [syncFolio, status]);
+        showFolio(syncFolio);
+    }, [syncFolio, status, showFolio]);
 
     useEffect(() => {
         if (status !== 'ready' || !pdfRef.current || !canvasRef.current) return;
