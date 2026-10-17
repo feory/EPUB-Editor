@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ebooksApi, type Comment } from '../../../api/ebooks-api';
 
@@ -10,9 +10,6 @@ export interface CommentThread {
 
 export function useComments(isbn: string | undefined) {
     const queryClient = useQueryClient();
-    // anchor_id de uma thread ainda sem comentário nenhum (span acabado de criar no editor,
-    // à espera do 1º texto — ver onAddComment em WorkEditor/setup.ts).
-    const [draftAnchorId, setDraftAnchorId] = useState<string | null>(null);
 
     const { data: comments = [] } = useQuery({
         queryKey: ['ebook-comments', isbn],
@@ -59,7 +56,6 @@ export function useComments(isbn: string | undefined) {
 
     return {
         threads, unresolvedCount,
-        draftAnchorId, setDraftAnchorId,
         addComment: addMutation.mutate,
         resolveComment: resolveMutation.mutate,
         deleteComment: deleteMutation.mutate,

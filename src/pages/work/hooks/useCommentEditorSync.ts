@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { WorkEditorRef } from '../components/WorkEditor';
 import type { CommentThread, useComments } from './useComments';
@@ -10,7 +10,7 @@ export interface CommentThreadView extends CommentThread {
     orphan: boolean;
 }
 
-type CommentsApi = Pick<ReturnType<typeof useComments>, 'threads' | 'resolveComment' | 'deleteComment' | 'draftAnchorId' | 'setDraftAnchorId'>;
+type CommentsApi = Pick<ReturnType<typeof useComments>, 'threads' | 'resolveComment' | 'deleteComment' | 'addComment'>;
 
 interface UseCommentEditorSyncDeps extends CommentsApi {
     editorRef: RefObject<WorkEditorRef | null>;
@@ -31,9 +31,13 @@ interface UseCommentEditorSyncDeps extends CommentsApi {
  * já a sincronizar a marcação visual no span e a persistência quando aplicável.
  */
 export function useCommentEditorSync({
-    editorRef, threads, resolveComment, deleteComment, draftAnchorId, setDraftAnchorId, commentsOpen,
+    editorRef, threads, resolveComment, deleteComment, addComment, commentsOpen,
     fullHtmlContent, activeChapterIndex, setActiveChapterIndex, saveContentSilently, removeAnchorFromBook,
 }: UseCommentEditorSyncDeps) {
+    // anchor_id de uma thread ainda sem comentário nenhum (span acabado de criar no editor,
+    // à espera do 1º texto). Vive aqui, não no estado do servidor: o seu ciclo é o da âncora.
+    const [draftAnchorId, setDraftAnchorId] = useState<string | null>(null);
+
     const goTo = useGoToChapterMarker<string>(
         editorRef, fullHtmlContent, activeChapterIndex, setActiveChapterIndex,
         (anchorId) => `data-comment-id="${anchorId}"`,
@@ -83,13 +87,24 @@ export function useCommentEditorSync({
 
     // O botão "Comentar" do editor é ligado UMA vez no init do TinyMCE, por isso o callback que lhe
     // damos tem de ser estável — lê o rascunho e dropAnchor mais recentes por ref.
-    const latest = useRef({ draftAnchorId, dropAnchor, setDraftAnchorId });
-    useEffect(() => { latest.current = { draftAnchorId, dropAnchor, setDraftAnchorId }; });
+    const latest = useRef({ draftAnchorId, dropAnchor });
+    useEffect(() => { latest.current = { draftAnchorId, dropAnchor }; });
     const startDraft = useCallback((anchorId: string) => {
-        const { draftAnchorId: prev, dropAnchor: drop, setDraftAnchorId: setDraft } = latest.current;
+        const { draftAnchorId: prev, dropAnchor: drop } = latest.current;
         if (prev && prev !== anchorId) drop(prev);
-        setDraft(anchorId);
+        setDraftAnchorId(anchorId);
     }, []);
+
+    // "Comentar": o 1º texto fecha o rascunho e a âncora passa a ter thread.
+    const submitDraft = useCallback((text: string) => {
+        if (!draftAnchorId) return;
+        addComment({ anchorId: draftAnchorId, text });
+        setDraftAnchorId(null);
+    }, [draftAnchorId, addComment]);
+
+    const reply = useCallback((anchorId: string, rootId: number, text: string) => {
+        addComment({ anchorId, text, parentId: rootId });
+    }, [addComment]);
 
     const cancelDraftRef = useRef(cancelDraft);
     useEffect(() => { cancelDraftRef.current = cancelDraft; });
@@ -111,5 +126,5 @@ export function useCommentEditorSync({
         dropAnchor(thread.anchorId);
     }, [threads, deleteComment, dropAnchor]);
 
-    return { threads: viewThreads, goTo, resolve, remove, startDraft, cancelDraft };
+    return { threads: viewThreads, draftAnchorId, goTo, resolve, remove, startDraft, cancelDraft, submitDraft, reply };
 }

@@ -316,8 +316,7 @@ export function WorkPage() {
     threads: comments.threads,
     resolveComment: comments.resolveComment,
     deleteComment: comments.deleteComment,
-    draftAnchorId: comments.draftAnchorId,
-    setDraftAnchorId: comments.setDraftAnchorId,
+    addComment: comments.addComment,
     commentsOpen: sidebars.showCommentsSidebar,
     fullHtmlContent: work.fullHtmlContent,
     activeChapterIndex: work.activeChapterIndex,
@@ -569,14 +568,10 @@ export function WorkPage() {
         <CommentSidebar
           threads={commentSync.threads}
           unresolvedCount={comments.unresolvedCount}
-          draftAnchorId={comments.draftAnchorId}
+          draftAnchorId={commentSync.draftAnchorId}
           onCancelDraft={commentSync.cancelDraft}
-          onSubmitDraft={(text) => {
-            if (!comments.draftAnchorId) return;
-            comments.addComment({ anchorId: comments.draftAnchorId, text });
-            comments.setDraftAnchorId(null);
-          }}
-          onReply={(anchorId, rootId, text) => comments.addComment({ anchorId, text, parentId: rootId })}
+          onSubmitDraft={commentSync.submitDraft}
+          onReply={commentSync.reply}
           onResolve={commentSync.resolve}
           onDelete={commentSync.remove}
           onGoTo={commentSync.goTo}

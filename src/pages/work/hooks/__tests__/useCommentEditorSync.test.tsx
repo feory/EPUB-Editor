@@ -33,18 +33,18 @@ function mount({ inEditor = true, open = true } = {}) {
     };
 
     function Harness() {
-        const [draftAnchorId, setDraftAnchorId] = useState<string | null>(null);
         const [commentsOpen, setCommentsOpen] = useState(open);
-        draft = draftAnchorId; setOpen = setCommentsOpen;
+        setOpen = setCommentsOpen;
         api = useCommentEditorSync({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             editorRef: editorRef as any,
             threads: [], resolveComment: () => {}, deleteComment: () => {},
-            draftAnchorId, setDraftAnchorId, commentsOpen,
+            addComment: (c) => { log.push(`add:${c.anchorId}:${c.text}:${c.parentId ?? ''}`); }, commentsOpen,
             fullHtmlContent: '', activeChapterIndex: -1, setActiveChapterIndex: () => {},
             saveContentSilently: () => { log.push('save'); },
             removeAnchorFromBook: (id) => { log.push(`book:${id}`); },
         });
+        draft = api.draftAnchorId;
         return null;
     }
 
@@ -105,5 +105,21 @@ test('o mesmo rascunho recomeçado não se apaga a si próprio', () => {
     h.act(() => h.api().startDraft('a1'));
     expect(h.log).toEqual([]);
     expect(h.draft()).toBe('a1');
+    h.unmount();
+});
+
+test('Comentar: envia o texto na âncora do rascunho e mantém a âncora no texto', () => {
+    const h = mount();
+    h.act(() => h.api().startDraft('a1'));
+    h.act(() => h.api().submitDraft('olá'));
+    expect(h.log).toEqual(['add:a1:olá:']);
+    expect(h.draft()).toBeNull();
+    h.unmount();
+});
+
+test('responder: envia com o id da raiz', () => {
+    const h = mount();
+    h.act(() => h.api().reply('a1', 7, 'ok'));
+    expect(h.log).toEqual(['add:a1:ok:7']);
     h.unmount();
 });
