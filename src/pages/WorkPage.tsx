@@ -316,6 +316,9 @@ export function WorkPage() {
     threads: comments.threads,
     resolveComment: comments.resolveComment,
     deleteComment: comments.deleteComment,
+    draftAnchorId: comments.draftAnchorId,
+    setDraftAnchorId: comments.setDraftAnchorId,
+    commentsOpen: sidebars.showCommentsSidebar,
     fullHtmlContent: work.fullHtmlContent,
     activeChapterIndex: work.activeChapterIndex,
     setActiveChapterIndex: work.setActiveChapterIndex,
@@ -516,7 +519,7 @@ export function WorkPage() {
                 onVisiblePageChange={setEditorVisiblePage}
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 getIndiceSubtitles={work.getIndiceSubtitles}
-                onAddComment={(anchorId) => { comments.setDraftAnchorId(anchorId); panels.open('comments'); }}
+                onAddComment={(anchorId) => { commentSync.startDraft(anchorId); panels.open('comments'); }}
                 onEditBox={() => panels.open('box')}
                 onBlockChange={setBlockInfo}
                 htmlContent={work.htmlContent}
@@ -567,7 +570,7 @@ export function WorkPage() {
           threads={commentSync.threads}
           unresolvedCount={comments.unresolvedCount}
           draftAnchorId={comments.draftAnchorId}
-          onCancelDraft={() => comments.setDraftAnchorId(null)}
+          onCancelDraft={commentSync.cancelDraft}
           onSubmitDraft={(text) => {
             if (!comments.draftAnchorId) return;
             comments.addComment({ anchorId: comments.draftAnchorId, text });
