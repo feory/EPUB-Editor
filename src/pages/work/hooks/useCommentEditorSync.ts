@@ -18,6 +18,8 @@ interface UseCommentEditorSyncDeps extends CommentsApi {
     activeChapterIndex: number;
     setActiveChapterIndex: (index: number) => void;
     saveContentSilently: () => void;
+    // Tira a âncora do HTML do livro inteiro (capítulo não montado no editor).
+    removeAnchorFromBook: (anchorId: string) => void;
 }
 
 /**
@@ -28,7 +30,7 @@ interface UseCommentEditorSyncDeps extends CommentsApi {
  */
 export function useCommentEditorSync({
     editorRef, threads, resolveComment, deleteComment,
-    fullHtmlContent, activeChapterIndex, setActiveChapterIndex, saveContentSilently,
+    fullHtmlContent, activeChapterIndex, setActiveChapterIndex, saveContentSilently, removeAnchorFromBook,
 }: UseCommentEditorSyncDeps) {
     const goTo = useGoToChapterMarker<string>(
         editorRef, fullHtmlContent, activeChapterIndex, setActiveChapterIndex,
@@ -71,10 +73,12 @@ export function useCommentEditorSync({
         // texto continuava marcado).
         const thread = threads.find(t => t.root.id === id);
         deleteComment(id);
-        if (thread && editorRef.current?.removeCommentAnchor(thread.anchorId)) {
-            saveContentSilently();
-        }
-    }, [threads, deleteComment, editorRef, saveContentSilently]);
+        if (!thread) return; // resposta (não tem âncora própria)
+        // Capítulo montado no editor: desembrulha no DOM. Senão (âncora noutro capítulo) tira-a do
+        // HTML do livro — sem isto a marcação voltava a aparecer ao abrir esse capítulo.
+        if (editorRef.current?.removeCommentAnchor(thread.anchorId)) saveContentSilently();
+        else removeAnchorFromBook(thread.anchorId);
+    }, [threads, deleteComment, editorRef, saveContentSilently, removeAnchorFromBook]);
 
     return { threads: viewThreads, goTo, resolve, remove };
 }

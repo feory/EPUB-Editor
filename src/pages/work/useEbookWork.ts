@@ -268,6 +268,8 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     const handleDeleteChapter = useCallback((index: number) =>
         applyEdit(bookEdit.deleteChapter(getBook(), index)), [applyEdit, getBook]);
     const handleAddChapter = useCallback(() => applyEdit(bookEdit.addChapter(getBook())), [applyEdit, getBook]);
+    const handleRemoveCommentAnchor = useCallback((anchorId: string) =>
+        applyEdit(bookEdit.removeCommentAnchor(getBook(), anchorId)), [applyEdit, getBook]);
     const handleApplyDropCaps = useCallback(() => applyEdit(bookEdit.applyDropCaps(getBook())), [applyEdit, getBook]);
     const handleLinkIndiceEntries = useCallback(() => applyEdit(bookEdit.linkIndice(getBook())), [applyEdit, getBook]);
     // Mini-menu do editor ("Ligar a…"): uma entrada, ou null no alvo = remover a ligação.
@@ -379,6 +381,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         handleAddChapter,
         handleChangeChapterLevel,
         handleApplyDropCaps,
+        handleRemoveCommentAnchor,
         handleLinkIndiceEntries,
         handleLinkIndiceEntryManual,
         getIndiceSubtitles,

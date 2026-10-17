@@ -12,6 +12,7 @@
 import { renameChapterPart, changeChapterLevel, moveChapters, deleteChapterPart } from '../../utils/toc';
 import { applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import { linkIndiceEntries, linkOneIndiceEntry, unlinkOneIndiceEntry, listSubtitles } from '../../utils/indice-links';
+import { unwrapCommentAnchor } from '../../utils/comment-anchor';
 import { fixLinks, validateLinks } from '../../services/validation/link-validator';
 import { insertPageBreaks } from '../../services/page-list/page-list';
 import type { PageAnchor } from '../../services/page-list/page-list';
@@ -156,4 +157,10 @@ export function replaceInBook(book: Book, find: string, replaceWith: string): { 
     const count = countOccurrences(book.html, find);
     if (count === 0) return { edit: null, count: 0 };
     return { edit: { html: book.html.split(find).join(replaceWith), commit: 'keep' }, count };
+}
+
+/** Tira a âncora de um Comment do livro inteiro (o capítulo pode não estar montado no editor). */
+export function removeCommentAnchor(book: Book, anchorId: string): BookEdit | null {
+    const html = unwrapCommentAnchor(book.html, anchorId);
+    return html === book.html ? null : { html, commit: 'keep' };
 }

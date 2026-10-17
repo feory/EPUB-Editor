@@ -320,6 +320,7 @@ export function WorkPage() {
     activeChapterIndex: work.activeChapterIndex,
     setActiveChapterIndex: work.setActiveChapterIndex,
     saveContentSilently: work.saveContentSilently,
+    removeAnchorFromBook: work.handleRemoveCommentAnchor,
   });
 
   // Ferramenta "Atualização Pagelist": PDF trocado com o painel PDF de Impressão eventualmente
