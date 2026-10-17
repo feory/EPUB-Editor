@@ -469,7 +469,7 @@ export function WorkPage() {
       )}
 
       <main
-        className={`flex-1 w-full transition-[max-width,padding-left,padding-top,padding-bottom] duration-500 ease-in-out ${isFocusMode
+        className={`flex-1 w-full ${isFocusMode
           ? 'py-16 max-w-[1400px] mx-auto px-8'
           : (anySidebarOpen || reservePanelSpace)
             ? 'py-8 max-w-none px-12 ml-0'
@@ -498,7 +498,7 @@ export function WorkPage() {
               readOnly={work.readOnly}
             />
 
-            <div className="min-w-0 transition-all duration-300 flex-1 relative">
+            <div className="min-w-0 flex-1 relative">
               {work.isLoadingChapter && (
                 <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-2xl">
                   <div className="flex flex-col items-center gap-3">

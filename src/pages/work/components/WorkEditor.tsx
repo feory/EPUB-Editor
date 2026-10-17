@@ -929,8 +929,14 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             if (saved > 0) container.style.height = `${saved}px`;
                             else syncHeight();
 
+                            // Um resize por frame no máximo: o editor re-layouta o documento inteiro a cada um.
+                            let roFrame = 0;
                             const ro = new ResizeObserver(() => {
-                                window.dispatchEvent(new Event('resize'));
+                                if (roFrame) return;
+                                roFrame = requestAnimationFrame(() => {
+                                    roFrame = 0;
+                                    window.dispatchEvent(new Event('resize'));
+                                });
                                 const h = Math.round(container.getBoundingClientRect().height);
                                 // Altura diferente da que o preenchimento automático tinha posto →
                                 // foi o utilizador a arrastar o canto — grava para persistir.
