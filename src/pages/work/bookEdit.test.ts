@@ -75,3 +75,22 @@ test('substituir no livro: conta, keep e sem aviso; 0 ocorrências = nada', () =
     expect(edit?.notice).toBeUndefined();
     expect(be.countInBook(b, 'texto')).toBe(3);
 });
+
+test('criar capítulo não fica dono das quebras do início; eliminá-lo devolve o livro igual', () => {
+    const front = '<p class="chapter-break" data-title="Frontespício"></p><p>f</p>'
+        + '<p class="chapter-break" data-title="Ficha Técnica"></p><p>ft</p>';
+    const html = front + ch('A') + ch('B');
+    const b = book(html);
+    const added = be.addChapter(b);
+    expect(added.html).toBe(front + '<p class="chapter-break-h1" data-title="Novo Capítulo"></p><h1>Novo Capítulo</h1><p></p>' + ch('A') + ch('B'));
+
+    const b2 = book(added.html!);
+    const idx = b2.chapters.findIndex(c => c.title === 'Novo Capítulo');
+    expect(b2.chapters[idx].level).toBe('h1');
+    expect(be.deleteChapter(b2, idx)?.html).toBe(html); // só o novo sai
+});
+
+test('criar capítulo num livro sem h1: vai para o topo', () => {
+    const b = book('<p class="chapter-break" data-title="x"></p><p>a</p>');
+    expect(be.addChapter(b).html?.startsWith('<p class="chapter-break-h1" data-title="Novo Capítulo"')).toBe(true);
+});

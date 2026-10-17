@@ -72,10 +72,16 @@ export function deleteChapter(book: Book, index: number): BookEdit | null {
     return reset(html, `Capítulo ${book.chapters[index].title} eliminado!`);
 }
 
-/** Capítulo novo, sempre como primeiro. */
+/**
+ * Capítulo novo, antes do primeiro h1 (no topo se não há h1). Nunca antes das quebras do início
+ * (Frontespício, Ficha Técnica…): um h1 é dono de todas as partes até ao próximo h1, por isso
+ * posto à frente delas ficava dono delas — e eliminá-lo (o ✓ do editor de TOC) apagava-as também.
+ */
 export function addChapter(book: Book): BookEdit {
     const part = `${changeChapterLevel('<p class="chapter-break" data-title="Novo Capítulo"></p>', 'h1')}<p></p>`;
-    return reset([part, ...book.parts].join(''), 'Capítulo criado!');
+    const firstH1 = book.chapters.findIndex(c => c.level === 'h1');
+    const at = firstH1 === -1 ? 0 : firstH1;
+    return reset([...book.parts.slice(0, at), part, ...book.parts.slice(at)].join(''), 'Capítulo criado!');
 }
 
 export function applyDropCaps(book: Book): BookEdit {
