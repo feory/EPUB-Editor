@@ -78,7 +78,7 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
   }, [activeMenu, subMenu]);
 
   return (
-    <nav className="bg-surface border-b border-border px-6 py-2.5 relative">
+    <nav className="bg-surface border-b border-border px-6 py-2.5 shadow-sm relative">
 
         {/* Left: Back — preso ao canto esquerdo real do nav, fora do bloco centrado */}
         <div
@@ -98,7 +98,7 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
             onClick={() => onSave()}
             disabled={isLoading || !htmlContent || readOnly}
             title={readOnly ? 'Modo leitura — outro utilizador está a editar' : undefined}
-            className="inline-flex items-center justify-center gap-2 px-3 h-9 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-slate-500 hover:text-slate-900"
+            className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 min-w-[112px] px-4 h-9 rounded-lg font-bold text-sm transition-all shadow-sm active:scale-95 disabled:opacity-50"
           >
             <Save size={14} />
             <span>
@@ -110,7 +110,7 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
           <button
             onClick={onToggleImageGallery}
             disabled={readOnly}
-            className="inline-flex items-center justify-center gap-2 px-3 h-9 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-slate-500 hover:text-slate-900"
+            className="inline-flex items-center justify-center gap-2 min-w-[112px] px-4 h-9 rounded-lg font-bold text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             title={readOnly ? 'Modo leitura — outro utilizador está a editar' : 'Galeria de Imagens'}
           >
             <span className="hidden lg:inline">Galeria</span>
@@ -122,7 +122,7 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
               onClick={() => { setActiveMenu(activeMenu === 'tools' ? null : 'tools'); setSubMenu(null); }}
               disabled={readOnly}
               title={readOnly ? 'Modo leitura — outro utilizador está a editar' : undefined}
-              className={`inline-flex items-center justify-center gap-2 px-3 h-9 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${activeMenu === 'tools' ? 'text-slate-900 underline underline-offset-[10px] decoration-2 decoration-slate-300' : 'text-slate-500 hover:text-slate-900'}`}
+              className={`inline-flex items-center justify-center gap-2 min-w-[112px] px-4 h-9 rounded-lg font-bold text-sm transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${activeMenu === 'tools' ? 'bg-slate-200 text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
               <span className="hidden md:inline">Ferramentas</span>
               <ChevronDown size={14} className={`transition-transform duration-200 ${activeMenu === 'tools' ? 'rotate-180' : ''}`} />
@@ -276,7 +276,7 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
               onClick={() => setActiveMenu(activeMenu === 'validation' ? null : 'validation')}
               disabled={readOnly}
               title={readOnly ? 'Modo leitura — outro utilizador está a editar' : undefined}
-              className={`inline-flex items-center justify-center gap-2 px-3 h-9 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${activeMenu === 'validation' ? 'text-slate-900 underline underline-offset-[10px] decoration-2 decoration-slate-300' : 'text-slate-500 hover:text-slate-900'}`}
+              className={`inline-flex items-center justify-center gap-2 min-w-[112px] px-4 h-9 rounded-lg font-bold text-sm transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${activeMenu === 'validation' ? 'bg-slate-200 text-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
               <span className="hidden lg:inline">Validações</span>
               <ChevronDown size={14} className={`transition-transform duration-200 ${activeMenu === 'validation' ? 'rotate-180' : ''}`} />
@@ -328,7 +328,7 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
           <div className="relative" ref={exportMenuRef}>
             <button 
               onClick={() => setActiveMenu(activeMenu === 'export' ? null : 'export')}
-              className={`inline-flex items-center justify-center gap-2 px-3 h-9 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${activeMenu === 'export' ? 'text-slate-900 underline underline-offset-[10px] decoration-2 decoration-slate-300' : 'text-slate-500 hover:text-slate-900'}`}
+              className={`inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 min-w-[112px] px-4 h-9 rounded-lg font-bold text-sm transition-all shadow-sm active:scale-95 disabled:opacity-50`}
               disabled={isLoading || !htmlContent}
             >
               {isLoading && <Loader2 className="animate-spin" size={14} />}

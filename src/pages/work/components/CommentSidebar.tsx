@@ -67,7 +67,7 @@ const CommentSidebarComponent: React.FC<CommentSidebarProps> = ({
     const [replyText, setReplyText] = useState('');
 
     return (
-        <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-white border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
+        <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.05)] border border-border rounded-2xl overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
             <PanelResizeHandle width={width} onResize={onResize} />
             <div className="p-5 border-b border-border flex items-center justify-between bg-white">
                 <div>
