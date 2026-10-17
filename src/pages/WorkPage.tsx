@@ -516,6 +516,8 @@ export function WorkPage() {
                 isFocusMode={isFocusMode}
                 onTogglePrintPdf={() => panels.toggle('printPdf')}
                 showPrintPdfPanel={sidebars.showPrintPdfSidebar}
+                onToggleComments={() => panels.toggle('comments')}
+                showCommentsPanel={sidebars.showCommentsSidebar}
                 onVisiblePageChange={setEditorVisiblePage}
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 getIndiceSubtitles={work.getIndiceSubtitles}
