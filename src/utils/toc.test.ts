@@ -63,13 +63,3 @@ test('changeChapterLevel: hr legacy → h2 normaliza para marcador <p>', () => {
     expect(changeChapterLevel('<hr class="chapter-break" data-title="Velho"/><p>corpo</p>', 'h2'))
         .toBe('<p class="chapter-break-h2" data-title="Velho"></p><h2>Velho</h2><p>corpo</p>');
 });
-
-test('changeChapterLevel promoteTitle:false: break → h1 só troca o marcador (sem heading novo)', () => {
-    expect(changeChapterLevel('<p class="chapter-break" data-title="Ficha"></p><p>corpo</p>', 'h1', { promoteTitle: false }))
-        .toBe('<p class="chapter-break-h1" data-title="Ficha"></p><p>corpo</p>');
-});
-
-test('changeChapterLevel promoteTitle:false não mexe num heading que já existe', () => {
-    expect(changeChapterLevel('<p class="chapter-break-h1" data-title="Cap"></p><h1>Cap</h1>', 'h2', { promoteTitle: false }))
-        .toBe('<p class="chapter-break-h2" data-title="Cap"></p><h2>Cap</h2>');
-});

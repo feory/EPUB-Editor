@@ -56,7 +56,7 @@ O module (`services/notes/notes.ts`) dono da convenção das notas de rodapé: m
 _Avoid_: rodapés, anotações (Comment é outra coisa)
 
 **Capítulos**:
-O module (`utils/chapters.ts`) que sabe como o livro se divide em capítulos: a fronteira é o MARCADOR `<p class="chapter-break[-hN]" data-title>` antes do heading (ou `<hr class="chapter-break">` legacy). `splitChapters` (sem partes vazias, índice = `chapters[]`), `splitChapterSegments` (`join` devolve o HTML original), `matchChapterBoundary`, `classifyChapterPart`. O padrão de divisão não é exportado. Um capítulo SEM título é um marcador `chapter-break-h1` sem heading no corpo (o título vive no `data-title`; "Mudar nível" de `break` para h1/h2/h3 só troca o marcador). `break` fica para continuações dentro de um capítulo: são filhas do h1 anterior (movem-se e eliminam-se com ele).
+O module (`utils/chapters.ts`) que sabe como o livro se divide em capítulos: a fronteira é o MARCADOR `<p class="chapter-break[-hN]" data-title>` antes do heading (ou `<hr class="chapter-break">` legacy). `splitChapters` (sem partes vazias, índice = `chapters[]`), `splitChapterSegments` (`join` devolve o HTML original), `matchChapterBoundary`, `classifyChapterPart`. O padrão de divisão não é exportado.
 _Avoid_: secções, quebras (a quebra sem título é só um nível, `break`)
 
 **Marcas efémeras**:
