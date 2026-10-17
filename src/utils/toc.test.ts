@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { subtreeRange, moveChapters, renameChapterPart, changeChapterLevel } from './toc';
+import { subtreeRange, moveChapters, renameChapterPart, changeChapterLevel, insertChapterPart, deleteChapterPart } from './toc';
 
 type Level = 'h1' | 'h2' | 'h3' | 'break';
 const P = ['A', 'B', 'b1', 'b2', 'C']; // A(h1) B(h1) b1(h2) b2(break) C(h1)
@@ -62,4 +62,20 @@ test('changeChapterLevel: marcador não-vazio (&nbsp;/<br> do TinyMCE) também c
 test('changeChapterLevel: hr legacy → h2 normaliza para marcador <p>', () => {
     expect(changeChapterLevel('<hr class="chapter-break" data-title="Velho"/><p>corpo</p>', 'h2'))
         .toBe('<p class="chapter-break-h2" data-title="Velho"></p><h2>Velho</h2><p>corpo</p>');
+});
+
+test('insertChapterPart: entra antes do 1.º h1, nunca à frente das quebras do início', () => {
+    const html = insertChapterPart(['F', 'A', 'B'], ['break', 'h1', 'h1'], 'Novo');
+    expect(html).toBe('F<p class="chapter-break-h1" data-title="Novo"></p><h1>Novo</h1><p></p>AB');
+});
+
+test('insertChapterPart: sem h1 vai para o topo; título é escapado', () => {
+    expect(insertChapterPart(['F'], ['break'], 'A&B')).toStartWith('<p class="chapter-break-h1" data-title="A&amp;B"');
+});
+
+test('insertChapterPart + deleteChapterPart: eliminar o novo devolve o livro', () => {
+    const parts = ['F', 'A', 'B'], levels: Level[] = ['break', 'h1', 'h1'];
+    const added = insertChapterPart(parts, levels, 'Novo');
+    const novo = added.slice(1, added.length - 2); // F + novo + A + B
+    expect(deleteChapterPart(['F', novo, 'A', 'B'], ['break', 'h1', 'h1', 'h1'], 1)).toBe('FAB');
 });

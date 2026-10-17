@@ -9,7 +9,7 @@
  *  - 'reset' — reorder/eliminar/criar: o índice do capítulo ativo deixa de valer depois de
  *    mover/eliminar, restaurá-lo seria a posição errada → o ebook recarrega sem capítulo ativo.
  */
-import { renameChapterPart, changeChapterLevel, moveChapters, deleteChapterPart } from '../../utils/toc';
+import { renameChapterPart, changeChapterLevel, moveChapters, deleteChapterPart, insertChapterPart } from '../../utils/toc';
 import { applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import { linkIndiceEntries, linkOneIndiceEntry, unlinkOneIndiceEntry, listSubtitles } from '../../utils/indice-links';
 import { unwrapCommentAnchor } from '../../utils/comment-anchor';
@@ -34,6 +34,7 @@ export interface BookEdit {
     notice?: Notice;
 }
 
+const levelsOf = (book: Book) => book.chapters.map(c => c.level);
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const keep = (html: string, text: string): BookEdit => ({ html, commit: 'keep', notice: { type: 'success', text } });
 const reset = (html: string, text: string): BookEdit => ({ html, commit: 'reset', notice: { type: 'success', text } });
@@ -61,27 +62,19 @@ export function changeLevel(book: Book, index: number, level: Level): BookEdit |
 
 export function moveChapter(book: Book, from: number, to: number): BookEdit | null {
     if (!book.chapters[from] || from === to) return null;
-    const html = moveChapters(book.parts, book.chapters.map(c => c.level), from, to);
+    const html = moveChapters(book.parts, levelsOf(book), from, to);
     if (html === book.parts.join('')) return null; // soltar dentro da própria subárvore
     return reset(html, `Capítulo ${book.chapters[from].title} movido!`);
 }
 
 export function deleteChapter(book: Book, index: number): BookEdit | null {
     if (!book.chapters[index]) return null;
-    const html = deleteChapterPart(book.parts, book.chapters.map(c => c.level), index);
+    const html = deleteChapterPart(book.parts, levelsOf(book), index);
     return reset(html, `Capítulo ${book.chapters[index].title} eliminado!`);
 }
 
-/**
- * Capítulo novo, antes do primeiro h1 (no topo se não há h1). Nunca antes das quebras do início
- * (Frontespício, Ficha Técnica…): um h1 é dono de todas as partes até ao próximo h1, por isso
- * posto à frente delas ficava dono delas — e eliminá-lo (o ✓ do editor de TOC) apagava-as também.
- */
 export function addChapter(book: Book): BookEdit {
-    const part = `${changeChapterLevel('<p class="chapter-break" data-title="Novo Capítulo"></p>', 'h1')}<p></p>`;
-    const firstH1 = book.chapters.findIndex(c => c.level === 'h1');
-    const at = firstH1 === -1 ? 0 : firstH1;
-    return reset([...book.parts.slice(0, at), part, ...book.parts.slice(at)].join(''), 'Capítulo criado!');
+    return reset(insertChapterPart(book.parts, levelsOf(book), 'Novo Capítulo'), 'Capítulo criado!');
 }
 
 export function applyDropCaps(book: Book): BookEdit {

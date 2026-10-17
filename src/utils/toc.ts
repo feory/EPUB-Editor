@@ -35,6 +35,19 @@ export function moveChapters(parts: string[], levels: Level[], from: number, to:
 }
 
 /**
+ * Capítulo novo (h1 com título), antes do primeiro h1 — ou no topo se não há h1. Nunca antes das
+ * quebras do início (Frontespício, Ficha Técnica…): um h1 é dono de todas as partes até ao próximo
+ * h1, por isso posto à frente delas ficava dono delas e eliminá-lo apagava-as também.
+ * Devolve o novo fullHtml.
+ */
+export function insertChapterPart(parts: string[], levels: Level[], title: string): string {
+    const part = `${changeChapterLevel(`<p class="chapter-break" data-title="${escapeHtml(title)}"></p>`, 'h1')}<p></p>`;
+    const firstH1 = levels.indexOf('h1');
+    const at = firstH1 === -1 ? 0 : firstH1;
+    return [...parts.slice(0, at), part, ...parts.slice(at)].join('');
+}
+
+/**
  * Elimina a subárvore de `index` (h1 → o próprio + h2/breaks filhos; h2/break → só o próprio).
  * Devolve o novo fullHtml (partes juntas).
  */
