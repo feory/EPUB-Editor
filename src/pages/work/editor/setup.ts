@@ -229,7 +229,6 @@ export function createEditorSetup(deps: SetupDeps) {
             ['psdefault', 'p', 'ps-default', 'Padrão'],
             ['psindent', 'p-indent', 'ps-indent', 'Com Indentação'],
             ['pstop', 'p-top', 'ps-top', 'Espaçamento no Topo'],
-            ['psspace', 'p-space', 'ps-space', 'Espaço Extra'],
             ['psquote', 'p-quote', 'ps-quote', 'Citação'],
             ['psuppercase', 'p-uppercase', 'ps-uppercase', 'Maiúsculas'],
             ['psh1', 'h1', 'ps-h1', 'Título 1'],
@@ -503,7 +502,7 @@ export function createEditorSetup(deps: SetupDeps) {
             },
             position: 'node',
             scope: 'node',
-            items: 'psmorepara pscombopara blockalignmenu psdefault psindent pstop psspace psquote psuppercase idxlinktarget edithtml',
+            items: 'psmorepara pscombopara blockalignmenu psdefault psindent pstop psquote psuppercase idxlinktarget edithtml',
         });
         // Em título: "Mais estilos" (⋮) no canto esquerdo, alinhamento logo à direita, depois estilos inline.
         editor.ui.registry.addContextToolbar('headingstyles', {

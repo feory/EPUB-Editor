@@ -9,7 +9,6 @@ export function registerEditorIcons(editor: TinyMCEEditor) {
         ['ps-default', '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M4 5h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z"/></svg>'],
         ['ps-indent', '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M9 5h11v2H9zM4 9h16v2H4zm0 4h16v2H4zm0 4h16v2H4z"/></svg>'],
         ['ps-top', '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M3 3h18v2H3z"/><path fill="currentColor" d="M12 7l4 5h-3v4h-2v-4H8z"/><path fill="currentColor" d="M4 19h16v2H4z"/></svg>'],
-        ['ps-space', '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M4 3h16v3H4zm0 15h16v3H4z"/><path fill="currentColor" opacity=".45" d="M11 8h2v8h-2z"/></svg>'],
         ['ps-small', '<svg width="24" height="24" viewBox="0 0 24 24"><text x="12" y="18" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="14" fill="currentColor">a</text></svg>'],
         ['ps-bold', '<svg width="24" height="24" viewBox="0 0 24 24"><text x="12" y="18" text-anchor="middle" font-family="Georgia,serif" font-weight="bold" font-size="16" fill="currentColor">B</text></svg>'],
         ['ps-quote', '<svg width="24" height="24" viewBox="0 0 24 24"><rect x="3" y="4" width="3" height="16" rx="1.5" fill="currentColor"/><path fill="currentColor" d="M9 7h11v2H9zm0 4h11v2H9zm0 4h8v2H9z"/></svg>'],
