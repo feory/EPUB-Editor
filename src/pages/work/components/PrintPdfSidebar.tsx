@@ -5,6 +5,7 @@ import { ebooksApi } from '../../../api/ebooks-api';
 import { extractPdfPageAnchors } from '../../../services/page-list/page-list';
 import type { PageAnchor } from '../../../services/page-list/page-list';
 import { nearestPdfPage } from '../../../services/page-list/nearest-page';
+import 'pdfjs-dist/web/pdf_viewer.css';
 import { PanelResizeHandle } from './PanelResizeHandle';
 
 interface PrintPdfSidebarProps {
@@ -31,6 +32,8 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     const [scale, setScale] = useState(1.4);
     const [uploading, setUploading] = useState(false);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const pageBoxRef = useRef<HTMLDivElement>(null);
+    const textLayerRef = useRef<HTMLDivElement>(null);
     const pdfRef = useRef<PDFDocumentProxy | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     // folio impresso (data-page do editor) → página física do PDF; podem divergir por
@@ -90,6 +93,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     useEffect(() => {
         if (status !== 'ready' || !pdfRef.current || !canvasRef.current) return;
         let cancelled = false;
+        let textLayer: { cancel(): void } | undefined;
         (async () => {
             const pdfPage = await pdfRef.current!.getPage(page);
             if (cancelled) return;
@@ -97,9 +101,21 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
             const canvas = canvasRef.current!;
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-            await pdfPage.render({ canvas, viewport }).promise;
-        })();
-        return () => { cancelled = true; };
+            // Caixa do tamanho da página: o canvas pinta, a camada de texto (transparente, por cima)
+            // dá a seleção/cópia — o canvas sozinho é só imagem.
+            const box = pageBoxRef.current!;
+            box.style.width = `${viewport.width}px`;
+            box.style.height = `${viewport.height}px`;
+            box.style.setProperty('--total-scale-factor', String(scale));
+            box.style.setProperty('--scale-factor', String(scale));
+            const textDiv = textLayerRef.current!;
+            textDiv.replaceChildren();
+            const { TextLayer } = await import('pdfjs-dist');
+            if (cancelled) return;
+            textLayer = new TextLayer({ textContentSource: pdfPage.streamTextContent(), container: textDiv, viewport });
+            await Promise.all([pdfPage.render({ canvas, viewport }).promise, textLayer.render()]);
+        })().catch(() => { /* render cancelado por mudança de página/zoom */ });
+        return () => { cancelled = true; textLayer?.cancel(); };
     }, [status, page, scale]);
 
     // Confirma o nº digitado no campo "ir para página" — fora do intervalo/inválido reverte
@@ -182,17 +198,21 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
                     </div>
                 )}
                 {status === 'ready' && (
-                    <canvas
-                        ref={canvasRef}
-                        onClick={() => goToPage(page)}
+                    <div
+                        ref={pageBoxRef}
+                        // Clicar (sem ter selecionado texto) leva o editor a esta página.
+                        onClick={() => { if (!window.getSelection()?.toString()) goToPage(page); }}
                         title="Ir para esta página no editor"
                         // m-auto (não a centragem do container, items-center/justify-center):
                         // quando a página renderizada é maior que o painel, justify/items-center
                         // do pai deslocava-a para um scroll negativo inalcançável — parecia
                         // cortada mesmo havendo overflow-auto. Margens auto no próprio item
                         // anulam a centragem do pai só quando não há espaço, ficando alcançável.
-                        className="shadow-md cursor-pointer m-auto shrink-0"
-                    />
+                        className="relative shadow-md m-auto shrink-0"
+                    >
+                        <canvas ref={canvasRef} className="block" />
+                        <div ref={textLayerRef} className="textLayer" />
+                    </div>
                 )}
 
                 {/* Paginação: sem espaço próprio (canvas aproveita a altura toda) — oculta por
