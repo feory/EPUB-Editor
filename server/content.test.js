@@ -41,3 +41,16 @@ test('getContent devolve a versão mais recente', async () => {
   const res = await getContent(new Request('http://x/c'), isbn, new URL('http://x/c'));
   expect((await res.json()).content).toBe('UNCOMPRESSED:<p>a</p>');
 });
+
+test('mesmo texto em gzip com cabeçalho (data) diferente também conta como igual', async () => {
+  const { gzipSync } = await import('node:zlib');
+  const gz = (t, mtime) => { const b = gzipSync(Buffer.from(t)); b.writeUInt32LE(mtime, 4); return b.toString('base64'); };
+  await wait(5);
+  const a = await save(gz('<p>gz</p>', 1000));
+  expect(a.message).toBe('Saved');
+  const again = await save(gz('<p>gz</p>', 2000));
+  expect(again.message).toBe('Unchanged');
+  expect(again.filename).toBe(a.filename);
+  await wait(5);
+  expect((await save(gz('<p>gz2</p>', 2000))).message).toBe('Saved');
+});

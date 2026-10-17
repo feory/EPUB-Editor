@@ -15,6 +15,17 @@ async function latestContentFile(dir) {
   return files.length ? files[files.length - 1] : null;
 }
 
+// Mesmo conteúdo? O gzip leva a data no cabeçalho, por isso o mesmo texto comprimido em
+// segundos diferentes dá strings diferentes: se ambos forem gzip compara-se o texto descomprimido.
+function sameContent(stored, content) {
+  if (stored === content) return true;
+  try {
+    const a = Buffer.from(stored, 'base64'), b = Buffer.from(content, 'base64');
+    const gz = (x) => x[0] === 0x1f && x[1] === 0x8b;
+    return gz(a) && gz(b) && Buffer.from(Bun.gunzipSync(a)).equals(Buffer.from(Bun.gunzipSync(b)));
+  } catch { return false; }
+}
+
 export async function saveContent(req, isbn) {
   const { content } = await req.json();
   if (typeof content !== 'string') return Response.json({ error: 'Invalid content' }, { status: 400, headers: corsHeaders });
@@ -34,7 +45,7 @@ export async function saveContent(req, isbn) {
 
   // Igual à última versão → não escreve outra (cada save guarda o livro inteiro: ~600 KB).
   const latest = await latestContentFile(historyDir);
-  if (latest && await Bun.file(join(historyDir, latest)).text() === content) {
+  if (latest && sameContent(await Bun.file(join(historyDir, latest)).text(), content)) {
     return Response.json({ message: 'Unchanged', filename: latest }, { headers: corsHeaders });
   }
 
