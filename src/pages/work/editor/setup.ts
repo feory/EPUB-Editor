@@ -19,8 +19,6 @@ export interface SetupLive {
     onToggleFocusMode?: () => void;
     onTogglePrintPdf?: () => void;
     showPrintPdfPanel?: boolean;                    // painel de PDF aberto → botão "Ver PDF" ativo
-    onToggleComments?: () => void;
-    showCommentsPanel?: boolean;                    // painel de comentários aberto → botão "Comentários" ativo
     chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
     activeChapterIndex: number;
 }
@@ -566,16 +564,6 @@ export function createEditorSetup(deps: SetupDeps) {
                 update();
                 editor.on('pdfpanelchange', update); // despachado pelo WorkEditor quando a prop muda
                 return () => editor.off('pdfpanelchange', update);
-            },
-        });
-        editor.ui.registry.addToggleButton('commentspanel', {
-            icon: 'comment', tooltip: 'Comentários',
-            onAction: () => live.current.onToggleComments?.(),
-            onSetup: (api) => {
-                const update = () => api.setActive(!!live.current.showCommentsPanel);
-                update();
-                editor.on('commentspanelchange', update); // despachado pelo WorkEditor quando a prop muda
-                return () => editor.off('commentspanelchange', update);
             },
         });
         editor.ui.registry.addButton('focusmode', {
