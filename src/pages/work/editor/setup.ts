@@ -228,7 +228,6 @@ export function createEditorSetup(deps: SetupDeps) {
 
         // Botões inline do mini-menu de estilos (toggle por formato)
         ([
-            ['psdefault', 'p', 'ps-default', 'Padrão'],
             ['psindent', 'p-indent', 'ps-indent', 'Com Indentação'],
             ['pstop', 'p-top', 'ps-top', 'Espaçamento no Topo'],
             ['psquote', 'p-quote', 'ps-quote', 'Citação'],
@@ -504,7 +503,7 @@ export function createEditorSetup(deps: SetupDeps) {
             },
             position: 'node',
             scope: 'node',
-            items: 'psmorepara pscombopara blockalignmenu psdefault psindent pstop psquote psuppercase idxlinktarget edithtml',
+            items: 'psmorepara pscombopara blockalignmenu psindent pstop psquote psuppercase idxlinktarget edithtml',
         });
         // Em título: "Mais estilos" (⋮) no canto esquerdo, alinhamento logo à direita, depois estilos inline.
         editor.ui.registry.addContextToolbar('headingstyles', {
