@@ -51,6 +51,7 @@ import 'tinymce/skins/ui/oxide/skin.css';
 import 'tinymce/skins/ui/oxide/content.css';
 import type { TinyMCEEditor } from '../editor/types';
 import { attachContentChannel, type ContentChannel } from '../editor/contentChannel';
+import { pickFolio } from '../../../services/page-list/nearest-page';
 import { normalizeEditorBody } from '../editor/normalizeBody';
 import type { IndiceLinkSubtitle } from '../editor/overlays/IndiceLinkPanel';
 import { useIndiceLinkPanel } from '../editor/overlays/useIndiceLinkPanel';
@@ -143,6 +144,9 @@ export interface WorkEditorRef {
     // Reporta JÁ (setHtmlContent) uma edição ainda à espera de ser reportada — quem lê o
     // conteúdo para gravar/trocar de capítulo chama isto antes (canal: editor/contentChannel.ts).
     flushContent: () => void;
+    // Folio (data-page) do marcador de page-list em vigor onde o utilizador está: o cursor, se estiver
+    // à vista, senão o topo da vista. null sem marcadores no que está carregado no editor.
+    getCurrentFolio: () => number | null;
     cleanIndexSelection: () => void;
     linkIndexPagesSelection: () => void;
     applyConversions: (options: ImportOptions) => void;
@@ -832,6 +836,17 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         },
 
         flushContent: () => channelRef.current?.flush(),
+        getCurrentFolio: () => {
+            const editor = editorRef.current;
+            if (!editor) return null;
+            const markers = Array.from(editor.getBody().querySelectorAll('span.pagebreak[data-page]'), (el: Element) => ({
+                page: Number(el.getAttribute('data-page')), top: el.getBoundingClientRect().top,
+            })).filter(m => Number.isFinite(m.page));
+            const rng = editor.selection.getRng() as Range;
+            const rect = rng.getClientRects()[0] ?? (editor.selection.getNode() as Element)?.getBoundingClientRect();
+            const inView = !!rect && rect.top >= 0 && rect.top <= editor.getWin().innerHeight;
+            return pickFolio(markers, inView ? rect.top + 1 : 0);
+        },
 
         // Transformação do livro inteiro (useEbookWork.commitHtml), chamada ANTES do dispatch: carrega
         // no editor o capítulo aberto mantendo o undo (reversível) e devolve o fullHtml com esse

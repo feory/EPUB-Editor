@@ -698,6 +698,7 @@ export function WorkPage() {
           isbn={isbn!}
           onClose={() => sidebars.setShowPrintPdfSidebar(false)}
           syncFolio={editorVisiblePage}
+          getEditorFolio={() => editorRef.current?.getCurrentFolio() ?? null}
           onPageClick={handleGoToPdfPage}
           onPdfUploaded={work.handleGeneratePageList}
           width={panelWidth}

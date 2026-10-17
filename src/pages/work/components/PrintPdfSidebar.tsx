@@ -4,12 +4,14 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { extractPdfPageAnchors } from '../../../services/page-list/page-list';
 import type { PageAnchor } from '../../../services/page-list/page-list';
+import { nearestPdfPage } from '../../../services/page-list/nearest-page';
 import { PanelResizeHandle } from './PanelResizeHandle';
 
 interface PrintPdfSidebarProps {
     isbn: string;
     onClose: () => void;
     syncFolio?: number | null; // folio (nº impresso) visível no editor — salta o viewer para lá
+    getEditorFolio?: () => number | null; // folio onde o editor está AGORA — a página que abre com o PDF
     onPageClick?: (folio: number) => void; // clique na página → editor salta para o marcador
     onPdfUploaded?: (anchors: PageAnchor[]) => void; // PDF acabado de carregar → gerar page-list
     width: number;
@@ -22,7 +24,7 @@ const MIN_SCALE = 0.6;
 const MAX_SCALE = 3;
 const SCALE_STEP = 0.2;
 
-export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, onPageClick, onPdfUploaded, width, onResize }) => {
+export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, getEditorFolio, onPageClick, onPdfUploaded, width, onResize }) => {
     const [status, setStatus] = useState<Status>('loading');
     const [page, setPage] = useState(1);
     const [pageCount, setPageCount] = useState(0);
@@ -58,9 +60,15 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
             anchorsRef.current = anchors;
             folioMapRef.current = new Map(anchors.map(a => [a.page, a.pdfPageIndex]));
             indexToFolioRef.current = new Map(anchors.map(a => [a.pdfPageIndex, a.page]));
+            // Abre na página mais próxima de onde o editor está (o mapa só existe agora, depois do
+            // parse das âncoras — antes ficava sempre na 1.ª e o sync só reagia a scroll).
+            const folio = getEditorFolio?.();
+            const target = folio != null ? nearestPdfPage(folioMapRef.current, folio) : undefined;
+            if (target) setPage(target);
         } catch {
             setStatus('error');
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getEditorFolio só é lido ao carregar o PDF
     }, [isbn]);
 
     // Fetch-on-mount/isbn-change: setStatus('loading') no arranque de loadPdf é síncrono de
