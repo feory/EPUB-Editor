@@ -82,13 +82,13 @@ const CommentSidebarComponent: React.FC<CommentSidebarProps> = ({
             </div>
 
             {draftAnchorId && (
-                <div className="p-4 border-b border-border bg-amber-50/60">
+                <div className="p-4 border-b border-border bg-slate-50/50">
                     <textarea
                         autoFocus
                         value={draftText}
                         onChange={(e) => setDraftText(e.target.value)}
                         placeholder="Escreve o comentário…"
-                        className="w-full text-sm p-2 rounded-lg border border-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
+                        className="w-full text-sm p-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-300 resize-none"
                         rows={3}
                     />
                     <div className="flex justify-end gap-2 mt-2">
