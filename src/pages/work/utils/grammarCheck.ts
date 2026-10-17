@@ -1,6 +1,9 @@
 import { getContentBlocks, clearGrammarErrorsInBody, hashString, processBatch, type BatchMapEntry } from './editorDom';
 import type { GrammarMatch } from '../hooks/useEbookGrammar';
 
+const OWN_SERVER_CONCURRENCY = 6;
+const PUBLIC_CONCURRENCY = 3;
+
 export async function runGrammarCheck(
     body: HTMLElement,
     grammarCache: Record<string, GrammarMatch[]> | undefined,
@@ -50,18 +53,23 @@ export async function runGrammarCheck(
             }
             if (batchText) batches.push({ text: batchText, map: batchMap });
 
-            const CONCURRENCY = 3;
-            for (let i = 0; i < batches.length; i += CONCURRENCY) {
-                const chunk = batches.slice(i, i + CONCURRENCY);
-                await Promise.all(
-                    chunk.map(b => processBatch(b.text, b.map, baseUrl, allMatches, newCache))
-                );
-                onGrammarCheck?.([...allMatches]);
-            }
+            // Pool: há sempre CONCURRENCY pedidos em voo (antes: grupos de 3 à espera do mais lento).
+            // O LanguageTool próprio (/api/…) escala com os núcleos; o público limita pedidos.
+            const concurrency = baseUrl.startsWith('/api/') ? OWN_SERVER_CONCURRENCY : PUBLIC_CONCURRENCY;
+            const byParagraph = (list: GrammarMatch[]) => [...list].sort((a, b) => (a.paragraphIndex ?? 0) - (b.paragraphIndex ?? 0));
+            let next = 0;
+            const worker = async () => {
+                while (next < batches.length) {
+                    const b = batches[next++];
+                    await processBatch(b.text, b.map, baseUrl, allMatches, newCache);
+                    onGrammarCheck?.(byParagraph(allMatches));
+                }
+            };
+            await Promise.all(Array.from({ length: Math.min(concurrency, batches.length) }, worker));
             const addedCache = Object.fromEntries(
                 Object.entries(newCache).filter(([h]) => !currentCache[h])
             );
-            onGrammarCheck?.([...allMatches], addedCache);
+            onGrammarCheck?.(allMatches.slice().sort((a, b) => (a.paragraphIndex ?? 0) - (b.paragraphIndex ?? 0)), addedCache);
         } else {
             onGrammarCheck?.(allMatches);
         }
