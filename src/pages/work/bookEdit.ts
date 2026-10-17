@@ -52,7 +52,8 @@ export function renameChapter(book: Book, index: number, newTitle: string): Book
 export function changeLevel(book: Book, index: number, level: Level): BookEdit | null {
     const chapter = book.chapters[index];
     if (!chapter || chapter.level === level) return null;
-    const part = changeChapterLevel(book.parts[index], level);
+    // break → h1/h2/h3 só troca o marcador: um capítulo sem título é um h1 sem heading no corpo.
+    const part = changeChapterLevel(book.parts[index], level, { promoteTitle: false });
     if (part === book.parts[index]) return null;
     const parts = [...book.parts];
     parts[index] = part;

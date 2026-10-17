@@ -94,3 +94,15 @@ test('criar capítulo num livro sem h1: vai para o topo', () => {
     const b = book('<p class="chapter-break" data-title="x"></p><p>a</p>');
     expect(be.addChapter(b).html?.startsWith('<p class="chapter-break-h1" data-title="Novo Capítulo"')).toBe(true);
 });
+
+test('mudar nível break → h1: capítulo sem heading no corpo, título no marcador, e volta a break', () => {
+    const html = '<p class="chapter-break" data-title="Frontespício"></p><p>f</p>' + ch('A');
+    const b = book(html);
+    const up = be.changeLevel(b, 0, 'h1');
+    expect(up?.html).toBe('<p class="chapter-break-h1" data-title="Frontespício"></p><p>f</p>' + ch('A'));
+    const b2 = book(up!.html!);
+    expect(b2.chapters[0]).toMatchObject({ title: 'Frontespício', level: 'h1' });
+    expect(be.changeLevel(b2, 0, 'break')?.html).toBe(html); // volta igual
+    // já é h1 → o capítulo seguinte (A) deixa de estar sob o Frontespício
+    expect(be.deleteChapter(b2, 0)?.html).toBe(ch('A'));
+});

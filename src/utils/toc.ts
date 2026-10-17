@@ -60,11 +60,14 @@ export function renameChapterPart(part: string, newTitle: string): string {
 /**
  * Muda o nível de uma parte de capítulo (h1/h2/h3/break), preservando o título.
  *  - heading → `break`: heading vira `<p>` comum, marcador perde o sufixo -hN.
- *  - `break` → heading: promove o data-title do marcador a heading novo.
+ *  - `break` → heading: promove o data-title do marcador a heading novo — ou, com
+ *    `promoteTitle: false`, só troca o marcador (capítulo SEM heading no corpo: o título vive no
+ *    data-title e é o que vão buscar a Estrutura e o índice do EPUB). Marcador `-hN` sem heading
+ *    é válido (classifyChapterPart lê o título do data-title).
  *  - heading → heading: só troca marcador + tag do heading.
  * `<hr class="chapter-break">` legacy é normalizado para o marcador `<p>` ao mudar de nível.
  */
-export function changeChapterLevel(part: string, newLevel: Level): string {
+export function changeChapterLevel(part: string, newLevel: Level, { promoteTitle = true } = {}): string {
     const boundary = matchChapterBoundary(part);
     if (!boundary) return part;
 
@@ -80,5 +83,5 @@ export function changeChapterLevel(part: string, newLevel: Level): string {
     const n = newLevel.slice(1);
     const newMarker = `<p class="chapter-break-h${n}" data-title="${title}"></p>`;
     if (headingMatch) return `${newMarker}<h${n}>${headingMatch[2]}</h${n}>${rest.slice(headingMatch[0].length)}`;
-    return `${newMarker}<h${n}>${title}</h${n}>${rest}`;
+    return promoteTitle ? `${newMarker}<h${n}>${title}</h${n}>${rest}` : `${newMarker}${rest}`;
 }
