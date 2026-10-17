@@ -986,6 +986,11 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         },
                         height: 700,
                         menubar: false,
+                        // Texto literal (á, ç…) e só o nbsp com nome — a forma que o livro limpo (cleanHeadings,
+                        // innerHTML) e o servidor têm. Com o 'named' por omissão o editor emitia &aacute;, o mesmo
+                        // texto tinha duas formas e o rascunho local nunca batia com o save (ficava a oferecer-se).
+                        entity_encoding: 'named',
+                        entities: '160,nbsp',
                         elementpath: false,
                         base_url: '/tinymce',
                         skin: false,
