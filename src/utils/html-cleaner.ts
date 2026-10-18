@@ -41,7 +41,7 @@ const PATTERNS = {
   bareSpanTag: /<span\s*>([\s\S]*?)<\/span>/gi,
 
   // Links and spans
-  links: /<a[^>]*>(.*?)<\/a>/gi,
+  links: /<a\b[^>]*>([\s\S]*?)<\/a>/gi,
   // Matches paragraphs containing red font elements (handles nested spans)
   redFontInParagraph: /<p[^>]*>(?:<span[^>]*>)*<font\s+color=["']?#ff0000["']?[^>]*>([\s\S]*?)<\/font>(?:<\/span>)*<\/p>/gi,
   // Matches paragraphs containing red span elements (handles nested spans)

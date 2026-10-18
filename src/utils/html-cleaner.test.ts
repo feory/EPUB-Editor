@@ -1,6 +1,6 @@
 import { test, expect, beforeAll } from 'bun:test';
 import { Window } from 'happy-dom';
-import { cleanEditorHtml } from './html-cleaner';
+import { cleanEditorHtml, cleanHtml } from './html-cleaner';
 
 beforeAll(() => {
   const win = new Window();
@@ -13,4 +13,10 @@ test('cleanEditorHtml: tira o destaque temporário preso (highlight-pulse) sem t
   expect(out).not.toContain('highlight-pulse');
   expect(out).toContain('p-center');
   expect(out).toContain('p-small');
+});
+
+test('removeLinks: desembrulha <a> (também multi-linha) sem apanhar <abbr>/<aside>', () => {
+  expect(cleanHtml('<p><abbr title="x">AB</abbr> e <a href="u">link</a></p>', { removeLinks: true }))
+    .toBe('<p><abbr title="x">AB</abbr> e link</p>');
+  expect(cleanHtml('<p><a href="u">li\nnk</a> fim</p>', { removeLinks: true })).toBe('<p>li\nnk fim</p>');
 });
