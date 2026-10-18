@@ -18,6 +18,15 @@ function safeUnlink(path) {
   try { unlinkSync(path); } catch (err) { if (err.code !== 'ENOENT') throw err; }
 }
 
+// Substituir uma imagem: apagar as variantes do mesmo id noutra extensão e todas as miniaturas
+// (senão uma antiga vencia no findImagePath ou a miniatura velha continuava a servir).
+function clearImageVariants(imagesDir, thumbnailsDir, id, keepFilename) {
+  for (const e of IMAGE_EXTENSIONS) {
+    if (`${id}.${e}` !== keepFilename) safeUnlink(join(imagesDir, `${id}.${e}`));
+    safeUnlink(join(thumbnailsDir, `${id}.${e}`));
+  }
+}
+
 // Rasteriza um EPS (Illustrator vetorial) para PNG a 300dpi com Ghostscript (cor, nítido).
 // Fallback: o preview raster embutido no DOS-EPS (cinza, baixa-res) via sharp, se o gs faltar.
 // ponytail: 300dpi fixo — subir -r se precisar de mais nitidez. Requer `ghostscript` no PATH.
@@ -224,14 +233,7 @@ export async function saveSingleImage(req, isbn, imageId) {
   const rawExt = (image.type?.split('/')[1] || 'png').replace(/[^a-z]/gi, '').toLowerCase();
   const validExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
   const ext = validExts.has(rawExt) ? rawExt : 'png';
-  // Substituição: remover variantes de outra extensão do mesmo id + thumbnail
-  // (senão um ficheiro antigo noutra extensão venceria no findImagePath).
-  for (const e of IMAGE_EXTENSIONS) {
-    if (e.toLowerCase() === ext) continue;
-    safeUnlink(join(imagesDir, `${imageId}.${e}`));
-    safeUnlink(join(thumbnailsDir, `${imageId}.${e}`));
-  }
-  safeUnlink(join(thumbnailsDir, `${imageId}.${ext}`));
+  clearImageVariants(imagesDir, thumbnailsDir, imageId, `${imageId}.${ext}`);
   await Bun.write(join(imagesDir, `${imageId}.${ext}`), image);
   return Response.json({ message: 'Image saved' }, { headers: corsHeaders });
 }
@@ -255,7 +257,7 @@ export async function batchImages(req, isbn) {
     if (/\.eps$/i.test(file.name)) {
       const id = sanitizeName(file.name.replace(/\.eps$/i, '')) || 'image';
       const png = await epsToPng(await file.arrayBuffer());
-      if (png) { await Bun.write(join(imagesDir, `${id}.png`), png); saved.push({ id, filename: `${id}.png` }); }
+      if (png) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.png`); await Bun.write(join(imagesDir, `${id}.png`), png); saved.push({ id, filename: `${id}.png` }); }
       else debugLog(`[EPS] conversão falhou (gs ausente?): ${file.name}`);
       return;
     }
@@ -263,7 +265,7 @@ export async function batchImages(req, isbn) {
     if (/\.psd$/i.test(file.name)) {
       const id = sanitizeName(file.name.replace(/\.psd$/i, '')) || 'image';
       const png = await psdToPng(await file.arrayBuffer());
-      if (png) { await Bun.write(join(imagesDir, `${id}.png`), png); saved.push({ id, filename: `${id}.png` }); }
+      if (png) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.png`); await Bun.write(join(imagesDir, `${id}.png`), png); saved.push({ id, filename: `${id}.png` }); }
       else debugLog(`[PSD] conversão falhou (ImageMagick ausente?): ${file.name}`);
       return;
     }
@@ -271,13 +273,14 @@ export async function batchImages(req, isbn) {
     if (/\.tiff?$/i.test(file.name)) {
       const id = sanitizeName(file.name.replace(/\.tiff?$/i, '')) || 'image';
       const jpeg = await tiffToJpeg(await file.arrayBuffer());
-      if (jpeg) { await Bun.write(join(imagesDir, `${id}.jpg`), jpeg); saved.push({ id, filename: `${id}.jpg` }); }
+      if (jpeg) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.jpg`); await Bun.write(join(imagesDir, `${id}.jpg`), jpeg); saved.push({ id, filename: `${id}.jpg` }); }
       else debugLog(`[TIFF] conversão falhou (sharp ausente?): ${file.name}`);
       return;
     }
     let filename = sanitizeName(file.name);
     if (!filename.match(/\.(png|jpg|jpeg|gif|webp)$/i)) filename += '.png';
     const id = filename.replace(/\.(png|jpg|jpeg|gif|webp)$/i, '');
+    clearImageVariants(imagesDir, thumbnailsDir, id, filename);
     await Bun.write(join(imagesDir, filename), file);
     saved.push({ id, filename });
   }));
