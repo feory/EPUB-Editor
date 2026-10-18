@@ -19,7 +19,7 @@ interface EbookMeta {
 interface UseEbookExportOptions {
     isbn: string | undefined;
     ebook: EbookMeta | undefined;
-    getSyncedHtmlContent: () => string;
+    getLatestHtmlContent: () => string;
     customCss: string;
     showNotification: (type: NotificationType, message: string) => void;
 }
@@ -27,7 +27,7 @@ interface UseEbookExportOptions {
 export function useEbookExport({
     isbn,
     ebook,
-    getSyncedHtmlContent,
+    getLatestHtmlContent,
     customCss,
     showNotification,
 }: UseEbookExportOptions) {
@@ -68,7 +68,7 @@ export function useEbookExport({
     const handlePreview = useCallback(async () => {
         try {
             setIsPreviewing(true);
-            const html = getSyncedHtmlContent();
+            const html = getLatestHtmlContent();
             const { metadata } = await prepareEpubAssets(html);
             const blob = await generateEpubBlob(html, metadata, customCss);
             setPreviewBlob(blob);
@@ -78,11 +78,11 @@ export function useEbookExport({
         } finally {
             setIsPreviewing(false);
         }
-    }, [getSyncedHtmlContent, prepareEpubAssets, customCss, showNotification]);
+    }, [getLatestHtmlContent, prepareEpubAssets, customCss, showNotification]);
 
     const handleExport = useCallback(async () => {
         try {
-            const html = getSyncedHtmlContent();
+            const html = getLatestHtmlContent();
             const { metadata } = await prepareEpubAssets(html);
             const blob = await generateEpubBlob(html, metadata, customCss);
             await generateEpub(html, metadata, blob, customCss);
@@ -91,7 +91,7 @@ export function useEbookExport({
             console.error(error);
             showNotification('error', 'Falha ao processar exportação.');
         }
-    }, [getSyncedHtmlContent, prepareEpubAssets, customCss, showNotification]);
+    }, [getLatestHtmlContent, prepareEpubAssets, customCss, showNotification]);
 
     return {
         previewBlob,

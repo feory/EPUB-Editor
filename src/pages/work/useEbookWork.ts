@@ -198,7 +198,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     const exportHook = useEbookExport({
         isbn,
         ebook,
-        getSyncedHtmlContent: chapterSync.getSyncedHtmlContent,
+        getLatestHtmlContent, // inclui a edição ainda no debounce — exportar/validar com o texto antigo era o bug
         customCss,
         showNotification,
     });
@@ -206,7 +206,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // --- Validation ---
     const validation = useEbookValidation({
         isbn,
-        getSyncedHtmlContent: chapterSync.getSyncedHtmlContent,
+        getLatestHtmlContent, // inclui a edição ainda no debounce — exportar/validar com o texto antigo era o bug
         prepareEpubAssets: exportHook.prepareEpubAssets,
         customCss,
         showNotification,

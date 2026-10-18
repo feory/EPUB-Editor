@@ -20,7 +20,7 @@ type ValidationConfig = {
 
 interface UseEbookValidationOptions {
     isbn: string | undefined;
-    getSyncedHtmlContent: () => string;
+    getLatestHtmlContent: () => string;
     prepareEpubAssets: (html: string) => Promise<{ metadata: BookMetadata; imageMap: Map<string, Blob>; coverBlob: Blob | null }>;
     customCss: string;
     showNotification: (type: NotificationType, message: string, duration?: number) => string;
@@ -29,7 +29,7 @@ interface UseEbookValidationOptions {
 
 export function useEbookValidation({
     isbn,
-    getSyncedHtmlContent,
+    getLatestHtmlContent,
     prepareEpubAssets,
     customCss,
     showNotification,
@@ -41,7 +41,7 @@ export function useEbookValidation({
 
     const performValidation = useCallback(async (config: ValidationConfig) => {
         try {
-            const html = getSyncedHtmlContent();
+            const html = getLatestHtmlContent();
             // As três validações são mutuamente exclusivas no painel — limpar todas
             // e preencher só a do tipo atual.
             setValidationResults(null);
@@ -95,7 +95,7 @@ export function useEbookValidation({
             console.error(error);
             showNotification('error', config.errorMessage);
         }
-    }, [getSyncedHtmlContent, prepareEpubAssets, customCss, isbn, showNotification, hideNotification]);
+    }, [getLatestHtmlContent, prepareEpubAssets, customCss, isbn, showNotification, hideNotification]);
 
     const validateMutation = useMutation({
         mutationFn: async () => {
