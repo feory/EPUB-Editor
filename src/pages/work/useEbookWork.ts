@@ -3,14 +3,14 @@ import type { RefObject } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { ebooksApi } from '../../api/ebooks-api';
-import { getAccessToken, clientId } from '../../api/client';
 import { useNotification } from '../../context/NotificationContext';
 import { useStyles } from '../../context/StyleContext';
 import type { ImageSettings } from '../../components/MarginPreview';
-import { compressHtml, compressHtmlAsync, decompressHtml } from '../../utils/compression';
+import { compressHtmlAsync, decompressHtml } from '../../utils/compression';
 import { cleanEditorHtml } from '../../utils/html-cleaner';
 import type { ImportOptions } from '../../utils/html-cleaner';
 import { drafts } from '../../utils/local-draft';
+import { sendOnUnload } from './sendOnUnload';
 import type { Draft } from '../../utils/local-draft';
 import { listSubtitles } from '../../utils/indice-links';
 import type { DocxStyleMapping } from '../../services/import/document-importer';
@@ -29,23 +29,6 @@ import { useVersionDiff } from './hooks/useVersionDiff';
 import { useEbookGrammar } from './hooks/useEbookGrammar';
 import { usePresence } from './hooks/usePresence';
 import type { WorkEditorRef } from './components/WorkEditor';
-
-// Fechar/recarregar o separador: keepalive porque o pedido tem de sobreviver à página.
-// sendBeacon não serve — não deixa pôr o cabeçalho Authorization.
-function sendOnUnload(isbn: string, content: string) {
-    const token = getAccessToken();
-    fetch(`/api/ebooks/${isbn}/content`, {
-        method: 'POST',
-        keepalive: true,
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Client-Id': clientId,
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ content: compressHtml(content) }),
-    }).catch(() => { /* a página está a fechar */ });
-}
 
 export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<WorkEditorRef | null>) {
     const queryClient = useQueryClient();

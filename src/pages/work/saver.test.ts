@@ -87,10 +87,10 @@ test('saída: app = pedido normal com exit=true; unload = keepalive', async () =
     saver.baseline();
     s.text = '<p>b</p>';
     expect(saver.exit('unload')).toBe(true);
-    expect(log).toEqual(['unload:<p>b</p>']);
+    expect(log).toEqual(['draft:<p>b</p>', 'unload:<p>b</p>']); // rascunho já: o pedido pode não concluir
     s.sendFails = true;
     saver.exit('app'); await wait(5);
-    expect(log[1]).toBe('failed:false:true');
+    expect(log[2]).toBe('failed:false:true');
 });
 
 test('rascunho a oferecer: só se difere; bloqueia escrita até resolver', async () => {

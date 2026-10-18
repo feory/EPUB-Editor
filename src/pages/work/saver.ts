@@ -133,13 +133,16 @@ export function createSaver(deps: SaverDeps) {
 
         /**
          * Sair com texto por gravar. 'app' (voltar, troca de rota): pedido normal, a página
-         * continua. 'unload' (fechar/recarregar): keepalive. Devolve true se havia algo a gravar
+         * continua. 'unload' (fechar/recarregar): keepalive (se couber) + rascunho local. Devolve true se havia algo a gravar
          * (o chamador pede ao browser o aviso de "alterações por gravar").
          */
         exit(kind: 'app' | 'unload'): boolean {
             const content = pending();
             if (!content) return false;
-            if (kind === 'unload') deps.sendOnUnload(content);
+            if (kind === 'unload') {
+                if (!holdDrafts) void deps.drafts.save(isbn, content); // o pedido pode não caber/concluir → fica recuperável
+                deps.sendOnUnload(content);
+            }
             else void send(content, false, true);
             return true;
         },
