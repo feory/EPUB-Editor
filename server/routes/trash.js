@@ -19,7 +19,10 @@ export function restoreEbook(isbn) {
 
 export function hardDeleteEbook(req, isbn, user) {
   const ebook = stmt.getEbook.get(isbn);
+  // Só do lixo: um livro ativo apagado aqui perdia-se de vez, sem passar pelo prazo do lixo.
+  if (!ebook?.deleted_at) return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
   stmt.hardDeleteEbook.run(isbn);
+  stmt.deleteCommentsByIsbn.run(isbn); // como purgeOldTrash
   stmt.grammarDeleteIsbn.run(isbn);
   stmt.grammarSessionDelete.run(isbn);
   stmt.unshareAllForEbook.run(isbn);
