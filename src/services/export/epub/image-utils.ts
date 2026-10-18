@@ -21,6 +21,9 @@ export const toNCName = (id: string): string => {
     return /^[A-Za-z_]/.test(cleaned) ? cleaned : `img-${cleaned}`;
 };
 
+// ids fixos do content.opf (assets.ts / epub-service.ts).
+const RESERVED_MANIFEST_IDS = /^(cover|cover-image|nav|ncx|style|pagelist|page-list|toc|BookId|isbn-id|src-id|section\d+)$/;
+
 const createImageFilename = (id: string, blob: Blob, includeFolder = true): string => {
     const ext = getImageExtension(blob);
     return includeFolder ? `Images/${id}.${ext}` : `${id}.${ext}`;
@@ -77,8 +80,17 @@ export const addImagesToArchive = (
         imagesFolder.file(filename, blob);
         entries.push({ id, filename: createImageFilename(id, blob, true), mediaType: blob.type });
     });
+    // ids únicos no manifest: não colidir com os fixos do OPF nem entre si (ex.: "a b" e "a_b" → "a_b")
+    const used = new Set<string>();
+    const manifestId = (id: string): string => {
+        const base = RESERVED_MANIFEST_IDS.test(toNCName(id)) ? `img-${toNCName(id)}` : toNCName(id);
+        let out = base;
+        for (let n = 2; used.has(out); n++) out = `${base}-${n}`;
+        used.add(out);
+        return out;
+    };
     const manifestItems = entries
-        .map(({ id, filename, mediaType }) => `<item id="${toNCName(id)}" href="${filename}" media-type="${mediaType}"/>`)
+        .map(({ id, filename, mediaType }) => `<item id="${manifestId(id)}" href="${filename}" media-type="${mediaType}"/>`)
         .join('\n    ');
     return { manifestItems, entries };
 };

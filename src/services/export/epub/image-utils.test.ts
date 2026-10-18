@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import { stripPlaceholderImages, replaceImageUrlsInContent } from './image-utils';
+import JSZip from 'jszip';
+import { stripPlaceholderImages, replaceImageUrlsInContent, addImagesToArchive } from './image-utils';
 
 test('stripPlaceholderImages: remove parágrafo cujo único conteúdo é a imagem placeholder', () => {
     const html = '<p class="p-center"><img src="placeholder" alt="" data-image-id="Moçambique_160x230"></p>';
@@ -29,4 +30,13 @@ test('replaceImageUrlsInContent preserva o alt escrito pelo utilizador', () => {
     const images = new Map([['a', new Blob(['x'], { type: 'image/jpeg' })]]);
     expect(replaceImageUrlsInContent('<img src="x" alt="Mapa de Moçambique" data-image-id="a">', images)).toContain('alt="Mapa de Moçambique"');
     expect(replaceImageUrlsInContent('<img src="x" alt="Imagem importada" data-image-id="a">', images)).toContain('alt="Imagem a"');
+});
+
+test('addImagesToArchive: ids do manifest não colidem com os fixos do OPF nem entre si', () => {
+    const png = () => new Blob(['x'], { type: 'image/png' });
+    const images = new Map([['cover', png()], ['style', png()], ['section1', png()], ['a b', png()], ['a_b', png()]]);
+    const { manifestItems } = addImagesToArchive(images, new JSZip().folder('Images')!);
+    const ids = [...manifestItems.matchAll(/ id="([^"]+)"/g)].map(m => m[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const reserved of ['cover', 'style', 'section1']) expect(ids).not.toContain(reserved);
 });
