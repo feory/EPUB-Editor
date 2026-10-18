@@ -50,3 +50,10 @@ test('parseOpfMetadata tira o sufixo _ebook do título (InDesign)', () => {
     expect(parseOpfMetadata(opf('<dc:title>Porque falham as equipas_ebook</dc:title>'), 'x').title).toBe('Porque falham as equipas');
     expect(parseOpfMetadata(opf('<dc:title>O ebook do futuro</dc:title>'), 'x').title).toBe('O ebook do futuro');
 });
+
+test('parseOpfMetadata: ISBN vem do identificador que não é urn:uuid (EPUB exportado pela app)', () => {
+    const bare = (ids: string) => `<package><metadata>${ids}</metadata></package>`;
+    const uuid = '<dc:identifier id="BookId">urn:uuid:123e4567-e89b-12d3-a456-426614174000</dc:identifier>';
+    expect(parseOpfMetadata(bare(uuid + '<dc:identifier id="isbn-id">978-972-44-3000-3</dc:identifier>'), 'x').ebook_isbn).toBe('978-972-44-3000-3');
+    expect(parseOpfMetadata(bare(uuid), 'fallback').ebook_isbn).toBe('fallback');
+});

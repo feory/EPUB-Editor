@@ -42,7 +42,10 @@ export function parseOpfMetadata(opfXml: string, fallbackIsbn: string): EpubMeta
     const grabAll = (tag: string) =>
         Array.from(opfXml.matchAll(new RegExp(`<dc:${tag}\\b[^>]*>([\\s\\S]*?)</dc:${tag}>`, 'gi')))
             .map(m => decodeEntities(m[1].trim())).filter(Boolean);
-    const isbn = (grab('identifier').match(/[\d-]{8,}/)?.[0] || fallbackIsbn).trim();
+    // Os EPUB da própria app trazem urn:uuid primeiro e o ISBN depois — o UUID tem sequências de dígitos
+    // que o regex aceitaria. Salta-se e usa-se o primeiro identificador que não seja UUID.
+    const isbn = (grabAll('identifier').filter(id => !/^urn:uuid:/i.test(id))
+        .map(id => id.match(/[\d-]{8,}/)?.[0]).find(Boolean) || fallbackIsbn).trim();
     const date = grab('date').slice(0, 10);
     // ISBN do livro físico (InDesign): <meta property="pageBreakSource">urn:isbn: 978…</meta>
     const physical = opfXml.match(/<meta\b[^>]*\bproperty="pageBreakSource"[^>]*>([^<]*)</i)?.[1].match(/\d[\d-]{7,}[\dXx]/)?.[0];
