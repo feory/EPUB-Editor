@@ -1,5 +1,6 @@
 import apiClient from '../../../api/client';
 import type { GrammarMatch } from '../hooks/useEbookGrammar';
+import { MARK } from '../editor/ephemeral';
 
 // Resposta crua do LanguageTool — só os campos que processBatch lê (o resto do payload
 // real tem mais campos, ex. rule.category/sentence, ignorados aqui). offset/length são
@@ -30,6 +31,11 @@ export function getContentBlocks(container: Element): Element[] {
     return Array.from(container.querySelectorAll('p, h1, h2, h3'));
 }
 
+// Blocos com texto, na ordem de `extractParagraphs` (índices do diff): ignora marcadores de capítulo e `<p>` vazios.
+export function getNonEmptyBlocks(container: Element): Element[] {
+    return getContentBlocks(container).filter(b => (b.textContent || '').trim().length > 0);
+}
+
 export function unwrapNode(node: ChildNode) {
     const parent = node.parentNode!;
     while (node.firstChild) parent.insertBefore(node.firstChild, node);
@@ -48,9 +54,11 @@ export function clearGrammarErrorsInBody(body: HTMLElement) {
 }
 
 // Destaque temporário de "cheguei aqui" (scrollToImage/scrollToPage/scrollToComment).
+// Marca efémera (ephemeral.ts): não é gravada. Uma classe apanhada por um save antes dos 3s ficava no
+// livro e repetia o destaque sempre que o capítulo abria.
 export function pulseHighlight(el: Element) {
-    el.classList.add('highlight-pulse');
-    setTimeout(() => el.classList.remove('highlight-pulse'), 3000);
+    el.setAttribute(MARK.pulse, '');
+    setTimeout(() => el.removeAttribute(MARK.pulse), 3000);
 }
 
 export type BatchMapEntry = { index: number; text: string; offset: number; separatorLength: number };

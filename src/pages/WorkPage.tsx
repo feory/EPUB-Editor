@@ -40,6 +40,7 @@ import { useDiffComparison } from './work/hooks/useDiffComparison';
 import { useWorkPanels } from './work/hooks/useWorkPanels';
 import { useWorkPageSidebars } from './work/hooks/useWorkPageSidebars';
 import { useGoToChapterMarker } from './work/hooks/useGoToChapterMarker';
+import { useGoToParagraph } from './work/hooks/useGoToParagraph';
 import { useNotification } from '../context/NotificationContext';
 import { useStyles, DEFAULT_CSS, patchLoadedCss } from '../context/StyleContext';
 import { sanitizeImageFilename } from '../utils/format';
@@ -300,14 +301,17 @@ export function WorkPage() {
   // clique em "localizar" na Galeria → idem para uma imagem. Ambos os marcadores só existem no
   // DOM do capítulo ATIVO (editor carrega capítulos um a um) — ver useGoToChapterMarker.
   const handleGoToPdfPage = useGoToChapterMarker<number>(
-    editorRef, work.fullHtmlContent, work.activeChapterIndex, work.setActiveChapterIndex,
+    editorRef, work.fullHtmlContent, work.setActiveChapterIndex,
     (folio) => `data-page="${folio}"`,
     (editor, folio) => editor.scrollToPage(folio),
   );
   const handleGoToImage = useGoToChapterMarker<string>(
-    editorRef, work.fullHtmlContent, work.activeChapterIndex, work.setActiveChapterIndex,
+    editorRef, work.fullHtmlContent, work.setActiveChapterIndex,
     (imageId) => `data-image-id="${imageId}"`,
     (editor, imageId) => editor.scrollToImage(imageId),
+  );
+  const handleGoToVersionDiffItem = useGoToParagraph(
+    editorRef, work.fullHtmlContent, work.activeChapterIndex, work.setActiveChapterIndex,
   );
   // Seam entre o estado de comentários (useComments, servidor) e o editor (editorRef, DOM
   // do TinyMCE) — ver candidato A do architecture review desta sessão.
@@ -418,7 +422,10 @@ export function WorkPage() {
           Há alterações não gravadas de {new Date(work.draft.ts).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })}.{' '}
           <button className="underline mx-2" onClick={work.restoreDraft}>Recuperar</button>
           <button className="underline mr-2" onClick={() => panels.compareWithDraft(work.draft!)}>Ver alterações</button>
-          <button className="underline" onClick={work.discardDraft}>Descartar</button>
+          <button className="underline" onClick={() => {
+            if (work.versionDiff.labels?.draft) work.versionDiff.close(); // o diff do rascunho deixa de ter objeto
+            work.discardDraft();
+          }}>Descartar</button>
         </div>
       )}
       {!isFocusMode && (
@@ -602,9 +609,9 @@ export function WorkPage() {
           isLoading={work.versionDiff.isLoading}
           isUpdating={false}
           onClose={work.versionDiff.close}
-          onGoToItem={(editorIndex) => editorRef.current?.scrollToContent('', editorIndex)}
-          labelInsert={work.versionDiff.labels?.draft ? 'Rascunho' : 'Atual'}
-          labelDelete={work.versionDiff.labels?.draft ? 'Atual' : 'Histórico'}
+          onGoToItem={handleGoToVersionDiffItem}
+          labelInsert="Atual"
+          labelDelete={work.versionDiff.labels?.draft ? 'Rascunho' : 'Histórico'}
           width={panelWidth}
           onResize={handlePanelResize}
         />
@@ -615,7 +622,7 @@ export function WorkPage() {
           isLoading={diff.isDiffLoading}
           isUpdating={diff.isDiffUpdating}
           onClose={diff.closeDiffSidebar}
-          onGoToItem={(editorIndex) => editorRef.current?.scrollToContent('', editorIndex)}
+          onGoToItem={(editorIndex) => editorRef.current?.scrollToParagraph(editorIndex)}
           width={panelWidth}
           onResize={handlePanelResize}
         />

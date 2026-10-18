@@ -39,7 +39,7 @@ export function useCommentEditorSync({
     const [draftAnchorId, setDraftAnchorId] = useState<string | null>(null);
 
     const goTo = useGoToChapterMarker<string>(
-        editorRef, fullHtmlContent, activeChapterIndex, setActiveChapterIndex,
+        editorRef, fullHtmlContent, setActiveChapterIndex,
         (anchorId) => `data-comment-id="${anchorId}"`,
         (editor, anchorId) => editor.scrollToComment(anchorId),
     );

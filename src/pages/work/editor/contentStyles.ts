@@ -29,6 +29,8 @@ body.${BODY_CLASS.boxSelected} [${MARK.active}] { box-shadow: none !important; }
 ${gripCss()}
 [${MARK.empty}]::before { content: 'Escreve algo…'; color: #94a3b8; pointer-events: none; }
 [${MARK.htmlEdit}] { visibility: hidden !important; }
+[${MARK.pulse}] { animation: ps-pulse 2s; }
+@keyframes ps-pulse { 0% { background-color: rgba(255, 255, 0, 0); } 20% { background-color: rgba(255, 255, 0, 0.5); } 100% { background-color: rgba(255, 255, 0, 0); } }
 /* Botão "+" (inserir bloco): só CSS, ::after do bloco de topo, centrado na borda inferior.
    Sem position:relative no bloco (passaria a ser o contentor de span.pagebreak e deslocava o
    folio): absoluto na posição ESTÁTICA (fim do bloco) e centrado com cqw do próprio bloco.

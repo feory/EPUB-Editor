@@ -78,10 +78,11 @@ export function useVersionDiff(isbn: string | undefined) {
         await runDiff({ history: file.timestamp }, async () => [editorHtml, await loadHtml(file.filename)]);
     }, [isbn, loadHtml, runDiff]);
 
-    // Rascunho local (verde = o que o rascunho tem a mais) vs texto atual (rose = o que só o atual tem).
+    // Como no histórico: lado do editor = ATUAL (verde = o que só o atual tem; os índices apontam
+    // para o texto que o editor mostra), rose = o que só o rascunho tem.
     const compareDraft = useCallback(
         (draft: { html: string; ts: number }, currentHtml: string) =>
-            runDiff({ history: new Date(draft.ts).toISOString(), draft: true }, async () => [draft.html, currentHtml]),
+            runDiff({ history: new Date(draft.ts).toISOString(), draft: true }, async () => [currentHtml, draft.html]),
         [runDiff],
     );
 

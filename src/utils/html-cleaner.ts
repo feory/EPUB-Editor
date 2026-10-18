@@ -215,11 +215,15 @@ export function collapseHangingIndents(html: string): string {
   return doc.body.innerHTML;
 }
 
+// Livros gravados com o destaque temporário preso (`highlight-pulse`, antes de passar a `data-mce-pulse`).
+const stripStalePulse = (html: string): string =>
+  html.replace(/\sclass="\s*highlight-pulse\s*"/g, '').replace(/(class="[^"]*?)\s*\bhighlight-pulse\b/g, '$1');
+
 /**
  * Clean HTML from editor (includes grammar highlight removal)
  */
 export function cleanEditorHtml(html: string): string {
-  return insertChapterMarkers(convertFullyStyledParas(cleanHtml(cleanHeadings(collapseHangingIndents(html)), {
+  return insertChapterMarkers(convertFullyStyledParas(cleanHtml(cleanHeadings(collapseHangingIndents(stripStalePulse(html))), {
     removeEmptyParagraphs: true,
     removeEmptySpans: true,
     removeLinks: true,

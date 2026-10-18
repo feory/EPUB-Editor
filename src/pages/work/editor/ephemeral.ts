@@ -9,6 +9,7 @@ export const MARK = {
     box: 'data-mce-psbox',            // caixa/grelha selecionada pelo clique na sua área
     empty: 'data-mce-empty',          // placeholder do parágrafo vazio focado
     htmlEdit: 'data-mce-htmledit',    // bloco escondido durante a edição de HTML inline
+    pulse: 'data-mce-pulse',          // destaque de 3s ao saltar para um bloco
 } as const;
 
 // Classes do <body> do iframe (também não entram no conteúdo gravado).

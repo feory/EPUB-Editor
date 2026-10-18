@@ -9,7 +9,7 @@ import type { ImportOptions } from '../../../utils/html-cleaner';
 import { cleanIndexText, linkIndexPages, wrapPageLinks, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
 import { sanitizeImageFilename } from '../../../utils/format';
 import {
-    getContentBlocks, unwrapNode, clearMarkers,
+    getContentBlocks, getNonEmptyBlocks, unwrapNode, clearMarkers,
     clearGrammarErrorsInBody, pulseHighlight,
 } from '../utils/editorDom';
 import { runGrammarCheck } from '../utils/grammarCheck';
@@ -101,6 +101,10 @@ interface WorkEditorProps {
 export interface WorkEditorRef {
     // Navegação / scroll
     scrollToContent: (text: string, paragraphIndex?: number) => void;
+    /** N-ésimo parágrafo NÃO vazio (índice de `extractParagraphs`): ignora marcadores de capítulo e `<p>` vazios. */
+    scrollToParagraph: (index: number) => void;
+    /** Corre `fn` uma vez, depois da PRÓXIMA troca de capítulo (conteúdo carregado e scroll reposto). */
+    afterChapterChange: (fn: () => void) => void;
     scrollToImage: (imageId: string) => boolean;
     scrollToPage: (folio: number) => boolean;
 
@@ -242,6 +246,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
         applyCustomStyles(editor);
     }, [applyCustomStyles]);
 
+    const afterChapterChangeRef = useRef<(() => void) | null>(null);
     useEffect(() => {
         const editor = editorRef.current;
         if (!editor) return;
@@ -250,6 +255,9 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const body = editor.getBody();
             if (editorWin) editorWin.scrollTo(0, 0);
             editor.selection.setCursorLocation(body.firstChild, 0);
+            const after = afterChapterChangeRef.current;
+            afterChapterChangeRef.current = null;
+            after?.(); // depois do reset de scroll — senão este desfazia o salto
         }, 100);
     }, [activeChapterIndex]);
 
@@ -258,7 +266,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const editor = editorRef.current;
             if (!editor) return;
             const indexSet = new Set(indices);
-            getContentBlocks(editor.getBody()).forEach((block, i) => {
+            getNonEmptyBlocks(editor.getBody()).forEach((block, i) => {
                 block.classList.toggle('diff-highlight', indexSet.has(i));
             });
         },
@@ -279,7 +287,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                     ? rng.startContainer.parentElement
                     : rng.startContainer as HTMLElement);
                 const cursorBlock = anchorEl?.closest?.('p,h1,h2,h3') as HTMLElement | null;
-                const allBlocksBefore = getContentBlocks(body);
+                const allBlocksBefore = getNonEmptyBlocks(body);
                 const cursorIdx = cursorBlock ? allBlocksBefore.indexOf(cursorBlock) : -1;
 
                 // Unwrap any existing diff spans
@@ -289,7 +297,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 body.querySelectorAll('.diff-highlight, .diff-modify').forEach((el: Element) =>
                     el.classList.remove('diff-highlight', 'diff-modify'));
 
-                const blocks = getContentBlocks(body);
+                const blocks = getNonEmptyBlocks(body);
                 let cursorBlockHasAdds = false;
                 let cursorBlockInnerHTMLReplaced = false;
 
@@ -718,7 +726,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
 
             if (!cleanSearch) {
                 if (paragraphIndex !== undefined && blocks[paragraphIndex]) {
-                    blocks[paragraphIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    blocks[paragraphIndex].scrollIntoView({ behavior: 'instant', block: 'center' });
                 }
                 return;
             }
@@ -733,9 +741,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 if (nodeText.includes(searchSnippet)) {
                     const parent = (node as Text).parentElement;
                     if (parent) {
-                        parent.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        parent.classList.add('highlight-pulse');
-                        setTimeout(() => parent.classList.remove('highlight-pulse'), 3000);
+                        parent.scrollIntoView({ behavior: 'instant', block: 'center' });
+                        pulseHighlight(parent);
                         editor.selection.select(parent);
                         found = true;
                         break;
@@ -744,11 +751,23 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             }
 
             if (!found && paragraphIndex !== undefined && blocks[paragraphIndex]) {
-                blocks[paragraphIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                blocks[paragraphIndex].classList.add('highlight-pulse');
-                setTimeout(() => blocks[paragraphIndex].classList.remove('highlight-pulse'), 3000);
+                blocks[paragraphIndex].scrollIntoView({ behavior: 'instant', block: 'center' });
+                pulseHighlight(blocks[paragraphIndex]);
             }
         },
+
+        scrollToParagraph: (index: number) => {
+            const editor = editorRef.current;
+            const body = editor?.getBody();
+            if (!editor || !body) return;
+            const block = getNonEmptyBlocks(body)[index];
+            if (!block) return;
+            editor.focus();
+            block.scrollIntoView({ behavior: 'instant', block: 'center' });
+            pulseHighlight(block);
+        },
+
+        afterChapterChange: (fn: () => void) => { afterChapterChangeRef.current = fn; },
 
         scrollToImage: (imageId: string) => {
             const editor = editorRef.current;
@@ -759,9 +778,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const img = editor.getBody()?.querySelector(`img[data-image-id="${imageId}"]`) as HTMLElement | null;
             if (!img) return false;
             editor.focus();
-            img.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            img.classList.add('highlight-pulse');
-            setTimeout(() => img.classList.remove('highlight-pulse'), 3000);
+            img.scrollIntoView({ behavior: 'instant', block: 'center' });
+            pulseHighlight(img);
             editor.selection.select(img);
             return true;
         },
@@ -777,9 +795,8 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             // atual" o último marcador com top<=0 — se o salto PDF→editor pousasse a meio do ecrã
             // (center), o próximo scroll no editor resolvia para uma página diferente da que se
             // acabou de abrir, criando conflito entre os dois sentidos de sincronização.
-            marker.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            marker.classList.add('highlight-pulse');
-            setTimeout(() => marker.classList.remove('highlight-pulse'), 3000);
+            marker.scrollIntoView({ behavior: 'instant', block: 'start' });
+            pulseHighlight(marker);
             return true;
         },
 
