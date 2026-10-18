@@ -65,8 +65,8 @@ export function deleteChapterPart(parts: string[], levels: Level[], index: numbe
 export function renameChapterPart(part: string, newTitle: string): string {
     const safe = escapeHtml(newTitle.trim());
     return part.replace(
-        /(class=["'][^"']*chapter-break[^"']*["'][^>]*data-title=["'])[^"']*(["'])/i,
-        `$1${safe}$2`,
+        /(class=["'][^"']*chapter-break[^"']*["'][^>]*data-title=)(?:"[^"]*"|'[^']*')/i,
+        `$1"${safe}"`,
     );
 }
 

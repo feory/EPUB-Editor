@@ -79,3 +79,10 @@ test('insertChapterPart + deleteChapterPart: eliminar o novo devolve o livro', (
     const novo = added.slice(1, added.length - 2); // F + novo + A + B
     expect(deleteChapterPart(['F', novo, 'A', 'B'], ['break', 'h1', 'h1', 'h1'], 1)).toBe('FAB');
 });
+
+test('apóstrofo no data-title: renomear substitui o valor todo e mudar de nível preserva o título', () => {
+    expect(renameChapterPart(`<p class="chapter-break-h1" data-title="D'Artagnan"></p><h1>x</h1>`, "O'Neil"))
+        .toBe(`<p class="chapter-break-h1" data-title="O'Neil"></p><h1>x</h1>`);
+    expect(changeChapterLevel(`<p class="chapter-break-h1" data-title="D'Artagnan"></p><h1>D'Artagnan</h1><p>t</p>`, 'h2'))
+        .toContain(`data-title="D'Artagnan"`);
+});

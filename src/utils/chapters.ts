@@ -15,7 +15,12 @@ const CHAPTER_SPLIT_PATTERN = /(?=<p[^>]*class=["'][^"']*chapter-break[^"']*["']
 // Counts chapter-start markers (detect a split appearing mid-edit).
 const CHAPTER_MARKER_COUNT_PATTERN = /<p[^>]*class=["'][^"']*chapter-break[^"']*["']/gi;
 const HR_BREAK_PATTERN = /^<hr[^>]*class=["']chapter-break["'][^>]*>/i;
-const HR_DATA_TITLE_PATTERN = /data-title=["']([^"']+)["']/i;
+// Cada aspa fecha com a SUA aspa: o apóstrofo de data-title="D'Artagnan" não termina o valor.
+const HR_DATA_TITLE_PATTERN = /data-title=(?:"([^"]*)"|'([^']*)')/i;
+const dataTitleOf = (tag: string): string | undefined => {
+    const m = tag.match(HR_DATA_TITLE_PATTERN);
+    return (m && (m[1] ?? m[2])) || undefined;
+};
 
 // Flatten heading inner HTML to plain title text (<br>→space, strip tags, collapse).
 export function flattenHeadingText(inner: string): string {
@@ -38,8 +43,7 @@ export function matchChapterMarkerElement(content: string): { raw: string; level
     const m = content.match(/^<p[^>]*class=["'][^"']*chapter-break(?:-h([123]))?[^"']*["'][^>]*>[\s\S]*?<\/p>/i);
     if (!m) return null;
     const level = m[1] === '1' ? 'h1' : m[1] === '2' ? 'h2' : m[1] === '3' ? 'h3' : null;
-    const dt = m[0].match(HR_DATA_TITLE_PATTERN);
-    return { raw: m[0], level, title: dt ? dt[1] : '' };
+    return { raw: m[0], level, title: dataTitleOf(m[0]) ?? '' };
 }
 
 /**
@@ -49,8 +53,7 @@ export function matchChapterMarkerElement(content: string): { raw: string; level
 export function classifyChapterPart(content: string, index: number): { title: string; level: 'h1' | 'h2' | 'h3' | 'break'; hrTag?: string } {
     const hrMatch = content.match(HR_BREAK_PATTERN);
     if (hrMatch) {
-        const titleMatch = hrMatch[0].match(HR_DATA_TITLE_PATTERN);
-        const title = decodeEntities(titleMatch ? titleMatch[1] : `Quebra ${index + 1}`);
+        const title = decodeEntities(dataTitleOf(hrMatch[0]) ?? `Quebra ${index + 1}`);
         return { title, level: 'break', hrTag: hrMatch[0] };
     }
     const marker = matchChapterMarkerElement(content);
@@ -103,7 +106,7 @@ export const countChapterMarkers = (html: string): number => (html.match(CHAPTER
  */
 export function matchChapterBoundary(content: string): { raw: string; level: 'h1' | 'h2' | 'h3' | null; title: string; legacyHr: boolean } | null {
     const hr = content.match(HR_BREAK_PATTERN);
-    if (hr) return { raw: hr[0], level: null, title: hr[0].match(HR_DATA_TITLE_PATTERN)?.[1] ?? '', legacyHr: true };
+    if (hr) return { raw: hr[0], level: null, title: dataTitleOf(hr[0]) ?? '', legacyHr: true };
     const marker = matchChapterMarkerElement(content);
     return marker ? { ...marker, legacyHr: false } : null;
 }

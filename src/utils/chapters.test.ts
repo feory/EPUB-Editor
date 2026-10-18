@@ -27,3 +27,10 @@ test('classifyChapterPart + insertChapterMarkers: o marcador inserido antes do h
     const [part] = splitChapters(insertChapterMarkers('<h1>Capítulo 1<br>Início</h1><p>x</p>'));
     expect(classifyChapterPart(part, 0)).toEqual({ title: 'Capítulo 1 Início', level: 'h1' });
 });
+
+test('data-title com apóstrofo não é truncado (marcador <p>, <hr> legacy e classifyChapterPart)', () => {
+    expect(matchChapterBoundary(`<p class="chapter-break-h1" data-title="D'Artagnan"></p><h1>x</h1>`)?.title).toBe("D'Artagnan");
+    expect(matchChapterBoundary(`<hr class="chapter-break" data-title="O'Neil">`)?.title).toBe("O'Neil");
+    expect(matchChapterBoundary(`<p class="chapter-break-h1" data-title='Diz "sim"'></p>`)?.title).toBe('Diz "sim"');
+    expect(classifyChapterPart(`<p class="chapter-break-h1" data-title="D'Artagnan"></p><h1>D'Artagnan</h1>`, 0).title).toBe("D'Artagnan");
+});
