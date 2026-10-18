@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { generateEpub, generateEpubBlob } from '../../../services/export/epub-service';
+import { collectImageIds, fetchImages } from './fetchEpubImages';
 import type { NotificationType } from '../../../context/NotificationContext';
 
 interface EbookMeta {
@@ -35,28 +36,7 @@ export function useEbookExport({
 
     const prepareEpubAssets = useCallback(async (html: string) => {
         const [imageMap, coverBlob] = await Promise.all([
-            (async () => {
-                const imageMap = new Map<string, Blob>();
-                for (const match of html.matchAll(/data-image-id="([^"]+)"/g)) {
-                    const id = match[1];
-                    if (!imageMap.has(id)) {
-                        try {
-                            const res = await ebooksApi.getImage(isbn!, id);
-                            imageMap.set(id, res.data);
-                        } catch { /* image not on server */ }
-                    }
-                }
-                for (const match of html.matchAll(/src=["']\/api\/ebooks\/[^/]+\/images\/([^"'?]+)/g)) {
-                    const id = match[1];
-                    if (!imageMap.has(id)) {
-                        try {
-                            const res = await ebooksApi.getImage(isbn!, id);
-                            imageMap.set(id, res.data);
-                        } catch { /* image not on server */ }
-                    }
-                }
-                return imageMap;
-            })(),
+            fetchImages(collectImageIds(html), async (id) => (await ebooksApi.getImage(isbn!, id)).data),
             (async () => {
                 try {
                     const coverRes = await ebooksApi.getCover(isbn!);
