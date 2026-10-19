@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { KeyRound, LogOut, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2, Wand2 } from 'lucide-react';
+import { UserRound, LogOut, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2, Wand2 } from 'lucide-react';
 import type { AuthUser } from '../../api/auth-api';
+import { initialsOf } from './initials';
 
 type ViewMode = 'table' | 'grid';
 
@@ -9,18 +10,11 @@ interface UserMenuProps {
     viewMode: ViewMode;
     onViewModeChange: (mode: ViewMode) => void;
     onLogout: () => void;
-    onChangePassword: () => void;
+    onOpenAccount: () => void;
     onNavigatePanel: () => void;
     onImportEpub: () => void;
     onImportIndesign: () => void;
     importPending: boolean;
-}
-
-function getInitials(email: string): string {
-    const local = email.split('@')[0];
-    const parts = local.split('.');
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    return local.slice(0, 2).toUpperCase();
 }
 
 const VIEW_MODES: { mode: ViewMode; icon: React.ReactNode; label: string }[] = [
@@ -29,7 +23,7 @@ const VIEW_MODES: { mode: ViewMode; icon: React.ReactNode; label: string }[] = [
 ];
 
 export const UserMenu: React.FC<UserMenuProps> = ({
-    user, viewMode, onViewModeChange, onLogout, onChangePassword, onNavigatePanel, onImportEpub, onImportIndesign, importPending,
+    user, viewMode, onViewModeChange, onLogout, onOpenAccount, onNavigatePanel, onImportEpub, onImportIndesign, importPending,
 }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -43,14 +37,14 @@ export const UserMenu: React.FC<UserMenuProps> = ({
         return () => document.removeEventListener('mousedown', handler);
     }, [open]);
 
-    const initials = getInitials(user.email);
+    const initials = initialsOf(user);
 
     return (
         <div ref={ref} className="relative">
             {/* Avatar */}
             <button
                 onClick={() => setOpen(prev => !prev)}
-                title={user.email}
+                title={user.name}
                 className="w-9 h-9 rounded-full bg-slate-200 text-slate-600 text-sm font-bold flex items-center justify-center hover:bg-slate-300 transition-colors select-none"
             >
                 {initials}
@@ -66,8 +60,9 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                                 {initials}
                             </div>
                             <div className="min-w-0">
-                                <p className="text-xs font-semibold text-text-main truncate">{user.email}</p>
-                                <p className="text-xs text-text-muted capitalize">{user.role}</p>
+                                <p className="text-xs font-semibold text-text-main truncate">{user.name}</p>
+                                {user.name !== user.email && <p className="text-[11px] text-text-muted truncate">{user.email}</p>}
+                                {user.role === 'admin' && <p className="text-xs text-text-muted">Admin</p>}
                             </div>
                         </div>
                     </div>
@@ -119,11 +114,11 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                     )}
 
                     <button
-                        onClick={() => { setOpen(false); onChangePassword(); }}
+                        onClick={() => { setOpen(false); onOpenAccount(); }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:bg-slate-50 hover:text-text-main transition-colors border-b border-border"
                     >
-                        <KeyRound size={15} />
-                        <span>Mudar palavra-passe</span>
+                        <UserRound size={15} />
+                        <span>A minha conta</span>
                     </button>
 
                     {/* Logout */}

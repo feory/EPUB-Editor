@@ -20,7 +20,7 @@ import { CompletedTable } from './home/CompletedTable';
 import { EbookGrid } from './home/EbookGrid';
 import { UserMenu } from './home/UserMenu';
 import { NotificationsBell } from './home/NotificationsBell';
-import { ChangePasswordModal } from './home/ChangePasswordModal';
+import { AccountModal } from './home/AccountModal';
 import { EpubMappingModal } from './EpubMappingModal';
 import { IndesignImportModal } from './IndesignImportModal';
 import { analyzeBook, optimizeBook, type BookMap, type LineBreakSummary } from '../services/indesign/commands';
@@ -34,7 +34,7 @@ export function HomePage() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { showNotification } = useNotification();
-    const { user: currentUser, logout } = useAuth();
+    const { user: currentUser, logout, setUser } = useAuth();
 
     const handleLogout = async () => {
         await logout();
@@ -49,7 +49,7 @@ export function HomePage() {
     const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
     const [trashOpen, setTrashOpen] = useState(false);
     const [sharingEbook, setSharingEbook] = useState<Ebook | null>(null);
-    const [showChangePassword, setShowChangePassword] = useState(false);
+    const [showAccount, setShowAccount] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [ownerFilter, setOwnerFilter] = useState<'all' | 'mine' | 'others'>('all');
     const [searchOpen, setSearchOpen] = useState(false);
@@ -222,7 +222,7 @@ export function HomePage() {
     const isSharedWithMe = (ebook: Ebook) => !!currentUser && currentUser.role !== 'admin' && ebook.user_id !== currentUser.id;
     const ownerLabel = (ebook: Ebook): string | null => {
         if (!currentUser || ebook.user_id === currentUser.id) return null;
-        const who = ebook.owner_email ?? 'outro utilizador';
+        const who = ebook.owner_name ?? ebook.owner_email ?? 'outro utilizador';
         return currentUser.role === 'admin' ? `De ${who}` : `Partilhado por ${who}`;
     };
     const leaveShareMutation = useMutation({
@@ -404,7 +404,7 @@ export function HomePage() {
                                 viewMode={viewMode}
                                 onViewModeChange={setViewMode}
                                 onLogout={handleLogout}
-                                onChangePassword={() => setShowChangePassword(true)}
+                                onOpenAccount={() => setShowAccount(true)}
                                 onNavigatePanel={() => navigate('/painel')}
                                 onImportEpub={() => epubInputRef.current?.click()}
                                 onImportIndesign={() => indesignInputRef.current?.click()}
@@ -521,10 +521,11 @@ export function HomePage() {
                 )}
             </main>
 
-            {showChangePassword && (
-                <ChangePasswordModal
-                    onClose={() => setShowChangePassword(false)}
-                    onDone={() => { setShowChangePassword(false); showNotification('success', 'Palavra-passe alterada. As outras sessões foram terminadas.', 4000); }}
+            {showAccount && currentUser && (
+                <AccountModal
+                    user={currentUser}
+                    onClose={() => setShowAccount(false)}
+                    onSaved={(u) => { setUser(u); queryClient.invalidateQueries(); setShowAccount(false); showNotification('success', 'Conta atualizada.', 3000); }}
                 />
             )}
 

@@ -52,9 +52,9 @@ export const NotificationsBell: React.FC<{ onOpenEbook: (isbn: string) => void }
                         {(data?.notifications.length ?? 0) === 0 ? (
                             <p className="px-4 py-8 text-center text-sm text-text-muted italic">Sem avisos.</p>
                         ) : data!.notifications.map(n => (
-                            <button key={n.id} onClick={() => { if (!n.read_at) void markRead(n.id); setOpen(false); onOpenEbook(n.ebook_isbn); }}
-                                className={`w-full text-left px-4 py-2.5 border-b border-border last:border-0 hover:bg-slate-50 transition-colors ${n.read_at ? '' : 'bg-primary/5'}`}>
-                                <p className={`text-sm ${n.read_at ? 'text-text-muted' : 'text-text-main font-medium'}`}>{notificationText(n)}</p>
+                            <button key={n.id} onClick={() => { void markRead(n.id); setOpen(false); onOpenEbook(n.ebook_isbn); }}
+                                className="w-full text-left px-4 py-2.5 border-b border-border last:border-0 bg-primary/5 hover:bg-slate-50 transition-colors">
+                                <p className="text-sm text-text-main font-medium">{notificationText(n)}</p>
                                 <p className="text-[11px] text-text-muted mt-0.5">{when(n.created_at)}</p>
                             </button>
                         ))}

@@ -40,7 +40,7 @@ function CommentMessage({ comment, currentUserId, currentUserRole, onDelete }: {
         <div className="group flex items-start justify-between gap-2">
             <div>
                 <div className="flex items-baseline gap-2">
-                    <span className="text-xs font-bold text-slate-700">{comment.user_email}</span>
+                    <span className="text-xs font-bold text-slate-700">{comment.user_name ?? comment.user_email}</span>
                     <span className="text-[10px] text-slate-400">{formatTimestamp(comment.created_at)}</span>
                 </div>
                 <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{comment.text}</p>

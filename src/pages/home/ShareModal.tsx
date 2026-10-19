@@ -64,7 +64,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ ebook, onClose }) => {
     const filteredUsers = useMemo(() => {
         const q = query.trim().toLowerCase();
         if (!q) return users;
-        return users.filter(u => u.email.toLowerCase().includes(q));
+        return users.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
     }, [users, query]);
 
     return (
@@ -87,7 +87,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ ebook, onClose }) => {
                                     <input
                                         type="text"
                                         autoFocus
-                                        placeholder="Email..."
+                                        placeholder="Nome ou email..."
                                         value={query}
                                         onChange={e => setQuery(e.target.value)}
                                         onKeyDown={e => { if (e.key === 'Escape') { setQuery(''); setSearchOpen(false); } }}
@@ -130,9 +130,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({ ebook, onClose }) => {
                                         className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-60 text-left"
                                     >
                                         <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold uppercase ${shared ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                            {u.email.slice(0, 2)}
+                                            {u.name.slice(0, 2)}
                                         </div>
-                                        <span className="flex-1 min-w-0 truncate text-sm text-text-main">{u.email}</span>
+                                        <span className="flex-1 min-w-0 truncate text-sm text-text-main">{u.name}{u.name !== u.email && <span className="ml-2 text-xs text-text-muted">{u.email}</span>}</span>
                                         {pending ? (
                                             <Loader2 size={16} className="animate-spin text-slate-400 shrink-0" />
                                         ) : (

@@ -97,6 +97,7 @@ export const server = Bun.serve({
       // Auth user management
       if (path === "/api/auth/me"    && method === "GET")    return authRoutes.me(user);
       if (path === "/api/auth/password" && method === "POST") return authRoutes.changePassword(req, user);
+      if (path === "/api/auth/profile"  && method === "PUT")  return authRoutes.updateProfile(req, user);
       if (path === "/api/notifications"      && method === "GET")  return notifications.listNotifications(user);
       if (path === "/api/notifications/read" && method === "POST") return notifications.markRead(req, user);
       if (path === "/api/auth/users" && method === "GET")    return authRoutes.listUsers(req, user);
@@ -178,7 +179,7 @@ export const server = Bun.serve({
 
         // Presence / edit-lock (heartbeat). Excluído do guard de escrita abaixo.
         if (parts.length === 5 && parts[4] === 'presence') {
-          if (method === "POST")   return Response.json(presence.touch(isbn, clientId, user.email), { headers: corsHeaders });
+          if (method === "POST")   return Response.json(presence.touch(isbn, clientId, stmt.getDisplayName.get(Number(user.sub))?.name ?? user.email), { headers: corsHeaders });
           if (method === "DELETE") { presence.release(isbn, clientId); return Response.json({ ok: true }, { headers: corsHeaders }); }
         }
 

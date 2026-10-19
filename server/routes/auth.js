@@ -42,11 +42,17 @@ function issueRefreshToken(userId) {
   return rawToken;
 }
 
+const MAX_NAME = 60;
+const cleanName = (v) => (typeof v === 'string' ? v.trim().slice(0, MAX_NAME) : '');
+const displayName = (u) => [u.first_name, u.last_name].map(s => s?.trim()).filter(Boolean).join(' ') || u.email;
+// Forma que o cliente guarda como utilizador autenticado.
+const publicUser = (u) => ({ id: u.id, email: u.email, role: u.role, first_name: u.first_name ?? null, last_name: u.last_name ?? null, name: displayName(u) });
+
 async function authSuccessResponse(user) {
   const accessToken = await signAccessToken(user);
   const rawRefresh = issueRefreshToken(user.id);
   return new Response(
-    JSON.stringify({ accessToken, user: { id: user.id, email: user.email, role: user.role } }),
+    JSON.stringify({ accessToken, user: publicUser(user) }),
     {
       status: 200,
       headers: {
@@ -160,6 +166,17 @@ export async function me(user) {
   return Response.json({ data: dbUser }, { headers: corsHeaders });
 }
 
+// PUT /api/auth/profile { firstName, lastName } — o próprio utilizador define o seu nome (vazio = voltar ao email).
+export async function updateProfile(req, user) {
+  let body;
+  try { body = await req.json(); } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: corsHeaders });
+  }
+  const id = Number(user.sub);
+  stmt.setUserName.run(cleanName(body?.firstName) || null, cleanName(body?.lastName) || null, id);
+  return Response.json({ data: stmt.getUserById.get(id) }, { headers: corsHeaders });
+}
+
 export async function listUsers(req, user) {
   const adminErr = requireAdmin(user);
   if (adminErr) return adminErr;
@@ -180,6 +197,7 @@ export async function createUser(req, user) {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: corsHeaders });
   }
   const { email, password, role = 'user' } = body ?? {};
+  const firstName = cleanName(body?.firstName), lastName = cleanName(body?.lastName);
   if (!email || !password) {
     return new Response(JSON.stringify({ error: 'Email and password required' }), { status: 400, headers: corsHeaders });
   }
@@ -196,11 +214,11 @@ export async function createUser(req, user) {
   }
 
   const hash = await Bun.password.hash(password);
-  const result = stmt.createUser.run(email, hash, role);
+  const result = stmt.createUser.run(email, hash, role, firstName || null, lastName || null);
   logActivity(actorFromUser(user), 'user_create',
     { target: email, meta: { role }, req });
   return Response.json(
-    { data: { id: result.lastInsertRowid, email, role } },
+    { data: publicUser({ id: result.lastInsertRowid, email, role, first_name: firstName, last_name: lastName }) },
     { status: 201, headers: corsHeaders }
   );
 }
@@ -276,6 +294,11 @@ export async function updateUser(req, user, targetId) {
   if (password) sets.push('password = ?');
   if (role)     sets.push('role = ?');
 
+  const hasNames = body?.firstName !== undefined || body?.lastName !== undefined;
+  if (hasNames) {
+    sets.push('first_name = ?', 'last_name = ?');
+  }
+
   if (sets.length === 0) {
     return new Response(JSON.stringify({ error: 'Nothing to update' }), { status: 400, headers: corsHeaders });
   }
@@ -284,6 +307,7 @@ export async function updateUser(req, user, targetId) {
   if (email)    params.push(email);
   if (password) params.push(await Bun.password.hash(password));
   if (role)     params.push(role);
+  if (hasNames) params.push(cleanName(body.firstName) || null, cleanName(body.lastName) || null);
   params.push(id);
 
   db.run(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, params);

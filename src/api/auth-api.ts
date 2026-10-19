@@ -5,6 +5,9 @@ export interface AuthUser {
   id: number;
   email: string;
   role: 'admin' | 'user';
+  first_name?: string | null;
+  last_name?: string | null;
+  name: string;               // "Nome Apelido", ou o email se não houver nome
   created_at?: string;
 }
 
@@ -33,8 +36,8 @@ export const authApi = {
   listBasicUsers: () =>
     apiClient.get<{ data: ShareUser[] }>('/users'),
 
-  createUser: (email: string, password: string, role: 'admin' | 'user') =>
-    apiClient.post<{ data: AuthUser }>('/auth/users', { email, password, role }),
+  createUser: (email: string, password: string, role: 'admin' | 'user', firstName = '', lastName = '') =>
+    apiClient.post<{ data: AuthUser }>('/auth/users', { email, password, role, firstName, lastName }),
 
   deleteUser: (id: number) =>
     apiClient.delete(`/auth/users/${id}`),
@@ -43,6 +46,10 @@ export const authApi = {
   changePassword: (currentPassword: string, newPassword: string) =>
     apiClient.post<AuthResponse>('/auth/password', { currentPassword, newPassword }),
 
-  updateUser: (id: number, data: { email?: string; password?: string; role?: 'admin' | 'user' }) =>
+  // O próprio utilizador define o nome (vazio = voltar a mostrar o email).
+  updateProfile: (firstName: string, lastName: string) =>
+    apiClient.put<{ data: AuthUser }>('/auth/profile', { firstName, lastName }),
+
+  updateUser: (id: number, data: { email?: string; password?: string; role?: 'admin' | 'user'; firstName?: string; lastName?: string }) =>
     apiClient.put<{ data: AuthUser }>(`/auth/users/${id}`, data),
 };

@@ -8,6 +8,7 @@ export interface AppNotification {
     ebook_isbn: string;
     ebook_title: string | null;
     actor_email: string | null;
+    actor_name: string | null;
     read_at: string | null;
     created_at: string;
 }

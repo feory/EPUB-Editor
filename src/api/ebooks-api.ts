@@ -22,12 +22,14 @@ export interface Ebook {
     created_at?: string;
     deleted_at?: string;
     owner_email?: string | null;
+    owner_name?: string | null;
     user_id?: number;               // dono (os restantes com acesso têm o ebook partilhado)
 }
 
 export interface ShareUser {
     id: number;
     email: string;
+    name: string;
 }
 
 export interface Comment {
@@ -37,6 +39,7 @@ export interface Comment {
     parent_id: number | null;
     user_id: number;
     user_email: string;
+    user_name: string;
     text: string;
     resolved: 0 | 1;
     created_at: string;

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { PasswordInput } from '../components/PasswordInput';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import {
     ChevronLeft, Trash2, Loader2, AlertTriangle, Search, Check, X, CloudUpload,
-    UserPlus, Shield, User, Eye, EyeOff, Pencil, Info,
+    UserPlus, Shield, User, Pencil, Info,
 } from 'lucide-react';
 import { ebooksApi, type DiskUsageBook, type BackupRun, type CleanupSettings } from '../api/ebooks-api';
 import { authApi, type AuthUser } from '../api/auth-api';
@@ -769,30 +770,7 @@ function BooksTab() {
 }
 
 const USERS_PAGE_SIZE = 10;
-const EMPTY_CREATE_USER = { email: '', password: '', role: 'user' as 'admin' | 'user' };
-
-function PasswordInput({ value, onChange, required = false, placeholder = '••••••••••••' }: {
-    value: string; onChange: (v: string) => void; required?: boolean; placeholder?: string;
-}) {
-    const [show, setShow] = useState(false);
-    return (
-        <div className="relative">
-            <input
-                type={show ? 'text' : 'password'}
-                required={required}
-                minLength={required ? 12 : undefined}
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border focus:border-slate-400 focus:ring-2 focus:ring-slate-200 outline-none transition-all"
-                placeholder={placeholder}
-            />
-            <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? 'Ocultar palavra-passe' : 'Mostrar palavra-passe'}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-color">
-                {show ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
-        </div>
-    );
-}
+const EMPTY_CREATE_USER = { email: '', password: '', role: 'user' as 'admin' | 'user', firstName: '', lastName: '' };
 
 function UserModal({ title, onClose, onSave, children }: { title: string; onClose: () => void; onSave?: () => void; children: React.ReactNode }) {
     useBodyScrollLock();
@@ -834,7 +812,7 @@ function UsersTab() {
     const [showCreate, setShowCreate] = useState(false);
     const [createForm, setCreateForm] = useState(EMPTY_CREATE_USER);
     const [editTarget, setEditTarget] = useState<AuthUser | null>(null);
-    const [editForm, setEditForm] = useState({ email: '', password: '', role: 'user' as 'admin' | 'user' });
+    const [editForm, setEditForm] = useState({ email: '', password: '', role: 'user' as 'admin' | 'user', firstName: '', lastName: '' });
     const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
     const [query, setQuery] = useState('');
     const [page, setPage] = useState(1);
@@ -851,6 +829,7 @@ function UsersTab() {
         if (!q) return users;
         return users.filter((u: AuthUser) =>
             u.email.toLowerCase().includes(q) ||
+            u.name.toLowerCase().includes(q) ||
             (u.role === 'admin' ? 'administrador' : 'utilizador').includes(q)
         );
     }, [users, query]);
@@ -862,7 +841,7 @@ function UsersTab() {
     function handleQueryChange(value: string) { setQuery(value); setPage(1); }
 
     const createMutation = useMutation({
-        mutationFn: () => authApi.createUser(createForm.email, createForm.password, createForm.role),
+        mutationFn: () => authApi.createUser(createForm.email, createForm.password, createForm.role, createForm.firstName, createForm.lastName),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-users'] });
             queryClient.invalidateQueries({ queryKey: ['activity-log'] });
@@ -877,10 +856,14 @@ function UsersTab() {
 
     const updateMutation = useMutation({
         mutationFn: () => {
-            const data: { email?: string; password?: string; role?: 'admin' | 'user' } = {};
+            const data: { email?: string; password?: string; role?: 'admin' | 'user'; firstName?: string; lastName?: string } = {};
             if (editForm.email !== editTarget?.email) data.email = editForm.email;
             if (editForm.password) data.password = editForm.password;
             if (editForm.role !== editTarget?.role) data.role = editForm.role;
+            if (editForm.firstName !== (editTarget?.first_name ?? '') || editForm.lastName !== (editTarget?.last_name ?? '')) {
+                data.firstName = editForm.firstName;
+                data.lastName = editForm.lastName;
+            }
             return authApi.updateUser(editTarget!.id, data);
         },
         onSuccess: () => {
@@ -909,7 +892,7 @@ function UsersTab() {
 
     function openEdit(u: AuthUser) {
         setEditTarget(u);
-        setEditForm({ email: u.email, password: '', role: u.role });
+        setEditForm({ email: u.email, password: '', role: u.role, firstName: u.first_name ?? '', lastName: u.last_name ?? '' });
     }
 
     function formatUserDate(iso: string) {
@@ -958,7 +941,7 @@ function UsersTab() {
                                         {u.role === 'admin' ? <Shield size={14} className="text-slate-500" /> : <User size={14} className="text-text-muted" />}
                                     </div>
                                     <div className="min-w-0">
-                                        <p className="text-sm font-medium text-text-color truncate">{u.email}</p>
+                                        <p className="text-sm font-medium text-text-color truncate">{u.name}{u.name !== u.email && <span className="ml-2 text-xs font-normal text-text-muted">{u.email}</span>}</p>
                                         <p className="text-xs text-text-muted">
                                             {u.role === 'admin' ? 'Administrador' : 'Utilizador'}
                                             {u.created_at && ` · ${formatUserDate(u.created_at)}`}
@@ -1006,6 +989,20 @@ function UsersTab() {
             {showCreate && (
                 <UserModal title="Novo Utilizador" onClose={() => { setShowCreate(false); setCreateForm(EMPTY_CREATE_USER); }} onSave={() => createFormRef.current?.requestSubmit()}>
                     <form ref={createFormRef} onSubmit={e => { e.preventDefault(); createMutation.mutate(); }} className="flex flex-col gap-4">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelClass}>Nome</label>
+                                <input value={createForm.firstName} maxLength={60}
+                                    onChange={e => setCreateForm(f => ({ ...f, firstName: e.target.value }))}
+                                    className={fieldClass} />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelClass}>Apelido</label>
+                                <input value={createForm.lastName} maxLength={60}
+                                    onChange={e => setCreateForm(f => ({ ...f, lastName: e.target.value }))}
+                                    className={fieldClass} />
+                            </div>
+                        </div>
                         <div className="flex flex-col gap-1.5">
                             <label className={labelClass}>Email</label>
                             <input type="email" required value={createForm.email}
@@ -1032,6 +1029,20 @@ function UsersTab() {
             {editTarget && (
                 <UserModal title="Edição do Utilizador" onClose={() => setEditTarget(null)} onSave={() => editFormRef.current?.requestSubmit()}>
                     <form ref={editFormRef} onSubmit={e => { e.preventDefault(); updateMutation.mutate(); }} className="flex flex-col gap-4">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelClass}>Nome</label>
+                                <input value={editForm.firstName} maxLength={60}
+                                    onChange={e => setEditForm(f => ({ ...f, firstName: e.target.value }))}
+                                    className={fieldClass} />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelClass}>Apelido</label>
+                                <input value={editForm.lastName} maxLength={60}
+                                    onChange={e => setEditForm(f => ({ ...f, lastName: e.target.value }))}
+                                    className={fieldClass} />
+                            </div>
+                        </div>
                         <div className="flex flex-col gap-1.5">
                             <label className={labelClass}>Email</label>
                             <input type="email" required value={editForm.email}

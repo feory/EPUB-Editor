@@ -8,6 +8,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  setUser: (user: AuthUser) => void; // depois de editar o próprio perfil
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -48,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   );
