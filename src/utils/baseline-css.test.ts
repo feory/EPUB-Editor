@@ -1,6 +1,5 @@
 import { test, expect } from 'bun:test';
-import { ensureBaselineCss, stripEditorOnlyCss } from './baseline-css';
-import { addCustomStyle } from './custom-styles';
+import { ensureBaselineCss } from './baseline-css';
 
 const OLD = `body { margin: 5%; }\n    /* === ESTILOS DE PARÁGRAFO === */\n    .p-center { text-align: center; }\n`;
 
@@ -27,11 +26,4 @@ test('idempotente e respeita regras já presentes', () => {
     const out = ensureBaselineCss(has, 'export');
     expect(out.match(/\.grid/g)!.length).toBe(1);
     expect(out.match(/\.p-italic/g)!.length).toBe(1);
-});
-
-test('stripEditorOnlyCss: estilos personalizados depois do marcador do editor sobrevivem ao corte', () => {
-    const css = addCustomStyle('p { margin: 0; }\n/* === EDITOR (não exportado para EPUB) === */\nhr.chapter-break { border: 0; }\n', 'p-a', 'text-align: right;');
-    const out = stripEditorOnlyCss(css);
-    expect(out).toContain('.p-a { text-align: right; }');
-    expect(out).not.toContain('chapter-break');
 });

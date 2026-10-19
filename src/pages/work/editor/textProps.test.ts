@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
 import { Window } from 'happy-dom';
 import { applyTextProps, textPropsFrom, textPatchToDecls, EMPTY_TEXT, convertLen, type TextDom } from './textProps';
-import { readRule, applyRule } from './cssRule';
+import { readRule, applyRule } from '../../../utils/css-rule';
 
 const CSS = `
     /* === PARÁGRAFOS === */

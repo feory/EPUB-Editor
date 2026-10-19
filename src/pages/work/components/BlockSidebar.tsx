@@ -4,11 +4,11 @@ import { PanelResizeHandle } from './PanelResizeHandle';
 import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
 import { EMPTY_TEXT, textPropsFrom, textPatchToDecls, convertLen, type TextProps, type TextAlign, type Len, type Unit } from '../editor/textProps';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
-import { readRule, hasRule } from '../editor/cssRule';
+import { readRule, hasRule } from '../../../utils/css-rule';
 import { GRID_RATIOS, EMPTY_GRID, type GridProps } from '../editor/gridProps';
 import { IMAGE_ALIGNS, EMPTY_IMAGE, type ImageProps } from '../editor/imageProps';
 import { BLOCK_STYLE_OPTIONS } from '../editor/config';
-import { listCustomStyles, styleClassOf } from '../../../utils/custom-styles';
+import { listCustomStyles, styleClassOf } from '../../../utils/book-css';
 
 interface BlockSidebarProps {
     info: BlockInfo;                                  // caixa / bloco de texto sob o cursor

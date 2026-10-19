@@ -26,10 +26,7 @@ import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { CommentSidebar } from './work/components/CommentSidebar';
 import { BlockSidebar } from './work/components/BlockSidebar';
 import type { BlockInfo } from './work/editor/blockEditing';
-import type { TextProps } from './work/editor/textProps';
-import { textPatchToDecls } from './work/editor/textProps';
-import { applyRule, hasRule } from './work/editor/cssRule';
-import { addCustomStyle } from '../utils/custom-styles';
+import { useBookCss } from './work/hooks/useBookCss';
 import { useComments } from './work/hooks/useComments';
 import { useCommentEditorSync } from './work/hooks/useCommentEditorSync';
 import { useAuth } from '../context/AuthContext';
@@ -43,7 +40,8 @@ import { useWorkPageSidebars } from './work/hooks/useWorkPageSidebars';
 import { useGoToChapterMarker } from './work/hooks/useGoToChapterMarker';
 import { useGoToParagraph } from './work/hooks/useGoToParagraph';
 import { useNotification } from '../context/NotificationContext';
-import { useStyles, DEFAULT_CSS, patchLoadedCss } from '../context/StyleContext';
+import { useStyles, DEFAULT_CSS } from '../context/StyleContext';
+import { forEditor } from '../utils/book-css';
 import { sanitizeImageFilename } from '../utils/format';
 import { getStoredFont, storeFont, getStoredFontSize, storeFontSize } from './work/utils/editorFonts';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -87,7 +85,7 @@ export function WorkPage() {
     if (!isbn) return;
     let cancelled = false;
     ebooksApi.getStyle(isbn)
-      .then(res => { if (!cancelled) setCustomCss(patchLoadedCss(res.data as unknown as string)); })
+      .then(res => { if (!cancelled) setCustomCss(forEditor(res.data as unknown as string)); })
       .catch(() => { if (!cancelled) setCustomCss(DEFAULT_CSS); });
     return () => { cancelled = true; };
   }, [isbn, setCustomCss]);
@@ -385,25 +383,8 @@ export function WorkPage() {
     } catch { return ts; }
   };
 
-  // Modo "Estilo" do painel de bloco: edita a regra no CSS do livro (aplica já; grava com debounce).
-  const styleSaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const handleTextStyle = (selector: string, patch: Partial<TextProps>) => {
-    const next = applyRule(getCurrentCss(), selector, textPatchToDecls(patch));
-    setCustomCss(next);
-    clearTimeout(styleSaveTimer.current);
-    if (isbn) styleSaveTimer.current = setTimeout(() => ebooksApi.saveStyle(isbn, next), 600);
-  };
-
-  // "Mais estilos" → "Novo estilo…": acrescenta `.cls { css }` à secção de estilos personalizados.
-  const handleCreateStyle = (cls: string, body: string): string | null => {
-    const css = getCurrentCss();
-    if (hasRule(css, `.${cls}`)) return `Já existe um estilo ".${cls}".`;
-    const next = addCustomStyle(css, cls, body);
-    setCustomCss(next);
-    clearTimeout(styleSaveTimer.current);
-    if (isbn) styleSaveTimer.current = setTimeout(() => ebooksApi.saveStyle(isbn, next), 600);
-    return null;
-  };
+  // CSS do livro editado a partir do editor (modo "Estilo" do painel, "Criar estilo…"): aplica já, grava com debounce.
+  const { editRule: handleTextStyle, createStyle: handleCreateStyle } = useBookCss(isbn);
 
   const anySidebarOpen = panels.anyOpen;
 

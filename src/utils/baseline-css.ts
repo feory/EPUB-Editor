@@ -2,8 +2,6 @@
 // funcionalidade existir) não as têm: faltam no editor ao abrir e no EPUB ao exportar. Uma tabela
 // única — regra nova = uma entrada — aplicada nos dois sítios.
 
-import { customStylesSection, EDITOR_CSS_MARKER } from './custom-styles';
-
 export type BaselineTarget = 'editor' | 'export';
 
 export const GRID_CSS = `.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; margin: 1em 0; }
@@ -49,13 +47,3 @@ export function ensureBaselineCss(css: string, target: BaselineTarget): string {
     for (const r of RULES) if (r.targets.includes(target) && !out.includes(r.guard)) out = add(out, r.css, target);
     return out;
 }
-
-// O style.css por livro tem uma secção editor-only após este marcador; cortar antes de exportar/pré-visualizar.
-export const stripEditorOnlyCss = (css: string): string => {
-    const i = css.indexOf(EDITOR_CSS_MARKER);
-    if (i === -1) return css;
-    const kept = css.slice(0, i).trimEnd();
-    // Estilos personalizados criados no editor vão para o fim do style.css (depois do marcador): mantêm-se.
-    const custom = customStylesSection(css);
-    return custom && !kept.includes(custom) ? `${kept}\n\n${custom}` : kept;
-};

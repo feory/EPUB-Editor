@@ -13,7 +13,7 @@ import { prepareTextForXml } from './epub/html-utils';
 
 export type { BookMetadata } from './epub/types';
 import type { BookMetadata } from './epub/types';
-import { ensureBaselineCss, stripEditorOnlyCss } from '../../utils/baseline-css';
+import { forExport } from '../../utils/book-css';
 
 // Mantido para compatibilidade - usar DEFAULT_CSS do StyleContext para customização
 export const EPUB_CSS = `
@@ -149,7 +149,7 @@ export const EPUB_CSS = `
 // CSS de exportação: corta a secção editor-only e garante classes utilitárias recentes
 // que podem faltar no style.css de livros antigos (utils/baseline-css).
 const exportCss = (css: string): string => {
-    let out = ensureBaselineCss(stripEditorOnlyCss(css), 'export');
+    let out = forExport(css);
     // Notas: marcador (sup a) e backlink (.footnote a) herdam a cor do texto.
     // SEMPRE anexado no fim (vence a cascata) — livros antigos podem ter
     // `.footnote a { text-decoration: none }` SEM `color`, deixando o link na

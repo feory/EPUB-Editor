@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
-import { ensureBaselineCss, GRID_CSS } from '../utils/baseline-css';
+import { GRID_CSS } from '../utils/baseline-css';
 
 export const DEFAULT_CSS = `
     /* === TIPOGRAFIA === */
@@ -205,18 +205,6 @@ ${GRID_CSS}
         100% { background-color: rgba(255, 255, 0, 0); }
     }
 `;
-
-/** Corrige o style.css guardado de livros antigos (marcador de capítulo, fontes) e acrescenta as regras-base em falta. */
-export function patchLoadedCss(css: string): string {
-  // Marcador de capítulo: retirar o prefixo "Capítulo - " (livros antigos guardaram-no no CSS).
-  css = css.replace(/content:\s*"Cap[íi]tulo - "\s+attr\(data-title\)/g, 'content: attr(data-title)');
-  // Fonte Crimson Text: livros gravados antes da correção tinham "Fonts/…" (relativo — dentro do
-  // srcdoc do TinyMCE resolvia contra a URL da página, ex. /work/Fonts/…, nunca contra a raiz onde
-  // os .ttf realmente estão servidos). Só troca ESTE ficheiro específico (não generaliza a outros
-  // url("Fonts/…") que possam existir, ex. os do export EPUB).
-  css = css.replace(/url\(["']?Fonts\/(CrimsonText-[\w]+\.ttf)["']?\)/g, 'url("/$1")');
-  return ensureBaselineCss(css, 'editor');
-}
 
 interface StyleContextType {
   customCss: string;
