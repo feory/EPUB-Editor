@@ -65,6 +65,16 @@ export function useEbookHistory({
         }
     }, [isbn, dispatch, queryClient, skipSyncRef, showNotification]);
 
+    // Marca (ou, com texto vazio, desmarca) uma versão; as marcadas nunca são apagadas pela limpeza automática.
+    const handleSetLabel = useCallback(async (filename: string, label: string) => {
+        try {
+            await ebooksApi.setHistoryLabel(isbn!, filename, label);
+            await refetchHistory();
+        } catch {
+            showNotification('error', 'Erro ao marcar a versão.');
+        }
+    }, [isbn, refetchHistory, showNotification]);
+
     const handleDownloadEpub = useCallback(async (filename: string) => {
         try {
             const res = await ebooksApi.downloadEpub(isbn!, filename);
@@ -93,6 +103,7 @@ export function useEbookHistory({
         fetchHistory,
         refetchHistory, // carregar a lista sem abrir o modal (ex. separador Histórico da Comparação)
         handleLoadHistory,
+        handleSetLabel,
         handleDownloadEpub,
     };
 }

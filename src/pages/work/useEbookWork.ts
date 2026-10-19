@@ -335,6 +335,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         epubFiles: history.epubFiles,
         fetchHistory: history.fetchHistory,
         loadHistoryFile: history.handleLoadHistory,
+        setHistoryLabel: history.handleSetLabel,
         downloadEpubFile: history.handleDownloadEpub,
         refetchHistory: history.refetchHistory,
         versionDiff,

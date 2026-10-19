@@ -3,10 +3,11 @@
 // handlers HTTP de lá chamam reschedule() daqui depois de guardar, sem import circular).
 import { existsSync } from 'fs';
 import { readdir, unlink, stat } from 'fs/promises';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { stmt, purgeOldTrash } from './database.js';
 import { DATA_DIR } from './config.js';
 import { nextRun } from './cron-schedule.js';
+import { readLabels } from './history-labels.js';
 
 const CLEANUP_RETENTION_DEFAULT = 7;
 const TRASH_RETENTION_DEFAULT = 30;
@@ -30,8 +31,8 @@ export function cleanupRetentionDays() { return settingNumber('cleanup_retention
 export function trashRetentionDays() { return settingNumber('trash_retention_days', TRASH_RETENTION_DEFAULT); }
 
 // Apaga, dentro de `dir`, os ficheiros que passam `filter` e têm mais de `limit` (mtime) —
-// preservando SEMPRE o mais recente. Devolve { count, bytes } apagados.
-async function purgeOldExceptNewest(dir, filter, limit) {
+// preservando SEMPRE o mais recente e os de `keep` (nomes de ficheiro). Devolve { count, bytes } apagados.
+export async function purgeOldExceptNewest(dir, filter, limit, keep = new Set()) {
   if (!existsSync(dir)) return { count: 0, bytes: 0 };
   const files = (await readdir(dir)).filter(filter);
   let newestPath = null, newestMtime = -1;
@@ -44,7 +45,7 @@ async function purgeOldExceptNewest(dir, filter, limit) {
   }
   let count = 0, bytes = 0;
   for (const { p, st } of entries) {
-    if (p === newestPath) continue; // manter sempre o mais recente
+    if (p === newestPath || keep.has(basename(p))) continue; // o mais recente e as versões marcadas ficam
     if (st.mtimeMs < limit) { bytes += st.size; await unlink(p); count++; }
   }
   return { count, bytes };
@@ -59,7 +60,7 @@ export async function runHistoryCleanup(retentionDays) {
   const isbns = await readdir(DATA_DIR);
   for (const isbn of isbns) {
     const history = await purgeOldExceptNewest(
-      join(DATA_DIR, isbn, 'history'), f => f.startsWith('content_'), limit);
+      join(DATA_DIR, isbn, 'history'), f => f.startsWith('content_'), limit, new Set(Object.keys(readLabels(isbn))));
     count += history.count; totalBytes += history.bytes;
     // Versões antigas do EPUB exportado (Epub/ebook_<timestamp>.epub) — nunca o `<isbn>.epub`
     // (ponteiro para a versão atual, sem prefixo ebook_, fica sempre fora deste filtro).

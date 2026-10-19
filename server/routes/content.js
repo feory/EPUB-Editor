@@ -4,6 +4,7 @@ import { join, resolve } from 'path';
 import { corsHeaders, jsonResponse, safeSegment } from '../response.js';
 import { DATA_DIR } from '../config.js';
 import { debugLog } from '../log.js';
+import { readLabels, setLabel } from '../history-labels.js';
 
 const MAX_CONTENT_SIZE = 50_000_000;
 
@@ -87,12 +88,22 @@ export async function getContent(req, isbn, url) {
 export async function getHistory(req, isbn) {
   const dir = join(DATA_DIR, isbn, 'history');
   if (!existsSync(dir)) return Response.json({ history: [] }, { headers: corsHeaders });
+  const labels = readLabels(isbn);
   const files = (await readdir(dir))
     .filter(f => f.endsWith('.html') || f.endsWith('.html.gz'))
     .map(f => ({
       filename: f,
       timestamp: f.replace('content_', '').replace('.html.gz', '').replace('.html', ''),
+      ...(labels[f] ? { label: labels[f] } : {}),
     }))
     .sort((a, b) => b.filename.localeCompare(a.filename));
   return jsonResponse({ history: files }, req, corsHeaders);
+}
+
+// PUT /api/ebooks/:isbn/history/:filename  { label }  — marca (ou, com label vazio, desmarca) uma versão.
+export async function setHistoryLabel(req, isbn, filename) {
+  if (!safeSegment(filename) || !filename.startsWith('content_') || !existsSync(join(DATA_DIR, isbn, 'history', filename)))
+    return Response.json({ error: 'File not found' }, { status: 404, headers: corsHeaders });
+  const { label } = await req.json();
+  return Response.json({ label: setLabel(isbn, filename, label) }, { headers: corsHeaders });
 }

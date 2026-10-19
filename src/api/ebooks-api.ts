@@ -127,6 +127,7 @@ export interface HealthResponse {
 export interface HistoryFile {
     filename: string;
     timestamp: string;
+    label?: string;   // versão marcada pelo utilizador (protegida da limpeza automática)
 }
 
 export interface EpubFile {
@@ -227,6 +228,7 @@ export const ebooksApi = {
         ),
 
     // History
+    setHistoryLabel: (isbn: string, filename: string, label: string) => apiClient.put<{ label: string }>(`/ebooks/${isbn}/history/${filename}`, { label }),
     getHistory: (isbn: string) => apiClient.get<{ history: HistoryFile[] }>(`/ebooks/${isbn}/history`),
 
     // Validation

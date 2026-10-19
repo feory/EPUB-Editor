@@ -219,6 +219,10 @@ export const server = Bun.serve({
           return epub.getEpubFile(isbn, parts[5]);
         }
 
+        if (parts.length === 6 && parts[4] === 'history' && method === "PUT") {
+          return content.setHistoryLabel(req, isbn, parts[5]);
+        }
+
         if (parts.length === 6 && parts[4] === 'share' && method === "DELETE") {
           return ebooks.unshareEbook(isbn, parts[5], user);
         }

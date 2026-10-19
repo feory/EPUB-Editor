@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Save, ArrowLeft, History, Download, BookOpen, ChevronRight } from 'lucide-react';
+import { Save, ArrowLeft, History, Download, BookOpen, ChevronRight, Bookmark } from 'lucide-react';
 import type { HistoryFile, EpubFile } from '../../../api/ebooks-api';
 import { formatFileSize } from '../../../utils/format';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
@@ -12,11 +12,12 @@ interface HistoryModalProps {
     epubFiles: EpubFile[];
     onClose: () => void;
     onLoad: (filename: string) => void;
+    onSetLabel: (filename: string, label: string) => void;   // texto vazio = desmarcar
     onDownloadEpub: (filename: string) => void;
     formatTimestamp: (ts: string) => string;
 }
 
-const HistoryModalComponent: React.FC<HistoryModalProps> = ({ files, epubFiles, onClose, onLoad, onDownloadEpub, formatTimestamp }) => {
+const HistoryModalComponent: React.FC<HistoryModalProps> = ({ files, epubFiles, onClose, onLoad, onSetLabel, onDownloadEpub, formatTimestamp }) => {
     useBodyScrollLock();
     const [activeTab, setActiveTab] = useState<HistoryTab>('history');
     // Default: só o grupo mais recente (índice 0) aberto; restantes fechados. `overrides` guarda
@@ -30,7 +31,13 @@ const HistoryModalComponent: React.FC<HistoryModalProps> = ({ files, epubFiles, 
         { id: 'epub', label: 'EPUBs', count: epubFiles.length },
     ];
 
-    const currentFiles = activeTab === 'history' ? files : [];
+    // Nome de uma versão em edição (inline, sem window.prompt) e filtro "só marcadas".
+    const [editing, setEditing] = useState<{ filename: string; value: string } | null>(null);
+    const [onlyMarked, setOnlyMarked] = useState(false);
+    const markedCount = files.filter(f => f.label).length;
+    const saveLabel = () => { if (editing) { onSetLabel(editing.filename, editing.value); setEditing(null); } };
+
+    const currentFiles = activeTab === 'history' ? (onlyMarked ? files.filter(f => f.label) : files) : [];
 
     // Agrupa por dia (files já vêm ordenados do mais recente); chave = parte da data do timestamp.
     const groups: { date: string; label: string; files: HistoryFile[] }[] = [];
@@ -85,6 +92,16 @@ const HistoryModalComponent: React.FC<HistoryModalProps> = ({ files, epubFiles, 
                     ))}
                 </div>
 
+                {activeTab === 'history' && (markedCount > 0 || onlyMarked) && (
+                    <div className="flex items-center justify-between px-5 py-2 border-b border-border bg-slate-50/30 text-xs text-text-muted">
+                        <span>{markedCount} {markedCount === 1 ? 'versão marcada' : 'versões marcadas'} (protegidas da limpeza automática)</span>
+                        <button onClick={() => setOnlyMarked(v => !v)}
+                            className={`px-2.5 py-1 rounded-full font-semibold transition-colors ${onlyMarked ? 'bg-slate-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
+                            Só marcadas
+                        </button>
+                    </div>
+                )}
+
                 <div className="overflow-y-auto px-2 pb-2 flex-1">
                     {activeTab !== 'epub' ? (
                         currentFiles.length === 0 ? (
@@ -95,7 +112,7 @@ const HistoryModalComponent: React.FC<HistoryModalProps> = ({ files, epubFiles, 
                         ) : (
                             <div className="space-y-5 pt-3">
                                 {groups.map((group, index) => {
-                                    const defCollapsed = index !== 0;
+                                    const defCollapsed = !onlyMarked && index !== 0;
                                     const isCollapsed = group.date in overrides ? overrides[group.date] : defCollapsed;
                                     return (
                                     <div key={group.date} className="space-y-1">
@@ -108,19 +125,41 @@ const HistoryModalComponent: React.FC<HistoryModalProps> = ({ files, epubFiles, 
                                             <span className="ml-auto px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[10px] normal-case">{group.files.length}</span>
                                         </button>
                                         {!isCollapsed && group.files.map(file => (
+                                            <div key={file.filename}>
                                             <div
-                                                key={file.filename}
                                                 className="group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all hover:bg-slate-100"
                                                 onClick={() => onLoad(file.filename)}
                                             >
-                                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-slate-200 text-slate-600">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${file.label ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-600'}`}>
                                                     <Save size={18} />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="text-sm font-bold text-text-main truncate">{formatTimestamp(file.timestamp)}</div>
-                                                    <div className="text-xs font-medium text-text-muted truncate opacity-60 font-mono">{file.filename}</div>
+                                                    {file.label
+                                                        ? <div className="text-xs font-semibold text-amber-700 truncate" title={file.label}>{file.label}</div>
+                                                        : <div className="text-xs font-medium text-text-muted truncate opacity-60 font-mono">{file.filename}</div>}
                                                 </div>
+                                                <button
+                                                    title={file.label ? 'Mudar o nome / desmarcar' : 'Marcar esta versão (fica protegida da limpeza)'}
+                                                    onClick={(e) => { e.stopPropagation(); setEditing({ filename: file.filename, value: file.label ?? '' }); }}
+                                                    className={`p-1.5 rounded-lg transition-colors ${file.label ? 'text-amber-500' : 'text-slate-300 hover:text-slate-600'}`}
+                                                >
+                                                    <Bookmark size={16} fill={file.label ? 'currentColor' : 'none'} />
+                                                </button>
                                                 <ArrowLeft size={18} className="text-text-muted group-hover:text-slate-600 transition-all group-hover:translate-x-1" style={{ transform: 'rotate(180deg)' }} />
+                                            </div>
+                                            {editing?.filename === file.filename && (
+                                                <form className="flex items-center gap-2 px-4 pb-3" onSubmit={(e) => { e.preventDefault(); saveLabel(); }}>
+                                                    <input autoFocus value={editing.value} maxLength={80} placeholder="Nome (ex.: Antes da revisão)"
+                                                        onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+                                                        onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(null); } }}
+                                                        className="flex-1 px-2.5 py-1.5 rounded-lg border border-border bg-white text-sm" />
+                                                    <button type="submit" className="px-3 py-1.5 rounded-lg bg-slate-700 text-white text-xs font-bold hover:bg-slate-600">
+                                                        {editing.value.trim() ? 'Guardar' : file.label ? 'Desmarcar' : 'Guardar'}
+                                                    </button>
+                                                    <button type="button" onClick={() => setEditing(null)} className="px-2 py-1.5 rounded-lg text-xs text-text-muted hover:bg-slate-100">Cancelar</button>
+                                                </form>
+                                            )}
                                             </div>
                                         ))}
                                     </div>

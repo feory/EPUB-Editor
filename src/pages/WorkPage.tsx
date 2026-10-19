@@ -649,6 +649,7 @@ export function WorkPage() {
             epubFiles={work.epubFiles}
             onClose={() => work.setShowHistory(false)}
             onLoad={work.loadHistoryFile}
+            onSetLabel={work.setHistoryLabel}
             onDownloadEpub={work.downloadEpubFile}
             formatTimestamp={formatTimestamp}
           />
