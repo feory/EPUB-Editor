@@ -85,6 +85,29 @@ function monotonicScore(folios: (number | null)[]): number {
     return inc;
 }
 
+// Texto de cada página do PDF (itens do pdfjs + altura) — a ÚNICA leitura do ficheiro; tudo o resto trabalha sobre isto.
+export interface PdfPageText { vpH: number; items: { str: string; transform: number[] }[] }
+async function readPdfPages(data: ArrayBuffer): Promise<PdfPageText[]> {
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const pages: PdfPageText[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const vpH = page.getViewport({ scale: 1 }).height;
+        const items = (await page.getTextContent()).items as PdfPageText['items'];
+        pages.push({ vpH, items });
+    }
+    return pages;
+}
+
+// Folio de cada página: zona (rodapé/cabeçalho) auto-detetada por livro + interpolação das páginas sem folio.
+// `printed` = os folios lidos tal e qual (null onde a página não traz folio impresso).
+function detectFolios(pages: PdfPageText[]): { folios: (number | null)[]; printed: (number | null)[] } {
+    const bottom = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'bottom'));
+    const top = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'top'));
+    const printed = monotonicScore(top) > monotonicScore(bottom) ? top : bottom;
+    return { folios: fillFolioGaps(printed), printed };
+}
+
 /**
  * Extrai, por página do PDF de impressão, o número impresso (folio) e um texto-âncora
  * (início do corpo). Cada página COM folio impresso = cabeçalho corrente (linha de topo,
@@ -102,19 +125,12 @@ function monotonicScore(folios: (number | null)[]): number {
  * folio com nºs de nota/tabela/índice que também caem por vezes numa das zonas.
  */
 export async function extractPdfPageAnchors(data: ArrayBuffer): Promise<PageAnchor[]> {
-    const pdf = await pdfjsLib.getDocument({ data }).promise;
-    const pages: { vpH: number; items: { str: string; transform: number[] }[] }[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const vpH = page.getViewport({ scale: 1 }).height;
-        const items = (await page.getTextContent()).items as { str: string; transform: number[] }[];
-        pages.push({ vpH, items });
-    }
-    const bottomFolios = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'bottom'));
-    const topFolios = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'top'));
-    const rawFolios = monotonicScore(topFolios) > monotonicScore(bottomFolios) ? topFolios : bottomFolios;
-    const folios = fillFolioGaps(rawFolios);
+    return anchorsFromPages(await readPdfPages(data));
+}
 
+/** A parte pura de extractPdfPageAnchors: texto das páginas → âncoras. Testável sem PDF. */
+export function anchorsFromPages(pages: PdfPageText[]): PageAnchor[] {
+    const { folios, printed: rawFolios } = detectFolios(pages);
     const anchors: PageAnchor[] = [];
     for (let idx = 0; idx < pages.length; idx++) {
         const folio = folios[idx];
@@ -147,18 +163,7 @@ export async function extractPdfPageAnchors(data: ArrayBuffer): Promise<PageAnch
 // folio (ex. placeFiguresByPosition em idml/figures.ts, que recebe o folio via Page/Name do
 // spread do IDML e precisa de abrir a página certa do PDF de impressão).
 export async function mapFolioToPdfPage(data: ArrayBuffer): Promise<Map<number, number>> {
-    const pdf = await pdfjsLib.getDocument({ data }).promise;
-    const pages: { vpH: number; items: { str: string; transform: number[] }[] }[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const vpH = page.getViewport({ scale: 1 }).height;
-        const items = (await page.getTextContent()).items as { str: string; transform: number[] }[];
-        pages.push({ vpH, items });
-    }
-    const bottomFolios = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'bottom'));
-    const topFolios = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'top'));
-    const rawFolios = monotonicScore(topFolios) > monotonicScore(bottomFolios) ? topFolios : bottomFolios;
-    const folios = fillFolioGaps(rawFolios);
+    const { folios } = detectFolios(await readPdfPages(data));
     const map = new Map<number, number>();
     folios.forEach((f, idx) => { if (f !== null) map.set(f, idx + 1); });
     return map;
@@ -168,11 +173,8 @@ export async function mapFolioToPdfPage(data: ArrayBuffer): Promise<Map<number, 
 // verifyBlankSpacing, partilhada com placeFiguresByPosition (idml/figures.ts), que procura a
 // maior quebra vertical entre linhas para localizar uma figura sem legenda/nº na página.
 export async function buildPdfLines(data: ArrayBuffer): Promise<{ y: number; text: string }[][]> {
-    const pdf = await pdfjsLib.getDocument({ data }).promise;
     const pages: { y: number; text: string }[][] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const items = (await page.getTextContent()).items as { str: string; transform: number[] }[];
+    for (const { items } of await readPdfPages(data)) {
         const lineMap = new Map<number, { x: number; str: string }[]>();
         for (const it of items) {
             if (!it.str || !it.str.trim()) continue;
@@ -186,6 +188,25 @@ export async function buildPdfLines(data: ArrayBuffer): Promise<{ y: number; tex
     return pages;
 }
 
+// Índice do texto do corpo: todos os text nodes achatados numa string normalizada (`flat`) e, por posição nela,
+// o nó e o offset de origem (`map[pos]`) — para inserir marcadores no ponto exato onde uma âncora casa.
+// Chars que a normalização descarta (espaço, pontuação) não entram em nenhum dos dois.
+function textIndex(doc: Document): { flat: string; map: { node: Text; offset: number }[] } {
+    let flat = '';
+    const map: { node: Text; offset: number }[] = [];
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+        const raw = node.textContent ?? '';
+        for (let k = 0; k < raw.length; k++) {
+            const nc = normalize(raw[k]);
+            if (!nc) continue;
+            flat += nc;
+            map.push({ node, offset: k });
+        }
+    }
+    return { flat, map };
+}
+
 export interface ChapterAnchor { title: string; anchor: string }
 
 /**
@@ -197,13 +218,7 @@ export interface ChapterAnchor { title: string; anchor: string }
  * (índice/TOC lista todos juntos — não é a página de abertura).
  */
 export async function extractChapterAnchors(data: ArrayBuffer, titles: string[]): Promise<ChapterAnchor[]> {
-    const pdf = await pdfjsLib.getDocument({ data }).promise;
-    const pageTexts: string[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const items = (await page.getTextContent()).items as { str: string }[];
-        pageTexts.push(normalize(items.map(it => it.str).join(' ')));
-    }
+    const pageTexts = (await readPdfPages(data)).map(({ items }) => normalize(items.map(it => it.str).join(' ')));
     const normTitles = titles.map(normalize);
     const anchors: ChapterAnchor[] = [];
     for (let ti = 0; ti < titles.length; ti++) {
@@ -239,21 +254,7 @@ export async function extractChapterAnchors(data: ArrayBuffer, titles: string[])
  */
 export function insertChapterHeadings(html: string, anchors: { anchor: string; headingHtml: string }[]): { html: string; inserted: number; total: number } {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const nodes: Text[] = [];
-    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
-
-    let flat = '';
-    const map: { node: Text; offset: number }[] = [];
-    for (const node of nodes) {
-        const raw = node.textContent ?? '';
-        for (let k = 0; k < raw.length; k++) {
-            const nc = normalize(raw[k]);
-            if (!nc) continue;
-            flat += nc;
-            map.push({ node, offset: k });
-        }
-    }
+    const { flat, map } = textIndex(doc);
 
     const hits: { pos: number; headingHtml: string; anchor: string }[] = [];
     for (const { anchor, headingHtml } of anchors) {
@@ -399,22 +400,7 @@ export function stripPageBreaks(html: string): string {
  */
 function insertPageBreaksInSegment(html: string, anchors: PageAnchor[]): { html: string; inserted: number } {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    // achatar text nodes do corpo: string normalizada concatenada + mapa posição→{node, offset}
-    const nodes: Text[] = [];
-    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
-
-    let flat = '';
-    const map: { node: Text; offset: number }[] = []; // map[posNormalizada] = origem do char
-    for (const node of nodes) {
-        const raw = node.textContent ?? '';
-        for (let k = 0; k < raw.length; k++) {
-            const nc = normalize(raw[k]);
-            if (!nc) continue; // char descartado pela normalização (espaço/pontuação)
-            flat += nc;
-            map.push({ node, offset: k });
-        }
-    }
+    const { flat, map } = textIndex(doc);
 
     // TODAS as ocorrências de cada âncora; `pickChain` escolhe a combinação com mais páginas em
     // posições crescentes. Um cursor único era envenenado por 1 hit errado (ex. "Espíritos Livres" do
