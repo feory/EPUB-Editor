@@ -3,11 +3,11 @@ import { PanelLeftClose, PanelLeftOpen, Edit2, GripVertical, Trash2, Check, X } 
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { subtreeRange } from '../../../utils/toc';
-import { UNTITLED_RE } from '../../../utils/chapters';
+import { UNTITLED_RE, type ChapterLevel } from '../../../utils/chapters';
 
 interface Chapter {
     title: string;
-    level: 'h1' | 'h2' | 'h3' | 'break';
+    level: ChapterLevel;
 }
 
 interface ChapterSidebarProps {

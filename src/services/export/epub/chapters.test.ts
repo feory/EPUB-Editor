@@ -1,13 +1,13 @@
 /**
- * buildSections agora reusa matchChapterMarkerElement/CHAPTER_SPLIT_PATTERN de html-cleaner
- * em vez de reimplementar o regex — este teste tranca o comportamento observável.
+ * buildSections reusa classifyChapterPart (a regra de nível/título do editor) em vez de a reimplementar —
+ * este teste tranca o comportamento observável.
  */
 import { test, expect, beforeAll } from 'bun:test';
 import { Window } from 'happy-dom';
 import { buildSections } from './chapters';
-import { insertChapterMarkers } from '../../../utils/chapters';
+import { insertChapterMarkers, splitChapterSegments, classifyChapterPart, stripHidden } from '../../../utils/chapters';
 
-// decodeHtmlEntities (html-utils.ts) usa DOMParser global — não existe fora do browser.
+// insertChapterMarkers (o limpador de HTML) usa DOMParser global — não existe fora do browser.
 beforeAll(() => {
     const win = new Window();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -84,4 +84,15 @@ test('buildSections: quebra sem título é um h1, não filha do h1 anterior', ()
 test('buildSections: chamada de nota no heading não entra no título do capítulo', () => {
     const sections = buildSections(insertChapterMarkers('<h1>SEGUNDA PARTE<br>O VIAJANTE E A SUA SOMBRA(<sup>143</sup>)</h1><p>corpo</p>'));
     expect(sections[0].title).toBe('SEGUNDA PARTE O VIAJANTE E A SUA SOMBRA');
+});
+
+test('buildSections e a barra lateral concordam: mesmo nível e título por parte (uma só regra)', () => {
+    const html = '<p class="chapter-break" data-title="Frontespício"></p><p>f</p>'
+        + '<p class="chapter-break-h1" data-title="Cap 1"></p><h1>Cap 1</h1><p>a</p>'
+        + '<p class="chapter-break-h2" data-title="Sec"></p><h2>Sec</h2><p>b</p>'
+        + '<p class="chapter-break">x</p><p>c</p>'
+        + '<p class="chapter-break" data-title="[hidden]Oculta"></p><p>d</p>';
+    const sections = buildSections(html);
+    const editor = splitChapterSegments(html).filter(p => p.trim()).map((p, i) => classifyChapterPart(p, i));
+    expect(sections.map(s => [s.level, s.title])).toEqual(editor.map(c => [c.level, stripHidden(c.title)]));
 });

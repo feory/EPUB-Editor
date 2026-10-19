@@ -1,9 +1,7 @@
 // Operações puras do Editor de TOC: reordenar (por subárvore) e renomear capítulos.
 // Trabalham sobre as `parts` do split de capítulos (1:1 com `chapters[]`), sem tocar no DOM.
 
-import { matchChapterBoundary } from './chapters';
-
-type Level = 'h1' | 'h2' | 'h3' | 'break';
+import { matchChapterBoundary, isExplicitH1Part, type ChapterLevel as Level } from './chapters';
 
 const escapeHtml = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -35,14 +33,13 @@ export function moveChapters(parts: string[], levels: Level[], from: number, to:
 }
 
 /**
- * Capítulo novo (h1 com título), antes do primeiro h1 — ou no topo se não há h1. Nunca antes das
- * quebras do início (Frontespício, Ficha Técnica…): um h1 é dono de todas as partes até ao próximo
- * h1, por isso posto à frente delas ficava dono delas e eliminá-lo apagava-as também.
- * Devolve o novo fullHtml.
+ * Capítulo novo (h1 com título), antes do primeiro h1 EXPLÍCITO (marcador -h1) — ou no topo se não há. Nunca antes
+ * das quebras planas do início (Frontespício, Ficha Técnica…): elas também contam como h1 na estrutura, mas são o
+ * que vem antes dos capítulos. Devolve o novo fullHtml.
  */
-export function insertChapterPart(parts: string[], levels: Level[], title: string): string {
+export function insertChapterPart(parts: string[], title: string): string {
     const part = `${changeChapterLevel(`<p class="chapter-break" data-title="${escapeHtml(title)}"></p>`, 'h1')}<p></p>`;
-    const firstH1 = levels.indexOf('h1');
+    const firstH1 = parts.findIndex(isExplicitH1Part);
     const at = firstH1 === -1 ? 0 : firstH1;
     return [...parts.slice(0, at), part, ...parts.slice(at)].join('');
 }

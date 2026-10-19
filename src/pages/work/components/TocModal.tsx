@@ -2,11 +2,11 @@ import React, { useState, useCallback } from 'react';
 import { ListTree, GripVertical, Check, Info, Plus, Edit2, Trash2, X } from 'lucide-react';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
-import { UNTITLED_RE } from '../../../utils/chapters';
+import { UNTITLED_RE, type ChapterLevel } from '../../../utils/chapters';
 
 interface Chapter {
     title: string;
-    level: 'h1' | 'h2' | 'h3' | 'break';
+    level: ChapterLevel;
 }
 
 interface TocModalProps {

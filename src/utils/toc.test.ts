@@ -65,20 +65,24 @@ test('changeChapterLevel: hr legacy → h2 normaliza para marcador <p>', () => {
         .toBe('<p class="chapter-break-h2" data-title="Velho"></p><h2>Velho</h2><p>corpo</p>');
 });
 
-test('insertChapterPart: entra antes do 1.º h1, nunca à frente das quebras do início', () => {
-    const html = insertChapterPart(['F', 'A', 'B'], ['break', 'h1', 'h1'], 'Novo');
-    expect(html).toBe('F<p class="chapter-break-h1" data-title="Novo"></p><h1>Novo</h1><p></p>AB');
+const front = '<p class="chapter-break" data-title="Ficha Técnica"></p><p>ft</p>';
+const cap = (t: string) => `<p class="chapter-break-h1" data-title="${t}"></p><h1>${t}</h1>`;
+
+test('insertChapterPart: entra antes do 1.º h1 explícito, nunca à frente das quebras planas do início', () => {
+    const html = insertChapterPart([front, cap('A'), cap('B')], 'Novo');
+    expect(html).toBe(front + '<p class="chapter-break-h1" data-title="Novo"></p><h1>Novo</h1><p></p>' + cap('A') + cap('B'));
 });
 
-test('insertChapterPart: sem h1 vai para o topo; título é escapado', () => {
-    expect(insertChapterPart(['F'], ['break'], 'A&B')).toStartWith('<p class="chapter-break-h1" data-title="A&amp;B"');
+test('insertChapterPart: sem h1 explícito vai para o topo; título é escapado', () => {
+    expect(insertChapterPart([front], 'A&B')).toStartWith('<p class="chapter-break-h1" data-title="A&amp;B"');
 });
 
 test('insertChapterPart + deleteChapterPart: eliminar o novo devolve o livro', () => {
-    const parts = ['F', 'A', 'B'], levels: Level[] = ['break', 'h1', 'h1'];
-    const added = insertChapterPart(parts, levels, 'Novo');
-    const novo = added.slice(1, added.length - 2); // F + novo + A + B
-    expect(deleteChapterPart(['F', novo, 'A', 'B'], ['break', 'h1', 'h1', 'h1'], 1)).toBe('FAB');
+    const parts = [front, cap('A'), cap('B')];
+    const added = insertChapterPart(parts, 'Novo');
+    const novo = '<p class="chapter-break-h1" data-title="Novo"></p><h1>Novo</h1><p></p>';
+    expect(added).toBe(front + novo + cap('A') + cap('B'));
+    expect(deleteChapterPart([front, novo, cap('A'), cap('B')], ['h1', 'h1', 'h1', 'h1'], 1)).toBe(front + cap('A') + cap('B'));
 });
 
 test('apóstrofo no data-title: renomear substitui o valor todo e mudar de nível preserva o título', () => {

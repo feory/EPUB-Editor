@@ -1,6 +1,5 @@
-import { decodeHtmlEntities } from './html-utils';
 import type { Section } from './types';
-import { splitChapterSegments, matchChapterBoundary, flattenHeadingText } from '../../../utils/chapters';
+import { splitChapterSegments, matchChapterBoundary, classifyChapterPart, stripHidden, untitled } from '../../../utils/chapters';
 
 const relocateFootnotes = (html: string): string => {
     const footnoteRegex = /<(p|aside)[^>]*class="[^"]*footnote[^"]*"[^>]*>.*?<\/\1>/gs;
@@ -16,75 +15,31 @@ export function buildSections(processedContent: string): Section[] {
     const sections: Section[] = [];
     let currentH1Idx = -1;
 
-    const pushBreakSection = (
-        title: string,
-        fallback: string,
-        strippedContent: string,
-        idx: number,
-        hiddenFromToc = true,
-    ) => {
-        const body = strippedContent.trim().length === 0 ? '<p>&#160;</p>' : strippedContent;
-        sections.push({
-            title: title || fallback,
-            content: relocateFootnotes(body),
-            level: 'break',
-            parentIdx: currentH1Idx,
-            childIndices: [],
-            hiddenFromToc,
-        });
-        if (currentH1Idx >= 0) sections[currentH1Idx].childIndices.push(idx);
-    };
-
-    // Quebra plana (com ou sem título, ex. Ficha Técnica), hr legacy ou parte sem marcador = h1 próprio, não filho
-    // do h1 anterior — mesmo critério de classifyChapterPart no editor. Só `[hidden]` continua quebra escondida.
-    const pushPlainH1 = (title: string, strippedContent: string, idx: number) => {
-        const body = strippedContent.trim().length === 0 ? '<p>&#160;</p>' : strippedContent;
-        sections.push({ title: title || `Sem Título ${idx + 1}`, content: relocateFootnotes(body), level: 'h1', parentIdx: -1, childIndices: [] });
-        currentH1Idx = idx;
-    };
-
-    // Split on chapter-break MARKERS (and legacy hr.chapter-break). The marker — not the
-    // heading — is the boundary; it is editor-only and stripped from the exported body.
-    const parts = splitChapterSegments(processedContent);
-
-    parts.forEach((part) => {
+    // O nível e o título vêm de classifyChapterPart (a mesma regra da barra lateral do editor): quebra plana, hr
+    // legacy e parte sem marcador são h1; só `[hidden]` é quebra escondida do índice.
+    // The marker — not the heading — is the boundary; it is editor-only and stripped from the exported body.
+    splitChapterSegments(processedContent).forEach((part) => {
         let content = part.trim();
         if (content.length === 0) return;
 
-        const thisSectionIdx = sections.length;
+        const idx = sections.length;
+        const { title: rawTitle, level } = classifyChapterPart(content, idx);
+        const boundary = matchChapterBoundary(content);
+        if (boundary) content = content.slice(boundary.raw.length).trim();
+        const title = stripHidden(rawTitle) || untitled(idx);
+        // Sem nível explícito (quebra plana / hr / sem marcador) o corpo pode ficar vazio: não deixar o ficheiro vazio.
+        const body = !boundary?.level && content.length === 0 ? '<p>&#160;</p>' : content;
 
-        const marker = matchChapterBoundary(content);
-        if (marker?.legacyHr) {
-            const title = decodeHtmlEntities(marker.title);
-            content = content.slice(marker.raw.length).trim();
-            pushPlainH1(title, content, thisSectionIdx);
-            return;
+        if (level === 'break') {
+            sections.push({ title, content: relocateFootnotes(body), level, parentIdx: currentH1Idx, childIndices: [], hiddenFromToc: true });
+            if (currentH1Idx >= 0) sections[currentH1Idx].childIndices.push(idx);
+        } else if (level === 'h1') {
+            sections.push({ title, content: relocateFootnotes(body), level, parentIdx: -1, childIndices: [] });
+            currentH1Idx = idx;
+        } else {
+            sections.push({ title, content: relocateFootnotes(body), level, parentIdx: currentH1Idx, childIndices: [] });
+            if (currentH1Idx >= 0) sections[currentH1Idx].childIndices.push(idx);
         }
-
-        if (marker) {
-            const dtTitle = decodeHtmlEntities(marker.title);
-            content = content.slice(marker.raw.length).trim(); // strip the editor-only marker
-            if (!marker.level) {
-                const isHidden = /\[hidden\]/i.test(dtTitle);
-                const title = dtTitle.replace(/\[hidden\]/gi, '').trim();
-                if (isHidden) pushBreakSection(title, `Capítulo ${thisSectionIdx + 1}`, content, thisSectionIdx, true);
-                else pushPlainH1(title, content, thisSectionIdx);
-                return;
-            }
-            const hMatch = content.match(/^<(h[123])[^>]*>([\s\S]*?)<\/\1>/i);
-            const headTitle = hMatch ? decodeHtmlEntities(flattenHeadingText(hMatch[2])) : '';
-            const title = dtTitle || headTitle;
-            if (marker.level === 'h1') {
-                sections.push({ title: title || `Capítulo ${thisSectionIdx + 1}`, content: relocateFootnotes(content), level: 'h1', parentIdx: -1, childIndices: [] });
-                currentH1Idx = thisSectionIdx;
-            } else {
-                sections.push({ title: title || `Secção ${thisSectionIdx + 1}`, content: relocateFootnotes(content), level: marker.level, parentIdx: currentH1Idx, childIndices: [] });
-                if (currentH1Idx >= 0) sections[currentH1Idx].childIndices.push(thisSectionIdx);
-            }
-            return;
-        }
-
-        pushPlainH1('', content, thisSectionIdx);
     });
 
     if (sections.length === 0) {

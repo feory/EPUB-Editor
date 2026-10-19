@@ -1,3 +1,5 @@
+import type { ChapterLevel } from '../../../utils/chapters';
+
 export interface BookMetadata {
     title: string;
     author: string;
@@ -16,7 +18,7 @@ export interface BookMetadata {
 export interface Section {
     title: string;
     content: string;
-    level: 'h1' | 'h2' | 'h3' | 'break';
+    level: ChapterLevel;
     parentIdx: number;
     childIndices: number[];
     hiddenFromToc?: boolean;

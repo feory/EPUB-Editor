@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useMemo, useCallback, startTransition } from 'react';
 import type React from 'react';
 import { cleanHeadings } from '../../../utils/html-cleaner';
-import { splitChapters, countChapterMarkers, classifyChapterPart } from '../../../utils/chapters';
+import { splitChapters, countChapterMarkers, classifyChapterPart, type ChapterLevel } from '../../../utils/chapters';
 import { replaceChapterContent } from './contentReducer';
 import type { ContentState, ContentAction } from './contentReducer';
 
-type ChapterPart = { title: string; content: string; level: 'h1' | 'h2' | 'h3' | 'break'; hrTag?: string; _size?: number };
+type ChapterPart = { title: string; content: string; level: ChapterLevel; hrTag?: string; _size?: number };
 
 export function useChapterSync(
     contentState: ContentState,

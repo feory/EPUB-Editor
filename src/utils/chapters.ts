@@ -22,10 +22,16 @@ const dataTitleOf = (tag: string): string | undefined => {
     return (m && (m[1] ?? m[2])) || undefined;
 };
 
-// Título provisório de um capítulo sem título (classifyChapterPart) — a UI mostra o campo de edição vazio.
+/** Nível de uma parte do livro: h1/h2/h3 ou `break` (só a quebra escondida do índice — `[hidden]` no data-title). */
+export type ChapterLevel = 'h1' | 'h2' | 'h3' | 'break';
+
 // `[hidden]` no data-title: a quebra não entra no índice do EPUB.
 const HIDDEN_RE = /\[hidden\]/i;
+export const stripHidden = (title: string): string => title.replace(/\[hidden\]/gi, '').trim();
+
+// Título provisório de um capítulo sem título (classifyChapterPart) — a UI mostra o campo de edição vazio.
 export const UNTITLED_RE = /^Sem Título \d+$/;
+export const untitled = (index: number): string => `Sem Título ${index + 1}`;
 
 // Flatten heading inner HTML to plain title text (<br>→space, strip tags, collapse).
 export function flattenHeadingText(inner: string): string {
@@ -56,25 +62,28 @@ export function matchChapterMarkerElement(content: string): { raw: string; level
  * sem marcador → h1; só `[hidden]` no título (escondida do índice no export) continua `break`.
  * Shared by the sidebar (useChapterSync) and the index linker (indice-links.ts).
  */
-export function classifyChapterPart(content: string, index: number): { title: string; level: 'h1' | 'h2' | 'h3' | 'break'; hrTag?: string } {
+export function classifyChapterPart(content: string, index: number): { title: string; level: ChapterLevel; hrTag?: string } {
     const hrMatch = content.match(HR_BREAK_PATTERN);
     if (hrMatch) {
         const title = dataTitleOf(hrMatch[0]);
-        return { title: title ? decodeEntities(title) : `Sem Título ${index + 1}`, level: title && HIDDEN_RE.test(title) ? 'break' : 'h1', hrTag: hrMatch[0] };
+        return { title: title ? decodeEntities(title) : untitled(index), level: title && HIDDEN_RE.test(title) ? 'break' : 'h1', hrTag: hrMatch[0] };
     }
     const marker = matchChapterMarkerElement(content);
     if (marker) {
-        const level: 'h1' | 'h2' | 'h3' | 'break' = marker.level ?? (HIDDEN_RE.test(marker.title) ? 'break' : 'h1');
+        const level: ChapterLevel = marker.level ?? (HIDDEN_RE.test(marker.title) ? 'break' : 'h1');
         let title = marker.title ? decodeEntities(marker.title) : '';
         if (!title) {
             const hMatch = content.slice(marker.raw.length).match(/^\s*<(h[123])[^>]*>([\s\S]*?)<\/\1>/i);
             if (hMatch) title = decodeEntities(flattenHeadingText(hMatch[2]));
         }
-        if (!title) title = `Sem Título ${index + 1}`;
+        if (!title) title = untitled(index);
         return { title, level };
     }
-    return { title: `Sem Título ${index + 1}`, level: 'h1' };
+    return { title: untitled(index), level: 'h1' };
 }
+
+/** A parte abre com um marcador `chapter-break-h1` EXPLÍCITO (não uma quebra plana, que também conta como h1). */
+export const isExplicitH1Part = (content: string): boolean => matchChapterMarkerElement(content)?.level === 'h1';
 
 /**
  * Insert chapter-break markers before headings (import + legacy-book migration).
