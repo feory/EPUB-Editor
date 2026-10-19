@@ -219,7 +219,8 @@ export function renderPsr(rc: RenderContext, psr: Element, counter: NoteCounter)
                 // segmento vazio a mais → falso positivo de "linha em branco"); emite a tabela
                 // como segmento raw (renderStory insere sem envolver em <tag>).
                 if (cur.trim() || curNotes.length) flush(); else { cur = ''; curNotes = []; }
-                segs.push({ text: '', notes: [], raw: renderIdmlTable(rc, el, counter) });
+                const table = renderIdmlTable(rc, el, counter);
+                if (table) segs.push({ text: '', notes: [], raw: table });
             } else if (el.tagName === 'Br') {
                 flush(); // quebra de parágrafo
             } else if (el.tagName === 'Footnote') {
@@ -350,6 +351,9 @@ function renderIdmlTable(rc: RenderContext, tableEl: Element, counter: NoteCount
         ].filter(Boolean);
         rowMap.set(col, { html: lines.join('<br>'), bg, attrs: span('RowSpan', 'rowspan') + span('ColumnSpan', 'colspan'), align: align.join(';') });
     }
+    // Tabela só com gráficos (ex. figura ancorada numa célula): a imagem entra à parte (figures.ts) — a tabela ficava vazia.
+    const empty = [...grid.values()].every(row => [...row.values()].every(c => !c.html));
+    if (empty && tableEl.getElementsByTagName('Rectangle').length > 0) return '';
     const out: string[] = ['<table>'];
     for (let r = 0; r <= maxRow; r++) {
         const rowMap = grid.get(r);

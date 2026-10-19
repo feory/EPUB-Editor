@@ -15,3 +15,10 @@ test('tabela IDML: RowSpan/ColumnSpan viram rowspan/colspan; centrado só quando
     expect(html).toContain('<td rowspan="2" style="text-align:center;vertical-align:middle">Plano</td>');
     expect(html).toContain('Plano</td><td>A</td></tr><tr><td>B</td></tr>');
 });
+
+test('tabela IDML só com um gráfico (figura numa célula): não gera <table> vazia', () => {
+    const xml = `<idPkg:Story xmlns:idPkg="x"><Story><ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/TXT"><CharacterStyleRange><Table HeaderRowCount="0">
+        <Cell Name="0:0" RowSpan="1" ColumnSpan="1"><ParagraphStyleRange><CharacterStyleRange><Rectangle ContentType="GraphicType" /></CharacterStyleRange></ParagraphStyleRange></Cell>
+    </Table></CharacterStyleRange></ParagraphStyleRange></Story></idPkg:Story>`;
+    expect(renderStory({ styles: NO_STYLES, detectSpacing: false }, xml, { n: 0, star: 0, defs: [] }, {})).not.toContain('<table');
+});
