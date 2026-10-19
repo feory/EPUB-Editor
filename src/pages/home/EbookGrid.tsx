@@ -12,6 +12,8 @@ interface EbookGridProps {
     onComplete?: (e: React.MouseEvent, ebook: Ebook) => void;
     onShare?: (e: React.MouseEvent, ebook: Ebook) => void;
     onDelete?: (isbn: string) => void;
+    ownerLabel?: (ebook: Ebook) => string | null;   // "Partilhado por X" / "De X" (null = é meu)
+    isShared?: (ebook: Ebook) => boolean;   // partilhado comigo (não sou o dono): o botão remove a partilha em vez de eliminar
     isDeleting?: boolean;
     coverVersions?: Record<string, number>;
     onDownloadEpub: (isbn: string) => Promise<void>;
@@ -20,7 +22,7 @@ interface EbookGridProps {
 }
 
 export const EbookGrid: React.FC<EbookGridProps> = ({
-    ebooks, onNavigate, onOpenMetadata, onOpenCover, onComplete, onShare, onDelete, isDeleting, coverVersions, onDownloadEpub, onReopen, emptyMessage,
+    ebooks, onNavigate, onOpenMetadata, onOpenCover, onComplete, onShare, onDelete, isShared, ownerLabel, isDeleting, coverVersions, onDownloadEpub, onReopen, emptyMessage,
 }) => {
     const [confirmingIsbn, setConfirmingIsbn] = useState<string | null>(null);
     const [deletingIsbn, setDeletingIsbn] = useState<string | null>(null);
@@ -57,6 +59,7 @@ export const EbookGrid: React.FC<EbookGridProps> = ({
                         <div className="flex flex-col flex-1 px-3 pt-2 pb-1 gap-0.5">
                             <p className="font-semibold text-base text-text-muted group-hover:text-text-main transition-colors truncate leading-tight">{ebook.title}</p>
                             <p className="text-xs text-text-muted truncate">{ebook.author}</p>
+                            {ownerLabel?.(ebook) && <p className="text-[11px] text-text-muted truncate" title={ownerLabel(ebook)!}>{ownerLabel(ebook)}</p>}
                         </div>
                         {/* Actions */}
                         <div className="px-3 pb-3 pt-1 flex gap-1" onClick={e => e.stopPropagation()}>
@@ -95,7 +98,7 @@ export const EbookGrid: React.FC<EbookGridProps> = ({
                                             <>
                                                 <button className="flex-1 flex items-center justify-center p-2 rounded bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50"
                                                     onClick={(e) => { e.stopPropagation(); onDelete(ebook.ebook_isbn); setDeletingIsbn(null); }}
-                                                    disabled={isDeleting} title="Enviar para a Reciclagem (recuperável 30 dias)">
+                                                    disabled={isDeleting} title={isShared?.(ebook) ? 'Remover a partilha (o ebook continua com o dono)' : 'Enviar para a Reciclagem (recuperável 30 dias)'}>
                                                     {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                                                 </button>
                                                 <button className="flex-1 flex items-center justify-center p-2 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
@@ -105,12 +108,12 @@ export const EbookGrid: React.FC<EbookGridProps> = ({
                                             </>
                                         ) : confirmingIsbn !== ebook.ebook_isbn ? (
                                             <button className="flex-1 flex items-center justify-center p-2 rounded border border-border text-text-muted hover:border-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
-                                                onClick={(e) => { e.stopPropagation(); setDeletingIsbn(ebook.ebook_isbn); setConfirmingIsbn(null); }} title="Eliminar registo">
+                                                onClick={(e) => { e.stopPropagation(); setDeletingIsbn(ebook.ebook_isbn); setConfirmingIsbn(null); }} title={isShared?.(ebook) ? 'Remover partilha' : 'Eliminar registo'}>
                                                 <Trash2 size={14} />
                                             </button>
                                         ) : null
                                     )}
-                                    {confirmingIsbn !== ebook.ebook_isbn && deletingIsbn !== ebook.ebook_isbn && (onOpenMetadata || onOpenCover || onShare) && (
+                                    {confirmingIsbn !== ebook.ebook_isbn && deletingIsbn !== ebook.ebook_isbn && (onOpenMetadata || onOpenCover || (onShare && !isShared?.(ebook))) && (
                                         <OverflowMenu
                                             iconSize={14}
                                             direction="up"
@@ -118,7 +121,7 @@ export const EbookGrid: React.FC<EbookGridProps> = ({
                                             items={[
                                                 ...(onOpenMetadata ? [{ icon: <Settings size={13} />, label: 'Edição da Informação', onClick: (e: React.MouseEvent) => onOpenMetadata(e, ebook) }] : []),
                                                 ...(onOpenCover ? [{ icon: <ImageIcon size={13} />, label: 'Capa', onClick: (e: React.MouseEvent) => onOpenCover(e, ebook) }] : []),
-                                                ...(onShare ? [{ icon: <Share2 size={13} />, label: 'Partilha', onClick: (e: React.MouseEvent) => onShare(e, ebook) }] : []),
+                                                ...(onShare && !isShared?.(ebook) ? [{ icon: <Share2 size={13} />, label: 'Partilha', onClick: (e: React.MouseEvent) => onShare(e, ebook) }] : []),
                                             ]}
                                         />
                                     )}

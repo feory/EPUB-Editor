@@ -21,6 +21,8 @@ export interface Ebook {
     status: 'in_progress' | 'completed';
     created_at?: string;
     deleted_at?: string;
+    owner_email?: string | null;
+    user_id?: number;               // dono (os restantes com acesso têm o ebook partilhado)
 }
 
 export interface ShareUser {

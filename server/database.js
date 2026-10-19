@@ -118,10 +118,12 @@ db.run("CREATE INDEX IF NOT EXISTS idx_comments_isbn ON comments(ebook_isbn)");
 
 export const stmt = {
   // ebooks
-  listEbooks:           db.prepare('SELECT * FROM ebooks WHERE deleted_at IS NULL ORDER BY created_at DESC'),
+  // owner_email: a lista mostra "partilhado por X" nos ebooks que não são do próprio utilizador.
+  listEbooks:           db.prepare('SELECT e.*, u.email AS owner_email FROM ebooks e LEFT JOIN users u ON u.id = e.user_id WHERE e.deleted_at IS NULL ORDER BY e.created_at DESC'),
   listEbooksByUser:     db.prepare(`
-    SELECT * FROM ebooks WHERE deleted_at IS NULL AND (user_id = ? OR ebook_isbn IN
-      (SELECT ebook_isbn FROM ebook_shares WHERE user_id = ?)) ORDER BY created_at DESC
+    SELECT e.*, u.email AS owner_email FROM ebooks e LEFT JOIN users u ON u.id = e.user_id
+    WHERE e.deleted_at IS NULL AND (e.user_id = ? OR e.ebook_isbn IN
+      (SELECT ebook_isbn FROM ebook_shares WHERE user_id = ?)) ORDER BY e.created_at DESC
   `),
   getEbook:             db.prepare('SELECT * FROM ebooks WHERE ebook_isbn = ?'),
   insertEbook:          db.prepare('INSERT INTO ebooks (ebook_isbn, physical_isbn, title, author, status, user_id) VALUES (?, ?, ?, ?, ?, ?)'),

@@ -36,6 +36,9 @@ export function getEbook(isbn) {
 
 export function deleteEbook(req, isbn, user) {
   const ebook = stmt.getEbook.get(isbn);
+  // Quem tem o ebook partilhado não o apaga (para todos): só remove a sua partilha (unshareEbook).
+  if (!isOwnerOrAdmin(ebook, user))
+    return Response.json({ error: 'Forbidden' }, { status: 403, headers: corsHeaders });
   stmt.softDeleteEbook.run(isbn);
   logActivity(actorFromUser(user), 'ebook_trash',
     { target: isbn, meta: { title: ebook?.title }, req });
@@ -165,7 +168,8 @@ export async function shareEbook(req, isbn, user) {
 
 export function unshareEbook(isbn, targetUserId, user) {
   const ebook = stmt.getEbook.get(isbn);
-  if (!isOwnerOrAdmin(ebook, user))
+  // Dono/admin removem qualquer partilha; quem recebeu a partilha remove só a sua ("sair").
+  if (!isOwnerOrAdmin(ebook, user) && Number(targetUserId) !== Number(user.sub))
     return Response.json({ error: 'Forbidden' }, { status: 403, headers: corsHeaders });
   stmt.unshareEbook.run(isbn, Number(targetUserId));
   return Response.json({ data: stmt.listSharesForEbook.all(isbn) }, { headers: corsHeaders });

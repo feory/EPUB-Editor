@@ -10,10 +10,11 @@ interface CompletedTableProps {
     onReopen: (e: React.MouseEvent, ebook: Ebook) => void;
     coverVersions?: Record<string, number>;
     onDownloadEpub: (isbn: string) => Promise<void>;
+    ownerLabel?: (ebook: Ebook) => string | null;   // "Partilhado por X" / "De X" (null = é meu)
 }
 
 export const CompletedTable: React.FC<CompletedTableProps> = ({
-    ebooks, searchSlot, onReopen, coverVersions, onDownloadEpub,
+    ebooks, searchSlot, onReopen, coverVersions, onDownloadEpub, ownerLabel,
 }) => {
     const [downloadingIsbn, setDownloadingIsbn] = useState<string | null>(null);
     const [viewingEbook, setViewingEbook] = useState<Ebook | null>(null);
@@ -53,6 +54,7 @@ export const CompletedTable: React.FC<CompletedTableProps> = ({
                             <td className="px-6 py-4"><code className="bg-slate-100 px-2 py-1 rounded text-xs font-mono text-slate-500">{ebook.ebook_isbn}</code></td>
                             <td className="px-6 py-4">
                                 <span className="font-semibold text-text-muted group-hover:text-text-main transition-colors">{ebook.title}</span>
+                                {ownerLabel?.(ebook) && <span className="ml-2 px-2 py-0.5 rounded-full bg-slate-100 text-[11px] font-medium text-text-muted not-italic">{ownerLabel(ebook)}</span>}
                             </td>
                             <td className="px-6 py-4 text-text-muted italic text-sm">{ebook.author}</td>
                             <td className="px-6 py-4 text-right">

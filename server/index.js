@@ -179,7 +179,8 @@ export const server = Bun.serve({
         }
 
         // Write-lock: só o detentor do lock pode escrever quando alguém está presente
-        if ((method === "POST" || method === "PUT" || method === "DELETE")
+        // Partilhas fora do lock: sair de uma partilha não depende de quem está a editar.
+        if ((method === "POST" || method === "PUT" || method === "DELETE") && parts[4] !== 'share'
             && presence.anyonePresent(isbn) && !presence.isHolder(isbn, clientId)) {
           return Response.json({ error: 'locked', editor: presence.holderEmail(isbn) }, { status: 409, headers: corsHeaders });
         }

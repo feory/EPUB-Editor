@@ -48,6 +48,7 @@ export function HomePage() {
     const [trashOpen, setTrashOpen] = useState(false);
     const [sharingEbook, setSharingEbook] = useState<Ebook | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [ownerFilter, setOwnerFilter] = useState<'all' | 'mine' | 'others'>('all');
     const [searchOpen, setSearchOpen] = useState(false);
     const searchRef = useRef<HTMLDivElement>(null);
 
@@ -214,6 +215,23 @@ export function HomePage() {
         onSuccess: (_data, vars) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['trash'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); showNotification('success', `Ebook ${vars.title} movido para a reciclagem.`, 3000); },
         onError: () => { showNotification('error', 'Erro ao eliminar o registo.'); },
     });
+    // Ebook partilhado comigo (não sou o dono nem admin): "eliminar" = sair da partilha.
+    const isSharedWithMe = (ebook: Ebook) => !!currentUser && currentUser.role !== 'admin' && ebook.user_id !== currentUser.id;
+    const ownerLabel = (ebook: Ebook): string | null => {
+        if (!currentUser || ebook.user_id === currentUser.id) return null;
+        const who = ebook.owner_email ?? 'outro utilizador';
+        return currentUser.role === 'admin' ? `De ${who}` : `Partilhado por ${who}`;
+    };
+    const leaveShareMutation = useMutation({
+        mutationFn: (vars: { isbn: string; title: string }) => ebooksApi.unshareEbook(vars.isbn, currentUser!.id),
+        onSuccess: (_data, vars) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); showNotification('success', `Partilha de ${vars.title} removida.`, 3000); },
+        onError: () => { showNotification('error', 'Erro ao remover a partilha.'); },
+    });
+    const removeEbook = (isbn: string) => {
+        const ebook = inProgressEbooks.find(e => e.ebook_isbn === isbn);
+        const vars = { isbn, title: ebook?.title || '' };
+        if (ebook && isSharedWithMe(ebook)) leaveShareMutation.mutate(vars); else deleteEbookMutation.mutate(vars);
+    };
     const restoreEbookMutation = useMutation({
         mutationFn: (vars: { isbn: string; title: string }) => ebooksApi.restoreEbook(vars.isbn),
         onSuccess: (_data, vars) => { queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['trash'] }); showNotification('success', `Ebook ${vars.title} restaurado.`, 3000); },
@@ -328,12 +346,15 @@ export function HomePage() {
         }, 'image/jpeg');
     };
 
+    const hasOthers = !!currentUser && ebooks.some(e => e.user_id !== currentUser.id);
+    const ownedEbooks = ownerFilter === 'all' || !currentUser ? ebooks
+        : ebooks.filter(e => (e.user_id === currentUser.id) === (ownerFilter === 'mine'));
     const filteredEbooks = searchQuery.trim()
-        ? ebooks.filter(e => {
+        ? ownedEbooks.filter(e => {
             const q = searchQuery.toLowerCase();
             return e.ebook_isbn.toLowerCase().includes(q) || e.title.toLowerCase().includes(q) || e.author.toLowerCase().includes(q);
           })
-        : ebooks;
+        : ownedEbooks;
 
     const inProgressEbooks = filteredEbooks.filter(e => e.status !== 'completed');
     const completedEbooks = filteredEbooks.filter(e => e.status === 'completed');
@@ -397,10 +418,7 @@ export function HomePage() {
                 ) : ebooks.length === 0 && trashEbooks.length === 0 ? (
                     <div className="flex-1 bg-surface rounded-2xl shadow-md border border-border overflow-hidden flex">
                         <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6 text-center">
-                            <div className="space-y-2">
-                                <h3 className="text-2xl font-bold text-slate-600">Ainda não tens ebooks</h3>
-                                <p className="text-text-muted max-w-md mx-auto">Cria o teu primeiro ebook para começares a converter PDFs de forma simples e rápida.</p>
-                            </div>
+                            <h3 className="text-2xl font-bold text-slate-600">Ainda não tens ebooks</h3>
                         </div>
                     </div>
                 ) : (
@@ -420,6 +438,14 @@ export function HomePage() {
                                 Concluído
                                 <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === 'completed' ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-text-muted'}`}>{completedEbooks.length}</span>
                             </button>
+                            {(hasOthers || ownerFilter !== 'all') && (
+                                <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value as typeof ownerFilter)} aria-label="Filtrar por dono"
+                                    className="ml-auto mb-1 h-8 rounded-lg border border-border bg-white px-2 text-xs text-text-muted outline-none cursor-pointer">
+                                    <option value="all">Todos</option>
+                                    <option value="mine">Meus</option>
+                                    <option value="others">{currentUser?.role === 'admin' ? 'De outros' : 'Partilhados comigo'}</option>
+                                </select>
+                            )}
                         </div>
 
                         {activeTab === 'in_progress' && (
@@ -433,8 +459,10 @@ export function HomePage() {
                                         onOpenCover={openCoverModal}
                                         onComplete={toggleStatus}
                                         onShare={openShareModal}
-                                        onDelete={(isbn) => deleteEbookMutation.mutate({ isbn, title: inProgressEbooks.find(e => e.ebook_isbn === isbn)?.title || '' })}
-                                        isDeleting={deleteEbookMutation.isPending}
+                                        onDelete={removeEbook}
+                                        isShared={isSharedWithMe}
+                                        ownerLabel={ownerLabel}
+                                        isDeleting={deleteEbookMutation.isPending || leaveShareMutation.isPending}
                                         coverVersions={coverVersions}
                                         onDownloadEpub={handleDownloadEpub}
                                     />
@@ -447,8 +475,10 @@ export function HomePage() {
                                         onOpenCover={openCoverModal}
                                         onComplete={toggleStatus}
                                         onShare={openShareModal}
-                                        onDelete={(isbn) => deleteEbookMutation.mutate({ isbn, title: inProgressEbooks.find(e => e.ebook_isbn === isbn)?.title || '' })}
-                                        isDeleting={deleteEbookMutation.isPending}
+                                        onDelete={removeEbook}
+                                        isShared={isSharedWithMe}
+                                        ownerLabel={ownerLabel}
+                                        isDeleting={deleteEbookMutation.isPending || leaveShareMutation.isPending}
                                         coverVersions={coverVersions}
                                         onDownloadEpub={handleDownloadEpub}
                                         emptyMessage="Não há ebooks em progresso no momento."
@@ -463,6 +493,7 @@ export function HomePage() {
                                     <CompletedTable
                                         searchSlot={searchControl}
                                         ebooks={completedEbooks}
+                                        ownerLabel={ownerLabel}
                                         onReopen={toggleStatus}
                                         coverVersions={coverVersions}
                                         onDownloadEpub={handleDownloadEpub}
@@ -471,6 +502,7 @@ export function HomePage() {
                                 {viewMode === 'grid' && (
                                     <EbookGrid
                                         ebooks={completedEbooks}
+                                        ownerLabel={ownerLabel}
                                         onReopen={toggleStatus}
                                         coverVersions={coverVersions}
                                         onDownloadEpub={handleDownloadEpub}
