@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ebooksApi } from '../../../../api/ebooks-api';
 import { useNotification } from '../../../../context/NotificationContext';
+import { imageSrc } from '../../../../utils/book-image';
 
 // Corte de imagem: partilhado pela Galeria e pelo menu de contexto (botão direito) do editor —
 // cada instância mantém o seu próprio estado (só uma imagem de cada vez, sem necessidade de
@@ -14,7 +15,7 @@ export function useImageCrop(isbn: string, onSaved?: (imageId: string) => void) 
     // Guarda por id no callback: se entretanto cancelar/abrir outra, não pisa.
     const handleOpenCrop = useCallback((imageId: string) => {
         setCropImage({ id: imageId, url: '' });
-        fetch(`/api/ebooks/${isbn}/images/${imageId}`)
+        fetch(imageSrc(isbn, imageId))
             .then(res => { if (!res.ok) throw new Error('Failed to load image'); return res.blob(); })
             .then(blob => setCropImage(prev => (prev?.id === imageId ? { id: imageId, url: URL.createObjectURL(blob) } : prev)))
             .catch(error => {

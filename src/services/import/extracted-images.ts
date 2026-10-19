@@ -1,4 +1,5 @@
 import { IMPORTED_ALT } from '../../utils/image-alt';
+import { imageSrc } from '../../utils/book-image';
 // Imagens extraídas pelos importadores (EPUB, IDML, Word, PDF) → servidor.
 // Todos os extratores marcam a imagem como <img data-image-id="{id}" src="placeholder" …>; aqui sobe-se o blob
 // e troca-se SÓ o src pelo URL do servidor — alt, class e o resto do que o extrator produziu ficam.
@@ -17,7 +18,7 @@ export function pointImagesToServer(html: string, isbn: string): string {
     return html.replace(/<img\b[^>]*>/gi, (tag) => {
         const id = tag.match(/data-image-id="([^"]+)"/)?.[1];
         if (!id) return tag;
-        const out = tag.replace(/\bsrc="placeholder"/, `src="/api/ebooks/${isbn}/images/${id}"`);
+        const out = tag.replace(/\bsrc="placeholder"/, `src="${imageSrc(isbn, id)}"`);
         return /\balt=/.test(out) ? out : out.replace(/^<img\b/i, `<img alt="${IMPORTED_ALT}"`);
     });
 }

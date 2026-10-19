@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { formatFileSize } from '../../../../utils/format';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import type { ImageData } from './useImageGallery';
+import { imageSrc } from '../../../../utils/book-image';
 
 interface ImageLightboxProps {
     image: ImageData;
@@ -32,7 +33,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, isbn, onClo
 
         <div className="max-w-6xl max-h-full flex flex-col items-center gap-4">
             <img
-                src={`/api/ebooks/${isbn}/images/${image.id}`}
+                src={imageSrc(isbn, image.id)}
                 alt=""
                 className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
                 onClick={(e) => e.stopPropagation()}

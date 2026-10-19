@@ -1,10 +1,4 @@
-// Imagens referenciadas pelo HTML do livro (data-image-id e src /api/.../images/<id>), sem repetidas, por ordem.
-export function collectImageIds(html: string): string[] {
-    const ids = new Set<string>();
-    for (const m of html.matchAll(/data-image-id="([^"]+)"/g)) ids.add(m[1]);
-    for (const m of html.matchAll(/src=["']\/api\/ebooks\/[^/]+\/images\/([^"'?]+)/g)) ids.add(m[1]);
-    return [...ids];
-}
+export { collectImageIds } from '../../../utils/book-image';
 
 // Descarrega com concorrência limitada (um pedido de cada vez demorava segundos em livros com centenas de
 // imagens). Falhas (imagem não está no servidor) saltam-se; o Map mantém a ordem de `ids`.

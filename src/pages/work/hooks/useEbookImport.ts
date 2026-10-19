@@ -6,6 +6,7 @@ import type { DocxStyleMapping } from '../../../services/import/document-importe
 import type { ImportOptions } from '../../../utils/html-cleaner';
 import type { ImageSettings } from '../../../components/MarginPreview';
 import type { NotificationType } from '../../../context/NotificationContext';
+import { bustImageSrcs } from '../../../utils/book-image';
 
 interface UseEbookImportOptions {
     isbn: string | undefined;
@@ -38,8 +39,7 @@ export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImp
         const result = await finalizeImport(extracted, decisions, ports());
         // Mesmo id = mesmo src: o editor reaproveitava da memória as imagens do import anterior (e só recarregar
         // mostrava as novas). `?v=` força o pedido — o mesmo cache-bust do editor ao cortar/substituir imagens.
-        const bust = `?v=${Date.now()}`;
-        result.html = result.html.replace(/(\bsrc="\/api\/ebooks\/[^"?]+\/images\/[^"?]+)"/g, `$1${bust}"`);
+        result.html = bustImageSrcs(result.html);
         await ebooksApi.saveStyle(isbn!, DEFAULT_CSS);
         setCustomCss(DEFAULT_CSS);
         return result;

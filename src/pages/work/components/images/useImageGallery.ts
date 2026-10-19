@@ -7,7 +7,7 @@ import { useImageCrop } from './useImageCrop';
 import type { WorkEditorRef } from '../WorkEditor';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { PLACEHOLDER_ALT } from '../../../../utils/image-alt';
+import { imageSrc, imageTag, renameImageIn } from '../../../../utils/book-image';
 
 export interface ImageData {
     id: string;
@@ -127,7 +127,7 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
         try {
             // cache-bust: mesma URL de antes, bytes novos no servidor — sem isto o browser
             // podia servir a resposta em cache da 1ª vez que esta imagem foi pedida.
-            const response = await fetch(`/api/ebooks/${isbn}/images/${imageId}?thumbnail=true&v=${Date.now()}`);
+            const response = await fetch(`${imageSrc(isbn, imageId)}?thumbnail=true&v=${Date.now()}`);
             if (!response.ok) throw new Error('Failed to load thumbnail');
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
@@ -185,7 +185,7 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
     const handleInsertAtCursor = useCallback((imageData: ImageData) => {
         if (editorRef.current) {
             editorRef.current.insertContent(
-                `<img data-image-id="${imageData.id}" src="/api/ebooks/${isbn}/images/${imageData.id}" alt="${PLACEHOLDER_ALT}" style="max-width: 100%; height: auto;" loading="lazy" />`
+                imageTag(isbn, imageData.id)
             );
             showNotification('success', 'Imagem inserida no cursor', 2000);
         }
@@ -203,9 +203,7 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
         try {
             const response = await ebooksApi.renameImage(isbn, imageId, newImageName);
             const { newId, oldId } = response.data;
-            const updatedHtml = htmlContentRef.current
-                .replace(new RegExp(`data-image-id="${oldId}"`, 'g'), `data-image-id="${newId}"`)
-                .replace(new RegExp(`/images/${oldId}`, 'g'), `/images/${newId}`);
+            const updatedHtml = renameImageIn(htmlContentRef.current, oldId, newId);
             onContentUpdate(updatedHtml);
 
             const imagesResponse = await ebooksApi.listImages(isbn);
@@ -337,7 +335,7 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
             // Uma só imagem → descarregar o ficheiro direto, sem zip.
             if (imagesToExport.length === 1) {
                 const img = imagesToExport[0];
-                const blob = await (await fetch(`/api/ebooks/${isbn}/images/${img.id}`)).blob();
+                const blob = await (await fetch(imageSrc(isbn, img.id))).blob();
                 saveAs(blob, filenameMap.get(img.id) || `${img.id}.png`);
                 showNotification('success', '1 imagem exportada', 2000);
                 return;
@@ -346,7 +344,7 @@ export function useImageGallery({ isbn, htmlContent, editorRef, onContentUpdate,
             const zip = new JSZip();
             for (const img of imagesToExport) {
                 try {
-                    const blob = await (await fetch(`/api/ebooks/${isbn}/images/${img.id}`)).blob();
+                    const blob = await (await fetch(imageSrc(isbn, img.id))).blob();
                     zip.file(filenameMap.get(img.id) || `${img.id}.png`, blob);
                 } catch (e) { console.error(`Failed to add ${img.id} to ZIP:`, e); }
             }

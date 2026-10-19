@@ -58,6 +58,7 @@ import { normalizeEditorBody } from '../editor/normalizeBody';
 import type { IndiceLinkSubtitle } from '../editor/overlays/IndiceLinkPanel';
 import { useIndiceLinkPanel } from '../editor/overlays/useIndiceLinkPanel';
 import type { GrammarMatch } from '../hooks/useEbookGrammar';
+import { imageSrc, imageIdsOf, bustSrc } from '../../../utils/book-image';
 
 type FilePickerCallback = NonNullable<RawEditorOptions['file_picker_callback']>;
 type BlobInfo = Parameters<NonNullable<RawEditorOptions['images_upload_handler']>>[0];
@@ -164,13 +165,9 @@ export interface WorkEditorRef {
 // força o reload visual sem tocar no imageId/referências no HTML.
 function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
     if (!editor) return;
-    const bust = `?v=${Date.now()}`;
+    const stamp = Date.now();
     editor.getBody().querySelectorAll('img').forEach((img: HTMLImageElement) => {
-        const id = img.getAttribute('data-image-id');
-        const src = img.getAttribute('src') || '';
-        if (id === imageId || src.includes(`/images/${imageId}`)) {
-            img.setAttribute('src', src.split('?')[0] + bust);
-        }
+        if (imageIdsOf(img).includes(imageId)) img.setAttribute('src', bustSrc(img.getAttribute('src') || '', stamp));
     });
     editor.dispatch('change');
 }
@@ -897,11 +894,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             if (!editor) return '';
             const ids = new Set(imageIds);
             editor.getBody().querySelectorAll('img').forEach((img: HTMLImageElement) => {
-                const id = img.getAttribute('data-image-id');
-                const src = img.getAttribute('src') || '';
-                if ((id && ids.has(id)) || [...ids].some(i => src.includes(`/images/${i}`))) {
-                    img.remove();
-                }
+                if (imageIdsOf(img).some(id => ids.has(id))) img.remove();
             });
             editor.dispatch('change');
             return editor.getContent();
@@ -1080,7 +1073,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             if (!isbn) throw new Error('ISBN não disponível');
                             await ebooksApi.uploadImages(isbn, formData);
                             live.current.onImageUploaded?.();
-                            return `/api/ebooks/${isbn}/images/${imageId}`;
+                            return imageSrc(isbn, imageId);
                         },
                         // Só os extras estáticos do editor aqui — o CSS do livro é sempre o injetado
                         // pela useEffect abaixo (currentCss), nunca este valor de arranque do TinyMCE:
