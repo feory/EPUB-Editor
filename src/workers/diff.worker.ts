@@ -1,11 +1,13 @@
 export type WordPart = { type: 'equal' | 'insert' | 'delete'; text: string };
 
 export interface DiffItem {
-  type: 'equal' | 'insert' | 'delete' | 'modify';
+  type: 'equal' | 'insert' | 'delete' | 'modify' | 'format';
   editorText?: string;
   refText?: string;
   editorIndex?: number;
   charDiff?: WordPart[];
+  editorFormat?: string; // type 'format': mesmo texto, formatação diferente (tag.classes {style})
+  refFormat?: string;
 }
 
 function normalize(text: string): string {
@@ -62,7 +64,7 @@ function charDiffAndSimilarity(editorText: string, refText: string): { charDiff:
   return { charDiff: consolidateParts(raw), sim };
 }
 
-function diffParagraphs(editorParas: string[], refParas: string[]): DiffItem[] {
+export function diffParagraphs(editorParas: string[], refParas: string[], editorFormats?: string[], refFormats?: string[]): DiffItem[] {
   const a = editorParas.map(normalize);
   const b = refParas.map(normalize);
   const m = a.length, n = b.length;
@@ -73,7 +75,10 @@ function diffParagraphs(editorParas: string[], refParas: string[]): DiffItem[] {
   let i = m, j = n;
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
-      raw.unshift({ type: 'equal', editorText: editorParas[i - 1], refText: refParas[j - 1], editorIndex: i - 1 });
+      const ef = editorFormats?.[i - 1], rf = refFormats?.[j - 1];
+      raw.unshift(ef !== undefined && rf !== undefined && ef !== rf
+        ? { type: 'format', editorText: editorParas[i - 1], refText: refParas[j - 1], editorIndex: i - 1, editorFormat: ef, refFormat: rf }
+        : { type: 'equal', editorText: editorParas[i - 1], refText: refParas[j - 1], editorIndex: i - 1 });
       i--; j--;
     } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
       raw.unshift({ type: 'delete', refText: refParas[j - 1] });
@@ -143,7 +148,7 @@ self.onmessage = (e: MessageEvent) => {
   const { type, payload, id } = e.data;
   try {
     if (type === 'diff') {
-      const result = diffParagraphs(payload.editorParagraphs, payload.refParagraphs);
+      const result = diffParagraphs(payload.editorParagraphs, payload.refParagraphs, payload.editorFormats, payload.refFormats);
       self.postMessage({ id, result, error: null });
     } else {
       throw new Error(`Unknown type: ${type}`);

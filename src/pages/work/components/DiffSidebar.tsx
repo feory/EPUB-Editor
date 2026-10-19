@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, GitCompare, Plus, Minus, Equal, ChevronDown, ChevronUp, Loader2, ArrowUpRight, Pencil } from 'lucide-react';
+import { X, GitCompare, Plus, Minus, Equal, ChevronDown, ChevronUp, Loader2, ArrowUpRight, Pencil, Paintbrush } from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
 import type { DiffItem } from '../../../workers/diff.worker';
 import { CharDiff } from './DiffCharView';
@@ -14,7 +14,7 @@ interface DiffSidebarProps {
   onGoToItem: (editorIndex: number) => void;
   labelInsert?: string; // rótulo do lado "adicionado" (default: Editor)
   labelDelete?: string; // rótulo do lado "removido" (default: Ficheiro)
-  formatOnly?: boolean; // sem diferenças de texto, mas o HTML difere (só formatação)
+  formatOnly?: boolean; // sem diferenças visíveis, mas o HTML difere (imagens, atributos…)
   width: number;
   onResize: (width: number) => void;
 }
@@ -39,9 +39,9 @@ function groupItems(items: DiffItem[]): DiffGroup[] {
 export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoading, isUpdating, onClose, onGoToItem, labelInsert = 'Editor', labelDelete = 'Ficheiro', formatOnly, width, onResize }) => {
   const [showEqual, setShowEqual] = useState(false);
 
-  const { insertCount, deleteCount, modifyCount, equalCount } = items.reduce(
+  const { insertCount, deleteCount, modifyCount, formatCount, equalCount } = items.reduce(
     (acc, i) => { acc[`${i.type}Count`]++; return acc; },
-    { insertCount: 0, deleteCount: 0, modifyCount: 0, equalCount: 0 }
+    { insertCount: 0, deleteCount: 0, modifyCount: 0, formatCount: 0, equalCount: 0 }
   );
 
   const visibleItems = showEqual ? items : items.filter(i => i.type !== 'equal');
@@ -108,6 +108,35 @@ export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoa
         </div>
       );
     }
+    if (group.type === 'format') {
+      return (
+        <div className="border-b border-slate-100">
+          <div className="px-3 pt-2.5 pb-1 flex items-center gap-1.5">
+            <Paintbrush size={11} className="text-sky-500 shrink-0" />
+            <span className="text-[10px] font-black text-sky-600 uppercase tracking-widest">
+              Formatação {group.items.length > 1 ? `· ${group.items.length}` : ''}
+            </span>
+          </div>
+          <div className="mx-3 mb-2">
+            {group.items.map((item, ii) => (
+              <button
+                key={`fmt-${gi}-${ii}-${item.editorIndex}`}
+                onClick={() => item.editorIndex !== undefined && onGoToItem(item.editorIndex)}
+                className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-sky-50 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+              >
+                <p className="text-[12px] text-slate-700 line-clamp-2 group-hover:text-slate-900">{item.editorText}</p>
+                <p className="text-[10px] font-mono text-slate-400 mt-0.5 break-all">
+                  <span className="text-rose-400">{item.refFormat}</span> → <span className="text-emerald-600">{item.editorFormat}</span>
+                </p>
+                <span className="text-[10px] text-sky-500 flex items-center gap-0.5 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <ArrowUpRight size={10} /> ir para parágrafo
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
     if (group.type === 'modify') {
       const item = group.items[0];
       return (
@@ -165,6 +194,12 @@ export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoa
                 {modifyCount}
               </span>
             )}
+            {formatCount > 0 && (
+              <span className="inline-flex items-center gap-1 bg-sky-100 text-sky-700 px-2 py-0.5 rounded text-[11px] font-bold" title="Só a formatação mudou">
+                <Paintbrush size={10} />
+                {formatCount}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[11px] font-bold">
               <Plus size={10} strokeWidth={3} />
               {insertCount}
@@ -195,12 +230,12 @@ export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoa
             <Loader2 size={24} className="animate-spin" />
             <p className="text-sm font-semibold">A comparar documentos...</p>
           </div>
-        ) : items.length === 0 ? (
+        ) : groups.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-400 px-8 text-center">
             <GitCompare size={28} />
-            <p className="text-sm font-semibold text-slate-600">{formatOnly ? 'Sem diferenças de texto' : 'Sem diferenças'}</p>
+            <p className="text-sm font-semibold text-slate-600">{formatOnly ? 'Sem diferenças visíveis' : 'Sem diferenças'}</p>
             <p className="text-xs">{formatOnly
-              ? 'A comparação só vê texto; o que mudou é formatação (estilos, classes ou imagens).'
+              ? 'O texto e a formatação dos parágrafos são iguais; o HTML difere noutro detalhe (imagens, atributos…).'
               : 'O conteúdo do editor é idêntico ao ficheiro de referência.'}</p>
           </div>
         ) : (

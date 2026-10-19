@@ -3,7 +3,7 @@ import type { DiffItem } from '../../../workers/diff.worker';
 import type { HistoryFile } from '../../../api/ebooks-api';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { decompressHtml } from '../../../utils/compression';
-import { extractParagraphs } from '../../../utils/diff-text';
+import { extractParagraphs, extractParagraphFormats } from '../../../utils/diff-text';
 import { useNotification } from '../../../context/NotificationContext';
 
 /**
@@ -34,7 +34,7 @@ export function useVersionDiff(isbn: string | undefined) {
         return decompressHtml(res.data.content);
     }, [isbn]);
 
-    const runWorker = useCallback((editorParagraphs: string[], refParagraphs: string[]) => {
+    const runWorker = useCallback((editorParagraphs: string[], refParagraphs: string[], editorFormats: string[], refFormats: string[]) => {
         const worker = workerRef.current;
         if (!worker) throw new Error('Worker não disponível');
         const id = `vdiff-${++idCounterRef.current}`;
@@ -48,7 +48,7 @@ export function useVersionDiff(isbn: string | undefined) {
                 else resolve(e.data.result);
             };
             worker.addEventListener('message', handler);
-            worker.postMessage({ type: 'diff', payload: { editorParagraphs, refParagraphs }, id });
+            worker.postMessage({ type: 'diff', payload: { editorParagraphs, refParagraphs, editorFormats, refFormats }, id });
         });
     }, []);
 
@@ -62,10 +62,13 @@ export function useVersionDiff(isbn: string | undefined) {
         setLabels(newLabels);
         try {
             const [editorHtml, refHtml] = await getHtmls();
-            const items = await runWorker(extractParagraphs(editorHtml), extractParagraphs(refHtml));
+            const items = await runWorker(
+                extractParagraphs(editorHtml), extractParagraphs(refHtml),
+                extractParagraphFormats(editorHtml), extractParagraphFormats(refHtml),
+            );
             setDiffItems(items);
-            // Sem diferenças de texto mas HTML diferente: só mudou formatação (classes, estilos, imagens…).
-            if (items.length === 0 && editorHtml !== refHtml) setLabels({ ...newLabels, formatOnly: true });
+            // Nada de texto nem de classes/estilos de parágrafo, mas o HTML difere (imagens, atributos…).
+            if (items.every(i => i.type === 'equal') && editorHtml !== refHtml) setLabels({ ...newLabels, formatOnly: true });
         } catch (err) {
             console.error('Version diff error:', err);
             showNotification('error', 'Erro ao comparar com o histórico.');
