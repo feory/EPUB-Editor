@@ -5,6 +5,7 @@ import { corsHeaders } from '../response.js';
 import { loginRateLimit } from '../middleware/rateLimit.js';
 import { SECRET, requireAuth, requireAdmin } from '../middleware/auth.js';
 import { logActivity, actorFromUser } from '../log-activity.js';
+import { displayName } from '../display-name.js';
 
 const COOKIE_SECURE = Bun.env.COOKIE_SECURE === 'true';
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -44,7 +45,6 @@ function issueRefreshToken(userId) {
 
 const MAX_NAME = 60;
 const cleanName = (v) => (typeof v === 'string' ? v.trim().slice(0, MAX_NAME) : '');
-const displayName = (u) => [u.first_name, u.last_name].map(s => s?.trim()).filter(Boolean).join(' ') || u.email;
 // Forma que o cliente guarda como utilizador autenticado.
 const publicUser = (u) => ({ id: u.id, email: u.email, role: u.role, first_name: u.first_name ?? null, last_name: u.last_name ?? null, name: displayName(u) });
 

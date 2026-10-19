@@ -1,4 +1,11 @@
-import type { AuthUser } from '../../api/auth-api';
+import type { AuthUser } from '../api/auth-api';
+
+// Como mostrar uma pessoa: o servidor já manda `name` ("Nome Apelido" ou o email, ver server/display-name.js);
+// aqui só o que sobra no cliente — iniciais e o que mostrar quando a pessoa já não existe (campos a null).
+
+/** `name` do servidor, senão o email, senão `fallback` (ex.: o autor apagou a conta). */
+export const labelOf = (name: string | null | undefined, email: string | null | undefined, fallback: string): string =>
+    name || email || fallback;
 
 /** Iniciais do avatar: "Ana Silva" → AS; sem nome, do email ("ana.silva@x" → AS, "ana@x" → AN). */
 export function initialsOf(user: Pick<AuthUser, 'name' | 'email'>): string {

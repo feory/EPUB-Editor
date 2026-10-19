@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite';
 import { join } from 'path';
 import { existsSync, readdirSync, readFileSync, rmSync, unlinkSync } from 'fs';
 import { DATA_DIR, DB_PATH } from './config.js';
+import { displayNameSql } from './display-name.js';
 
 export const db = new Database(DB_PATH);
 
@@ -47,8 +48,6 @@ const userColumns = db.query("PRAGMA table_info(users)").all();
 for (const col of ['first_name', 'last_name']) {
   if (!userColumns.some(c => c.name === col)) db.run(`ALTER TABLE users ADD COLUMN ${col} TEXT`);
 }
-// Expressão SQL do nome a mostrar para a tabela users com o alias `a`.
-export const DISPLAY_NAME = (a) => `COALESCE(NULLIF(TRIM(COALESCE(${a}.first_name, '') || ' ' || COALESCE(${a}.last_name, '')), ''), ${a}.email)`;
 
 const columns = db.query("PRAGMA table_info(ebooks)").all();
 const requiredCols = ['status', 'description', 'publisher', 'language', 'subjects', 'pub_date', 'deleted_at', 'user_id'];
@@ -139,9 +138,9 @@ db.run("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_
 export const stmt = {
   // ebooks
   // owner_email: a lista mostra "partilhado por X" nos ebooks que não são do próprio utilizador.
-  listEbooks:           db.prepare(`SELECT e.*, u.email AS owner_email, ${DISPLAY_NAME('u')} AS owner_name FROM ebooks e LEFT JOIN users u ON u.id = e.user_id WHERE e.deleted_at IS NULL ORDER BY e.created_at DESC`),
+  listEbooks:           db.prepare(`SELECT e.*, u.email AS owner_email, ${displayNameSql('u')} AS owner_name FROM ebooks e LEFT JOIN users u ON u.id = e.user_id WHERE e.deleted_at IS NULL ORDER BY e.created_at DESC`),
   listEbooksByUser:     db.prepare(`
-    SELECT e.*, u.email AS owner_email, ${DISPLAY_NAME('u')} AS owner_name FROM ebooks e LEFT JOIN users u ON u.id = e.user_id
+    SELECT e.*, u.email AS owner_email, ${displayNameSql('u')} AS owner_name FROM ebooks e LEFT JOIN users u ON u.id = e.user_id
     WHERE e.deleted_at IS NULL AND (e.user_id = ? OR e.ebook_isbn IN
       (SELECT ebook_isbn FROM ebook_shares WHERE user_id = ?)) ORDER BY e.created_at DESC
   `),
@@ -172,10 +171,10 @@ export const stmt = {
   // users
   createUser:           db.prepare('INSERT INTO users (email, password, role, first_name, last_name) VALUES (?, ?, ?, ?, ?)'),
   setUserName:          db.prepare('UPDATE users SET first_name = ?, last_name = ? WHERE id = ?'),
-  getDisplayName:       db.prepare(`SELECT ${DISPLAY_NAME('u')} AS name FROM users u WHERE u.id = ?`),
+  getDisplayName:       db.prepare(`SELECT ${displayNameSql('u')} AS name FROM users u WHERE u.id = ?`),
   getUserByEmail:       db.prepare('SELECT * FROM users WHERE email = ?'),
-  getUserById:          db.prepare(`SELECT u.id, u.email, u.role, u.created_at, u.first_name, u.last_name, ${DISPLAY_NAME('u')} AS name FROM users u WHERE u.id = ?`),
-  listUsers:            db.prepare(`SELECT u.id, u.email, u.role, u.created_at, u.first_name, u.last_name, ${DISPLAY_NAME('u')} AS name FROM users u ORDER BY u.created_at`),
+  getUserById:          db.prepare(`SELECT u.id, u.email, u.role, u.created_at, u.first_name, u.last_name, ${displayNameSql('u')} AS name FROM users u WHERE u.id = ?`),
+  listUsers:            db.prepare(`SELECT u.id, u.email, u.role, u.created_at, u.first_name, u.last_name, ${displayNameSql('u')} AS name FROM users u ORDER BY u.created_at`),
   getPasswordHashById:  db.prepare('SELECT password FROM users WHERE id = ?'),
   setPassword:          db.prepare('UPDATE users SET password = ? WHERE id = ?'),
   deleteUser:           db.prepare("DELETE FROM users WHERE id = ? AND role != 'admin'"),
@@ -190,11 +189,11 @@ export const stmt = {
   unshareEbook:         db.prepare('DELETE FROM ebook_shares WHERE ebook_isbn = ? AND user_id = ?'),
   unshareAllForEbook:   db.prepare('DELETE FROM ebook_shares WHERE ebook_isbn = ?'),
   listSharesForEbook:   db.prepare(`
-    SELECT u.id, u.email, ${DISPLAY_NAME('u')} AS name FROM ebook_shares s JOIN users u ON u.id = s.user_id
+    SELECT u.id, u.email, ${displayNameSql('u')} AS name FROM ebook_shares s JOIN users u ON u.id = s.user_id
     WHERE s.ebook_isbn = ? ORDER BY name
   `),
   hasShareAccess:       db.prepare('SELECT 1 FROM ebook_shares WHERE ebook_isbn = ? AND user_id = ?'),
-  listBasicUsers:       db.prepare(`SELECT u.id, u.email, ${DISPLAY_NAME('u')} AS name FROM users u ORDER BY name`),
+  listBasicUsers:       db.prepare(`SELECT u.id, u.email, ${displayNameSql('u')} AS name FROM users u ORDER BY name`),
   // backup runs
   startBackupRun:       db.prepare('INSERT INTO backup_runs (source) VALUES (?)'),
   finishBackupRun:      db.prepare("UPDATE backup_runs SET finished_at = datetime('now'), status = ?, summary = ? WHERE id = ?"),
@@ -211,7 +210,7 @@ export const stmt = {
   listActivityLog:      db.prepare('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 1000'),
   // comments
   commentsListByIsbn:   db.prepare(`
-    SELECT c.*, u.email AS user_email, ${DISPLAY_NAME('u')} AS user_name FROM comments c JOIN users u ON u.id = c.user_id
+    SELECT c.*, u.email AS user_email, ${displayNameSql('u')} AS user_name FROM comments c JOIN users u ON u.id = c.user_id
     WHERE c.ebook_isbn = ? ORDER BY c.created_at ASC
   `),
   insertComment:        db.prepare(`
@@ -225,7 +224,7 @@ export const stmt = {
   insertNotification:   db.prepare('INSERT INTO notifications (user_id, type, ebook_isbn, actor_id) VALUES (?, ?, ?, ?)'),
   pruneNotifications:   db.prepare("DELETE FROM notifications WHERE user_id = ? AND created_at < datetime('now', '-90 days')"),
   listNotifications:    db.prepare(`
-    SELECT n.id, n.type, n.ebook_isbn, n.read_at, n.created_at, u.email AS actor_email, ${DISPLAY_NAME('u')} AS actor_name, e.title AS ebook_title
+    SELECT n.id, n.type, n.ebook_isbn, n.read_at, n.created_at, u.email AS actor_email, ${displayNameSql('u')} AS actor_name, e.title AS ebook_title
     FROM notifications n
     LEFT JOIN users u ON u.id = n.actor_id
     LEFT JOIN ebooks e ON e.ebook_isbn = n.ebook_isbn

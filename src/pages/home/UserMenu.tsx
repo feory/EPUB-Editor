@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { UserRound, LogOut, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2, Wand2 } from 'lucide-react';
 import type { AuthUser } from '../../api/auth-api';
-import { initialsOf } from './initials';
+import { initialsOf } from '../../utils/person';
 
 type ViewMode = 'table' | 'grid';
 

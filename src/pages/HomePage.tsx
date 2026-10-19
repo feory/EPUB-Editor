@@ -19,6 +19,7 @@ import { InProgressTable } from './home/InProgressTable';
 import { CompletedTable } from './home/CompletedTable';
 import { EbookGrid } from './home/EbookGrid';
 import { UserMenu } from './home/UserMenu';
+import { labelOf } from '../utils/person';
 import { NotificationsBell } from './home/NotificationsBell';
 import { AccountModal } from './home/AccountModal';
 import { EpubMappingModal } from './EpubMappingModal';
@@ -223,7 +224,7 @@ export function HomePage() {
     const ownerLabel = (ebook: Ebook): string | null => {
         const relation = ebook.access?.relation;
         if (!relation || relation === 'owner') return null;
-        const who = ebook.owner_name ?? ebook.owner_email ?? 'outro utilizador';
+        const who = labelOf(ebook.owner_name, ebook.owner_email, 'outro utilizador');
         return relation === 'admin' ? `De ${who}` : `Partilhado por ${who}`;
     };
     const leaveShareMutation = useMutation({
