@@ -17,7 +17,7 @@ export function useVersionDiff(isbn: string | undefined) {
     const [open, setOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [diffItems, setDiffItems] = useState<DiffItem[]>([]);
-    const [labels, setLabels] = useState<{ history: string; draft?: boolean } | null>(null);
+    const [labels, setLabels] = useState<{ history: string; draft?: boolean; formatOnly?: boolean } | null>(null);
     const workerRef = useRef<Worker | null>(null);
     const idCounterRef = useRef(0);
 
@@ -53,7 +53,7 @@ export function useVersionDiff(isbn: string | undefined) {
     }, []);
 
     const runDiff = useCallback(async (
-        newLabels: { history: string; draft?: boolean },
+        newLabels: { history: string; draft?: boolean; formatOnly?: boolean },
         getHtmls: () => Promise<[editorHtml: string, refHtml: string]>,
     ) => {
         setOpen(true);
@@ -62,7 +62,10 @@ export function useVersionDiff(isbn: string | undefined) {
         setLabels(newLabels);
         try {
             const [editorHtml, refHtml] = await getHtmls();
-            setDiffItems(await runWorker(extractParagraphs(editorHtml), extractParagraphs(refHtml)));
+            const items = await runWorker(extractParagraphs(editorHtml), extractParagraphs(refHtml));
+            setDiffItems(items);
+            // Sem diferenças de texto mas HTML diferente: só mudou formatação (classes, estilos, imagens…).
+            if (items.length === 0 && editorHtml !== refHtml) setLabels({ ...newLabels, formatOnly: true });
         } catch (err) {
             console.error('Version diff error:', err);
             showNotification('error', 'Erro ao comparar com o histórico.');

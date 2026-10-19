@@ -14,6 +14,7 @@ interface DiffSidebarProps {
   onGoToItem: (editorIndex: number) => void;
   labelInsert?: string; // rótulo do lado "adicionado" (default: Editor)
   labelDelete?: string; // rótulo do lado "removido" (default: Ficheiro)
+  formatOnly?: boolean; // sem diferenças de texto, mas o HTML difere (só formatação)
   width: number;
   onResize: (width: number) => void;
 }
@@ -35,7 +36,7 @@ function groupItems(items: DiffItem[]): DiffGroup[] {
 }
 
 
-export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoading, isUpdating, onClose, onGoToItem, labelInsert = 'Editor', labelDelete = 'Ficheiro', width, onResize }) => {
+export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoading, isUpdating, onClose, onGoToItem, labelInsert = 'Editor', labelDelete = 'Ficheiro', formatOnly, width, onResize }) => {
   const [showEqual, setShowEqual] = useState(false);
 
   const { insertCount, deleteCount, modifyCount, equalCount } = items.reduce(
@@ -197,8 +198,10 @@ export const DiffSidebar: React.FC<DiffSidebarProps> = ({ items, fileName, isLoa
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-400 px-8 text-center">
             <GitCompare size={28} />
-            <p className="text-sm font-semibold text-slate-600">Sem diferenças</p>
-            <p className="text-xs">O conteúdo do editor é idêntico ao ficheiro de referência.</p>
+            <p className="text-sm font-semibold text-slate-600">{formatOnly ? 'Sem diferenças de texto' : 'Sem diferenças'}</p>
+            <p className="text-xs">{formatOnly
+              ? 'A comparação só vê texto; o que mudou é formatação (estilos, classes ou imagens).'
+              : 'O conteúdo do editor é idêntico ao ficheiro de referência.'}</p>
           </div>
         ) : (
           <Virtuoso

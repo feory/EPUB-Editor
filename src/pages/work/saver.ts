@@ -63,7 +63,9 @@ export function createSaver(deps: SaverDeps) {
             await deps.send(content);
             saved = content;
             failed = false;
-            void deps.drafts.clear(isbn, content);
+            // Sem edição mais recente: qualquer rascunho (mesmo de um texto anterior ao enviado) ficou para trás.
+            // Com edição nova a meio, só o rascunho deste mesmo texto cai — o novo escreve-se a seguir.
+            void deps.drafts.clear(isbn, deps.getContent() === content ? undefined : content);
             deps.onSaved(content, notify);
         } catch {
             failed = true;

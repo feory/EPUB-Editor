@@ -121,3 +121,21 @@ test('start/stop: o intervalo dispara o autosave', async () => {
     stop();
     expect(log).toContain('send:<p>b</p>');
 });
+
+test('save confirmado apaga um rascunho ANTERIOR ao texto enviado (ficaria a pedir "recuperar" um texto velho)', async () => {
+    const { saver, s } = setup();
+    saver.baseline();
+    s.draft = { html: '<p>a2</p>', ts: 1 };
+    s.text = '<p>b</p>';
+    await saver.save('<p>b</p>');
+    expect(s.draft).toBeNull();
+});
+
+test('save confirmado com edição nova a meio mantém o rascunho dessa edição', async () => {
+    const { saver, s } = setup();
+    saver.baseline();
+    s.draft = { html: '<p>c</p>', ts: 1 };
+    s.text = '<p>c</p>';
+    await saver.save('<p>b</p>');
+    expect(s.draft?.html).toBe('<p>c</p>');
+});
