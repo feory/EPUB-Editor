@@ -5,7 +5,7 @@ import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures, 
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from '../document-importer';
 import { readIdmlStyles } from './styles';
 import {
-    renderPsr, renderStory, isHeuristicTitle, accumulateSpacing, hasUserMappedStyle, styleName,
+    renderPsr, renderStory, adoptTableNoteRefs, isHeuristicTitle, accumulateSpacing, hasUserMappedStyle, styleName,
     type RenderContext, type NoteCounter, type SpacingStyleInfo,
 } from './story';
 
@@ -487,6 +487,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     let html = parts.join('\n');
     // Bullets literais "•" → lista <ul><li> real.
     html = convertBulletParagraphs(html);
+    html = adoptTableNoteRefs(html);
     // Coletânea: inserir cada título de artigo antes da sua abertura (p.drop-cap), por ordem.
     const titleBlockRes = insertTitleBlocks(html, titleBlocks);
     html = titleBlockRes.html;

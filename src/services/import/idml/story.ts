@@ -370,6 +370,25 @@ function renderIdmlTable(rc: RenderContext, tableEl: Element, counter: NoteCount
     return out.join('');
 }
 
+// Notas de uma tabela: o IDML tem os números na tabela como sobrescrito MANUAL (às vezes a negrito) e as
+// <Footnote> reais num parágrafo solto logo a seguir (só refs `<sup><a …footnote-ref>N</a></sup>`). Esse
+// parágrafo era quem fazia a correspondência com as notas e ficava fora da tabela: passam a ser as
+// referências da tabela e o parágrafo solto sai. Só quando TODOS os números do parágrafo existem como
+// sobrescrito na tabela — senão não se mexe.
+const NOTE_REF = '<sup><a href="#footnote-(\\d+)" class="footnote-ref">\\d+<\\/a><\\/sup>';
+const TABLE_THEN_REFS_RE = new RegExp(`(<table>[\\s\\S]*?<\\/table>)\\s*<p\\b[^>]*>((?:\\s*${NOTE_REF})+)\\s*<\\/p>`, 'g');
+const WRAPPED_SUP_RE = /<sup>(?:<(\w+)>)*(\d+)(?:<\/\w+>)*<\/sup>/g;
+
+export function adoptTableNoteRefs(html: string): string {
+    return html.replace(TABLE_THEN_REFS_RE, (whole, table: string, refs: string) => {
+        const nums = [...refs.matchAll(new RegExp(NOTE_REF, 'g'))].map(m => m[1]);
+        const inTable = new Set([...table.matchAll(WRAPPED_SUP_RE)].map(m => m[2]));
+        if (!nums.every(n => inTable.has(n))) return whole;
+        return table.replace(WRAPPED_SUP_RE, (sup, _tag, n: string) =>
+            nums.includes(n) ? `<sup><a href="#footnote-${n}" class="footnote-ref">${n}</a></sup>` : sup);
+    });
+}
+
 // Título "disfarçado" de corpo: alguns títulos (ex. "Índice", "Índice remissivo") usam o
 // estilo de parágrafo do corpo (TEXTO) e só se distinguem visualmente — CENTRADOS, texto
 // CURTO (uma linha de título, não um parágrafo) e num run maior/mais forte (≥13pt Medium/Bold).
