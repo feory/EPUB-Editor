@@ -4,6 +4,8 @@ const ROOT = join(import.meta.dir, '..');
 
 export const PORT = parseInt(Bun.env.PORT ?? '3999');
 export const DATA_DIR = join(ROOT, 'data');
+// Base de dados: o ficheiro do projeto, ou o que EPUB_DB indicar (':memory:' nos testes — ver bunfig.toml).
+export const DB_PATH = Bun.env.EPUB_DB ?? join(ROOT, 'ebooks.db');
 export const TEMP_DIR = join(ROOT, 'temp');
 export const EPUBCHECK_JAR = join(ROOT, 'tools', 'epubcheck', 'epubcheck.jar');
 

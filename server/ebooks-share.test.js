@@ -1,49 +1,46 @@
-import { test, expect, afterAll } from 'bun:test';
+import { test, expect } from 'bun:test';
+import { stmt } from './database.js';
+import { deleteEbook, unshareEbook, listEbooks } from './routes/ebooks.js';
+import { makeUser, makeEbook } from './test-helpers.js';
 
-process.env.JWT_SECRET ??= 'test-secret';
-const { stmt } = await import('./database.js');
-const { deleteEbook, unshareEbook, listEbooks } = await import('./routes/ebooks.js');
-
-// database.js liga-se ao ebooks.db REAL: statements trocados por fakes em memória (ver trash.test.js).
-const calls = [];
-const FAKES = {
-  getEbook: { get: () => ({ ebook_isbn: 'x', title: 't', user_id: 1 }) },
-  softDeleteEbook: { run: (isbn) => calls.push(['trash', isbn]) },
-  unshareEbook: { run: (isbn, uid) => calls.push(['unshare', isbn, uid]) },
-  listSharesForEbook: { all: () => [] },
-  hasShareAccess: { get: (_isbn, uid) => (uid === 2 ? { 1: 1 } : undefined) },
-  listEbooksByUser: { all: () => [{ ebook_isbn: 'x', user_id: 1 }, { ebook_isbn: 'y', user_id: 7 }] },
-  insertActivityLog: { run: () => {} },
-};
-const originals = Object.fromEntries(Object.keys(FAKES).map(k => [k, stmt[k]]));
-Object.assign(stmt, FAKES);
-afterAll(() => Object.assign(stmt, originals));
-
-const owner = { role: 'user', sub: '1' };
-const guest = { role: 'user', sub: '2' };
-const admin = { role: 'admin', sub: '9' };
+// SQL real, base em memória (test-setup.js).
+const owner = makeUser({ first: 'Rita', last: 'Dias' });
+const guest = makeUser();
+const stranger = makeUser();
+const admin = makeUser({ role: 'admin' });
+const isbn = makeEbook(owner);
+stmt.shareEbook.run(isbn, guest.id);
 const req = new Request('http://x');
+const trashed = () => !!stmt.getEbook.get(isbn).deleted_at;
 
-test('quem recebeu a partilha não apaga o ebook (403), o dono e o admin sim', async () => {
-  calls.length = 0;
-  expect(deleteEbook(req, 'x', guest).status).toBe(403);
-  expect(calls).toEqual([]);
-  expect(deleteEbook(req, 'x', owner).status).toBe(200);
-  expect(deleteEbook(req, 'x', admin).status).toBe(200);
-  expect(calls).toEqual([['trash', 'x'], ['trash', 'x']]);
+test('quem recebeu a partilha não apaga o ebook (403), o dono e o admin sim', () => {
+  expect(deleteEbook(req, isbn, guest).status).toBe(403);
+  expect(deleteEbook(req, isbn, stranger).status).toBe(403);
+  expect(trashed()).toBe(false);
+  expect(deleteEbook(req, isbn, owner).status).toBe(200);
+  expect(trashed()).toBe(true);
+  stmt.restoreEbook.run(isbn);
+  expect(deleteEbook(req, isbn, admin).status).toBe(200);
+  stmt.restoreEbook.run(isbn);
 });
 
 test('quem recebeu a partilha remove só a sua; a dos outros não', () => {
-  calls.length = 0;
-  expect(unshareEbook('x', '2', guest).status).toBe(200);
-  expect(unshareEbook('x', '3', guest).status).toBe(403);
-  expect(unshareEbook('x', '3', owner).status).toBe(200);
-  expect(calls).toEqual([['unshare', 'x', 2], ['unshare', 'x', 3]]);
+  const other = makeUser();
+  stmt.shareEbook.run(isbn, other.id);
+  expect(unshareEbook(isbn, String(other.id), guest).status).toBe(403);
+  expect(stmt.hasShareAccess.get(isbn, other.id)).toBeTruthy();
+  expect(unshareEbook(isbn, String(guest.id), guest).status).toBe(200);
+  expect(stmt.hasShareAccess.get(isbn, guest.id)).toBeFalsy();
+  expect(unshareEbook(isbn, String(other.id), owner).status).toBe(200);
+  expect(stmt.hasShareAccess.get(isbn, other.id)).toBeFalsy();
+  stmt.shareEbook.run(isbn, guest.id);
 });
 
-test('a lista traz o acesso por ebook: dono vs partilhado', async () => {
-  const res = listEbooks(new Request('http://x'), owner);
-  const { data } = await res.json();
-  expect(data.map(e => e.access.relation)).toEqual(['owner', 'shared']);
-  expect(data[1].access).toEqual({ relation: 'shared', delete: false, manageShares: false, leave: true });
+test('a lista traz o acesso e o dono por ebook (SQL real)', async () => {
+  const mine = (await listEbooks(req, owner).json()).data.find(e => e.ebook_isbn === isbn);
+  expect(mine.access).toEqual({ relation: 'owner', delete: true, manageShares: true, leave: false });
+  const theirs = (await listEbooks(req, guest).json()).data.find(e => e.ebook_isbn === isbn);
+  expect(theirs.access).toEqual({ relation: 'shared', delete: false, manageShares: false, leave: true });
+  expect(theirs.owner_name).toBe('Rita Dias');
+  expect((await listEbooks(req, stranger).json()).data.some(e => e.ebook_isbn === isbn)).toBe(false);
 });

@@ -1,10 +1,9 @@
 import { Database } from 'bun:sqlite';
 import { join } from 'path';
 import { existsSync, readdirSync, readFileSync, rmSync, unlinkSync } from 'fs';
-import { DATA_DIR } from './config.js';
+import { DATA_DIR, DB_PATH } from './config.js';
 
-const dbPath = join(import.meta.dir, '..', 'ebooks.db');
-export const db = new Database(dbPath);
+export const db = new Database(DB_PATH);
 
 db.run("PRAGMA journal_mode = WAL");
 db.run("PRAGMA synchronous = NORMAL");

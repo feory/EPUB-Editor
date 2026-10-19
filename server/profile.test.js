@@ -1,27 +1,29 @@
-import { test, expect, afterAll } from 'bun:test';
+import { test, expect } from 'bun:test';
+import { stmt } from './database.js';
+import { updateProfile } from './routes/auth.js';
+import { makeUser, put } from './test-helpers.js';
 
-process.env.JWT_SECRET ??= 'test-secret';
-const { stmt } = await import('./database.js');
-const { updateProfile } = await import('./routes/auth.js');
-
-// database.js liga-se ao ebooks.db REAL: statements trocados por fakes em memória (ver trash.test.js).
-const calls = [];
-const FAKES = {
-  setUserName: { run: (...a) => calls.push(a) },
-  getUserById: { get: (id) => ({ id, email: 'a@x.pt', role: 'user', first_name: 'Ana', last_name: 'Silva', name: 'Ana Silva' }) },
-};
-const originals = Object.fromEntries(Object.keys(FAKES).map(k => [k, stmt[k]]));
-Object.assign(stmt, FAKES);
-afterAll(() => Object.assign(stmt, originals));
-
-const put = (body) => new Request('http://x', { method: 'PUT', body: JSON.stringify(body) });
-
-test('perfil: aparam-se os nomes, limitam-se a 60 e vazio guarda null (volta ao email)', async () => {
-  calls.length = 0;
-  const res = await updateProfile(put({ firstName: '  Ana ', lastName: 'x'.repeat(100) }), { sub: '4' });
+// SQL real, base em memória (test-setup.js).
+test('perfil: aparam-se os nomes, limitam-se a 60 e o nome a mostrar vem do SQL', async () => {
+  const u = makeUser();
+  const res = await updateProfile(put({ firstName: '  Ana ', lastName: 'x'.repeat(100) }), u);
   expect(res.status).toBe(200);
-  expect(calls).toEqual([['Ana', 'x'.repeat(60), 4]]);
-  calls.length = 0;
-  await updateProfile(put({ firstName: '  ', lastName: 42 }), { sub: '4' });
-  expect(calls).toEqual([[null, null, 4]]);
+  const row = stmt.getUserById.get(u.id);
+  expect(row.first_name).toBe('Ana');
+  expect(row.last_name).toBe('x'.repeat(60));
+  expect(row.name).toBe(`Ana ${'x'.repeat(60)}`);
+});
+
+test('perfil: vazio guarda null e o nome a mostrar volta ao email', async () => {
+  const u = makeUser({ first: 'Ana', last: 'Silva' });
+  expect(stmt.getUserById.get(u.id).name).toBe('Ana Silva');
+  await updateProfile(put({ firstName: '  ', lastName: 42 }), u);
+  const row = stmt.getUserById.get(u.id);
+  expect(row.first_name).toBeNull();
+  expect(row.name).toBe(u.email);
+});
+
+test('nome a mostrar: só o nome, só o apelido, ambos', () => {
+  expect(stmt.getUserById.get(makeUser({ first: 'Ana' }).id).name).toBe('Ana');
+  expect(stmt.getUserById.get(makeUser({ last: 'Silva' }).id).name).toBe('Silva');
 });
