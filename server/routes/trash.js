@@ -23,6 +23,7 @@ export function hardDeleteEbook(req, isbn, user) {
   if (!ebook?.deleted_at) return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
   stmt.hardDeleteEbook.run(isbn);
   stmt.deleteCommentsByIsbn.run(isbn); // como purgeOldTrash
+  stmt.deleteNotificationsByIsbn.run(isbn);
   stmt.grammarDeleteIsbn.run(isbn);
   stmt.grammarSessionDelete.run(isbn);
   stmt.unshareAllForEbook.run(isbn);

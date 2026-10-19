@@ -19,6 +19,7 @@ import { InProgressTable } from './home/InProgressTable';
 import { CompletedTable } from './home/CompletedTable';
 import { EbookGrid } from './home/EbookGrid';
 import { UserMenu } from './home/UserMenu';
+import { NotificationsBell } from './home/NotificationsBell';
 import { EpubMappingModal } from './EpubMappingModal';
 import { IndesignImportModal } from './IndesignImportModal';
 import { analyzeBook, optimizeBook, type BookMap, type LineBreakSummary } from '../services/indesign/commands';
@@ -392,6 +393,8 @@ export function HomePage() {
                             <Plus className="w-4.5 h-4.5" />
                             <span>Novo Ebook</span>
                         </button>
+
+                        {currentUser && <NotificationsBell onOpenEbook={(isbn) => navigate(`/work/${isbn}`)} />}
 
                         {currentUser && (
                             <UserMenu

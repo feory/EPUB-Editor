@@ -116,6 +116,19 @@ db.run(`CREATE TABLE IF NOT EXISTS comments (
 
 db.run("CREATE INDEX IF NOT EXISTS idx_comments_isbn ON comments(ebook_isbn)");
 
+// Avisos do sino (partilha, resposta a comentário, comentário num ebook do próprio). Sem FK enforcement
+// (como o resto): apagam-se à mão com o ebook (deleteNotificationsByIsbn) e acompanham o rename do ISBN.
+db.run(`CREATE TABLE IF NOT EXISTS notifications (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL,
+  type       TEXT NOT NULL CHECK(type IN ('share','comment_reply','comment')),
+  ebook_isbn TEXT NOT NULL,
+  actor_id   INTEGER NOT NULL,
+  read_at    DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+db.run("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at)");
+
 export const stmt = {
   // ebooks
   // owner_email: a lista mostra "partilhado por X" nos ebooks que não são do próprio utilizador.
@@ -197,6 +210,21 @@ export const stmt = {
   resolveComment:       db.prepare('UPDATE comments SET resolved = ? WHERE id = ?'),
   deleteComment:        db.prepare('DELETE FROM comments WHERE id = ? OR parent_id = ?'),
   deleteCommentsByIsbn: db.prepare('DELETE FROM comments WHERE ebook_isbn = ?'),
+  // notifications
+  insertNotification:   db.prepare('INSERT INTO notifications (user_id, type, ebook_isbn, actor_id) VALUES (?, ?, ?, ?)'),
+  pruneNotifications:   db.prepare("DELETE FROM notifications WHERE user_id = ? AND created_at < datetime('now', '-90 days')"),
+  listNotifications:    db.prepare(`
+    SELECT n.id, n.type, n.ebook_isbn, n.read_at, n.created_at, u.email AS actor_email, e.title AS ebook_title
+    FROM notifications n
+    LEFT JOIN users u ON u.id = n.actor_id
+    LEFT JOIN ebooks e ON e.ebook_isbn = n.ebook_isbn
+    WHERE n.user_id = ? ORDER BY n.id DESC LIMIT 50
+  `),
+  countUnreadNotifications: db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL'),
+  markNotificationRead: db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE id = ? AND user_id = ? AND read_at IS NULL"),
+  markAllNotificationsRead: db.prepare("UPDATE notifications SET read_at = datetime('now') WHERE user_id = ? AND read_at IS NULL"),
+  deleteNotificationsByIsbn: db.prepare('DELETE FROM notifications WHERE ebook_isbn = ?'),
+  renameNotifications:  db.prepare('UPDATE notifications SET ebook_isbn = ? WHERE ebook_isbn = ?'),
 };
 
 export function migrateGrammarToDb() {
@@ -231,6 +259,7 @@ export function purgeOldTrash(days = 30) {
     stmt.grammarSessionDelete.run(ebook_isbn);
     stmt.unshareAllForEbook.run(ebook_isbn);
     stmt.deleteCommentsByIsbn.run(ebook_isbn);
+    stmt.deleteNotificationsByIsbn.run(ebook_isbn);
     try { rmSync(join(DATA_DIR, ebook_isbn), { recursive: true, force: true }); } catch {}
   }
   if (old.length > 0) console.log(`Purged ${old.length} ebooks from trash (> ${days} days)`);

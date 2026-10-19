@@ -15,6 +15,7 @@ const FAKES = {
   getEbook: { get: (isbn) => rows.get(isbn) },
   hardDeleteEbook: { run: (isbn) => { rows.delete(isbn); calls.push(['hardDelete', isbn]); } },
   deleteCommentsByIsbn: { run: (isbn) => calls.push(['comments', isbn]) },
+  deleteNotificationsByIsbn: { run: () => {} },
   grammarDeleteIsbn: { run: () => {} },
   grammarSessionDelete: { run: () => {} },
   unshareAllForEbook: { run: () => {} },

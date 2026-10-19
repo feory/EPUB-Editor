@@ -5,6 +5,7 @@ import { corsHeaders, jsonResponse, safeSegment } from '../response.js';
 import { DATA_DIR } from '../config.js';
 import { debugLog } from '../log.js';
 import { logActivity, actorFromUser } from '../log-activity.js';
+import { notify } from './notifications.js';
 
 export function listEbooks(req, user) {
   const data = user.role === 'admin'
@@ -124,6 +125,7 @@ export async function updateMetadata(req, isbn) {
           stmt.renameGrammarCache.run(newIsbn, isbn);
           stmt.renameGrammarSession.run(newIsbn, isbn);
           stmt.renameComments.run(newIsbn, isbn);
+          stmt.renameNotifications.run(newIsbn, isbn);
         }
       })();
     } catch (dbErr) {
@@ -163,6 +165,7 @@ export async function shareEbook(req, isbn, user) {
   const { userId } = await req.json();
   if (!userId) return Response.json({ error: 'Missing userId' }, { status: 400, headers: corsHeaders });
   stmt.shareEbook.run(isbn, Number(userId));
+  notify(Number(userId), 'share', isbn, Number(user.sub));
   return Response.json({ data: stmt.listSharesForEbook.all(isbn) }, { headers: corsHeaders });
 }
 

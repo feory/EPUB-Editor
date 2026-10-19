@@ -6,6 +6,7 @@ import { cleanupTempDir } from './temp-cleanup.js';
 import { requireAuth } from './middleware/auth.js';
 import { purgeRateLimitStore } from './middleware/rateLimit.js';
 import * as authRoutes from './routes/auth.js';
+import * as notifications from './routes/notifications.js';
 import * as ebooks from './routes/ebooks.js';
 import * as content from './routes/content.js';
 import * as grammar from './routes/grammar.js';
@@ -95,6 +96,8 @@ export const server = Bun.serve({
 
       // Auth user management
       if (path === "/api/auth/me"    && method === "GET")    return authRoutes.me(user);
+      if (path === "/api/notifications"      && method === "GET")  return notifications.listNotifications(user);
+      if (path === "/api/notifications/read" && method === "POST") return notifications.markRead(req, user);
       if (path === "/api/auth/users" && method === "GET")    return authRoutes.listUsers(req, user);
       if (path === "/api/users"      && method === "GET")    return authRoutes.listBasicUsers(user);
       if (path === "/api/auth/users" && method === "POST")   return authRoutes.createUser(req, user);
