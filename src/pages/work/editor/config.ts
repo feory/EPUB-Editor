@@ -76,6 +76,10 @@ const OTHER_STYLES = [
 export const MORE_STYLES_PARA: ReadonlyArray<readonly [string, string]> = [...HEADING_STYLES, ...OTHER_STYLES];
 export const MORE_STYLES_HEAD: ReadonlyArray<readonly [string, string]> = [...PARAGRAPH_STYLES, ...OTHER_STYLES];
 
+// STYLE_FORMATS com os estilos personalizados do livro (classes) no fim de "Parágrafos".
+export const styleFormatsWith = (custom: string[]) => STYLE_FORMATS.map((group) =>
+    group.title === 'Parágrafos' ? { ...group, items: [...group.items, ...custom.map((c) => ({ title: c, format: c }))] } : group);
+
 // Estilos mutuamente exclusivos do seletor "Estilo" do painel de bloco (títulos + parágrafo + bordas + nota de rodapé + capitular).
 export const BLOCK_STYLE_OPTIONS: ReadonlyArray<readonly [string, string]> = [
     ...HEADING_STYLES, ...PARAGRAPH_STYLES, ...OTHER_STYLES.filter(([f]) => f !== 'box'), // box é um wrapper (div), não um estilo do próprio bloco

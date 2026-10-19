@@ -13,7 +13,7 @@ import { prepareTextForXml } from './epub/html-utils';
 
 export type { BookMetadata } from './epub/types';
 import type { BookMetadata } from './epub/types';
-import { ensureBaselineCss } from '../../utils/baseline-css';
+import { ensureBaselineCss, stripEditorOnlyCss } from '../../utils/baseline-css';
 
 // Mantido para compatibilidade - usar DEFAULT_CSS do StyleContext para customização
 export const EPUB_CSS = `
@@ -145,13 +145,6 @@ export const EPUB_CSS = `
     hr { border: none; height: 1px; background: #ccc; width: 40%; margin: 1.5em auto; }
     hr.divider-full { width: 100%; }
 `;
-
-// O style.css por livro tem uma secção editor-only após este marcador; cortar antes de exportar/pré-visualizar.
-const EDITOR_CSS_MARKER = '/* === EDITOR (não exportado para EPUB) === */';
-const stripEditorOnlyCss = (css: string): string => {
-    const i = css.indexOf(EDITOR_CSS_MARKER);
-    return i === -1 ? css : css.slice(0, i).trimEnd();
-};
 
 // CSS de exportação: corta a secção editor-only e garante classes utilitárias recentes
 // que podem faltar no style.css de livros antigos (utils/baseline-css).

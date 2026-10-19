@@ -28,7 +28,8 @@ import { BlockSidebar } from './work/components/BlockSidebar';
 import type { BlockInfo } from './work/editor/blockEditing';
 import type { TextProps } from './work/editor/textProps';
 import { textPatchToDecls } from './work/editor/textProps';
-import { applyRule } from './work/editor/cssRule';
+import { applyRule, hasRule } from './work/editor/cssRule';
+import { addCustomStyle } from '../utils/custom-styles';
 import { useComments } from './work/hooks/useComments';
 import { useCommentEditorSync } from './work/hooks/useCommentEditorSync';
 import { useAuth } from '../context/AuthContext';
@@ -393,6 +394,17 @@ export function WorkPage() {
     if (isbn) styleSaveTimer.current = setTimeout(() => ebooksApi.saveStyle(isbn, next), 600);
   };
 
+  // "Mais estilos" → "Novo estilo…": acrescenta `.cls { css }` à secção de estilos personalizados.
+  const handleCreateStyle = (cls: string, body: string): string | null => {
+    const css = getCurrentCss();
+    if (hasRule(css, `.${cls}`)) return `Já existe um estilo ".${cls}".`;
+    const next = addCustomStyle(css, cls, body);
+    setCustomCss(next);
+    clearTimeout(styleSaveTimer.current);
+    if (isbn) styleSaveTimer.current = setTimeout(() => ebooksApi.saveStyle(isbn, next), 600);
+    return null;
+  };
+
   const anySidebarOpen = panels.anyOpen;
 
   const presence = work.presence;
@@ -596,6 +608,7 @@ export function WorkPage() {
           css={getCurrentCss()}
           onEdit={(edit) => editorRef.current?.editBlock(edit)}
           onTextStyle={handleTextStyle}
+          onCreateStyle={handleCreateStyle}
           onClose={() => sidebars.setShowBoxSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}
@@ -612,6 +625,7 @@ export function WorkPage() {
           onGoToItem={handleGoToVersionDiffItem}
           labelInsert="Atual"
           labelDelete={work.versionDiff.labels?.draft ? 'Rascunho' : 'Histórico'}
+          formatOnly={work.versionDiff.labels?.formatOnly}
           width={panelWidth}
           onResize={handlePanelResize}
         />

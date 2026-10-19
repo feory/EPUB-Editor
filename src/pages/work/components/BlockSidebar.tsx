@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
-import { X, RotateCcw, Grid2x2, Pencil } from 'lucide-react';
+import { X, RotateCcw, Grid2x2, Pencil, Plus } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
-import { EMPTY_TEXT, textPropsFrom, convertLen, type TextProps, type TextAlign, type Len, type Unit } from '../editor/textProps';
+import { EMPTY_TEXT, textPropsFrom, textPatchToDecls, convertLen, type TextProps, type TextAlign, type Len, type Unit } from '../editor/textProps';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 import { readRule, hasRule } from '../editor/cssRule';
 import { GRID_RATIOS, EMPTY_GRID, type GridProps } from '../editor/gridProps';
 import { IMAGE_ALIGNS, EMPTY_IMAGE, type ImageProps } from '../editor/imageProps';
 import { BLOCK_STYLE_OPTIONS } from '../editor/config';
+import { listCustomStyles, styleClassOf } from '../../../utils/custom-styles';
 
 interface BlockSidebarProps {
     info: BlockInfo;                                  // caixa / bloco de texto sob o cursor
     css: string;                                      // CSS atual do livro (modo "Estilo")
     onEdit: (edit: BlockEdit) => void;                                     // edita o que está sob o cursor
     onTextStyle: (selector: string, patch: Partial<TextProps>) => void;    // modo "Estilo": regra CSS do livro
+    onCreateStyle: (cls: string, body: string) => string | null;          // estilo personalizado novo; devolve o erro, ou null se criou
     onClose: () => void;
     width: number;
     onResize: (width: number) => void;
@@ -131,10 +133,55 @@ const ResetButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 // Estilos combináveis de um parágrafo/item (tudo o que não é título nem o 'Padrão').
 const COMBINABLE_STYLES = BLOCK_STYLE_OPTIONS.filter(([f]) => !/^(h[1-3]|p)$/.test(f));
 
+// "Criar estilo…": botão + formulário (nome + os campos de texto) que cria a classe no CSS do livro.
+// O estado (`draft`) vive em TextSection: com o formulário aberto os campos do bloco/regra atual escondem-se.
+interface StyleDraft { name: string; props: TextProps; error: string }
+
+const NewStyleButton: React.FC<{ onOpen: () => void }> = ({ onOpen }) => (
+    <button type="button" onClick={onOpen}
+        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-dashed border-border text-xs text-text-muted hover:text-slate-700 hover:bg-slate-50">
+        <Plus size={12} /> Criar estilo…
+    </button>
+);
+
+const NewStyleForm: React.FC<{
+    draft: StyleDraft; setDraft: (d: StyleDraft | null) => void;
+    onCreate: (cls: string, body: string) => string | null; onCreated: (cls: string) => void;
+}> = ({ draft, setDraft, onCreate, onCreated }) => {
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const cls = styleClassOf(draft.name);
+        if (!cls) return setDraft({ ...draft, error: 'Dá um nome ao estilo.' });
+        // !important como as restantes classes de parágrafo do livro (.p-center…).
+        const body = textPatchToDecls(draft.props).flatMap(([n, v]) => v === null ? [] : [`${n}: ${v} !important;`]).join(' ');
+        if (!body) return setDraft({ ...draft, error: 'Define pelo menos um campo.' });
+        const error = onCreate(cls, body);
+        if (error) return setDraft({ ...draft, error });
+        onCreated(cls);
+        setDraft(null);
+    };
+    return (
+        <form onSubmit={submit} className="flex flex-col gap-2 p-3 rounded-lg border border-border bg-slate-50">
+            <input autoFocus placeholder="Nome (ex.: Epígrafe)" value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value, error: '' })}
+                className="px-2 py-1.5 rounded-md border border-border bg-white text-sm" />
+            <TextFields value={draft.props} onChange={(patch) => setDraft({ ...draft, props: { ...draft.props, ...patch }, error: '' })} />
+            {draft.error && <div className="text-xs text-rose-600">{draft.error}</div>}
+            <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => setDraft(null)} className="px-3 py-1.5 rounded-md text-xs text-text-muted hover:bg-slate-100">Cancelar</button>
+                <button type="submit" className="px-3 py-1.5 rounded-md text-xs font-bold bg-slate-700 text-white hover:bg-slate-600">Criar e aplicar</button>
+            </div>
+        </form>
+    );
+};
+
 // Um chip por estilo do bloco (× tira) + escolha para acrescentar outro: um parágrafo pode ter vários.
-const StyleChips: React.FC<{ classes: string[]; onToggle: (cls: string, on: boolean) => void }> = ({ classes, onToggle }) => {
-    const active = COMBINABLE_STYLES.filter(([f]) => classes.includes(f));
-    const free = COMBINABLE_STYLES.filter(([f]) => !classes.includes(f));
+const StyleChips: React.FC<{
+    classes: string[]; css: string; creating: boolean; onNew: () => void; onToggle: (cls: string, on: boolean) => void;
+}> = ({ classes, css, creating, onNew, onToggle }) => {
+    const all: Array<readonly [string, string]> = [...COMBINABLE_STYLES, ...listCustomStyles(css).map((c) => [c, c] as const)];
+    const active = all.filter(([f]) => classes.includes(f));
+    const free = all.filter(([f]) => !classes.includes(f));
     return (
         <div className="flex flex-wrap items-center gap-1.5">
             {active.map(([f, label]) => (
@@ -151,6 +198,7 @@ const StyleChips: React.FC<{ classes: string[]; onToggle: (cls: string, on: bool
                     {free.map(([f, label]) => <option key={f} value={f}>{label}</option>)}
                 </select>
             )}
+            {!creating && <NewStyleButton onOpen={onNew} />}
         </div>
     );
 };
@@ -237,10 +285,12 @@ const MODES = [['block', 'Este bloco'], ['style', 'Estilo']] as const;
 const TextSection: React.FC<{
     text: NonNullable<BlockInfo['text']>; css: string;
     onInline: (patch: Partial<TextProps>) => void; onStyle: (selector: string, patch: Partial<TextProps>) => void;
-    onToggleClass: (cls: string, on: boolean) => void;
-}> = ({ text, css, onInline, onStyle, onToggleClass }) => {
+    onToggleClass: (cls: string, on: boolean) => void; onCreateStyle: (cls: string, body: string) => string | null;
+}> = ({ text, css, onInline, onStyle, onToggleClass, onCreateStyle }) => {
     const [mode, setMode] = useState<'block' | 'style'>('block');
     const [picked, setPicked] = useState('');
+    const [draft, setDraft] = useState<StyleDraft | null>(null); // criar estilo: esconde os campos do bloco/regra atual
+    const startDraft = () => setDraft({ name: '', props: EMPTY_TEXT, error: '' });
     // Alvos do modo "Estilo": estilos conhecidos do bloco (a regra cria-se se faltar) ou com regra no livro + todos os blocos da mesma tag.
     const targets: Array<readonly [string, string]> = [
         ...text.classes.flatMap((c) => {
@@ -271,24 +321,29 @@ const TextSection: React.FC<{
                 ))}
             </div>
             <Section>
-                {mode === 'block' && (text.tag === 'p' || text.tag === 'li') && <StyleChips classes={text.classes} onToggle={onToggleClass} />}
-                {mode === 'block' ? (
+                {mode === 'block' && (text.tag === 'p' || text.tag === 'li') && <StyleChips classes={text.classes} css={css} creating={!!draft} onNew={startDraft} onToggle={onToggleClass} />}
+                {draft && <NewStyleForm draft={draft} setDraft={setDraft} onCreate={onCreateStyle}
+                    onCreated={(cls) => { onToggleClass(cls, true); setPicked(`.${cls}`); }} />}
+                {mode === 'block' ? (draft ? null : (
                     <>
                         <TextFields value={text.inline} defaults={defaults} onChange={onInline} />
                         <ResetButton onClick={() => onInline(EMPTY_TEXT)} />
                     </>
-                ) : (
+                )) : (
                     <>
-                        <StyleEditChips targets={targets} selected={selector} onPick={setPicked} />
-                        <TextFields value={textPropsFrom(readRule(css, selector))} defaults={defaults} onChange={(patch) => onStyle(selector, patch)} />
-                        </>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <StyleEditChips targets={targets} selected={selector} onPick={setPicked} />
+                            {!draft && <NewStyleButton onOpen={startDraft} />}
+                        </div>
+                        {!draft && <TextFields value={textPropsFrom(readRule(css, selector))} defaults={defaults} onChange={(patch) => onStyle(selector, patch)} />}
+                    </>
                 )}
             </Section>
         </div>
     );
 };
 
-export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, onTextStyle, onClose, width, onResize }) => (
+export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, onTextStyle, onCreateStyle, onClose, width, onResize }) => (
     <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
         <PanelResizeHandle width={width} onResize={onResize} />
         <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
@@ -302,7 +357,7 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
         ) : (
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
                 {info.image && <ImageSection image={info.image} onChange={(patch) => onEdit({ target: 'image', patch })} />}
-                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
+                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={onCreateStyle} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
                 {info.grid && <GridSection grid={info.grid} onChange={(patch) => onEdit({ target: 'grid', patch })} onApplyToCells={() => onEdit({ target: 'gridCells' })} />}
                 {info.box && <BoxSection box={info.box} onChange={(patch) => onEdit({ target: 'box', patch })} />}
             </div>

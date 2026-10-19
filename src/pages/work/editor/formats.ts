@@ -1,4 +1,5 @@
 import type { Editor } from 'tinymce';
+import { styleFormatsWith } from './config';
 
 // Formatos de parágrafo/inline do editor (classes do livro). Registados no init do editor.
 export function registerBlockFormats(editor: Editor) {
@@ -34,4 +35,13 @@ export function registerBlockFormats(editor: Editor) {
         editor.formatter.register('uppercase', { inline: 'span', classes: 'p-uppercase' });
         editor.formatter.register('box', { block: 'div', classes: 'box', wrapper: true });
     });
+}
+
+// Estilos personalizados do livro (utils/custom-styles): registam-se como os de parágrafo e entram no
+// menu "Formats" → "Parágrafos". O TinyMCE só lê `style_formats` no arranque; `addStyleModifications`
+// (replace) refaz a lista, lida de novo cada vez que o menu abre.
+export function syncCustomStyleFormats(editor: Editor, custom: string[]) {
+    custom.forEach((c) => { if (!editor.formatter.has(c)) editor.formatter.register(c, { selector: 'p,li', classes: c }); });
+    (editor as unknown as { dispatch(name: string, args: object): void })
+        .dispatch('addStyleModifications', { items: styleFormatsWith(custom), replace: true });
 }

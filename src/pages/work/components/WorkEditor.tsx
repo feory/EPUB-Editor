@@ -20,6 +20,8 @@ import { ImageCropModal } from './images/ImageCropModal';
 import { applyBlockEdit, type BlockEdit, type BlockInfo } from '../editor/blockEditing';
 import { tinymceEditorLike } from '../editor/blockEditingTinymce';
 import { createEditorSetup } from '../editor/setup';
+import { syncCustomStyleFormats } from '../editor/formats';
+import { listCustomStyles } from '../../../utils/custom-styles';
 import { useLive } from '../editor/liveProps';
 import { editBlocks } from '../editor/blockEdit';
 import { buildContentStyle } from '../editor/contentStyles';
@@ -238,6 +240,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             editorDoc.head.appendChild(styleElement);
         }
         styleElement.textContent = currentCss + editorFontCss(editorFont, editorFontSize);
+        syncCustomStyleFormats(editor, listCustomStyles(currentCss));
     }, [currentCss, editorFont, editorFontSize]);
 
     useEffect(() => {
