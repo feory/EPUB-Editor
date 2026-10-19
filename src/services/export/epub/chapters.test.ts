@@ -37,25 +37,26 @@ test('buildSections: h2 aninha em childIndices do h1 anterior', () => {
     expect(sections[1]).toMatchObject({ level: 'h2', parentIdx: 0, title: 'Sec 1.1' });
 });
 
-test('buildSections: marcador sem nível (chapter-break plano) vira quebra sem título', () => {
+test('buildSections: marcador sem nível (chapter-break plano) com título (Ficha Técnica) é um h1', () => {
     const html = '<p class="chapter-break-h1" data-title="Cap 1">x</p><h1>Cap 1</h1>'
         + '<p class="chapter-break" data-title="Ficha">x</p><p>ficha técnica</p>';
     const sections = buildSections(html);
-    expect(sections[1]).toMatchObject({ level: 'break', title: 'Ficha', parentIdx: 0 });
+    expect(sections[1]).toMatchObject({ level: 'h1', title: 'Ficha', parentIdx: -1 });
+    expect(sections[0].childIndices).toEqual([]);
 });
 
-test('buildSections: [hidden] no título marca hiddenFromToc e é removido do título', () => {
+test('buildSections: [hidden] no título continua quebra escondida, marca hiddenFromToc e é removido do título', () => {
     const html = '<p class="chapter-break-h1" data-title="Cap 1">x</p><h1>Cap 1</h1>'
         + '<p class="chapter-break" data-title="[hidden]Índice">x</p><p>índice</p>';
     const sections = buildSections(html);
-    expect(sections[1]).toMatchObject({ title: 'Índice', hiddenFromToc: true });
+    expect(sections[1]).toMatchObject({ level: 'break', title: 'Índice', hiddenFromToc: true });
 });
 
-test('buildSections: hr.chapter-break legacy vira quebra', () => {
+test('buildSections: hr.chapter-break legacy vira h1', () => {
     const html = '<p class="chapter-break-h1" data-title="Cap 1">x</p><h1>Cap 1</h1>'
         + '<hr class="chapter-break" data-title="Legacy">' + '<p>corpo</p>';
     const sections = buildSections(html);
-    expect(sections[1]).toMatchObject({ level: 'break', title: 'Legacy' });
+    expect(sections[1]).toMatchObject({ level: 'h1', title: 'Legacy' });
 });
 
 test('buildSections: notas de rodapé relocadas para footnotes-section no fim da secção', () => {
@@ -66,9 +67,18 @@ test('buildSections: notas de rodapé relocadas para footnotes-section no fim da
     expect(html2.indexOf('footnotes-section')).toBeGreaterThan(html2.indexOf('corpo'));
 });
 
-test('buildSections: sem marcadores → quebra única sem título', () => {
+test('buildSections: sem marcadores → um h1 sem título', () => {
     const sections = buildSections('<p>sem marcadores</p>');
-    expect(sections).toEqual([{ title: 'Quebra 1', content: '<p>sem marcadores</p>', level: 'break', parentIdx: -1, childIndices: [], hiddenFromToc: true }]);
+    expect(sections).toEqual([{ title: 'Sem Título 1', content: '<p>sem marcadores</p>', level: 'h1', parentIdx: -1, childIndices: [] }]);
+});
+
+test('buildSections: quebra sem título é um h1, não filha do h1 anterior', () => {
+    const html = '<p class="chapter-break-h1" data-title="Cap 1">x</p><h1>Cap 1</h1><p>a</p>'
+        + '<p class="chapter-break">x</p><p>b</p>'
+        + '<hr class="chapter-break"><p>c</p>';
+    const sections = buildSections(html);
+    expect(sections.map(s => [s.level, s.parentIdx, s.title])).toEqual([['h1', -1, 'Cap 1'], ['h1', -1, 'Sem Título 2'], ['h1', -1, 'Sem Título 3']]);
+    expect(sections[0].childIndices).toEqual([]);
 });
 
 test('buildSections: chamada de nota no heading não entra no título do capítulo', () => {

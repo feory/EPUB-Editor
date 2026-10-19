@@ -34,3 +34,12 @@ test('data-title com apóstrofo não é truncado (marcador <p>, <hr> legacy e cl
     expect(matchChapterBoundary(`<p class="chapter-break-h1" data-title='Diz "sim"'></p>`)?.title).toBe('Diz "sim"');
     expect(classifyChapterPart(`<p class="chapter-break-h1" data-title="D'Artagnan"></p><h1>D'Artagnan</h1>`, 0).title).toBe("D'Artagnan");
 });
+
+test('classifyChapterPart: capítulo sem título (parte sem marcador, quebra plana ou hr sem data-title) conta como h1', () => {
+    expect(classifyChapterPart('<p>solto</p>', 0)).toEqual({ title: 'Sem Título 1', level: 'h1' });
+    expect(classifyChapterPart('<p class="chapter-break" data-title=""></p><p>x</p>', 1)).toEqual({ title: 'Sem Título 2', level: 'h1' });
+    expect(classifyChapterPart('<hr class="chapter-break"><p>x</p>', 2)).toMatchObject({ title: 'Sem Título 3', level: 'h1' });
+    // com título (Ficha Técnica, Frontespício…) também é h1; só [hidden] fica quebra
+    expect(classifyChapterPart('<p class="chapter-break" data-title="Ficha Técnica"></p>', 0)).toEqual({ title: 'Ficha Técnica', level: 'h1' });
+    expect(classifyChapterPart('<p class="chapter-break" data-title="[hidden]Índice"></p>', 0)).toMatchObject({ level: 'break' });
+});

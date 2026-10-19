@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { ListTree, GripVertical, Check, Info, Plus, Edit2, Trash2, X } from 'lucide-react';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
+import { UNTITLED_RE } from '../../../utils/chapters';
 
 interface Chapter {
     title: string;
@@ -42,7 +43,7 @@ const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter
     }, [editing, onEditChapterTitle]);
 
     const startEdit = useCallback((index: number, title: string) => {
-        setEditing({ index, value: title.startsWith('Quebra') ? '' : title });
+        setEditing({ index, value: UNTITLED_RE.test(title) ? '' : title });
     }, []);
 
     return (

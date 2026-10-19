@@ -10,6 +10,7 @@
  *    mover/eliminar, restaurá-lo seria a posição errada → o ebook recarrega sem capítulo ativo.
  */
 import { renameChapterPart, changeChapterLevel, moveChapters, deleteChapterPart, insertChapterPart } from '../../utils/toc';
+import { matchChapterMarkerElement } from '../../utils/chapters';
 import { applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import { linkIndiceEntries, linkOneIndiceEntry, unlinkOneIndiceEntry, listSubtitles } from '../../utils/indice-links';
 import { unwrapCommentAnchor } from '../../utils/comment-anchor';
@@ -74,7 +75,10 @@ export function deleteChapter(book: Book, index: number): BookEdit | null {
 }
 
 export function addChapter(book: Book): BookEdit {
-    return reset(insertChapterPart(book.parts, levelsOf(book), 'Novo Capítulo'), 'Capítulo criado!');
+    // "1.º capítulo" = 1.º h1 EXPLÍCITO (marcador -h1): as quebras planas do início (Frontespício, Ficha Técnica…)
+    // contam como h1 na estrutura mas continuam a ser o que vem antes dos capítulos.
+    const explicit = book.parts.map((p): Level => matchChapterMarkerElement(p)?.level === 'h1' ? 'h1' : 'break');
+    return reset(insertChapterPart(book.parts, explicit, 'Novo Capítulo'), 'Capítulo criado!');
 }
 
 export function applyDropCaps(book: Book): BookEdit {

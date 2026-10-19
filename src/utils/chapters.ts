@@ -22,6 +22,11 @@ const dataTitleOf = (tag: string): string | undefined => {
     return (m && (m[1] ?? m[2])) || undefined;
 };
 
+// Título provisório de um capítulo sem título (classifyChapterPart) — a UI mostra o campo de edição vazio.
+// `[hidden]` no data-title: a quebra não entra no índice do EPUB.
+const HIDDEN_RE = /\[hidden\]/i;
+export const UNTITLED_RE = /^Sem Título \d+$/;
+
 // Flatten heading inner HTML to plain title text (<br>→space, strip tags, collapse).
 export function flattenHeadingText(inner: string): string {
     return inner
@@ -47,27 +52,28 @@ export function matchChapterMarkerElement(content: string): { raw: string; level
 }
 
 /**
- * Classify one split part (a chapter) into { title, level }.
+ * Classify one split part (a chapter) into { title, level }. Quebra plana (com ou sem título, ex. Ficha Técnica) e parte
+ * sem marcador → h1; só `[hidden]` no título (escondida do índice no export) continua `break`.
  * Shared by the sidebar (useChapterSync) and the index linker (indice-links.ts).
  */
 export function classifyChapterPart(content: string, index: number): { title: string; level: 'h1' | 'h2' | 'h3' | 'break'; hrTag?: string } {
     const hrMatch = content.match(HR_BREAK_PATTERN);
     if (hrMatch) {
-        const title = decodeEntities(dataTitleOf(hrMatch[0]) ?? `Quebra ${index + 1}`);
-        return { title, level: 'break', hrTag: hrMatch[0] };
+        const title = dataTitleOf(hrMatch[0]);
+        return { title: title ? decodeEntities(title) : `Sem Título ${index + 1}`, level: title && HIDDEN_RE.test(title) ? 'break' : 'h1', hrTag: hrMatch[0] };
     }
     const marker = matchChapterMarkerElement(content);
     if (marker) {
-        const level = marker.level ?? 'break';
+        const level: 'h1' | 'h2' | 'h3' | 'break' = marker.level ?? (HIDDEN_RE.test(marker.title) ? 'break' : 'h1');
         let title = marker.title ? decodeEntities(marker.title) : '';
         if (!title) {
             const hMatch = content.slice(marker.raw.length).match(/^\s*<(h[123])[^>]*>([\s\S]*?)<\/\1>/i);
             if (hMatch) title = decodeEntities(flattenHeadingText(hMatch[2]));
         }
-        if (!title) title = level === 'break' ? `Quebra ${index + 1}` : `Sem Título ${index + 1}`;
+        if (!title) title = `Sem Título ${index + 1}`;
         return { title, level };
     }
-    return { title: `Quebra ${index + 1}`, level: 'break' };
+    return { title: `Sem Título ${index + 1}`, level: 'h1' };
 }
 
 /**

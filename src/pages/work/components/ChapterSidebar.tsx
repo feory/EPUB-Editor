@@ -3,6 +3,7 @@ import { PanelLeftClose, PanelLeftOpen, Edit2, GripVertical, Trash2, Check, X } 
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { subtreeRange } from '../../../utils/toc';
+import { UNTITLED_RE } from '../../../utils/chapters';
 
 interface Chapter {
     title: string;
@@ -43,7 +44,7 @@ interface ChapterItemProps {
 }
 
 // Título a mostrar no editor de nome (breaks sem título abrem vazios).
-const editValue = (c: Chapter) => (c.level === 'break' && c.title.startsWith('Quebra')) ? '' : c.title;
+const editValue = (c: Chapter) => UNTITLED_RE.test(c.title) ? '' : c.title;
 
 // Memoized so each item only re-renders when its own active state / title changes,
 // not on every parent re-render (keystroke). Requires stable callback props.

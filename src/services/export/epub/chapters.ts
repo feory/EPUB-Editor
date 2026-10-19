@@ -35,6 +35,14 @@ export function buildSections(processedContent: string): Section[] {
         if (currentH1Idx >= 0) sections[currentH1Idx].childIndices.push(idx);
     };
 
+    // Quebra plana (com ou sem título, ex. Ficha Técnica), hr legacy ou parte sem marcador = h1 próprio, não filho
+    // do h1 anterior — mesmo critério de classifyChapterPart no editor. Só `[hidden]` continua quebra escondida.
+    const pushPlainH1 = (title: string, strippedContent: string, idx: number) => {
+        const body = strippedContent.trim().length === 0 ? '<p>&#160;</p>' : strippedContent;
+        sections.push({ title: title || `Sem Título ${idx + 1}`, content: relocateFootnotes(body), level: 'h1', parentIdx: -1, childIndices: [] });
+        currentH1Idx = idx;
+    };
+
     // Split on chapter-break MARKERS (and legacy hr.chapter-break). The marker — not the
     // heading — is the boundary; it is editor-only and stripped from the exported body.
     const parts = splitChapterSegments(processedContent);
@@ -49,7 +57,7 @@ export function buildSections(processedContent: string): Section[] {
         if (marker?.legacyHr) {
             const title = decodeHtmlEntities(marker.title);
             content = content.slice(marker.raw.length).trim();
-            pushBreakSection(title, `Quebra ${thisSectionIdx + 1}`, content, thisSectionIdx);
+            pushPlainH1(title, content, thisSectionIdx);
             return;
         }
 
@@ -59,7 +67,8 @@ export function buildSections(processedContent: string): Section[] {
             if (!marker.level) {
                 const isHidden = /\[hidden\]/i.test(dtTitle);
                 const title = dtTitle.replace(/\[hidden\]/gi, '').trim();
-                pushBreakSection(title, `Capítulo ${thisSectionIdx + 1}`, content, thisSectionIdx, isHidden);
+                if (isHidden) pushBreakSection(title, `Capítulo ${thisSectionIdx + 1}`, content, thisSectionIdx, true);
+                else pushPlainH1(title, content, thisSectionIdx);
                 return;
             }
             const hMatch = content.match(/^<(h[123])[^>]*>([\s\S]*?)<\/\1>/i);
@@ -75,7 +84,7 @@ export function buildSections(processedContent: string): Section[] {
             return;
         }
 
-        pushBreakSection('', `Quebra ${thisSectionIdx + 1}`, content, thisSectionIdx);
+        pushPlainH1('', content, thisSectionIdx);
     });
 
     if (sections.length === 0) {
