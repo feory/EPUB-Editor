@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
 import { subtreeRange, moveChapters, renameChapterPart, changeChapterLevel, insertChapterPart, deleteChapterPart } from './toc';
+import { matchChapterBoundary } from './chapters';
 
 type Level = 'h1' | 'h2' | 'h3' | 'break';
 const P = ['A', 'B', 'b1', 'b2', 'C']; // A(h1) B(h1) b1(h2) b2(break) C(h1)
@@ -85,4 +86,10 @@ test('apóstrofo no data-title: renomear substitui o valor todo e mudar de níve
         .toBe(`<p class="chapter-break-h1" data-title="O'Neil"></p><h1>x</h1>`);
     expect(changeChapterLevel(`<p class="chapter-break-h1" data-title="D'Artagnan"></p><h1>D'Artagnan</h1><p>t</p>`, 'h2'))
         .toContain(`data-title="D'Artagnan"`);
+});
+
+test('renameChapterPart: parte sem marcador ganha marcador plano (permite [hidden])', () => {
+    const out = renameChapterPart('<p>corpo</p>', 'Nota [hidden]');
+    expect(out).toBe('<p class="chapter-break" data-title="Nota [hidden]"></p><p>corpo</p>');
+    expect(matchChapterBoundary(out)?.title).toBe('Nota [hidden]');
 });

@@ -66,9 +66,9 @@ test('buildSections: notas de rodapé relocadas para footnotes-section no fim da
     expect(html2.indexOf('footnotes-section')).toBeGreaterThan(html2.indexOf('corpo'));
 });
 
-test('buildSections: sem marcadores → secção única a partir do conteúdo', () => {
+test('buildSections: sem marcadores → quebra única sem título', () => {
     const sections = buildSections('<p>sem marcadores</p>');
-    expect(sections).toEqual([{ title: 'Secção 1', content: '<p>sem marcadores</p>', level: 'h1', parentIdx: -1, childIndices: [] }]);
+    expect(sections).toEqual([{ title: 'Quebra 1', content: '<p>sem marcadores</p>', level: 'break', parentIdx: -1, childIndices: [], hiddenFromToc: true }]);
 });
 
 test('buildSections: chamada de nota no heading não entra no título do capítulo', () => {

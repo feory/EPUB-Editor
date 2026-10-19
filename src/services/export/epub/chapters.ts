@@ -75,14 +75,7 @@ export function buildSections(processedContent: string): Section[] {
             return;
         }
 
-        sections.push({
-            title: `Secção ${thisSectionIdx + 1}`,
-            content: relocateFootnotes(content),
-            level: 'h1',
-            parentIdx: -1,
-            childIndices: [],
-        });
-        currentH1Idx = thisSectionIdx;
+        pushBreakSection('', `Quebra ${thisSectionIdx + 1}`, content, thisSectionIdx);
     });
 
     if (sections.length === 0) {

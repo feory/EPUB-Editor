@@ -67,7 +67,7 @@ export function classifyChapterPart(content: string, index: number): { title: st
         if (!title) title = level === 'break' ? `Quebra ${index + 1}` : `Sem Título ${index + 1}`;
         return { title, level };
     }
-    return { title: `Secção ${index + 1}`, level: 'h1' };
+    return { title: `Quebra ${index + 1}`, level: 'break' };
 }
 
 /**

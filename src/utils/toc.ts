@@ -64,6 +64,8 @@ export function deleteChapterPart(parts: string[], levels: Level[], index: numbe
  */
 export function renameChapterPart(part: string, newTitle: string): string {
     const safe = escapeHtml(newTitle.trim());
+    // Parte sem marcador (quebra implícita): o 1.º rename cria o marcador plano.
+    if (!matchChapterBoundary(part)) return `<p class="chapter-break" data-title="${safe}"></p>${part}`;
     return part.replace(
         /(class=["'][^"']*chapter-break[^"']*["'][^>]*data-title=)(?:"[^"]*"|'[^']*')/i,
         `$1"${safe}"`,
