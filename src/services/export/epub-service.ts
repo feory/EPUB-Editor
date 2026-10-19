@@ -102,7 +102,7 @@ export const EPUB_CSS = `
     .p-small       { font-size: 0.85em !important; }
     .p-legendas    { font-size: 0.85em !important; margin-bottom: 30px !important; text-indent: 0 !important; }
     table          { border-collapse: collapse; margin: 1em 0; font-size: 0.85em; width: 100%; table-layout: fixed; }
-    table th, table td { border: 1px solid #333; padding: 4px 8px; text-align: center; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }
+    table th, table td { border: 1px solid #333; padding: 4px 8px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }
     table th       { font-weight: bold; }
     .p-quote       { margin-left: 2em !important; margin-right: 2em !important; font-size: 0.85em !important; }
     .p-bold        { font-weight: bold !important; }
