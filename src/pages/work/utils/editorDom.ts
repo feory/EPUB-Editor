@@ -27,14 +27,8 @@ export function hashString(str: string): string {
     return hash.toString();
 }
 
-export function getContentBlocks(container: Element): Element[] {
-    return Array.from(container.querySelectorAll('p, h1, h2, h3'));
-}
-
-// Blocos com texto, na ordem de `extractParagraphs` (índices do diff): ignora marcadores de capítulo e `<p>` vazios.
-export function getNonEmptyBlocks(container: Element): Element[] {
-    return getContentBlocks(container).filter(b => (b.textContent || '').trim().length > 0);
-}
+// Seleção de blocos partilhada com o diff (utils/diff-text.ts): os índices do diff batem com estes por construção.
+export { getContentBlocks, getNonEmptyBlocks } from '../../../utils/diff-text';
 
 export function unwrapNode(node: ChildNode) {
     const parent = node.parentNode!;

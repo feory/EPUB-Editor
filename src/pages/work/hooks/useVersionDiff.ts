@@ -3,7 +3,7 @@ import type { DiffItem } from '../../../workers/diff.worker';
 import type { HistoryFile } from '../../../api/ebooks-api';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { decompressHtml } from '../../../utils/compression';
-import { extractParagraphs, extractParagraphFormats } from '../../../utils/diff-text';
+import { paragraphsOf } from '../../../utils/diff-text';
 import { useNotification } from '../../../context/NotificationContext';
 
 /**
@@ -62,9 +62,10 @@ export function useVersionDiff(isbn: string | undefined) {
         setLabels(newLabels);
         try {
             const [editorHtml, refHtml] = await getHtmls();
+            const editor = paragraphsOf(editorHtml), ref = paragraphsOf(refHtml);
             const items = await runWorker(
-                extractParagraphs(editorHtml), extractParagraphs(refHtml),
-                extractParagraphFormats(editorHtml), extractParagraphFormats(refHtml),
+                editor.map(p => p.text), ref.map(p => p.text),
+                editor.map(p => p.format), ref.map(p => p.format),
             );
             setDiffItems(items);
             // Nada de texto nem de classes/estilos de parágrafo, mas o HTML difere (imagens, atributos…).
