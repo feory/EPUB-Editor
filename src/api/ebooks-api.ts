@@ -23,7 +23,16 @@ export interface Ebook {
     deleted_at?: string;
     owner_email?: string | null;
     owner_name?: string | null;
-    user_id?: number;               // dono (os restantes com acesso têm o ebook partilhado)
+    user_id?: number;
+    access?: EbookAccess;           // calculado pelo servidor (server/access.ts): o cliente não deduz de user_id/role
+}
+
+/** O que o utilizador atual pode fazer ao ebook (ver server/access.js). */
+export interface EbookAccess {
+    relation: 'owner' | 'admin' | 'shared' | null;
+    delete: boolean;          // enviar para a reciclagem
+    manageShares: boolean;    // gerir as partilhas dos outros
+    leave: boolean;           // remover a própria partilha
 }
 
 export interface ShareUser {

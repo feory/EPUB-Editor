@@ -7,6 +7,7 @@ import { requireAuth } from './middleware/auth.js';
 import { purgeRateLimitStore } from './middleware/rateLimit.js';
 import * as authRoutes from './routes/auth.js';
 import * as notifications from './routes/notifications.js';
+import { ebookAccess } from './access.js';
 import * as ebooks from './routes/ebooks.js';
 import * as content from './routes/content.js';
 import * as grammar from './routes/grammar.js';
@@ -128,7 +129,7 @@ export const server = Bun.serve({
         if (!safeSegment(isbn)) return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
         // Verify ownership before trash operations (admin bypasses)
         const trashEbook = stmt.getEbook.get(isbn);
-        if (!trashEbook || (user.role !== 'admin' && trashEbook.user_id !== Number(user.sub))) {
+        if (!ebookAccess(trashEbook, user).delete) {
           return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
         }
         if (parts.length === 5 && parts[4] === 'restore' && method === "POST") return trash.restoreEbook(isbn);
@@ -168,9 +169,7 @@ export const server = Bun.serve({
         // Ownership check for all per-ebook operations (admin bypasses; utilizadores com
         // partilha ativa em ebook_shares têm o mesmo acesso do dono)
         const ebook = stmt.getEbook.get(isbn);
-        const hasAccess = ebook && (user.role === 'admin' || ebook.user_id === Number(user.sub)
-          || stmt.hasShareAccess.get(isbn, Number(user.sub)));
-        if (!hasAccess) {
+        if (!ebookAccess(ebook, user).view) {
           return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
         }
 

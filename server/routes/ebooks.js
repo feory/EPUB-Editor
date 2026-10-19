@@ -6,11 +6,14 @@ import { DATA_DIR } from '../config.js';
 import { debugLog } from '../log.js';
 import { logActivity, actorFromUser } from '../log-activity.js';
 import { notify } from './notifications.js';
+import { ebookAccess, publicAccess } from '../access.js';
 
 export function listEbooks(req, user) {
-  const data = user.role === 'admin'
+  const rows = user.role === 'admin'
     ? stmt.listEbooks.all()
     : stmt.listEbooksByUser.all(Number(user.sub), Number(user.sub));
+  // A consulta já só traz os do próprio e os partilhados: quem não é dono está partilhado (sem 1 SELECT por livro).
+  const data = rows.map(e => ({ ...e, access: publicAccess(ebookAccess(e, user, () => true)) }));
   return jsonResponse({ data }, req, corsHeaders);
 }
 
@@ -38,7 +41,7 @@ export function getEbook(isbn) {
 export function deleteEbook(req, isbn, user) {
   const ebook = stmt.getEbook.get(isbn);
   // Quem tem o ebook partilhado não o apaga (para todos): só remove a sua partilha (unshareEbook).
-  if (!isOwnerOrAdmin(ebook, user))
+  if (!ebookAccess(ebook, user).delete)
     return Response.json({ error: 'Forbidden' }, { status: 403, headers: corsHeaders });
   stmt.softDeleteEbook.run(isbn);
   logActivity(actorFromUser(user), 'ebook_trash',
@@ -147,20 +150,16 @@ export async function updateMetadata(req, isbn) {
 }
 
 // Só o dono do ebook (ou admin) pode gerir a lista de partilha.
-function isOwnerOrAdmin(ebook, user) {
-  return user.role === 'admin' || (ebook && ebook.user_id === Number(user.sub));
-}
-
 export function listShares(isbn, user) {
   const ebook = stmt.getEbook.get(isbn);
-  if (!isOwnerOrAdmin(ebook, user))
+  if (!ebookAccess(ebook, user).manageShares)
     return Response.json({ error: 'Forbidden' }, { status: 403, headers: corsHeaders });
   return Response.json({ data: stmt.listSharesForEbook.all(isbn) }, { headers: corsHeaders });
 }
 
 export async function shareEbook(req, isbn, user) {
   const ebook = stmt.getEbook.get(isbn);
-  if (!isOwnerOrAdmin(ebook, user))
+  if (!ebookAccess(ebook, user).manageShares)
     return Response.json({ error: 'Forbidden' }, { status: 403, headers: corsHeaders });
   const { userId } = await req.json();
   if (!userId) return Response.json({ error: 'Missing userId' }, { status: 400, headers: corsHeaders });
@@ -172,7 +171,8 @@ export async function shareEbook(req, isbn, user) {
 export function unshareEbook(isbn, targetUserId, user) {
   const ebook = stmt.getEbook.get(isbn);
   // Dono/admin removem qualquer partilha; quem recebeu a partilha remove só a sua ("sair").
-  if (!isOwnerOrAdmin(ebook, user) && Number(targetUserId) !== Number(user.sub))
+  const access = ebookAccess(ebook, user);
+  if (!access.manageShares && !(access.leave && Number(targetUserId) === Number(user.sub)))
     return Response.json({ error: 'Forbidden' }, { status: 403, headers: corsHeaders });
   stmt.unshareEbook.run(isbn, Number(targetUserId));
   return Response.json({ data: stmt.listSharesForEbook.all(isbn) }, { headers: corsHeaders });

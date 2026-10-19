@@ -219,11 +219,12 @@ export function HomePage() {
         onError: () => { showNotification('error', 'Erro ao eliminar o registo.'); },
     });
     // Ebook partilhado comigo (não sou o dono nem admin): "eliminar" = sair da partilha.
-    const isSharedWithMe = (ebook: Ebook) => !!currentUser && currentUser.role !== 'admin' && ebook.user_id !== currentUser.id;
+    const isSharedWithMe = (ebook: Ebook) => !!ebook.access?.leave;
     const ownerLabel = (ebook: Ebook): string | null => {
-        if (!currentUser || ebook.user_id === currentUser.id) return null;
+        const relation = ebook.access?.relation;
+        if (!relation || relation === 'owner') return null;
         const who = ebook.owner_name ?? ebook.owner_email ?? 'outro utilizador';
-        return currentUser.role === 'admin' ? `De ${who}` : `Partilhado por ${who}`;
+        return relation === 'admin' ? `De ${who}` : `Partilhado por ${who}`;
     };
     const leaveShareMutation = useMutation({
         mutationFn: (vars: { isbn: string; title: string }) => ebooksApi.unshareEbook(vars.isbn, currentUser!.id),
@@ -349,9 +350,9 @@ export function HomePage() {
         }, 'image/jpeg');
     };
 
-    const hasOthers = !!currentUser && ebooks.some(e => e.user_id !== currentUser.id);
-    const ownedEbooks = ownerFilter === 'all' || !currentUser ? ebooks
-        : ebooks.filter(e => (e.user_id === currentUser.id) === (ownerFilter === 'mine'));
+    const isMine = (e: Ebook) => e.access?.relation === 'owner';
+    const hasOthers = ebooks.some(e => !isMine(e));
+    const ownedEbooks = ownerFilter === 'all' ? ebooks : ebooks.filter(e => isMine(e) === (ownerFilter === 'mine'));
     const filteredEbooks = searchQuery.trim()
         ? ownedEbooks.filter(e => {
             const q = searchQuery.toLowerCase();
