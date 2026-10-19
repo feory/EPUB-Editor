@@ -5,7 +5,7 @@ import { corsHeaders, jsonResponse, safeSegment } from '../response.js';
 import { DATA_DIR } from '../config.js';
 import { debugLog } from '../log.js';
 import { logActivity, actorFromUser } from '../log-activity.js';
-import { notify } from './notifications.js';
+import { emit } from './notifications.js';
 import { ebookAccess, publicAccess } from '../access.js';
 
 export function listEbooks(req, user) {
@@ -164,7 +164,7 @@ export async function shareEbook(req, isbn, user) {
   const { userId } = await req.json();
   if (!userId) return Response.json({ error: 'Missing userId' }, { status: 400, headers: corsHeaders });
   stmt.shareEbook.run(isbn, Number(userId));
-  notify(Number(userId), 'share', isbn, Number(user.sub));
+  emit({ kind: 'share', isbn, actorId: Number(user.sub), targetUserId: Number(userId) });
   return Response.json({ data: stmt.listSharesForEbook.all(isbn) }, { headers: corsHeaders });
 }
 

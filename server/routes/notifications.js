@@ -1,8 +1,22 @@
 import { stmt } from '../database.js';
 import { corsHeaders } from '../response.js';
 
+// Quem é avisado de quê vive AQUI: as rotas só dizem o que aconteceu.
+//   { kind: 'share',   isbn, actorId, targetUserId }    → avisa quem recebeu o ebook
+//   { kind: 'comment', isbn, actorId, parentAuthorId? } → resposta: avisa o autor da thread; comentário novo: o dono do ebook
+/** Nunca avisa o próprio; nunca rebenta a ação que o originou. */
+export function emit(event) {
+  const { kind, isbn, actorId } = event;
+  if (kind === 'share') return notify(event.targetUserId, 'share', isbn, actorId);
+  if (kind === 'comment') {
+    return event.parentAuthorId != null
+      ? notify(event.parentAuthorId, 'comment_reply', isbn, actorId)
+      : notify(stmt.getEbook.get(isbn)?.user_id, 'comment', isbn, actorId);
+  }
+}
+
 /** Avisa `userId` de algo que `actorId` fez. Nunca avisa o próprio; nunca rebenta a ação que o originou. */
-export function notify(userId, type, isbn, actorId) {
+function notify(userId, type, isbn, actorId) {
   if (!userId || userId === actorId) return;
   try {
     stmt.insertNotification.run(userId, type, isbn, actorId);

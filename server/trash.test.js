@@ -5,7 +5,7 @@ import { db, stmt } from './database.js';
 import { hardDeleteEbook } from './routes/trash.js';
 import { DATA_DIR } from './config.js';
 import { makeUser, makeEbook } from './test-helpers.js';
-import { notify } from './routes/notifications.js';
+import { emit } from './routes/notifications.js';
 
 // SQL real, base em memória (test-setup.js); só os ficheiros em DATA_DIR são de verdade e limpam-se no fim.
 const admin = makeUser({ role: 'admin' });
@@ -33,7 +33,7 @@ test('hardDeleteEbook: livro no lixo é apagado (BD, comentários, avisos, parti
   stmt.softDeleteEbook.run(trashed);
   stmt.insertComment.run(trashed, 'a', null, owner.id, 'olá');
   stmt.shareEbook.run(trashed, admin.id);
-  notify(owner.id, 'share', trashed, admin.id);
+  emit({ kind: 'share', isbn: trashed, actorId: admin.id, targetUserId: owner.id });
   expect(stmt.listNotifications.all(owner.id).some(n => n.ebook_isbn === trashed)).toBe(true);
 
   expect(hardDeleteEbook(req, trashed, admin).status).toBe(200);

@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { stmt } from './database.js';
-import { notify, markRead, listNotifications } from './routes/notifications.js';
+import { emit, markRead, listNotifications } from './routes/notifications.js';
 import { addComment } from './routes/comments.js';
 import { shareEbook } from './routes/ebooks.js';
 import { makeUser, makeEbook, post } from './test-helpers.js';
@@ -11,10 +11,22 @@ const ana = makeUser({ first: 'Ana', last: 'Silva' });
 const isbn = makeEbook(owner);
 const inbox = (u) => stmt.listNotifications.all(u.id);
 
-test('notify: nunca avisa o próprio nem destinatário vazio', () => {
-  notify(ana.id, 'share', isbn, ana.id);
-  notify(undefined, 'share', isbn, ana.id);
+test('emit: nunca avisa o próprio nem destinatário vazio', () => {
+  emit({ kind: 'share', isbn, actorId: ana.id, targetUserId: ana.id });
+  emit({ kind: 'share', isbn, actorId: ana.id, targetUserId: undefined });
+  emit({ kind: 'desconhecido', isbn, actorId: ana.id });
   expect(inbox(ana)).toEqual([]);
+});
+
+test('emit comment: resposta vai para o autor da thread; comentário novo para o dono do ebook', () => {
+  const author = makeUser();
+  const dono = makeUser();
+  const outro = makeEbook(dono); // ebook à parte: não mexe nas caixas dos testes seguintes
+  emit({ kind: 'comment', isbn: outro, actorId: ana.id, parentAuthorId: author.id });
+  expect(inbox(author).map(n => n.type)).toEqual(['comment_reply']);
+  expect(inbox(dono)).toEqual([]);
+  emit({ kind: 'comment', isbn: outro, actorId: ana.id });
+  expect(inbox(dono).map(n => n.type)).toEqual(['comment']);
 });
 
 test('partilhar avisa quem recebe, com o nome de quem partilhou', async () => {
@@ -37,8 +49,8 @@ test('comentários: novo avisa o dono; resposta avisa quem abriu a thread; o don
 
 test('markRead: um desaparece da lista; sem id desaparecem todos; só os do próprio', async () => {
   const target = makeUser();
-  notify(target.id, 'share', isbn, owner.id);
-  notify(target.id, 'comment', isbn, owner.id);
+  emit({ kind: 'share', isbn, actorId: owner.id, targetUserId: target.id });
+  emit({ kind: 'comment', isbn, actorId: target.id + 1000, parentAuthorId: target.id });
   const [first] = inbox(target);
   await markRead(post({ id: first.id }), makeUser()); // outro utilizador: não apaga
   expect(inbox(target).length).toBe(2);

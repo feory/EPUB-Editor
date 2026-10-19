@@ -1,6 +1,6 @@
 import { stmt } from '../database.js';
 import { corsHeaders } from '../response.js';
-import { notify } from './notifications.js';
+import { emit } from './notifications.js';
 
 export function getComments(isbn) {
   const rows = stmt.commentsListByIsbn.all(isbn);
@@ -29,10 +29,7 @@ export async function addComment(req, isbn, user) {
   }
   const result = stmt.insertComment.run(isbn, anchorId, parentId ?? null, Number(user.sub), text.trim());
   const comment = stmt.getComment.get(result.lastInsertRowid);
-  // Resposta → avisa quem abriu a thread; comentário novo → avisa o dono do ebook.
-  const me = Number(user.sub);
-  if (parentId != null) notify(getOwnedComment(isbn, parentId).user_id, 'comment_reply', isbn, me);
-  else notify(stmt.getEbook.get(isbn)?.user_id, 'comment', isbn, me);
+  emit({ kind: 'comment', isbn, actorId: Number(user.sub), parentAuthorId: parentId != null ? getOwnedComment(isbn, parentId).user_id : undefined });
   return Response.json({ comment }, { headers: corsHeaders });
 }
 
