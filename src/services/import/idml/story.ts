@@ -319,11 +319,11 @@ export function renderPsr(rc: RenderContext, psr: Element, counter: NoteCounter)
 
 // Tabela nativa do InDesign (elemento <Table>, ancorada inline num CharacterStyleRange) → <table>
 // HTML. `Cell/@Name` = "coluna:linha" (0-based) — agrupa por linha, ordena por coluna dentro da
-// linha; `HeaderRowCount` linhas iniciais viram <th>. Sem suporte a células fundidas (RowSpan/
-// ColumnSpan > 1 — não visto nos livros testados); célula fundida cai para célula normal.
+// linha; `HeaderRowCount` linhas iniciais viram <th>. Células fundidas (RowSpan/ColumnSpan > 1) →
+// rowspan/colspan: o InDesign só lista a célula de origem, as cobertas não existem no XML.
 function renderIdmlTable(rc: RenderContext, tableEl: Element, counter: NoteCounter): string {
     const headerRows = parseInt(tableEl.getAttribute('HeaderRowCount') || '0') || 0;
-    const grid = new Map<number, Map<number, { html: string; bg: string }>>(); // linha → coluna → célula
+    const grid = new Map<number, Map<number, { html: string; bg: string; attrs: string; align: string }>>(); // linha → coluna → célula
     let maxRow = -1;
     for (const cell of Array.from(tableEl.children)) {
         if (cell.tagName !== 'Cell') continue;
@@ -332,15 +332,23 @@ function renderIdmlTable(rc: RenderContext, tableEl: Element, counter: NoteCount
         const row = parseInt(rowStr) || 0;
         maxRow = Math.max(maxRow, row);
         const lines: string[] = [];
+        let allCentered = true; // texto centrado só se TODOS os parágrafos com texto o estiverem
         for (const psr of Array.from(cell.children)) {
             if (psr.tagName !== 'ParagraphStyleRange') continue;
             const text = renderPsr(rc, psr, counter).map(s => s.text).filter(Boolean).join('<br>');
-            if (text) lines.push(text);
+            if (!text) continue;
+            lines.push(text);
+            if (psr.getAttribute('Justification') !== 'CenterAlign') allCentered = false;
         }
+        const span = (name: string, attr: string) => { const n = parseInt(cell.getAttribute(name) || '1'); return n > 1 ? ` ${attr}="${n}"` : ''; };
         const bg = resolveFillColor(rc.styles, cell.getAttribute('FillColor'), cell.getAttribute('FillTint'));
         let rowMap = grid.get(row);
         if (!rowMap) { rowMap = new Map(); grid.set(row, rowMap); }
-        rowMap.set(col, { html: lines.join('<br>'), bg });
+        const align = [
+            lines.length && allCentered ? 'text-align:center' : '',
+            cell.getAttribute('VerticalJustification') === 'CenterAlign' ? 'vertical-align:middle' : '',
+        ].filter(Boolean);
+        rowMap.set(col, { html: lines.join('<br>'), bg, attrs: span('RowSpan', 'rowspan') + span('ColumnSpan', 'colspan'), align: align.join(';') });
     }
     const out: string[] = ['<table>'];
     for (let r = 0; r <= maxRow; r++) {
@@ -350,8 +358,8 @@ function renderIdmlTable(rc: RenderContext, tableEl: Element, counter: NoteCount
         const cols = [...rowMap.keys()].sort((a, b) => a - b);
         out.push(`<tr>${cols.map(c => {
             const cell = rowMap.get(c);
-            const style = cell?.bg ? ` style="background-color:${cell.bg}"` : '';
-            return `<${tag}${style}>${cell?.html || ''}</${tag}>`;
+            const decls = [cell?.bg ? `background-color:${cell.bg}` : '', cell?.align].filter(Boolean).join(';');
+            return `<${tag}${cell?.attrs ?? ''}${decls ? ` style="${decls}"` : ''}>${cell?.html || ''}</${tag}>`;
         }).join('')}</tr>`);
     }
     out.push('</table>');
