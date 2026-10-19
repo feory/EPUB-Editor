@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { Save, Eye, EyeOff, ChevronRight, Search, X, AlertTriangle } from 'lucide-react';
+import { Save, Eye, EyeOff, ChevronRight, Search, X, AlertTriangle, RotateCcw } from 'lucide-react';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
@@ -8,7 +8,7 @@ import { EditorView } from '@codemirror/view';
 import type { EditorState } from '@codemirror/state';
 import { foldEffect, unfoldAll } from '@codemirror/language';
 import * as csstree from 'css-tree';
-import { useStyles } from '../../../context/StyleContext';
+import { useStyles, DEFAULT_CSS } from '../../../context/StyleContext';
 import { ebooksApi } from '../../../api/ebooks-api';
 
 interface CssError {
@@ -193,6 +193,12 @@ const StyleEditorModalComponent: React.FC<StyleEditorModalProps> = ({ isbn, onCl
     onClose();
   };
 
+  // Só repõe no editor (e no preview ao vivo) — a base de dados não muda até Guardar; Cancelar desfaz.
+  const handleRestore = () => {
+    if (!window.confirm('Restaurar o CSS original? Substitui tudo o que está no editor (só fica gravado ao clicar em Guardar).')) return;
+    handleCssChange(DEFAULT_CSS);
+  };
+
   const jumpToSection = useCallback((lineNumber: number, name: string) => {
     setActiveSection(name);
     const view = cmRef.current?.view;
@@ -251,6 +257,13 @@ const StyleEditorModalComponent: React.FC<StyleEditorModalProps> = ({ isbn, onCl
             <h2 className="text-xl font-bold text-slate-700">Editor CSS</h2>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={handleRestore}
+              title="Restaurar CSS original"
+              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-all"
+            >
+              <RotateCcw size={20} />
+            </button>
             <button
               onClick={handleSave}
               title="Guardar Alterações"
