@@ -49,6 +49,7 @@ export function normalize(s: string): string {
 
 const ANCHOR_LEN = 30;   // chars normalizados usados como âncora
 const MIN_ANCHOR = 15;   // mínimo para a âncora ser fiável
+const SUPER_Y_TOL = 5;   // pt: desvio vertical máximo de um sobrescrito face à linha do corpo
 
 // Âncoras de capítulo (extractChapterAnchors) precisam de mais chars que as de página: aberturas
 // de capítulo do mesmo livro por vezes começam com a mesma fórmula ("Sun Tzu disse: 1. Na
@@ -119,15 +120,18 @@ export async function extractPdfPageAnchors(data: ArrayBuffer): Promise<PageAnch
         const folio = folios[idx];
         if (folio === null) continue; // sem folio, nem interpolável (front-matter) → saltar
         const hasPrintedFolio = rawFolios[idx] !== null;
-        const lines = new Map<number, { x: number; str: string }[]>();
-        for (const it of pages[idx].items) {
-            if (!('str' in it) || !it.str) continue;
+        // Linha = itens com y próximo (SUPER_Y_TOL): o nº de nota sobrescrito tem y ligeiramente
+        // diferente do corpo e, agrupado por y exato, partia a linha (âncora sem "(9)" ≠ texto do editor).
+        const sorted = pages[idx].items.filter(it => 'str' in it && it.str).sort((a, b) => b.transform[5] - a.transform[5]);
+        const lines: { y: number; parts: { x: number; str: string }[] }[] = [];
+        for (const it of sorted) {
             const y = it.transform[5];
-            (lines.get(Math.round(y)) ?? lines.set(Math.round(y), []).get(Math.round(y))!).push({ x: it.transform[4], str: it.str });
+            const last = lines[lines.length - 1];
+            if (last && last.y - y < SUPER_Y_TOL) last.parts.push({ x: it.transform[4], str: it.str });
+            else lines.push({ y, parts: [{ x: it.transform[4], str: it.str }] });
         }
         // âncora = 1ª linha de corpo APÓS o cabeçalho corrente (linha de topo); ordenar topo→baixo
-        const ordered = [...lines.entries()].sort((a, b) => b[0] - a[0])
-            .map(([, parts]) => parts.sort((a, b) => a.x - b.x).map(p => p.str).join(''));
+        const ordered = lines.map(l => l.parts.sort((a, b) => a.x - b.x).map(p => p.str).join(''));
         for (const line of hasPrintedFolio ? ordered.slice(1) : ordered) {
             const anchor = normalize(line).slice(0, ANCHOR_LEN);
             if (anchor.length < MIN_ANCHOR) continue;
@@ -332,6 +336,29 @@ export async function verifyBlankSpacing(html: string, data?: ArrayBuffer): Prom
     return doc.body.innerHTML;
 }
 
+const PASS2_MIN_ANCHOR = 20; // âncora mínima para o 2º passo (por capítulo)
+const MAX_OCCURRENCES = 50;  // âncoras que se repetem mais que isto (frases-feitas) já não identificam a página
+
+// Uma ocorrência por âncora (cands[i] = posições crescentes), maximizando as posições estritamente
+// crescentes — LIS com alternativas: as de uma mesma âncora entram da maior para a menor, para
+// duas ocorrências da mesma página nunca se encadearem.
+function pickChain(cands: { pos: number; page: number }[][]): { pos: number; page: number }[] {
+    const nodes: { pos: number; page: number; prev: number }[] = [];
+    const tails: number[] = [];   // tails[k] = nó com o menor fim de uma cadeia de comprimento k+1
+    for (const list of cands) {
+        for (let c = list.length - 1; c >= 0; c--) {
+            const { pos, page } = list[c];
+            let lo = 0, hi = tails.length;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if (nodes[tails[mid]].pos < pos) lo = mid + 1; else hi = mid; }
+            nodes.push({ pos, page, prev: lo > 0 ? tails[lo - 1] : -1 });
+            tails[lo] = nodes.length - 1;
+        }
+    }
+    const seq: { pos: number; page: number }[] = [];
+    for (let i = tails.length ? tails[tails.length - 1] : -1; i >= 0; i = nodes[i].prev) seq.push(nodes[i]);
+    return seq.reverse();
+}
+
 // Índices da maior subsequência estritamente crescente de `arr` (LIS, O(n log n)).
 function longestIncreasing(arr: number[]): number[] {
     const tails: number[] = [];   // tails[k] = índice do menor fim de uma subseq. de comprimento k+1
@@ -389,18 +416,16 @@ function insertPageBreaksInSegment(html: string, anchors: PageAnchor[]): { html:
         }
     }
 
-    // cursor só avança: acha a ocorrência a partir de onde a âncora anterior ficou, não a 1ª do
-    // documento (evita colidir com o Índice); sem match à frente, cai para a 1ª ocorrência global.
-    let cursor = 0;
-    const hits: { pos: number; page: number }[] = [];
-    for (const { page, anchor } of anchors) {
-        let pos = flat.indexOf(anchor, cursor);
-        if (pos < 0) pos = flat.indexOf(anchor);
-        if (pos < 0) continue;
-        hits.push({ pos, page });
-        cursor = Math.max(cursor, pos);
-    }
-    const keep = longestIncreasing(hits.map(h => h.pos)).map(i => hits[i]);
+    // TODAS as ocorrências de cada âncora; `pickChain` escolhe a combinação com mais páginas em
+    // posições crescentes. Um cursor único era envenenado por 1 hit errado (ex. "Espíritos Livres" do
+    // rosto a casar no corpo): saltava para a frente e a ocorrência certa das páginas seguintes
+    // ficava para trás, perdendo-as (ex. p.31).
+    const cands = anchors.map(({ page, anchor }) => {
+        const list: { pos: number; page: number }[] = [];
+        for (let p = flat.indexOf(anchor); p >= 0 && list.length < MAX_OCCURRENCES; p = flat.indexOf(anchor, p + 1)) list.push({ pos: p, page });
+        return list;
+    });
+    const keep = pickChain(cands);
     const inserted = keep.length;
     const points: { node: Text; offset: number; page: number }[] = keep.map(h => ({ ...map[h.pos], page: h.page }));
     // aplicar inserções: por nó, offsets do maior para o menor (não desloca os anteriores)
@@ -453,7 +478,9 @@ export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: s
     const stripped = stripPageBreaks(html);
     const pass1 = insertPageBreaksInSegment(stripped, anchors);
 
-    let remaining = anchors.filter(a => !pagesIn(pass1.html).has(a.page));
+    // Âncoras curtas (títulos/rosto, ex. "Espíritos Livres") só valem no 1º passo, global e ordenado: por capítulo
+    // casavam em qualquer parte do corpo e punham a página fora de sítio.
+    let remaining = anchors.filter(a => a.anchor.length >= PASS2_MIN_ANCHOR && !pagesIn(pass1.html).has(a.page));
     if (remaining.length === 0) return { html: pass1.html, inserted: pass1.inserted, total: anchors.length };
 
     let extraInserted = 0;
