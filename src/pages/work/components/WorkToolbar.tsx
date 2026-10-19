@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { NotificationsBell } from '../../home/NotificationsBell';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, FileUp, Save, History, Download, Loader2, Eye, AlertTriangle, Keyboard, Hash, ChevronDown, ChevronRight, Palette, Shield, Accessibility, GitCompare, ListX, Wand2, Link2, Link, Wrench, Type, ListTree, RefreshCw, BookMarked, MessageSquare
@@ -356,6 +357,9 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
               </div>
             )}
           </div>
+
+          {/* Avisos (partilhas e comentários) — o mesmo sino da Home */}
+          <NotificationsBell onOpenEbook={(isbn) => navigate(`/work/${isbn}`)} />
 
         </div>
       </div>
