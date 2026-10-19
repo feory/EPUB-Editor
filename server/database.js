@@ -167,6 +167,8 @@ export const stmt = {
   getUserByEmail:       db.prepare('SELECT * FROM users WHERE email = ?'),
   getUserById:          db.prepare('SELECT id, email, role, created_at FROM users WHERE id = ?'),
   listUsers:            db.prepare('SELECT id, email, role, created_at FROM users ORDER BY created_at'),
+  getPasswordHashById:  db.prepare('SELECT password FROM users WHERE id = ?'),
+  setPassword:          db.prepare('UPDATE users SET password = ? WHERE id = ?'),
   deleteUser:           db.prepare("DELETE FROM users WHERE id = ? AND role != 'admin'"),
   // refresh tokens
   insertRefreshToken:   db.prepare('INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)'),

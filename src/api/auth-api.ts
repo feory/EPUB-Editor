@@ -39,6 +39,10 @@ export const authApi = {
   deleteUser: (id: number) =>
     apiClient.delete(`/auth/users/${id}`),
 
+  // O próprio utilizador. Devolve uma sessão nova (as outras terminam).
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiClient.post<AuthResponse>('/auth/password', { currentPassword, newPassword }),
+
   updateUser: (id: number, data: { email?: string; password?: string; role?: 'admin' | 'user' }) =>
     apiClient.put<{ data: AuthUser }>(`/auth/users/${id}`, data),
 };

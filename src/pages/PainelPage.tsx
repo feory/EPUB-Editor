@@ -1075,6 +1075,7 @@ const LOGS_PAGE_SIZE = 15;
 
 const ACTION_LABELS: Record<string, string> = {
     login_success: 'Login', login_failed: 'Falha de login', logout: 'Logout',
+    password_change: 'Palavra-passe alterada', password_change_failed: 'Falha ao mudar palavra-passe',
     user_create: 'Utilizador criado', user_update: 'Utilizador editado', user_delete: 'Utilizador eliminado',
     ebook_create: 'Livro criado', ebook_status_change: 'Estado alterado',
     ebook_trash: 'Livro na reciclagem', ebook_delete_permanent: 'Livro eliminado definitivamente',

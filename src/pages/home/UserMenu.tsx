@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LogOut, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2, Wand2 } from 'lucide-react';
+import { KeyRound, LogOut, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2, Wand2 } from 'lucide-react';
 import type { AuthUser } from '../../api/auth-api';
 
 type ViewMode = 'table' | 'grid';
@@ -9,6 +9,7 @@ interface UserMenuProps {
     viewMode: ViewMode;
     onViewModeChange: (mode: ViewMode) => void;
     onLogout: () => void;
+    onChangePassword: () => void;
     onNavigatePanel: () => void;
     onImportEpub: () => void;
     onImportIndesign: () => void;
@@ -28,7 +29,7 @@ const VIEW_MODES: { mode: ViewMode; icon: React.ReactNode; label: string }[] = [
 ];
 
 export const UserMenu: React.FC<UserMenuProps> = ({
-    user, viewMode, onViewModeChange, onLogout, onNavigatePanel, onImportEpub, onImportIndesign, importPending,
+    user, viewMode, onViewModeChange, onLogout, onChangePassword, onNavigatePanel, onImportEpub, onImportIndesign, importPending,
 }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -116,6 +117,14 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                             </button>
                         </div>
                     )}
+
+                    <button
+                        onClick={() => { setOpen(false); onChangePassword(); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:bg-slate-50 hover:text-text-main transition-colors border-b border-border"
+                    >
+                        <KeyRound size={15} />
+                        <span>Mudar palavra-passe</span>
+                    </button>
 
                     {/* Logout */}
                     <button

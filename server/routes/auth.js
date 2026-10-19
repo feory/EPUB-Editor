@@ -82,6 +82,34 @@ export async function login(req) {
   return authSuccessResponse(user);
 }
 
+// POST /api/auth/password { currentPassword, newPassword } — o próprio utilizador muda a sua palavra-passe.
+// Termina as outras sessões (refresh tokens) e devolve uma sessão nova para esta.
+export async function changePassword(req, user) {
+  const limited = loginRateLimit(req, corsHeaders); // a atual pode ser adivinhada: mesmo limite do login
+  if (limited) return limited;
+  const fail = (error, status = 400) => new Response(JSON.stringify({ error }), { status, headers: corsHeaders });
+
+  let body;
+  try { body = await req.json(); } catch { return fail('Invalid JSON'); }
+  const { currentPassword, newPassword } = body ?? {};
+  if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') return fail('Missing fields');
+  if (newPassword.length < 12) return fail('Password must be at least 12 characters');
+  if (newPassword === currentPassword) return fail('New password must differ from the current one');
+
+  const id = Number(user.sub);
+  const row = stmt.getPasswordHashById.get(id);
+  // 403 e não 401: o cliente trata 401 como sessão expirada (refresh/logout).
+  if (!row || !(await Bun.password.verify(currentPassword, row.password))) {
+    logActivity(actorFromUser(user), 'password_change_failed', { req });
+    return fail('Current password is wrong', 403);
+  }
+
+  stmt.setPassword.run(await Bun.password.hash(newPassword), id);
+  stmt.deleteUserTokens.run(id);
+  logActivity(actorFromUser(user), 'password_change', { req });
+  return authSuccessResponse(stmt.getUserById.get(id));
+}
+
 export async function refresh(req) {
   const rawToken = getRefreshCookie(req);
   if (!rawToken) {

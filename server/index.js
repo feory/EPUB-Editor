@@ -96,6 +96,7 @@ export const server = Bun.serve({
 
       // Auth user management
       if (path === "/api/auth/me"    && method === "GET")    return authRoutes.me(user);
+      if (path === "/api/auth/password" && method === "POST") return authRoutes.changePassword(req, user);
       if (path === "/api/notifications"      && method === "GET")  return notifications.listNotifications(user);
       if (path === "/api/notifications/read" && method === "POST") return notifications.markRead(req, user);
       if (path === "/api/auth/users" && method === "GET")    return authRoutes.listUsers(req, user);

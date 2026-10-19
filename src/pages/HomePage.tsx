@@ -20,6 +20,7 @@ import { CompletedTable } from './home/CompletedTable';
 import { EbookGrid } from './home/EbookGrid';
 import { UserMenu } from './home/UserMenu';
 import { NotificationsBell } from './home/NotificationsBell';
+import { ChangePasswordModal } from './home/ChangePasswordModal';
 import { EpubMappingModal } from './EpubMappingModal';
 import { IndesignImportModal } from './IndesignImportModal';
 import { analyzeBook, optimizeBook, type BookMap, type LineBreakSummary } from '../services/indesign/commands';
@@ -48,6 +49,7 @@ export function HomePage() {
     const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
     const [trashOpen, setTrashOpen] = useState(false);
     const [sharingEbook, setSharingEbook] = useState<Ebook | null>(null);
+    const [showChangePassword, setShowChangePassword] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [ownerFilter, setOwnerFilter] = useState<'all' | 'mine' | 'others'>('all');
     const [searchOpen, setSearchOpen] = useState(false);
@@ -402,6 +404,7 @@ export function HomePage() {
                                 viewMode={viewMode}
                                 onViewModeChange={setViewMode}
                                 onLogout={handleLogout}
+                                onChangePassword={() => setShowChangePassword(true)}
                                 onNavigatePanel={() => navigate('/painel')}
                                 onImportEpub={() => epubInputRef.current?.click()}
                                 onImportIndesign={() => indesignInputRef.current?.click()}
@@ -517,6 +520,13 @@ export function HomePage() {
                     </div>
                 )}
             </main>
+
+            {showChangePassword && (
+                <ChangePasswordModal
+                    onClose={() => setShowChangePassword(false)}
+                    onDone={() => { setShowChangePassword(false); showNotification('success', 'Palavra-passe alterada. As outras sessões foram terminadas.', 4000); }}
+                />
+            )}
 
             <button
                 className="fixed bottom-6 right-6 z-40 flex items-center gap-2 bg-white hover:bg-slate-50 border border-border text-text-muted hover:text-rose-600 px-3 h-11 rounded-full shadow-lg transition-all"
