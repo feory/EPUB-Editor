@@ -46,13 +46,13 @@ const FormatCombo: React.FC<{ value: TextProps; onChange: (patch: Partial<TextPr
     return (
         <div className="flex items-center justify-between gap-3 text-sm font-medium text-text-main">
             <span>Formato</span>
-            <div ref={ref} className="relative">
+            <div ref={ref} className="relative w-44">
                 <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}
-                    className="select-chevron w-40 h-9 rounded-lg border border-border pl-2 pr-8 text-sm text-left truncate outline-none focus:border-primary">
+                    className="select-chevron w-full h-9 rounded-lg border border-border pl-2 pr-8 text-sm text-left truncate outline-none focus:border-primary">
                     {on.join(', ') || 'Padrão'}
                 </button>
                 {open && (
-                    <div role="listbox" aria-multiselectable className="absolute right-0 top-10 z-10 w-40 rounded-lg border border-border bg-white shadow-md p-1">
+                    <div role="listbox" aria-multiselectable className="absolute right-0 top-10 z-10 w-full rounded-lg border border-border bg-white shadow-md p-1">
                         {FORMATS.map(([key, css, label]) => (
                             <label key={key} className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-normal cursor-pointer hover:bg-slate-50">
                                 <input type="checkbox" className="sr-only peer" checked={value[key] === css} onChange={(e) => onChange({ [key]: e.target.checked ? css : '' })} />
@@ -74,18 +74,17 @@ const BORDER_STYLES: Array<[BoxBorderStyle, string]> = [['', 'Padrão'], ['solid
 const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <label className="flex items-center justify-between gap-3 text-sm font-medium text-text-main">
         <span>{label}</span>
-        <span className="flex items-center gap-2">{children}</span>
+        <span className="w-44 flex items-center gap-2">{children}</span>
     </label>
 );
 
-const SELECT_CLS = 'select-chevron w-28 h-9 rounded-lg border border-border pl-2 pr-8 text-sm outline-none focus:border-primary';
+const SELECT_CLS = 'select-chevron flex-1 min-w-0 h-9 rounded-lg border border-border pl-2 pr-8 text-sm outline-none focus:border-primary';
 
 const Select = <T extends string>({ value, options, onChange }: { value: T; options: ReadonlyArray<readonly [T, string]>; onChange: (v: T) => void }) => (
     <>
         <select value={value} onChange={e => onChange(e.target.value as T)} className={SELECT_CLS}>
             {options.map(([v, text]) => <option key={v} value={v}>{text}</option>)}
         </select>
-        <span className="w-6" />
     </>
 );
 
@@ -98,12 +97,12 @@ const Section: React.FC<{ title?: string; children: React.ReactNode }> = ({ titl
 
 const Color: React.FC<{ value: string; fallback: string; onChange: (v: string) => void }> = ({ value, fallback, onChange }) => (
     <>
-        <span className="w-28 flex justify-center">
+        <span className="flex-1 flex justify-start">
             <input type="color" value={value || fallback} onChange={e => onChange(e.target.value)}
                 className="w-9 h-9 rounded-lg cursor-pointer border border-border p-0.5" />
         </span>
         <button type="button" onClick={() => onChange('')} disabled={!value} title="Remover (herdar do livro)"
-            className="w-6 flex justify-center text-text-muted hover:text-text-main disabled:invisible"><X size={14} /></button>
+            className="w-14 flex justify-center text-text-muted hover:text-text-main disabled:invisible"><X size={14} /></button>
     </>
 );
 
@@ -124,8 +123,8 @@ const Num: React.FC<{ value: number | null; unit: string; min: number; max: numb
                     if (draft !== null && draft !== '') onChange(Math.min(max, Math.max(min, Number(draft))));
                     setDraft(null);
                 }}
-                className="w-28 h-9 rounded-lg border border-border px-2 text-sm outline-none focus:border-primary" />
-            {suffix ?? <span className="w-6 text-xs text-text-muted">{unit}</span>}
+                className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2 text-sm outline-none focus:border-primary" />
+            {suffix ?? <span className="w-14 text-xs text-text-muted">{unit}</span>}
         </>
     );
 };
