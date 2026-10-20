@@ -32,8 +32,16 @@ const FORMATS: Array<[keyof TextProps, string, string]> = [
     ['fontVariant', 'small-caps', 'Versaletes'], ['textTransform', 'uppercase', 'Maiúsculas'],
 ];
 
+// Estilos de parágrafo que já dão negrito/itálico/maiúsculas: contam como marcados no Formato.
+const CLASS_FORMATS: Record<string, Array<keyof TextProps>> = {
+    'p-bold': ['fontWeight'], 'p-italic': ['fontStyle'], 'p-bold-italic': ['fontWeight', 'fontStyle'], 'p-uppercase': ['textTransform'],
+};
+const classesGiving = (key: keyof TextProps, classes: string[]) => classes.filter((c) => CLASS_FORMATS[c]?.includes(key));
+
 // Combobox de escolha múltipla: o botão resume o que está ligado, a lista tem uma caixa por opção.
-const FormatCombo: React.FC<{ value: TextProps; onChange: (patch: Partial<TextProps>) => void }> = ({ value, onChange }) => {
+const FormatCombo: React.FC<{
+    value: TextProps; classes: string[]; onChange: (patch: Partial<TextProps>) => void; onToggleClass?: (cls: string, on: boolean) => void;
+}> = ({ value, classes, onChange, onToggleClass }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
     useEffect(() => {
@@ -42,7 +50,17 @@ const FormatCombo: React.FC<{ value: TextProps; onChange: (patch: Partial<TextPr
         document.addEventListener('mousedown', away);
         return () => document.removeEventListener('mousedown', away);
     }, [open]);
-    const on = FORMATS.filter(([key, css]) => value[key] === css).map(([, , label]) => label);
+    const isOn = (key: keyof TextProps, css: string) => value[key] === css || classesGiving(key, classes).length > 0;
+    const toggle = (key: keyof TextProps, css: string, on: boolean) => {
+        if (on) return onChange({ [key]: css });
+        onChange({ [key]: '' });
+        // Desmarcar tira também o estilo de parágrafo que dava este formato (p-bold-italic mantém a outra metade).
+        classesGiving(key, classes).forEach((c) => {
+            onToggleClass?.(c, false);
+            if (c === 'p-bold-italic') onToggleClass?.(key === 'fontWeight' ? 'p-italic' : 'p-bold', true);
+        });
+    };
+    const on = FORMATS.filter(([key, css]) => isOn(key, css)).map(([, , label]) => label);
     return (
         <div className="flex items-center justify-between gap-3 text-sm font-medium text-text-main">
             <span>Formato</span>
@@ -55,11 +73,11 @@ const FormatCombo: React.FC<{ value: TextProps; onChange: (patch: Partial<TextPr
                     <div role="listbox" aria-multiselectable className="absolute right-0 top-10 z-10 w-full rounded-lg border border-border bg-white shadow-md p-1">
                         {FORMATS.map(([key, css, label]) => (
                             <label key={key} className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-normal cursor-pointer hover:bg-slate-50">
-                                <input type="checkbox" className="sr-only peer" checked={value[key] === css} onChange={(e) => onChange({ [key]: e.target.checked ? css : '' })} />
+                                <input type="checkbox" className="sr-only peer" checked={isOn(key, css)} onChange={(e) => toggle(key, css, e.target.checked)} />
                                 <span className="w-4 h-4 flex items-center justify-center rounded border border-slate-400 bg-white text-white peer-checked:bg-slate-700 peer-checked:border-slate-700 peer-focus-visible:ring-2 peer-focus-visible:ring-primary">
-                                    {value[key] === css && <Check size={12} strokeWidth={3} />}
+                                    {isOn(key, css) && <Check size={12} strokeWidth={3} />}
                                 </span>
-                                <span className={value[key] === css ? 'font-semibold' : ''}>{label}</span>
+                                <span className={isOn(key, css) ? 'font-semibold' : ''}>{label}</span>
                             </label>
                         ))}
                     </div>
@@ -263,10 +281,13 @@ const StyleEditChips: React.FC<{ targets: Array<readonly [string, string]>; sele
 const HEADING_EM: Record<string, number> = { h1: 2, h2: 1.5, h3: 1.17, h4: 1, h5: 0.83, h6: 0.67 };
 const em = (n: number): Len => ({ n, u: 'em' });
 
-const TextFields: React.FC<{ value: TextProps; defaults?: Partial<TextProps>; onChange: (patch: Partial<TextProps>) => void }> = ({ value, defaults, onChange }) => (
+const TextFields: React.FC<{
+    value: TextProps; defaults?: Partial<TextProps>; onChange: (patch: Partial<TextProps>) => void;
+    classes?: string[]; onToggleClass?: (cls: string, on: boolean) => void;
+}> = ({ value, defaults, onChange, classes = [], onToggleClass }) => (
     <>
         <Row label="Alinhamento"><Select value={value.align} options={ALIGNS} onChange={align => onChange({ align })} /></Row>
-        <FormatCombo value={value} onChange={onChange} />
+        <FormatCombo value={value} classes={classes} onChange={onChange} onToggleClass={onToggleClass} />
         <Row label="Recuo da 1.ª linha"><LenInput value={value.indent} placeholder={defaults?.indent} minEm={-10} maxEm={20} stepEm={0.1} onChange={indent => onChange({ indent: indent })} /></Row>
         <Row label="Margem esquerda"><LenInput value={value.marginLeft} placeholder={defaults?.marginLeft} minEm={0} maxEm={20} stepEm={0.1} onChange={marginLeft => onChange({ marginLeft: marginLeft })} /></Row>
         <Row label="Tamanho do texto"><LenInput value={value.fontSize} placeholder={defaults?.fontSize} minEm={0.5} maxEm={4} stepEm={0.05} onChange={fontSize => onChange({ fontSize: fontSize })} /></Row>
@@ -369,7 +390,7 @@ const TextSection: React.FC<{
                     onCreated={(cls) => { onToggleClass(cls, true); setPicked(`.${cls}`); }} />}
                 {mode === 'block' ? (draft ? null : (
                     <>
-                        <TextFields value={text.inline} defaults={defaults} onChange={onInline} />
+                        <TextFields value={text.inline} defaults={defaults} onChange={onInline} classes={text.classes} onToggleClass={onToggleClass} />
                         <ResetButton onClick={() => onInline(EMPTY_TEXT)} />
                     </>
                 )) : (
