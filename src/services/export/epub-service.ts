@@ -127,7 +127,6 @@ export const EPUB_CSS = `
         text-indent: 0;
         margin-top: 0.6em;
         color: #333;
-        text-align: left;
         display: block;
         hyphens: none;
     }
