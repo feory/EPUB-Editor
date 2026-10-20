@@ -39,3 +39,11 @@ test('textPropsFrom: mantém a unidade do CSS (px/em); % fica vazio; convertLen 
     expect(convertLen({ n: 30, u: 'px' }, 'em')).toEqual({ n: 1.88, u: 'em' });
     expect(convertLen({ n: 1.5, u: 'em' }, 'px')).toEqual({ n: 24, u: 'px' });
 });
+
+test('negrito, itálico, versaletes e maiúsculas: patch ↔ declarações', () => {
+    expect(textPatchToDecls({ fontWeight: 'bold', fontVariant: 'small-caps', textTransform: '' })).toEqual([
+        ['font-weight', 'bold'], ['font-variant', 'small-caps'], ['text-transform', null],
+    ]);
+    const get = (n: string) => ({ 'font-style': 'italic', 'text-transform': 'uppercase' } as Record<string, string>)[n] ?? '';
+    expect(textPropsFrom(get)).toMatchObject({ fontStyle: 'italic', textTransform: 'uppercase', fontWeight: '' });
+});
