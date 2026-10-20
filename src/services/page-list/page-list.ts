@@ -1,5 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import { fillFolioGaps } from './folio';
+import { fillFolioGaps, dropFolioOutliers } from './folio';
 import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from './marker';
 import { splitChapterSegments } from '../../utils/chapters';
 
@@ -105,7 +105,8 @@ function detectFolios(pages: PdfPageText[]): { folios: (number | null)[]; printe
     const bottom = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'bottom'));
     const top = pages.map(({ items, vpH }) => folioInZone(items, vpH, 'top'));
     const printed = monotonicScore(top) > monotonicScore(bottom) ? top : bottom;
-    return { folios: fillFolioGaps(printed), printed };
+    const clean = dropFolioOutliers(printed);
+    return { folios: fillFolioGaps(clean), printed: clean };
 }
 
 /**

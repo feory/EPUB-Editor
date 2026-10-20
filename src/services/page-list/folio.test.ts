@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { fillFolioGaps } from './folio';
+import { fillFolioGaps, dropFolioOutliers } from './folio';
 
 test('fillFolioGaps: interpola 1 página em falta (abertura de capítulo sem folio)', () => {
     expect(fillFolioGaps([40, null, 42, 43])).toEqual([40, 41, 42, 43]);
@@ -30,4 +30,14 @@ test('fillFolioGaps: não preenche o início se o 1º folio não bater certo com
 
 test('fillFolioGaps: sem folios detetados, devolve tudo null', () => {
     expect(fillFolioGaps([null, null, null])).toEqual([null, null, null]);
+});
+
+test('dropFolioOutliers: folio impossível (entrada do Índice lida como folio) é descartado', () => {
+    const f = [null, null, 47, ...Array.from({ length: 40 }, (_, k) => k + 6)];
+    expect(dropFolioOutliers(f)).toEqual([null, null, null, ...Array.from({ length: 40 }, (_, k) => k + 6)]);
+});
+
+test('dropFolioOutliers: numeração que recomeça (muitos fora de ordem) não é mexida', () => {
+    const f = [1, 2, 3, 4, 5, 1, 2, 3, 4, 5];
+    expect(dropFolioOutliers(f)).toEqual(f);
 });
