@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, RotateCcw, Grid2x2, Pencil, Plus } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
@@ -26,11 +26,45 @@ const RESET: BoxProps = { variant: '', background: '', color: '', borderColor: '
 
 const ALIGNS: Array<[TextAlign, string]> = [['', 'Padrão'], ['left', 'Esquerda'], ['center', 'Centro'], ['right', 'Direita'], ['justify', 'Justificado']];
 
-// Formato do texto: botões combináveis; ligado = valor CSS, desligado = herda ('').
-const FORMATS: Array<[keyof TextProps, string, string, string]> = [
-    ['fontWeight', 'bold', 'N', 'Negrito'], ['fontStyle', 'italic', 'I', 'Itálico'],
-    ['fontVariant', 'small-caps', 'Vs', 'Versaletes'], ['textTransform', 'uppercase', 'AA', 'Maiúsculas'],
+// Formato do texto: combinável; marcado = valor CSS, desmarcado = herda ('').
+const FORMATS: Array<[keyof TextProps, string, string]> = [
+    ['fontWeight', 'bold', 'Negrito'], ['fontStyle', 'italic', 'Itálico'],
+    ['fontVariant', 'small-caps', 'Versaletes'], ['textTransform', 'uppercase', 'Maiúsculas'],
 ];
+
+// Combobox de escolha múltipla: o botão resume o que está ligado, a lista tem uma caixa por opção.
+const FormatCombo: React.FC<{ value: TextProps; onChange: (patch: Partial<TextProps>) => void }> = ({ value, onChange }) => {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!open) return;
+        const away = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+        document.addEventListener('mousedown', away);
+        return () => document.removeEventListener('mousedown', away);
+    }, [open]);
+    const on = FORMATS.filter(([key, css]) => value[key] === css).map(([, , label]) => label);
+    return (
+        <div className="flex items-center justify-between gap-3 text-sm font-medium text-text-main">
+            <span>Formato</span>
+            <div ref={ref} className="relative">
+                <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}
+                    className="w-40 h-9 rounded-lg border border-border px-2 text-sm text-left truncate bg-white outline-none focus:border-primary">
+                    {on.join(', ') || 'Padrão'}
+                </button>
+                {open && (
+                    <div role="listbox" aria-multiselectable className="absolute right-0 top-10 z-10 w-40 rounded-lg border border-border bg-white shadow-md p-1">
+                        {FORMATS.map(([key, css, label]) => (
+                            <label key={key} className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-normal cursor-pointer hover:bg-slate-50">
+                                <input type="checkbox" checked={value[key] === css} onChange={(e) => onChange({ [key]: e.target.checked ? css : '' })} />
+                                {label}
+                            </label>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 const BORDER_STYLES: Array<[BoxBorderStyle, string]> = [['', 'Padrão'], ['solid', 'Sólido'], ['dashed', 'Tracejado'], ['dotted', 'Pontilhado']];
 
@@ -230,18 +264,7 @@ const em = (n: number): Len => ({ n, u: 'em' });
 const TextFields: React.FC<{ value: TextProps; defaults?: Partial<TextProps>; onChange: (patch: Partial<TextProps>) => void }> = ({ value, defaults, onChange }) => (
     <>
         <Row label="Alinhamento"><Select value={value.align} options={ALIGNS} onChange={align => onChange({ align })} /></Row>
-        <div className="flex items-center justify-between gap-3 text-sm font-medium text-text-main">
-            <span>Formato</span>
-            <span className="flex gap-1">
-                {FORMATS.map(([key, css, label, title]) => (
-                    <button key={key} type="button" title={title} aria-pressed={value[key] === css}
-                        onClick={() => onChange({ [key]: value[key] === css ? '' : css })}
-                        className={`w-9 h-9 rounded-lg border text-xs font-bold transition-colors ${value[key] === css ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-muted hover:bg-slate-50'}`}>
-                        {label}
-                    </button>
-                ))}
-            </span>
-        </div>
+        <FormatCombo value={value} onChange={onChange} />
         <Row label="Recuo da 1.ª linha"><LenInput value={value.indent} placeholder={defaults?.indent} minEm={-10} maxEm={20} stepEm={0.1} onChange={indent => onChange({ indent: indent })} /></Row>
         <Row label="Margem esquerda"><LenInput value={value.marginLeft} placeholder={defaults?.marginLeft} minEm={0} maxEm={20} stepEm={0.1} onChange={marginLeft => onChange({ marginLeft: marginLeft })} /></Row>
         <Row label="Tamanho do texto"><LenInput value={value.fontSize} placeholder={defaults?.fontSize} minEm={0.5} maxEm={4} stepEm={0.05} onChange={fontSize => onChange({ fontSize: fontSize })} /></Row>
