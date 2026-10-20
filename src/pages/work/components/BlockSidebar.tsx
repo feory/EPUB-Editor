@@ -26,11 +26,11 @@ const RESET: BoxProps = { variant: '', background: '', color: '', borderColor: '
 
 const ALIGNS: Array<[TextAlign, string]> = [['', 'Padrão'], ['left', 'Esquerda'], ['center', 'Centro'], ['right', 'Direita'], ['justify', 'Justificado']];
 
-const optionsOf = (on: string, onLabel: string, off: string): Array<[string, string]> => [['', 'Padrão'], [on, onLabel], [off, 'Não']];
-const WEIGHTS = optionsOf('bold', 'Negrito', 'normal');
-const FONT_STYLES = optionsOf('italic', 'Itálico', 'normal');
-const VARIANTS = optionsOf('small-caps', 'Versaletes', 'normal');
-const TRANSFORMS: Array<[string, string]> = [['', 'Padrão'], ['uppercase', 'MAIÚSCULAS'], ['lowercase', 'minúsculas'], ['capitalize', 'Iniciais Maiúsculas'], ['none', 'Não']];
+// Formato do texto: botões combináveis; ligado = valor CSS, desligado = herda ('').
+const FORMATS: Array<[keyof TextProps, string, string, string]> = [
+    ['fontWeight', 'bold', 'N', 'Negrito'], ['fontStyle', 'italic', 'I', 'Itálico'],
+    ['fontVariant', 'small-caps', 'Vs', 'Versaletes'], ['textTransform', 'uppercase', 'AA', 'Maiúsculas'],
+];
 
 const BORDER_STYLES: Array<[BoxBorderStyle, string]> = [['', 'Padrão'], ['solid', 'Sólido'], ['dashed', 'Tracejado'], ['dotted', 'Pontilhado']];
 
@@ -230,10 +230,18 @@ const em = (n: number): Len => ({ n, u: 'em' });
 const TextFields: React.FC<{ value: TextProps; defaults?: Partial<TextProps>; onChange: (patch: Partial<TextProps>) => void }> = ({ value, defaults, onChange }) => (
     <>
         <Row label="Alinhamento"><Select value={value.align} options={ALIGNS} onChange={align => onChange({ align })} /></Row>
-        <Row label="Negrito"><Select value={value.fontWeight} options={WEIGHTS} onChange={fontWeight => onChange({ fontWeight })} /></Row>
-        <Row label="Itálico"><Select value={value.fontStyle} options={FONT_STYLES} onChange={fontStyle => onChange({ fontStyle })} /></Row>
-        <Row label="Versaletes"><Select value={value.fontVariant} options={VARIANTS} onChange={fontVariant => onChange({ fontVariant })} /></Row>
-        <Row label="Maiúsculas"><Select value={value.textTransform} options={TRANSFORMS} onChange={textTransform => onChange({ textTransform })} /></Row>
+        <div className="flex items-center justify-between gap-3 text-sm font-medium text-text-main">
+            <span>Formato</span>
+            <span className="flex gap-1">
+                {FORMATS.map(([key, css, label, title]) => (
+                    <button key={key} type="button" title={title} aria-pressed={value[key] === css}
+                        onClick={() => onChange({ [key]: value[key] === css ? '' : css })}
+                        className={`w-9 h-9 rounded-lg border text-xs font-bold transition-colors ${value[key] === css ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-muted hover:bg-slate-50'}`}>
+                        {label}
+                    </button>
+                ))}
+            </span>
+        </div>
         <Row label="Recuo da 1.ª linha"><LenInput value={value.indent} placeholder={defaults?.indent} minEm={-10} maxEm={20} stepEm={0.1} onChange={indent => onChange({ indent: indent })} /></Row>
         <Row label="Margem esquerda"><LenInput value={value.marginLeft} placeholder={defaults?.marginLeft} minEm={0} maxEm={20} stepEm={0.1} onChange={marginLeft => onChange({ marginLeft: marginLeft })} /></Row>
         <Row label="Tamanho do texto"><LenInput value={value.fontSize} placeholder={defaults?.fontSize} minEm={0.5} maxEm={4} stepEm={0.05} onChange={fontSize => onChange({ fontSize: fontSize })} /></Row>
