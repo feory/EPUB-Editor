@@ -108,7 +108,6 @@ ${GRID_CSS}
     .footnote {
         font-size: 0.9em;
         margin-top: 0.6em;
-        text-align: left;
         display: block;
         hyphens: none;
         color: red;
