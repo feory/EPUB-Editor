@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, RotateCcw, Grid2x2, Pencil, Plus } from 'lucide-react';
+import { X, Check, RotateCcw, Grid2x2, Pencil, Plus } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
 import { EMPTY_TEXT, textPropsFrom, textPatchToDecls, convertLen, type TextProps, type TextAlign, type Len, type Unit } from '../editor/textProps';
@@ -55,8 +55,11 @@ const FormatCombo: React.FC<{ value: TextProps; onChange: (patch: Partial<TextPr
                     <div role="listbox" aria-multiselectable className="absolute right-0 top-10 z-10 w-40 rounded-lg border border-border bg-white shadow-md p-1">
                         {FORMATS.map(([key, css, label]) => (
                             <label key={key} className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-normal cursor-pointer hover:bg-slate-50">
-                                <input type="checkbox" checked={value[key] === css} onChange={(e) => onChange({ [key]: e.target.checked ? css : '' })} />
-                                {label}
+                                <input type="checkbox" className="sr-only peer" checked={value[key] === css} onChange={(e) => onChange({ [key]: e.target.checked ? css : '' })} />
+                                <span className="w-4 h-4 flex items-center justify-center rounded border border-slate-400 bg-white text-white peer-checked:bg-slate-700 peer-checked:border-slate-700 peer-focus-visible:ring-2 peer-focus-visible:ring-primary">
+                                    {value[key] === css && <Check size={12} strokeWidth={3} />}
+                                </span>
+                                <span className={value[key] === css ? 'font-semibold' : ''}>{label}</span>
                             </label>
                         ))}
                     </div>
