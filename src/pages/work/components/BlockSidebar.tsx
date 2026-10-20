@@ -48,7 +48,7 @@ const FormatCombo: React.FC<{ value: TextProps; onChange: (patch: Partial<TextPr
             <span>Formato</span>
             <div ref={ref} className="relative">
                 <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}
-                    className="w-40 h-9 rounded-lg border border-border px-2 text-sm text-left truncate bg-white outline-none focus:border-primary">
+                    className="select-chevron w-40 h-9 rounded-lg border border-border pl-2 pr-8 text-sm text-left truncate outline-none focus:border-primary">
                     {on.join(', ') || 'Padrão'}
                 </button>
                 {open && (
@@ -75,7 +75,7 @@ const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, ch
     </label>
 );
 
-const SELECT_CLS = 'w-28 h-9 rounded-lg border border-border px-2 text-sm outline-none focus:border-primary';
+const SELECT_CLS = 'select-chevron w-28 h-9 rounded-lg border border-border pl-2 pr-8 text-sm outline-none focus:border-primary';
 
 const Select = <T extends string>({ value, options, onChange }: { value: T; options: ReadonlyArray<readonly [T, string]>; onChange: (v: T) => void }) => (
     <>
@@ -138,7 +138,7 @@ const LenInput: React.FC<{ value: Len | null; placeholder?: Len | null; minEm: n
             min={minEm * k} max={maxEm * k} step={unit === 'px' ? 1 : stepEm}
             suffix={
                 <select value={unit} aria-label="Unidade" onChange={(e) => { const u = e.target.value as Unit; if (value) onChange(convertLen(value, u)); else setPicked(u); }}
-                    className="w-12 h-9 rounded-lg border border-border bg-white px-1 text-xs text-text-muted outline-none cursor-pointer">
+                    className="select-chevron w-14 h-9 rounded-lg border border-border pl-1.5 pr-6 text-xs text-text-muted outline-none cursor-pointer">
                     <option value="em">em</option><option value="px">px</option>
                 </select>
             }
@@ -233,7 +233,7 @@ const StyleChips: React.FC<{
             ))}
             {free.length > 0 && (
                 <select value="" onChange={(e) => e.target.value && onToggle(e.target.value, true)} aria-label="Novo estilo"
-                    className="h-7 rounded-full border border-border bg-white px-2 text-xs text-text-muted outline-none cursor-pointer">
+                    className="select-chevron h-7 rounded-full border border-border pl-2.5 pr-7 text-xs text-text-muted outline-none cursor-pointer">
                     <option value="">+ Novo estilo</option>
                     {free.map(([f, label]) => <option key={f} value={f}>{label}</option>)}
                 </select>
