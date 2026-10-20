@@ -39,6 +39,7 @@ import { useWorkPanels } from './work/hooks/useWorkPanels';
 import { useWorkPageSidebars } from './work/hooks/useWorkPageSidebars';
 import { useGoToChapterMarker } from './work/hooks/useGoToChapterMarker';
 import { useGoToParagraph } from './work/hooks/useGoToParagraph';
+import { useGrammarAvailable } from './work/hooks/useGrammarAvailable';
 import { useNotification } from '../context/NotificationContext';
 import { useStyles, DEFAULT_CSS } from '../context/StyleContext';
 import { forEditor } from '../utils/book-css';
@@ -341,6 +342,7 @@ export function WorkPage() {
     if (!sidebars.showGrammarSidebar) panels.open('grammar');
   };
 
+  const grammarAvailable = useGrammarAvailable();
   const handleGrammarValidation = useCallback(() => {
     if (work.grammarIssues.length > 0) {
       setGrammarChoiceOpen(true);
@@ -436,6 +438,7 @@ export function WorkPage() {
           onExport={work.handleExportEpub}
           onFileSelect={handleFileUpload}
           onToggleGrammar={handleGrammarValidation}
+          grammarAvailable={grammarAvailable}
           onToggleImageGallery={() => {
             panels.toggle('imageGallery');
           }}

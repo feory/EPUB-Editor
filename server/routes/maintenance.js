@@ -304,6 +304,16 @@ export async function healthCheck() {
   }, { headers: corsHeaders });
 }
 
+// Disponibilidade do LanguageTool (o cliente esconde a Revisão Gramatical se estiver em baixo).
+export async function languageToolStatus() {
+  const ltBase = (process.env.LANGUAGETOOL_URL || "https://api.languagetool.org").replace(/\/$/, "");
+  let available = false;
+  try {
+    available = (await fetch(`${ltBase}/v2/languages`, { signal: AbortSignal.timeout(3000) })).ok;
+  } catch { /* indisponível */ }
+  return new Response(JSON.stringify({ available }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
 export async function languageTool(req) {
   const ltBase = (process.env.LANGUAGETOOL_URL || "https://api.languagetool.org").replace(/\/$/, "");
   const body = await req.text();

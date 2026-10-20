@@ -19,6 +19,7 @@ interface WorkToolbarProps {
   onExport: () => void;
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onToggleGrammar: () => void;
+  grammarAvailable: boolean;
   onToggleImageGallery: () => void;
   onToggleComments: () => void;
   unresolvedCommentsCount?: number;
@@ -38,7 +39,7 @@ interface WorkToolbarProps {
 
 const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
   isLoading, htmlContent, lastSaved,
-  onSave, onFetchHistory, onValidate, onValidateEpub, onValidateAccessibility, onValidateLinks, onPreview, onExport, onFileSelect, onToggleGrammar, onToggleImageGallery, onToggleComments, unresolvedCommentsCount, onOpenCompare, onShowShortcuts, onShowStats, onShowStyleEditor, onShowFonts, onCleanIndex, onLinkIndexPages, onConversions, onEditToc, onUpdatePageList, onLinkIndiceEntries,
+  onSave, onFetchHistory, onValidate, onValidateEpub, onValidateAccessibility, onValidateLinks, onPreview, onExport, onFileSelect, onToggleGrammar, grammarAvailable, onToggleImageGallery, onToggleComments, unresolvedCommentsCount, onOpenCompare, onShowShortcuts, onShowStats, onShowStyleEditor, onShowFonts, onCleanIndex, onLinkIndexPages, onConversions, onEditToc, onUpdatePageList, onLinkIndiceEntries,
   readOnly
 }) => {
   const navigate = useNavigate();
@@ -285,14 +286,18 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
 
             {activeMenu === 'validation' && (
               <div className="absolute right-0 mt-2 w-56 bg-white border border-border rounded-xl shadow-xl py-2 animate-in fade-in slide-in-from-top-2 duration-200 z-[100]">
-                <button
-                  onClick={() => { onToggleGrammar(); setActiveMenu(null); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
-                >
-                  <AlertTriangle size={16} className="text-slate-400" />
-                  <span>Revisão Gramatical</span>
-                </button>
-                <div className="h-px bg-slate-100 my-1"></div>
+                {grammarAvailable && (
+                  <>
+                    <button
+                      onClick={() => { onToggleGrammar(); setActiveMenu(null); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
+                    >
+                      <AlertTriangle size={16} className="text-slate-400" />
+                      <span>Revisão Gramatical</span>
+                    </button>
+                    <div className="h-px bg-slate-100 my-1"></div>
+                  </>
+                )}
                 <button
                   onClick={() => { onValidate(); setActiveMenu(null); }}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"

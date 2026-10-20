@@ -159,6 +159,7 @@ export const server = Bun.serve({
         if (method === "PUT") return maintenance.setBackupSchedule(req, user);
       }
       if (path === "/api/languagetool/check"          && method === "POST") return maintenance.languageTool(req);
+      if (path === "/api/languagetool/status"         && method === "GET")  return maintenance.languageToolStatus();
 
       // Per-ebook routes
       if (path.startsWith("/api/ebooks/")) {
