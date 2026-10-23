@@ -432,7 +432,7 @@ export function createEditorSetup(deps: SetupDeps) {
         const selectionBar = (withStyles: boolean) => ({
             predicate: (node: Node) => !live.current.textPanelOpen && node.nodeName !== 'IMG' && !editor.selection.isCollapsed()
                 && editor.dom.getContentEditableParent(node) !== 'false' && (charStyleNames().length > 0) === withStyles,
-            items: withStyles ? QUICKBARS_SELECTION_TOOLBAR.replace('casemenu', 'casemenu charstyles') : QUICKBARS_SELECTION_TOOLBAR,
+            items: withStyles ? `charstyles ${QUICKBARS_SELECTION_TOOLBAR}` : QUICKBARS_SELECTION_TOOLBAR,
             position: 'selection' as const,
             scope: 'editor' as const,
         });
