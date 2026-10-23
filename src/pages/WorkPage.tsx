@@ -523,6 +523,7 @@ export function WorkPage() {
                 onAddComment={(anchorId) => { commentSync.startDraft(anchorId); panels.open('comments'); }}
                 onEditBox={() => panels.open('box')}
                 onEditText={() => panels.open('text')}
+                textPanelOpen={sidebars.showTextSidebar}
                 onBlockChange={setBlockInfo}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
@@ -601,8 +602,8 @@ export function WorkPage() {
 
       {sidebars.showTextSidebar && (
         <TextSidebar
-          selection={blockInfo.selection}
-          onChange={(patch) => editorRef.current?.editBlock({ target: 'selection', patch })}
+          info={blockInfo}
+          onEdit={(edit) => editorRef.current?.editBlock(edit)}
           onClose={() => sidebars.setShowTextSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}

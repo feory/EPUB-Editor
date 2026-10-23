@@ -21,6 +21,7 @@ export interface SetupLive {
     onToggleFocusMode?: () => void;
     onTogglePrintPdf?: () => void;
     showPrintPdfPanel?: boolean;                    // painel de PDF aberto → botão "Ver PDF" ativo
+    textPanelOpen?: boolean;                        // painel "Editar texto" aberto → o Mini-menu esconde-se (os campos estão no painel)
     chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
     activeChapterIndex: number;
 }
@@ -523,7 +524,7 @@ export function createEditorSetup(deps: SetupDeps) {
             // próprio em vez de alargar blockOf), para dar acesso a p-top/p-quote/etc. em bullets.
             predicate: (node: Node) => {
                 const block = blockOf(node) || editor.dom.getParent(node, 'li');
-                return !!block && (block.nodeName === 'P' || block.nodeName === 'LI') && !activeBlock.isCollapsed(block) && editor.selection.isCollapsed();
+                return !live.current.textPanelOpen && !!block && (block.nodeName === 'P' || block.nodeName === 'LI') && !activeBlock.isCollapsed(block) && editor.selection.isCollapsed();
             },
             position: 'node',
             scope: 'node',
@@ -533,7 +534,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addContextToolbar('headingstyles', {
             predicate: (node: Node) => {
                 const block = blockOf(node);
-                return !!block && /^H[1-6]$/.test(block.nodeName) && !activeBlock.isCollapsed(block) && editor.selection.isCollapsed();
+                return !live.current.textPanelOpen && !!block && /^H[1-6]$/.test(block.nodeName) && !activeBlock.isCollapsed(block) && editor.selection.isCollapsed();
             },
             position: 'node',
             scope: 'node',
