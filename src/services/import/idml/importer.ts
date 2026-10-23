@@ -4,6 +4,7 @@ import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAncho
 import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures, placeFiguresByPosition, toRasterName } from './figures';
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from '../document-importer';
 import { readIdmlStyles } from './styles';
+import { unboxWhite, BOXED_H1_OPEN } from './boxed';
 import {
     renderPsr, renderStory, adoptTableNoteRefs, isHeuristicTitle, accumulateSpacing, hasUserMappedStyle, styleName,
     type RenderContext, type NoteCounter, type SpacingStyleInfo,
@@ -292,14 +293,10 @@ function renderTitleBlock(rc: RenderContext, xml: string, counter: NoteCounter, 
     }
     if (lines.length === 0) return '';
     // Dentro da caixa preta do InDesign (boxed): o h1 todo leva o fundo preto e o texto branco herda dele. Senão o texto
-    // a branco (sobre o Rectangle, que não vem na story) ficaria invisível: sai com a cor do corpo.
-    // Desembrulha (não deixa <span> sem estilo): o limpador de spans nus emparelha com o 1.º </span> e, com o marcador de
-    // página lá dentro, passava a embrulhar o texto do título no span.pagebreak.
-    const WHITE = String.raw`color:rgb\(255,255,255\)`;
-    const unwrap = new RegExp(boxed ? String.raw`<span style="(?:background:#000;)?(?:color:#fff|${WHITE})[^"]*">([^<]*)</span>` : `<span style="${WHITE}">([^<]*)</span>`, 'g');
-    const heading = lines.slice(0, 2).map(l => l.replace(unwrap, '$1')).join('<br>'); // [0]=nº, [1]=título
+    // a branco (sobre o Rectangle, que não vem na story) ficaria invisível: sai com a cor do corpo (ver boxed.ts).
+    const heading = lines.slice(0, 2).map(l => unboxWhite(l, boxed)).join('<br>'); // [0]=nº, [1]=título
     const rest = lines.slice(2).map(l => `<p class="p-small p-non-indent">${l}</p>`);
-    const h1 = boxed ? '<h1 class="p-center" style="background:#000;color:#fff;padding:0.6em 1em">' : '<h1>';
+    const h1 = boxed ? BOXED_H1_OPEN : '<h1>';
     return [`${h1}${heading}</h1>`, ...rest].join('\n');
 }
 

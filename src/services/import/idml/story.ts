@@ -1,5 +1,6 @@
 import type { DocxStyleTarget, DocxStyleMapping } from '../document-importer';
 import { resolveFillColor, type IdmlStyles } from './styles';
+import { isWhite, isNumeral, boxedNumeralHtml } from './boxed';
 
 // Contexto de renderização de histórias: estilos do pacote IDML em curso + opção de espaçamento.
 // (Antes: variáveis globais do módulo, repostas por extractIdml a cada idmlZip.)
@@ -93,7 +94,8 @@ export function hasUserMappedStyle(xml: string, mapping: DocxStyleMapping): bool
 }
 
 export interface NoteCounter { n: number; star: number; defs: string[] }
-export interface Segment { text: string; notes: string[]; raw?: string }
+/** `boxedNumeral`: o segmento é só um numeral a branco, em caixa preta no InDesign (ver boxed.ts). */
+export interface Segment { text: string; notes: string[]; raw?: string; boxedNumeral?: string }
 
 // Aplica itálico/negrito (FontStyle do CharacterStyleRange) a um pedaço de texto já escapado.
 function withFontStyle(text: string, fs: string): string {
@@ -182,7 +184,12 @@ export function renderPsr(rc: RenderContext, psr: Element, counter: NoteCounter)
     const segs: Segment[] = [];
     let cur = '';
     let curNotes: string[] = [];
-    const flush = () => { segs.push({ text: collapseHyphenBreaks(cur.trim()), notes: curNotes }); cur = ''; curNotes = []; };
+    let curBoxed = ''; // numeral em caixa acumulado neste segmento ('' = nenhum)
+    const flush = () => {
+        const text = collapseHyphenBreaks(cur.trim());
+        segs.push({ text, notes: curNotes, ...(curBoxed && text === boxedNumeralHtml(curBoxed) ? { boxedNumeral: curBoxed } : {}) });
+        cur = ''; curNotes = []; curBoxed = '';
+    };
     // FontStyle do estilo de PARÁGRAFO (fallback de mais baixa prioridade): aplica-se aos runs
     // que não definem FontStyle próprio nem via estilo de carácter (ex. marcador "a)" das alíneas
     // num parágrafo Num2 Bold; o corpo, com FontStyle="Roman" explícito, mantém-se roman).
@@ -192,7 +199,7 @@ export function renderPsr(rc: RenderContext, psr: Element, counter: NoteCounter)
     const paraCap = rc.styles.paraIndents.get(psr.getAttribute('AppliedParagraphStyle') || '')?.cap || '';
     // Branco herdado do ESTILO de parágrafo (só branco: outras cores do estilo ficam como estavam).
     const paraFill = rc.styles.paraIndents.get(psr.getAttribute('AppliedParagraphStyle') || '')?.fill || null;
-    const paraWhite = resolveFillColor(rc.styles, paraFill, null) === 'rgb(255,255,255)' ? paraFill : null;
+    const paraWhite = isWhite(resolveFillColor(rc.styles, paraFill, null)) ? paraFill : null;
 
     // Processa os filhos de um CharacterStyleRange (ou de um container como HyperlinkTextSource)
     // recursivamente. Os atributos de formatação (fs/cap/pos) vêm do CharacterStyleRange pai.
@@ -215,8 +222,9 @@ export function renderPsr(rc: RenderContext, psr: Element, counter: NoteCounter)
                     if (color) piece = `<span style="color:${color}">${piece}</span>`;
                     // Numeral de capítulo ("V", "12") a branco: no InDesign está sobre um Rectangle
                     // preto separado (não está na story) — sem a caixa ficava branco sobre branco.
-                    if (color === 'rgb(255,255,255)' && /^[IVXLCDM]+$|^\d+$/i.test(raw.trim())) {
-                        piece = `<span style="background:#000;color:#fff;padding:0.15em 0.6em">${esc(raw.trim())}</span>`;
+                    if (isWhite(color) && isNumeral(raw)) {
+                        curBoxed = esc(raw.trim());
+                        piece = boxedNumeralHtml(curBoxed);
                     }
                 }
                 cur += piece;
@@ -457,8 +465,7 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
 
         // Numeral de capítulo sozinho (caixa preta, ver renderPsr) → rótulo que se junta ao título
         // seguinte, como o 'merge'; senão ficava como <p> no fim do capítulo anterior.
-        if (segs.length === 1 && segs[0].notes.length === 0 && segs[0].text.includes('background:#000')
-            && /^([IVXLCDM]+|\d+)$/i.test(segs[0].text.replace(/<[^>]+>/g, '').trim())) {
+        if (segs.length === 1 && segs[0].notes.length === 0 && segs[0].boxedNumeral) {
             pendingLabel = segs[0].text; pendingLabelTag = 'h1'; pendingLabelClass = rawMap.cls || ''; // Centrado/Topo do mapeamento
             continue;
         }

@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 
-import { cleanText, collapseHyphenBreaks, stripRedundantEmphasis } from './story';
+import { cleanText, collapseHyphenBreaks, stripRedundantEmphasis, type RenderContext } from './story';
 
 test('cleanText: tira hifen mole (U+00AD) e normaliza separadores de linha/tab', () => {
     expect(cleanText('Romano­-Germanico')).toBe('Romano-Germanico');
@@ -36,10 +36,11 @@ test('renderPsr: numeral de capítulo a branco ganha caixa preta (o Rectangle pr
     const { renderPsr } = await import('./story');
     const xml = `<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/texto"><CharacterStyleRange FillColor="Color/Paper"><Content>V</Content><Br/></CharacterStyleRange></ParagraphStyleRange>`;
     const psr = new DOMParser().parseFromString(xml, 'application/xml').documentElement;
-    const rc = { styles: { colors: new Map([['Color/Paper', { space: 'CMYK', values: [0, 0, 0, 0] }]]), paraIndents: new Map(), charStyles: new Map() } } as any;
+    const rc = { styles: { colors: new Map([['Color/Paper', { space: 'CMYK', values: [0, 0, 0, 0] }]]), paraIndents: new Map(), charStyles: new Map() } } as unknown as RenderContext;
     const [seg] = renderPsr(rc, psr, { n: 0, star: 0, defs: [] });
     expect(seg.text).toContain('background:#000');
     expect(seg.text).toContain('>V</span>');
+    expect(seg.boxedNumeral).toBe('V');
 });
 
 test('renderStory: numeral (estilo a branco) junta-se ao título seguinte num só <h1>', async () => {
@@ -50,7 +51,7 @@ test('renderStory: numeral (estilo a branco) junta-se ao título seguinte num s�
 <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/texto" Justification="CenterAlign"><CharacterStyleRange FontStyle="Bold" PointSize="15"><Content>AGORA ANTES.</Content><Br/></CharacterStyleRange></ParagraphStyleRange>
 </Story></idPkg:Story>`;
     const paraIndents = new Map([['ParagraphStyle/numeros', { left: 0, first: 0, spaceBefore: 0, spaceAfter: 0, fill: 'Color/Paper' }]]);
-    const rc = { styles: { colors: new Map([['Color/Paper', { space: 'CMYK', values: [0, 0, 0, 0] }]]), paraIndents, charStyles: new Map() } } as any;
-    const html = renderStory(rc, xml, { n: 0, star: 0, defs: [] }, {} as any);
+    const rc = { styles: { colors: new Map([['Color/Paper', { space: 'CMYK', values: [0, 0, 0, 0] }]]), paraIndents, charStyles: new Map() } } as unknown as RenderContext;
+    const html = renderStory(rc, xml, { n: 0, star: 0, defs: [] }, {});
     expect(html).toMatch(/^<h1 class="p-center">.*background:#000.*>IV<\/span><br>.*AGORA ANTES\..*<\/h1>$/);
 });
