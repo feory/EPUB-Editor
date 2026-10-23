@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { X, RotateCcw, Plus, Pencil, Trash2, Bold, Italic, Underline, Strikethrough, Superscript, Subscript } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, RotateCcw, Plus, MoreHorizontal, Pencil, Copy, Trash2, Bold, Italic, Underline, Strikethrough, Superscript, Subscript } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { Row, Select, Section, Color, LenInput } from './panelFields';
 import { FONT_FAMILIES, INLINE_FORMATS, EMPTY_SELECTION, selectionToCss, cssToSelection, type SelectionProps, type SelectionInfo } from '../editor/selectionProps';
 import { listCharStyles, readCustomStyle } from '../../../utils/book-css';
-import { charStyleClassOf, charStyleLabel } from '../../../utils/char-styles';
+import { charStyleClassOf, charStyleLabel, cloneCharStyleClass } from '../../../utils/char-styles';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 
 interface TextSidebarProps {
@@ -99,14 +99,50 @@ const StyleEditor: React.FC<{
     );
 };
 
+// Menu "⋯" de um estilo: clonar, editar, apagar. Fecha com clique fora ou Esc.
+const StyleMenu: React.FC<{ label: string; onClone: () => void; onEdit: () => void; onDelete: () => void; light: boolean }> = ({ label, onClone, onEdit, onDelete, light }) => {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLSpanElement>(null);
+    useEffect(() => {
+        if (!open) return;
+        const away = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+        const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', away);
+        document.addEventListener('keydown', esc);
+        return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
+    }, [open]);
+    const item = (text: string, icon: React.ReactNode, run: () => void, danger = false) => (
+        <button type="button" role="menuitem" onClick={() => { setOpen(false); run(); }}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-slate-50 ${danger ? 'text-rose-600' : 'text-text-main'}`}>{icon}{text}</button>
+    );
+    return (
+        <span ref={ref} className="h-full flex">
+            <button type="button" title="Mais opções" aria-label={`Mais opções de ${label}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}
+                className={`h-full pr-2.5 pl-0.5 rounded-r-full ${light ? 'opacity-80' : 'opacity-50'} hover:opacity-100`}><MoreHorizontal size={14} /></button>
+            {open && (
+                <div role="menu" className="absolute left-0 top-9 z-20 w-36 rounded-lg border border-border bg-white shadow-md py-1 text-text-main">
+                    {item('Clonar', <Copy size={12} />, onClone)}
+                    {item('Editar', <Pencil size={12} />, onEdit)}
+                    {item('Apagar', <Trash2 size={12} />, onDelete, true)}
+                </div>
+            )}
+        </span>
+    );
+};
+
 // Estilos de caracteres: classes `.c-nome` na secção de estilos do livro; aplicam-se à seleção como <span class>. Criar um
 // estilo guarda o que a seleção tem agora (formatos + aspeto) e aplica-o à seleção.
 const CharStyles: React.FC<{
     selection: SelectionInfo; css: string; onEdit: (edit: BlockEdit) => void; onStartEdit: (cls: string) => void;
-    onCreate: (cls: string, body: string) => string | null;
-}> = ({ selection, css, onEdit, onStartEdit, onCreate }) => {
+    onCreate: (cls: string, body: string) => string | null; onDelete: (cls: string) => void;
+}> = ({ selection, css, onEdit, onStartEdit, onCreate, onDelete }) => {
     const [name, setName] = useState<string | null>(null);
     const [error, setError] = useState('');
+    const [deleting, setDeleting] = useState<string | null>(null); // estilo à espera de confirmação para apagar
+    const clone = (cls: string) => {
+        const err = onCreate(cloneCharStyleClass(listCharStyles(css), cls), readCustomStyle(css, cls));
+        setError(err ?? '');
+    };
     const create = () => {
         const cls = charStyleClassOf(name ?? '');
         if (!cls) return setError('Dá um nome ao estilo.');
@@ -130,15 +166,24 @@ const CharStyles: React.FC<{
                 {listCharStyles(css).map((cls) => {
                     const on = selection.formats.includes(cls);
                     return (
-                        <span key={cls} className={`inline-flex items-center h-8 rounded-full border text-xs transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
+                        <span key={cls} className={`relative inline-flex items-center h-8 rounded-full border text-xs transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
                             <button type="button" aria-pressed={on} onClick={() => onEdit({ target: 'inlineFormat', format: cls })} className="h-full pl-3 pr-2 rounded-l-full">{charStyleLabel(cls)}</button>
-                            <button type="button" title="Editar estilo" aria-label={`Editar ${charStyleLabel(cls)}`} onClick={() => onStartEdit(cls)}
-                                className="h-full pr-2.5 pl-0.5 rounded-r-full opacity-50 hover:opacity-100"><Pencil size={11} /></button>
+                            <StyleMenu label={charStyleLabel(cls)} light={on} onClone={() => clone(cls)} onEdit={() => onStartEdit(cls)} onDelete={() => setDeleting(cls)} />
                         </span>
                     );
                 })}
                 {listCharStyles(css).length === 0 && name === null && <span className="text-xs text-text-muted">Ainda não há estilos.</span>}
             </div>
+            {deleting && (
+                <div className="flex flex-col gap-2">
+                    <p className="text-xs text-rose-700">Apagar o estilo "{charStyleLabel(deleting)}" e retirá-lo de todo o texto onde foi aplicado?</p>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => { onDelete(deleting); setDeleting(null); }} className="h-8 px-3 rounded-lg bg-rose-600 text-white text-xs hover:bg-rose-700">Apagar</button>
+                        <button type="button" onClick={() => setDeleting(null)} className="h-8 px-3 rounded-lg border border-border text-xs hover:bg-slate-50">Cancelar</button>
+                    </div>
+                </div>
+            )}
+            {error && name === null && <div className="text-xs text-rose-600">{error}</div>}
             {name !== null && (
                 <div className="flex flex-col gap-2">
                     <input autoFocus placeholder="Nome (ex.: Destaque)" value={name} onChange={(e) => { setName(e.target.value); setError(''); }}
@@ -179,7 +224,7 @@ export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onC
                 </div>
             ) : (
                 <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
-                    <CharStyles selection={selection} css={css} onEdit={onEdit} onStartEdit={setEditingCls} onCreate={onCreateStyle} />
+                    <CharStyles selection={selection} css={css} onEdit={onEdit} onStartEdit={setEditingCls} onCreate={onCreateStyle} onDelete={onDeleteStyle} />
                     <FormatFields value={selection} onToggle={(format) => onEdit({ target: 'inlineFormat', format })} onChange={(patch) => onEdit({ target: 'selection', patch })} />
                 </div>
             )}

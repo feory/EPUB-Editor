@@ -34,3 +34,12 @@ export function removeCharStyleFromHtml(html: string, cls: string): string {
     }
     return doc.body.innerHTML;
 }
+
+/** Nome livre para a cópia de `cls`: `c-nome-copia`, `c-nome-copia-2`… (nunca um que já exista). */
+export function cloneCharStyleClass(existing: string[], cls: string): string {
+    const base = `${cls}-copia`;
+    if (!existing.includes(base)) return base;
+    let n = 2;
+    while (existing.includes(`${base}-${n}`)) n++;
+    return `${base}-${n}`;
+}
