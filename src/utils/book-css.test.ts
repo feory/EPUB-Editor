@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { styleClassOf, charStyleClassOf, listCharStyles, listCustomStyles, createCustomStyle, forExport, forEditor } from './book-css';
+import { styleClassOf, listCharStyles, listCustomStyles, createCustomStyle, forExport, forEditor } from './book-css';
 
 const EDITOR = '/* === EDITOR (não exportado para EPUB) === */';
 const create = (css: string, cls: string, body: string) => {
@@ -82,8 +82,6 @@ test('forEditor: é idempotente (compara com a 1.ª passagem: os patches acresce
 });
 
 test('estilos de caracteres: c- à parte dos de parágrafo na mesma secção', () => {
-    expect(charStyleClassOf('Destaque forte')).toBe('c-destaque-forte');
-    expect(charStyleClassOf('  ')).toBe('');
     const first = createCustomStyle('body { }', 'p-nota', 'color: red;');
     if (!('css' in first)) throw new Error(first.error);
     const second = createCustomStyle(first.css, 'c-destaque', 'font-weight: bold;');

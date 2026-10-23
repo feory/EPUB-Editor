@@ -1,5 +1,6 @@
 import type { Editor } from 'tinymce';
 import { styleFormatsWith } from './config';
+import { isCharStyle, charStyleFormat } from '../../../utils/char-styles';
 
 // Formatos de parágrafo/inline do editor (classes do livro). Registados no init do editor.
 export function registerBlockFormats(editor: Editor) {
@@ -39,12 +40,19 @@ export function registerBlockFormats(editor: Editor) {
     });
 }
 
+/** Regista o formato de um estilo de caracteres (se ainda não existe): o nome do formato é a própria classe. */
+export function ensureCharStyleFormat(editor: Editor, cls: string) {
+    if (!editor.formatter.has(cls)) editor.formatter.register(cls, charStyleFormat(cls));
+}
+
+/** Estilos de caracteres já registados no editor (nomes dos formatos). */
+export const registeredCharStyles = (editor: Editor): string[] => Object.keys(editor.formatter.get()).filter(isCharStyle);
+
 // Estilos personalizados do livro (utils/custom-styles): registam-se como os de parágrafo e entram no
 // menu "Formats" → "Parágrafos". O TinyMCE só lê `style_formats` no arranque; `addStyleModifications`
 // (replace) refaz a lista, lida de novo cada vez que o menu abre.
 export function syncCustomStyleFormats(editor: Editor, custom: string[], charStyles: string[] = []) {
-    // Estilos de caracteres (.c-nome): span com a classe, aplicável a uma seleção.
-    charStyles.forEach((c) => { if (!editor.formatter.has(c)) editor.formatter.register(c, { inline: 'span', classes: c }); });
+    charStyles.forEach((c) => ensureCharStyleFormat(editor, c));
     custom.forEach((c) => { if (!editor.formatter.has(c)) editor.formatter.register(c, { selector: 'p,li', classes: c }); });
     (editor as unknown as { dispatch(name: string, args: object): void })
         .dispatch('addStyleModifications', { items: styleFormatsWith(custom), replace: true });

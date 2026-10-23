@@ -3,7 +3,8 @@ import { X, RotateCcw, Plus, Bold, Italic, Underline, Strikethrough, Superscript
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { Row, Select, Section, Color, LenInput } from './BlockSidebar';
 import { FONT_FAMILIES, INLINE_FORMATS, EMPTY_SELECTION, selectionToCss, type SelectionProps, type SelectionInfo } from '../editor/selectionProps';
-import { listCharStyles, charStyleClassOf } from '../../../utils/book-css';
+import { listCharStyles } from '../../../utils/book-css';
+import { charStyleClassOf, charStyleLabel } from '../../../utils/char-styles';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 
 interface TextSidebarProps {
@@ -54,7 +55,7 @@ const CharStyles: React.FC<{ selection: SelectionInfo; css: string; onEdit: (edi
                     return (
                         <button key={cls} type="button" aria-pressed={on} onClick={() => onEdit({ target: 'inlineFormat', format: cls })}
                             className={`h-8 px-3 rounded-full border text-xs transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
-                            {cls.slice(2)}
+                            {charStyleLabel(cls)}
                         </button>
                     );
                 })}

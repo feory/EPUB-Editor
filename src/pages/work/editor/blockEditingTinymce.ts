@@ -3,6 +3,8 @@ import type { EditorLike } from './blockEditing';
 import { editBlocks } from './blockEdit';
 import { MARK } from './ephemeral';
 import { INLINE_FORMATS } from './selectionProps';
+import { isCharStyle } from '../../../utils/char-styles';
+import { ensureCharStyleFormat, registeredCharStyles } from './formats';
 
 /** Adapter TinyMCE do seam EditorLike (blockEditing.ts). */
 export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
@@ -43,10 +45,10 @@ export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
         transact: (mutate) => editBlocks(editor, mutate),
         formatBlock: (tag) => editor.execCommand('FormatBlock', false, tag),
         applyFormat: (format) => editor.formatter.apply(format),
-        selectedText: () => (editor.selection.isCollapsed() ? null : { read: readInline, formats: () => [...INLINE_FORMATS.map(([f]) => f as string), ...Object.keys(editor.formatter.get()).filter((f) => f.startsWith('c-'))].filter((f) => editor.formatter.match(f)) }),
+        selectedText: () => (editor.selection.isCollapsed() ? null : { read: readInline, formats: () => [...INLINE_FORMATS.map(([f]) => f as string), ...registeredCharStyles(editor)].filter((f) => editor.formatter.match(f)) }),
         toggleInline: (format) => {
             // Estilo de caracteres acabado de criar: o CSS do livro só regista o formato no render seguinte.
-            if (format.startsWith('c-') && !editor.formatter.has(format)) editor.formatter.register(format, { inline: 'span', classes: format });
+            if (isCharStyle(format)) ensureCharStyleFormat(editor, format);
             editor.formatter.toggle(format);
         },
         applyInline: (format, css, value) => {

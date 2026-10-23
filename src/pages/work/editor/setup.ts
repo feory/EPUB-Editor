@@ -11,7 +11,8 @@ import { BOX_VARIANTS } from './boxProps';
 import { inspectBlock, applyBlockEdit, createBlockWatcher, TEXT_BLOCK_SELECTOR, type BlockInfo } from './blockEditing';
 import { tinymceEditorLike } from './blockEditingTinymce';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
-import { registerBlockFormats } from './formats';
+import { registerBlockFormats, registeredCharStyles } from './formats';
+import { charStyleLabel } from '../../../utils/char-styles';
 import { registerImageTools } from './imageTools';
 import { MARK, registerEphemeralMarks } from './ephemeral';
 
@@ -428,7 +429,7 @@ export function createEditorSetup(deps: SetupDeps) {
         // Barra da seleção (negrito, itálico, cor…): o quickbars não deixa condicionar o predicado, por isso é
         // nossa (quickbars_selection_toolbar desligado em WorkEditor) — esconde-se com o painel "Editor de Texto" aberto.
         // Com estilos de caracteres criados (formatos `c-…`, ver formats.ts) a barra ganha o menu "Estilos"; sem eles não há botão.
-        const charStyleNames = () => Object.keys(editor.formatter.get()).filter((f) => f.startsWith('c-'));
+        const charStyleNames = () => registeredCharStyles(editor);
         const selectionBar = (withStyles: boolean) => ({
             predicate: (node: Node) => !live.current.textPanelOpen && node.nodeName !== 'IMG' && !editor.selection.isCollapsed()
                 && editor.dom.getContentEditableParent(node) !== 'false' && (charStyleNames().length > 0) === withStyles,
@@ -442,7 +443,7 @@ export function createEditorSetup(deps: SetupDeps) {
             icon: 'format',
             tooltip: 'Estilos de caracteres',
             fetch: (callback) => callback(charStyleNames().map((format) => ({
-                type: 'togglemenuitem' as const, text: format.slice(2), onAction: undoable(() => editor.formatter.toggle(format)),
+                type: 'togglemenuitem' as const, text: charStyleLabel(format), onAction: undoable(() => editor.formatter.toggle(format)),
                 onSetup: (api: { setActive(state: boolean): void }) => {
                     api.setActive(editor.formatter.match(format));
                     editor.formatter.formatChanged(format, (active) => api.setActive(active));

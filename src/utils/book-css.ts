@@ -6,6 +6,7 @@
 //   createCustomStyle / listCustomStyles / styleClassOf — estilos personalizados
 import { ensureBaselineCss } from './baseline-css';
 import { hasRule } from './css-rule';
+import { isCharStyle } from './char-styles';
 
 const SECTION = '/* === ESTILOS PERSONALIZADOS === */';
 const SECTION_RE = /\/\* === ESTILOS PERSONALIZADOS === \*\/([\s\S]*?)(?=\/\* === |$)/;
@@ -17,23 +18,16 @@ export function styleClassOf(name: string): string {
     return slug ? `p-${slug}` : '';
 }
 
-/** "Destaque forte" → "c-destaque-forte": estilo de CARACTERES (span), à parte dos de parágrafo (`p-`). */
-export function charStyleClassOf(name: string): string {
-    const slug = name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^c-/, '');
-    return slug ? `c-${slug}` : '';
-}
-
 /** A secção inteira (cabeçalho incluído), ou '' — o export recoloca-a se o corte do editor-only a apanhou. */
 const customStylesSection = (css: string): string => SECTION_RE.exec(css)?.[0].trimEnd() ?? '';
 
 const customClasses = (css: string): string[] => [...(SECTION_RE.exec(css)?.[1] ?? '').matchAll(/\.([\w-]+)\s*\{/g)].map((m) => m[1]);
 
 /** Estilos de PARÁGRAFO criados pelo utilizador. */
-export const listCustomStyles = (css: string): string[] => customClasses(css).filter((c) => !c.startsWith('c-'));
+export const listCustomStyles = (css: string): string[] => customClasses(css).filter((c) => !isCharStyle(c));
 
 /** Estilos de CARACTERES criados pelo utilizador (`.c-nome`). */
-export const listCharStyles = (css: string): string[] => customClasses(css).filter((c) => c.startsWith('c-'));
+export const listCharStyles = (css: string): string[] => customClasses(css).filter(isCharStyle);
 
 // Marcador a partir do qual o style.css é só do editor (cortado no export).
 const EDITOR_CSS_MARKER = '/* === EDITOR (não exportado para EPUB) === */';
