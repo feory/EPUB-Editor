@@ -6,10 +6,20 @@ import { INLINE_FORMATS } from './selectionProps';
 
 /** Adapter TinyMCE do seam EditorLike (blockEditing.ts). */
 export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
-    // Só spans inline à volta da seleção: o style do próprio bloco é "Este bloco", não da seleção.
+    // Só spans inline que tocam na seleção: o style do próprio bloco é "Este bloco", não da seleção. Depois de aplicar um
+    // formato o getNode() sobe ao bloco (a seleção acaba fora do span), por isso parte-se do início da seleção e,
+    // se não houver valor, procura-se nos spans que a intersetam.
     const readInline = (css: string): string => {
-        const node = editor.selection.getNode();
-        for (let el: HTMLElement | null = node.nodeType === 1 ? (node as HTMLElement) : node.parentElement; el && !editor.dom.isBlock(el); el = el.parentElement) {
+        const rng = editor.selection.getRng();
+        const start = rng.startContainer;
+        for (let el: HTMLElement | null = start.nodeType === 1 ? (start as HTMLElement) : start.parentElement; el && !editor.dom.isBlock(el); el = el.parentElement) {
+            const v = el.style.getPropertyValue(css);
+            if (v) return v;
+        }
+        const root = rng.commonAncestorContainer;
+        const scope = (root.nodeType === 1 ? root : root.parentElement) as HTMLElement | null;
+        for (const el of Array.from(scope?.querySelectorAll<HTMLElement>('span[style]') ?? [])) {
+            if (!rng.intersectsNode(el)) continue;
             const v = el.style.getPropertyValue(css);
             if (v) return v;
         }
