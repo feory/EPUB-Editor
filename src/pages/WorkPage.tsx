@@ -25,6 +25,7 @@ import { FocusModeBar } from './work/components/FocusModeBar';
 import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { CommentSidebar } from './work/components/CommentSidebar';
 import { BlockSidebar } from './work/components/BlockSidebar';
+import { TextSidebar } from './work/components/TextSidebar';
 import type { BlockInfo } from './work/editor/blockEditing';
 import { useBookCss } from './work/hooks/useBookCss';
 import { useComments } from './work/hooks/useComments';
@@ -70,7 +71,7 @@ export function WorkPage() {
   const { showNotification } = useNotification();
   const { setCustomCss, getCurrentCss } = useStyles();
   const editorRef = useRef<WorkEditorRef>(null);
-  const [blockInfo, setBlockInfo] = useState<BlockInfo>({ box: null, text: null, image: null, grid: null });
+  const [blockInfo, setBlockInfo] = useState<BlockInfo>({ box: null, text: null, image: null, grid: null, selection: null });
   const work = useEbookWork(isbn, editorRef);
   const { user } = useAuth();
   const comments = useComments(isbn);
@@ -521,6 +522,7 @@ export function WorkPage() {
                 getIndiceSubtitles={work.getIndiceSubtitles}
                 onAddComment={(anchorId) => { commentSync.startDraft(anchorId); panels.open('comments'); }}
                 onEditBox={() => panels.open('box')}
+                onEditText={() => panels.open('text')}
                 onBlockChange={setBlockInfo}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
@@ -592,6 +594,16 @@ export function WorkPage() {
           onTextStyle={handleTextStyle}
           onCreateStyle={handleCreateStyle}
           onClose={() => sidebars.setShowBoxSidebar(false)}
+          width={panelWidth}
+          onResize={handlePanelResize}
+        />
+      )}
+
+      {sidebars.showTextSidebar && (
+        <TextSidebar
+          selection={blockInfo.selection}
+          onChange={(patch) => editorRef.current?.editBlock({ target: 'selection', patch })}
+          onClose={() => sidebars.setShowTextSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}
         />

@@ -19,9 +19,9 @@ test('readSelectionProps: lê cada propriedade; família só se for genérica co
 
 test('selectionPatchOps: só o que está no patch, por ordem dos campos; vazio/null remove', () => {
     expect(selectionPatchOps({ background: '#ffe066', fontSize: { n: 1.2, u: 'em' }, color: '', letterSpacing: null })).toEqual([
-        { format: 'forecolor', value: null },
-        { format: 'hilitecolor', value: '#ffe066' },
-        { format: 'fontsize', value: '1.2em' },
-        { format: 'letterspacing', value: null },
+        { format: 'forecolor', css: 'color', value: null },
+        { format: 'hilitecolor', css: 'background-color', value: '#ffe066' },
+        { format: 'fontsize', css: 'font-size', value: '1.2em' },
+        { format: 'letterspacing', css: 'letter-spacing', value: null },
     ]);
 });

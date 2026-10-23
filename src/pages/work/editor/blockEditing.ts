@@ -49,8 +49,8 @@ export interface EditorLike {
     applyFormat(format: string): void;
     /** Há texto selecionado (não só cursor)? `read` lê um valor CSS inline dos spans que o rodeiam (não do bloco). */
     selectedText?(): { read(cssName: string): string } | null;
-    /** Aplica (value) ou tira (null) um formato inline por propriedade na seleção. */
-    applyInline?(format: string, value: string | null): void;
+    /** Aplica (value) ou tira (null) um formato inline por propriedade (`css`) na seleção. */
+    applyInline?(format: string, css: string, value: string | null): void;
 }
 
 /** Caixa/grelha alvo: a selecionada pelo clique na sua área, senão a que rodeia o cursor. */
@@ -100,7 +100,7 @@ export function applyBlockEdit(ed: EditorLike, edit: BlockEdit): void {
             if (node.nodeName === 'IMG') ed.transact(() => applyImageProps(ed, node as HTMLElement, edit.patch));
             return;
         case 'selection': {
-            if (ed.selectedText?.() && ed.applyInline) ed.transact(() => selectionPatchOps(edit.patch).forEach((op) => ed.applyInline!(op.format, op.value)));
+            if (ed.selectedText?.() && ed.applyInline) ed.transact(() => selectionPatchOps(edit.patch).forEach((op) => ed.applyInline!(op.format, op.css, op.value)));
             return;
         }
         case 'text': {

@@ -5,6 +5,15 @@ import { MARK } from './ephemeral';
 
 /** Adapter TinyMCE do seam EditorLike (blockEditing.ts). */
 export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
+    // Só spans inline à volta da seleção: o style do próprio bloco é "Este bloco", não da seleção.
+    const readInline = (css: string): string => {
+        const node = editor.selection.getNode();
+        for (let el: HTMLElement | null = node.nodeType === 1 ? (node as HTMLElement) : node.parentElement; el && !editor.dom.isBlock(el); el = el.parentElement) {
+            const v = el.style.getPropertyValue(css);
+            if (v) return v;
+        }
+        return '';
+    };
     return {
         selectionNode: () => editor.selection.getNode(),
         // marcado por useBlockOverlays (data-mce-psbox) ao clicar na área da caixa/grelha
@@ -23,23 +32,13 @@ export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
         transact: (mutate) => editBlocks(editor, mutate),
         formatBlock: (tag) => editor.execCommand('FormatBlock', false, tag),
         applyFormat: (format) => editor.formatter.apply(format),
-        selectedText: () => {
-            if (editor.selection.isCollapsed()) return null;
-            const node = editor.selection.getNode();
-            return {
-                // Só spans inline à volta da seleção: o style do próprio bloco é "Este bloco", não da seleção.
-                read: (css) => {
-                    for (let el: HTMLElement | null = node.nodeType === 1 ? (node as HTMLElement) : node.parentElement; el && !editor.dom.isBlock(el); el = el.parentElement) {
-                        const v = el.style.getPropertyValue(css);
-                        if (v) return v;
-                    }
-                    return '';
-                },
-            };
-        },
-        applyInline: (format, value) => {
-            if (value) editor.formatter.apply(format, { value });
-            else editor.formatter.remove(format, { value: null }, undefined, true);
+        selectedText: () => (editor.selection.isCollapsed() ? null : { read: readInline }),
+        applyInline: (format, css, value) => {
+            if (value) return editor.formatter.apply(format, { value });
+            editor.formatter.remove(format, { value: null }, undefined, true);
+            // Os formatos sem remove_similar (tamanho, família) só saem pelo valor exato que lá está.
+            const current = readInline(css);
+            if (current) editor.formatter.remove(format, { value: current });
         },
     };
 }

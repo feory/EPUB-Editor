@@ -91,6 +91,7 @@ interface WorkEditorProps {
     getIndiceSubtitles?: () => IndiceLinkSubtitle[];
     onAddComment?: (anchorId: string) => void;
     onEditBox?: () => void;
+    onEditText?: () => void;
     onBlockChange?: (info: BlockInfo) => void;
     readOnly?: boolean;
     editorFont?: string;
@@ -174,7 +175,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onEditBox, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onEditBox, onEditText, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -184,7 +185,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     const live = useLive({
         htmlContent, setHtmlContent, grammarCache, onGrammarCheck, onImageUploaded, onVisiblePageChange,
         onToggleFocusMode, onTogglePrintPdf, showPrintPdfPanel, ebookLabel, chapters, activeChapterIndex,
-        onEditBox, onBlockChange, readOnly,
+        onEditBox, onEditText, onBlockChange, readOnly,
     });
     const indiceLinkPanel = useIndiceLinkPanel(editorRef, { chapters, activeChapterIndex, getSubtitles: getIndiceSubtitles, onLink: onLinkIndiceEntry });
     const syncEditorHeightRef = useRef<() => void>(() => {});
@@ -1034,6 +1035,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             onCropImage: imageCrop.handleOpenCrop,
                             onAddComment,
                             onEditBoxStyle: () => live.current.onEditBox?.(),
+                            onEditTextStyle: () => live.current.onEditText?.(),
                         }),
                         automatic_uploads: true,
                         paste_data_images: true,

@@ -430,7 +430,7 @@ function createPendingLabel() {
     return {
         set(t: string, labelTag = 'h1', labelCls = '') { text = t; tag = labelTag; cls = labelCls; },
         /** Junta o rótulo ao corpo do título (`<br>`); um título sem classes próprias herda as do rótulo (muta `classes`). */
-        mergeInto(body: string, classes: string[]): string {
+        mergeInto(body: string, classes: (string | undefined)[]): string {
             if (!text) return body;
             const merged = `${text}<br>${body}`;
             if (!classes.length && cls) classes.push(cls);

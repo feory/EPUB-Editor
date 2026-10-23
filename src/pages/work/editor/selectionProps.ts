@@ -45,11 +45,11 @@ export function readSelectionProps(read: (cssName: string) => string): Selection
     };
 }
 
-/** Patch → o que pedir ao formatter: [formato, valor | null (remover)]. */
-export function selectionPatchOps(patch: Partial<SelectionProps>): { format: string; value: string | null }[] {
+/** Patch → o que pedir ao formatter: formato, propriedade CSS (para saber o valor atual ao remover) e valor | null (remover). */
+export function selectionPatchOps(patch: Partial<SelectionProps>): { format: string; css: string; value: string | null }[] {
     return KEYS.filter((k) => k in patch).map((k) => {
         const v = patch[k];
         const value = v === null || v === undefined || v === '' ? null : typeof v === 'object' ? `${v.n}${v.u}` : v;
-        return { format: FIELDS[k][1], value };
+        return { format: FIELDS[k][1], css: FIELDS[k][0], value };
     });
 }

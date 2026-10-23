@@ -35,6 +35,7 @@ interface SetupDeps {
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
     onEditBoxStyle: () => void;
+    onEditTextStyle: () => void;
     // Props que mudam a cada render, lidas por ref: setup() só corre 1x no mount, uma prop direta ficava presa à
     // closure desse 1.º render (livro ainda vazio nessa altura) e nunca via as edições seguintes.
     live: React.MutableRefObject<SetupLive>;
@@ -47,7 +48,7 @@ interface SetupDeps {
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
     const { onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu, openIndiceLinkPanel,
-        live, wireOverlays, onCropImage, onAddComment, onEditBoxStyle } = deps;
+        live, wireOverlays, onCropImage, onAddComment, onEditBoxStyle, onEditTextStyle } = deps;
 
     return (editor: Editor) => {
         // Ação de menu/atalho como edição de bloco (blockEdit.ts): passo de undo + change + nodeChanged.
@@ -423,6 +424,12 @@ export function createEditorSetup(deps: SetupDeps) {
         });
         editor.on('NodeChange', updateCssInfo);
 
+        // Botão "Editar texto" na barra da seleção → abre o painel lateral com cor/fundo/tamanho/espaço entre letras.
+        editor.ui.registry.addButton('edittext', {
+            icon: 'edit-block',
+            tooltip: 'Editar texto',
+            onAction: () => onEditTextStyle(),
+        });
         // Botão "Editar HTML" no mini-menu → abre a edição inline do bloco de topo.
         editor.ui.registry.addButton('edithtml', {
             icon: 'ps-htmledit',

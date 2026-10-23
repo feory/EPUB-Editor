@@ -7,7 +7,6 @@ import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 import { readRule, hasRule } from '../../../utils/css-rule';
 import { GRID_RATIOS, EMPTY_GRID, type GridProps } from '../editor/gridProps';
 import { IMAGE_ALIGNS, EMPTY_IMAGE, type ImageProps } from '../editor/imageProps';
-import { FONT_FAMILIES, type SelectionProps } from '../editor/selectionProps';
 import { BLOCK_STYLE_OPTIONS } from '../editor/config';
 import { listCustomStyles, styleClassOf } from '../../../utils/book-css';
 
@@ -90,7 +89,7 @@ const FormatCombo: React.FC<{
 
 const BORDER_STYLES: Array<[BoxBorderStyle, string]> = [['', 'Padrão'], ['solid', 'Sólido'], ['dashed', 'Tracejado'], ['dotted', 'Pontilhado']];
 
-const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+export const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <label className="flex items-center justify-between gap-3 text-sm font-medium text-text-main">
         <span>{label}</span>
         <span className="w-44 flex items-center gap-2">{children}</span>
@@ -99,7 +98,7 @@ const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, ch
 
 const SELECT_CLS = 'select-chevron flex-1 min-w-0 h-9 rounded-lg border border-border pl-2 pr-8 text-sm outline-none focus:border-primary';
 
-const Select = <T extends string>({ value, options, onChange }: { value: T; options: ReadonlyArray<readonly [T, string]>; onChange: (v: T) => void }) => (
+export const Select = <T extends string>({ value, options, onChange }: { value: T; options: ReadonlyArray<readonly [T, string]>; onChange: (v: T) => void }) => (
     <>
         <select value={value} onChange={e => onChange(e.target.value as T)} className={SELECT_CLS}>
             {options.map(([v, text]) => <option key={v} value={v}>{text}</option>)}
@@ -107,14 +106,14 @@ const Select = <T extends string>({ value, options, onChange }: { value: T; opti
     </>
 );
 
-const Section: React.FC<{ title?: string; children: React.ReactNode }> = ({ title, children }) => (
+export const Section: React.FC<{ title?: string; children: React.ReactNode }> = ({ title, children }) => (
     <section className="flex flex-col gap-4">
         {title && <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{title}</h4>}
         {children}
     </section>
 );
 
-const Color: React.FC<{ value: string; fallback: string; onChange: (v: string) => void }> = ({ value, fallback, onChange }) => (
+export const Color: React.FC<{ value: string; fallback: string; onChange: (v: string) => void }> = ({ value, fallback, onChange }) => (
     <>
         <span className="flex-1 flex justify-start">
             <input type="color" value={value || fallback} onChange={e => onChange(e.target.value)}
@@ -150,7 +149,7 @@ const Num: React.FC<{ value: number | null; unit: string; min: number; max: numb
 
 // Medida com seletor px/em: mostra e guarda na unidade que o CSS já usa; trocar a unidade converte (16px = 1em).
 // Limites dados em em (em px ×16).
-const LenInput: React.FC<{ value: Len | null; placeholder?: Len | null; minEm: number; maxEm: number; stepEm: number; onChange: (v: Len | null) => void }> = ({ value, placeholder, minEm, maxEm, stepEm, onChange }) => {
+export const LenInput: React.FC<{ value: Len | null; placeholder?: Len | null; minEm: number; maxEm: number; stepEm: number; onChange: (v: Len | null) => void }> = ({ value, placeholder, minEm, maxEm, stepEm, onChange }) => {
     const [picked, setPicked] = useState<Unit | null>(null); // unidade escolhida enquanto o campo está vazio
     const unit: Unit = value?.u ?? picked ?? placeholder?.u ?? 'em';
     const k = unit === 'px' ? 16 : 1;
@@ -347,19 +346,6 @@ const GridSection: React.FC<{
 
 const MODES = [['block', 'Este bloco'], ['style', 'Estilo']] as const;
 
-// Caracteres selecionados: cada campo escreve/tira UM span inline (cor, fundo, tamanho, espaço entre letras, família).
-const SelectionSection: React.FC<{ selection: SelectionProps; onChange: (patch: Partial<SelectionProps>) => void }> = ({ selection, onChange }) => (
-    <Section title="Texto selecionado">
-        <Row label="Cor do texto"><Color value={selection.color} fallback="#000000" onChange={(v) => onChange({ color: v })} /></Row>
-        <Row label="Cor de fundo"><Color value={selection.background} fallback="#ffe066" onChange={(v) => onChange({ background: v })} /></Row>
-        <Row label="Tamanho"><LenInput value={selection.fontSize} minEm={0.5} maxEm={4} stepEm={0.05} onChange={(v) => onChange({ fontSize: v })} /></Row>
-        <Row label="Espaço entre letras"><LenInput value={selection.letterSpacing} minEm={-0.2} maxEm={1} stepEm={0.01} onChange={(v) => onChange({ letterSpacing: v })} /></Row>
-        <Row label="Tipo de letra"><Select value={selection.fontFamily} options={FONT_FAMILIES} onChange={(v) => onChange({ fontFamily: v })} /></Row>
-        <button type="button" onClick={() => onChange({ color: '', background: '', fontSize: null, letterSpacing: null, fontFamily: '' })}
-            className="self-start flex items-center gap-1.5 text-xs text-text-muted hover:text-text-main"><RotateCcw size={12} /> Repor texto selecionado</button>
-    </Section>
-);
-
 const TextSection: React.FC<{
     text: NonNullable<BlockInfo['text']>; css: string;
     onInline: (patch: Partial<TextProps>) => void; onStyle: (selector: string, patch: Partial<TextProps>) => void;
@@ -428,15 +414,14 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Edição do Bloco</h3>
             <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-500 transition-all"><X size={16} /></button>
         </div>
-        {!info.box && !info.text && !info.image && !info.grid && !info.selection ? (
+        {!info.box && !info.text && !info.image && !info.grid ? (
             <div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-text-muted">
                 Põe o cursor num parágrafo, título ou caixa, ou seleciona uma imagem, para editar os seus atributos.
             </div>
         ) : (
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
-                {info.selection && <SelectionSection selection={info.selection} onChange={(patch) => onEdit({ target: 'selection', patch })} />}
                 {info.image && <ImageSection image={info.image} onChange={(patch) => onEdit({ target: 'image', patch })} />}
-                {info.text && !info.selection && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={onCreateStyle} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
+                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={onCreateStyle} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
                 {info.grid && <GridSection grid={info.grid} onChange={(patch) => onEdit({ target: 'grid', patch })} onApplyToCells={() => onEdit({ target: 'gridCells' })} />}
                 {info.box && <BoxSection box={info.box} onChange={(patch) => onEdit({ target: 'box', patch })} />}
             </div>

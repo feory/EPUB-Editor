@@ -103,7 +103,7 @@ test('seleção: sem texto selecionado selection é null; com texto lê só os s
     const ed: EditorLike = {
         ...base,
         selectedText: () => ({ read: (css) => (base.root.querySelector('span') as HTMLElement).style.getPropertyValue(css) }),
-        applyInline: (format, value) => { ops.push([format, value]); },
+        applyInline: (format, _css, value) => { ops.push([format, value]); },
     };
     expect(inspectBlock(ed).selection).toMatchObject({ background: '#ffe066', fontSize: { n: 1.2, u: 'em' }, color: '' });
     applyBlockEdit(ed, { target: 'selection', patch: { background: '', letterSpacing: { n: 0.05, u: 'em' } } });
