@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, RotateCcw, Plus, Bold, Italic, Underline, Strikethrough, Superscript, Subscript } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
-import { Row, Select, Section, Color, LenInput } from './BlockSidebar';
+import { Row, Select, Section, Color, LenInput } from './panelFields';
 import { FONT_FAMILIES, INLINE_FORMATS, EMPTY_SELECTION, selectionToCss, type SelectionProps, type SelectionInfo } from '../editor/selectionProps';
 import { listCharStyles } from '../../../utils/book-css';
 import { charStyleClassOf, charStyleLabel } from '../../../utils/char-styles';
