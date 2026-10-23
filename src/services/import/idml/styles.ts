@@ -4,7 +4,7 @@ import type JSZip from 'jszip';
 // traduzir negrito/itálico/versaletes (estilos de carácter), recuos e espaçamento (estilos de parágrafo) e
 // cores de preenchimento das células de tabela. Lido por idmlZip — antes eram variáveis globais do módulo.
 export type CharStyle = { fontStyle?: string; cap?: string; position?: string };
-export type ParaStyle = { left: number; first: number; fontStyle?: string; cap?: string; spaceBefore: number; spaceAfter: number };
+export type ParaStyle = { left: number; first: number; fontStyle?: string; cap?: string; spaceBefore: number; spaceAfter: number; fill?: string };
 export type FillColor = { space: 'CMYK' | 'RGB'; values: number[] };
 
 export interface IdmlStyles {
@@ -78,9 +78,9 @@ export function resolveFillColor(styles: IdmlStyles, colorRef: string | null, ti
 // ponytail: pt→em com divisor fixo 12 (corpo não tem PointSize fiável nos runs); afinar se preciso.
 
 
-async function scanParaIndents(zip: JSZip): Promise<Map<string, { left: number; first: number; fontStyle?: string; cap?: string; spaceBefore: number; spaceAfter: number }>> {
+async function scanParaIndents(zip: JSZip): Promise<Map<string, ParaStyle>> {
     const xml = await zip.file('Resources/Styles.xml')?.async('string') ?? '';
-    const map = new Map<string, { left: number; first: number; fontStyle?: string; cap?: string; spaceBefore: number; spaceAfter: number }>();
+    const map = new Map<string, ParaStyle>();
     for (const m of xml.matchAll(/<ParagraphStyle\b([^>]*)>/g)) {
         const self = /\bSelf="([^"]*)"/.exec(m[1])?.[1];
         if (!self) continue;
@@ -96,7 +96,9 @@ async function scanParaIndents(zip: JSZip): Promise<Map<string, { left: number; 
         // Espaço antes/depois do parágrafo, em pontos (SpaceBefore/SpaceAfter do InDesign).
         const spaceBefore = parseFloat(/\bSpaceBefore="([^"]*)"/.exec(m[1])?.[1] || '0') || 0;
         const spaceAfter = parseFloat(/\bSpaceAfter="([^"]*)"/.exec(m[1])?.[1] || '0') || 0;
-        if (left || first || fontStyle || cap || spaceBefore || spaceAfter) map.set(self, { left, first, fontStyle, cap, spaceBefore, spaceAfter });
+        // Cor de texto do estilo de parágrafo (ex. estilo "numeros" a Color/Paper, numeral sobre caixa preta).
+        const fill = /\bFillColor="([^"]*)"/.exec(m[1])?.[1];
+        if (left || first || fontStyle || cap || spaceBefore || spaceAfter || fill) map.set(self, { left, first, fontStyle, cap, spaceBefore, spaceAfter, fill });
     }
     return map;
 }

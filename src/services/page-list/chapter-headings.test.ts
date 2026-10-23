@@ -13,3 +13,9 @@ test('insertChapterHeadings: âncora também no Índice (1.ª ocorrência fora d
     expect(res.inserted).toBe(3);
     expect(res.html).toBe(`<p>${c}</p><h1>H1</h1><p>${a}</p><h1>H2</h1><p>${b}</p><h1>H3</h1><p>${c}</p>`);
 });
+
+test('insertChapterHeadings: âncora que começa pelo folio da página (ausente do corpo) é reencontrada sem ele', () => {
+    const body = 'iagoraantesumdiaantesdofimbibliotecapublica';
+    const res = insertChapterHeadings(`<p>antes</p><p>${body}</p>`, [{ anchor: `137${body}`, headingHtml: '<h1>H</h1>' }]);
+    expect(res.html).toBe(`<p>antes</p><h1>H</h1><p>${body}</p>`);
+});

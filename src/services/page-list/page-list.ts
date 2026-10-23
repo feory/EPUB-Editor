@@ -257,10 +257,18 @@ export function insertChapterHeadings(html: string, anchors: { anchor: string; h
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const { flat, map } = textIndex(doc);
 
+    // A página impressa abre com o folio (cabeçalho/rodapé), que não existe no corpo: sem match, tenta sem o
+    // nº inicial (devolve a âncora efetivamente usada, para a repetição mais abaixo).
+    const locate = (anchor: string, from = 0): { pos: number; anchor: string } => {
+        const pos = flat.indexOf(anchor, from);
+        if (pos >= 0) return { pos, anchor };
+        const bare = anchor.replace(/^\d+/, '');
+        return bare.length >= CHAPTER_MIN_ANCHOR && bare !== anchor ? { pos: flat.indexOf(bare, from), anchor: bare } : { pos: -1, anchor };
+    };
     const hits: { pos: number; headingHtml: string; anchor: string }[] = [];
     for (const { anchor, headingHtml } of anchors) {
-        const pos = flat.indexOf(anchor);
-        if (pos >= 0) hits.push({ pos, headingHtml, anchor });
+        const found = locate(anchor);
+        if (found.pos >= 0) hits.push({ pos: found.pos, headingHtml, anchor: found.anchor });
     }
     const keptIdx = new Set(longestIncreasing(hits.map(h => h.pos)));
     // Âncora também presente antes (ex. título repetido no Índice): 1.ª ocorrência fora de ordem foi

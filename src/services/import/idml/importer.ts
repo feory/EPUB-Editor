@@ -282,7 +282,7 @@ function titleBlockSearchKey(rc: RenderContext, xml: string): string {
 // chapter-break-h1 é inserido ANTES pelo insertChapterMarkers e o heading fica intacto;
 // um <h1 class="chapter-break"> seria tratado como quebra SEM título e o texto sumiria).
 // Parágrafos restantes (autores) → <p class="p-small p-non-indent">.
-function renderTitleBlock(rc: RenderContext, xml: string, counter: NoteCounter): string {
+function renderTitleBlock(rc: RenderContext, xml: string, counter: NoteCounter, boxed = false): string {
     const story = new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('Story')[0];
     if (!story) return '';
     const lines: string[] = [];
@@ -291,9 +291,16 @@ function renderTitleBlock(rc: RenderContext, xml: string, counter: NoteCounter):
         for (const seg of renderPsr(rc, psr, counter)) if (seg.text) lines.push(seg.text);
     }
     if (lines.length === 0) return '';
-    const heading = lines.slice(0, 2).join('<br>'); // [0]=nº, [1]=título
+    // Dentro da caixa preta do InDesign (boxed): o h1 todo leva o fundo preto e o texto branco herda dele. Senão o texto
+    // a branco (sobre o Rectangle, que não vem na story) ficaria invisível: sai com a cor do corpo.
+    // Desembrulha (não deixa <span> sem estilo): o limpador de spans nus emparelha com o 1.º </span> e, com o marcador de
+    // página lá dentro, passava a embrulhar o texto do título no span.pagebreak.
+    const WHITE = String.raw`color:rgb\(255,255,255\)`;
+    const unwrap = new RegExp(boxed ? String.raw`<span style="(?:background:#000;)?(?:color:#fff|${WHITE})[^"]*">([^<]*)</span>` : `<span style="${WHITE}">([^<]*)</span>`, 'g');
+    const heading = lines.slice(0, 2).map(l => l.replace(unwrap, '$1')).join('<br>'); // [0]=nº, [1]=título
     const rest = lines.slice(2).map(l => `<p class="p-small p-non-indent">${l}</p>`);
-    return [`<h1>${heading}</h1>`, ...rest].join('\n');
+    const h1 = boxed ? '<h1 class="p-center" style="background:#000;color:#fff;padding:0.6em 1em">' : '<h1>';
+    return [`${h1}${heading}</h1>`, ...rest].join('\n');
 }
 
 // Marca cada bloco de topo de uma story Índice de Figuras/Tabelas (renderStory produz
@@ -366,13 +373,36 @@ function isBlockQuoteStory(xml: string): boolean {
  * qualquer TextFrame — capa/rosto soltos (Rectangle sem texto, ex. PDF de página inteira),
  * hoje invisíveis ao corpo. Janela fecha assim que aparece o 1º TextFrame do livro.
  */
-async function readingOrder(zip: JSZip): Promise<{ ordered: string[]; frameCount: Map<string, number>; frontImageNames: string[] }> {
+// Limites de cada frame/rectângulo de uma spread (ItemTransform + 1.º e 3.º ponto do caminho). Sem rotação: chega
+// para caixas direitas.
+function shapeBounds(xml: string, tag: 'TextFrame' | 'Rectangle'): { attrs: string; box: string }[] {
+    const out: { attrs: string; box: string }[] = [];
+    for (const m of xml.matchAll(new RegExp(`<${tag}\\b([^>]*)>`, 'g'))) {
+        const t = /\bItemTransform="([^"]*)"/.exec(m[1])?.[1].split(' ').map(Number) ?? [1, 0, 0, 1, 0, 0];
+        const pts = [...xml.slice(m.index! + m[0].length, m.index! + m[0].length + 1500).matchAll(/Anchor="([-\d.e]+) ([-\d.e]+)"/g)].slice(0, 4);
+        if (pts.length < 3) continue;
+        const xs = pts.map(p => +p[1] + t[4]), ys = pts.map(p => +p[2] + t[5]);
+        out.push({ attrs: m[1], box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)].map(Math.round).join(',') });
+    }
+    return out;
+}
+
+// Stories dentro de uma caixa preta: um Rectangle preenchido a preto com exatamente os limites do TextFrame (o texto
+// a branco por cima — o preto não vem na story).
+function blackBoxedStories(xml: string): string[] {
+    const black = new Set(shapeBounds(xml, 'Rectangle').filter(r => /\bFillColor="Color\/Black"/.test(r.attrs)).map(r => r.box));
+    if (black.size === 0) return [];
+    return shapeBounds(xml, 'TextFrame').filter(f => black.has(f.box)).flatMap(f => /\bParentStory="([^"]+)"/.exec(f.attrs)?.[1] ?? []);
+}
+
+async function readingOrder(zip: JSZip): Promise<{ ordered: string[]; frameCount: Map<string, number>; frontImageNames: string[]; boxed: Set<string> }> {
     const designmap = await zip.file('designmap.xml')?.async('string') ?? '';
     const spreadFiles = [...designmap.matchAll(/<idPkg:Spread src="([^"]+)"/g)].map(m => m[1]);
     const ordered: string[] = [];
     const seen = new Set<string>();
     const frameCount = new Map<string, number>();
     const frontImageNames: string[] = [];
+    const boxed = new Set<string>();
     let contentStarted = false;
     for (const sf of spreadFiles) {
         const xml = await zip.file(sf)?.async('string');
@@ -386,13 +416,14 @@ async function readingOrder(zip: JSZip): Promise<{ ordered: string[]; frameCount
             continue;
         }
         contentStarted = true;
+        for (const id of blackBoxedStories(xml)) boxed.add(id);
         for (const m of frames) {
             const id = m[1];
             frameCount.set(id, (frameCount.get(id) || 0) + 1);
             if (!seen.has(id)) { seen.add(id); ordered.push(id); }
         }
     }
-    return { ordered, frameCount, frontImageNames };
+    return { ordered, frameCount, frontImageNames, boxed };
 }
 
 export async function extractIdml(file: File, options: { styleMapping?: DocxStyleMapping; pdf?: ArrayBuffer; detectParagraphSpacing?: boolean } = {}): Promise<ExtractedDocument> {
@@ -412,7 +443,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     for (const idmlZip of idmlZips) {
         // estilos deste pacote (negrito/itálico/versaletes, recuos, cores de células) + opção de espaçamento
         const rc: RenderContext = { styles: await readIdmlStyles(idmlZip), detectSpacing };
-        const { ordered, frameCount, frontImageNames } = await readingOrder(idmlZip);
+        const { ordered, frameCount, frontImageNames, boxed } = await readingOrder(idmlZip);
         // só interessa antes da 1ª Ficha Técnica encontrada (normalmente tudo no 1º .idml).
         if (!fichaDone) frontImageIds.push(...frontImageNames.map(name => sanitizeImageFilename(toRasterName(name)).imageId));
         for (const storyId of ordered) {
@@ -456,7 +487,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
                 }
                 // Bloco de título de coletânea (story 1-frame, 1º parágrafo = nº)? Recupera-o.
                 const num = titleBlockNum(rc, xml);
-                if (num !== null) { const h = renderTitleBlock(rc, xml, counter); if (h) titleBlocks.push({ num, html: h, searchKey: titleBlockSearchKey(rc, xml) }); }
+                if (num !== null) { const h = renderTitleBlock(rc, xml, counter, boxed.has(storyId)); if (h) titleBlocks.push({ num, html: h, searchKey: titleBlockSearchKey(rc, xml) }); }
                 else if (!fichaDone) {
                     // Frontespício: texto solto ANTES da Ficha Técnica (título/subtítulo vivo,
                     // caso raro — normalmente já vem embutido nas imagens de rosto). Mesma

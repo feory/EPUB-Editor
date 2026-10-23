@@ -30,3 +30,27 @@ test('stripRedundantEmphasis: p-bold/p-italic tiram strong/b e em/i; sem a class
     expect(stripRedundantEmphasis('<strong>a</strong><em>b</em><br>', ['p-bold-italic'])).toBe('ab<br>');
     expect(stripRedundantEmphasis('<strong>a</strong>', ['p-indent'])).toBe('<strong>a</strong>');
 });
+
+test('renderPsr: numeral de capítulo a branco ganha caixa preta (o Rectangle preto não vem na story)', async () => {
+    await import('../../indesign/happy-dom');
+    const { renderPsr } = await import('./story');
+    const xml = `<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/texto"><CharacterStyleRange FillColor="Color/Paper"><Content>V</Content><Br/></CharacterStyleRange></ParagraphStyleRange>`;
+    const psr = new DOMParser().parseFromString(xml, 'application/xml').documentElement;
+    const rc = { styles: { colors: new Map([['Color/Paper', { space: 'CMYK', values: [0, 0, 0, 0] }]]), paraIndents: new Map(), charStyles: new Map() } } as any;
+    const [seg] = renderPsr(rc, psr, { n: 0, star: 0, defs: [] });
+    expect(seg.text).toContain('background:#000');
+    expect(seg.text).toContain('>V</span>');
+});
+
+test('renderStory: numeral (estilo a branco) junta-se ao título seguinte num só <h1>', async () => {
+    await import('../../indesign/happy-dom');
+    const { renderStory } = await import('./story');
+    const xml = `<idPkg:Story xmlns:idPkg="x"><Story>
+<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/numeros"><CharacterStyleRange><Content>IV</Content><Br/></CharacterStyleRange></ParagraphStyleRange>
+<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/texto" Justification="CenterAlign"><CharacterStyleRange FontStyle="Bold" PointSize="15"><Content>AGORA ANTES.</Content><Br/></CharacterStyleRange></ParagraphStyleRange>
+</Story></idPkg:Story>`;
+    const paraIndents = new Map([['ParagraphStyle/numeros', { left: 0, first: 0, spaceBefore: 0, spaceAfter: 0, fill: 'Color/Paper' }]]);
+    const rc = { styles: { colors: new Map([['Color/Paper', { space: 'CMYK', values: [0, 0, 0, 0] }]]), paraIndents, charStyles: new Map() } } as any;
+    const html = renderStory(rc, xml, { n: 0, star: 0, defs: [] }, {} as any);
+    expect(html).toMatch(/^<h1 class="p-center">.*background:#000.*>IV<\/span><br>.*AGORA ANTES\..*<\/h1>$/);
+});

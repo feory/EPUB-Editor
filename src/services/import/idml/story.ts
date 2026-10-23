@@ -190,6 +190,9 @@ export function renderPsr(rc: RenderContext, psr: Element, counter: NoteCounter)
     // Idem para Capitalization definida no ESTILO DE PARÁGRAFO (ex. "CAD AUT_TIT" com
     // Capitalization="SmallCaps" na própria definição, não no run nem no estilo de carácter).
     const paraCap = rc.styles.paraIndents.get(psr.getAttribute('AppliedParagraphStyle') || '')?.cap || '';
+    // Branco herdado do ESTILO de parágrafo (só branco: outras cores do estilo ficam como estavam).
+    const paraFill = rc.styles.paraIndents.get(psr.getAttribute('AppliedParagraphStyle') || '')?.fill || null;
+    const paraWhite = resolveFillColor(rc.styles, paraFill, null) === 'rgb(255,255,255)' ? paraFill : null;
 
     // Processa os filhos de um CharacterStyleRange (ou de um container como HyperlinkTextSource)
     // recursivamente. Os atributos de formatação (fs/cap/pos) vêm do CharacterStyleRange pai.
@@ -210,6 +213,11 @@ export function renderPsr(rc: RenderContext, psr: Element, counter: NoteCounter)
                     // "Color/Paper" branco) — sem isto ficava sempre preto, ilegível sobre fundos
                     // escuros. Só aplica quando resolveFillColor devolve algo (Swatch/None → '').
                     if (color) piece = `<span style="color:${color}">${piece}</span>`;
+                    // Numeral de capítulo ("V", "12") a branco: no InDesign está sobre um Rectangle
+                    // preto separado (não está na story) — sem a caixa ficava branco sobre branco.
+                    if (color === 'rgb(255,255,255)' && /^[IVXLCDM]+$|^\d+$/i.test(raw.trim())) {
+                        piece = `<span style="background:#000;color:#fff;padding:0.15em 0.6em">${esc(raw.trim())}</span>`;
+                    }
                 }
                 cur += piece;
             } else if (el.tagName === 'Table') {
@@ -300,7 +308,7 @@ export function renderPsr(rc: RenderContext, psr: Element, counter: NoteCounter)
             const pos = csr.getAttribute('Position') || acsDef?.position || '';
             // Cor de texto do run (ex. cabeçalho de tabela com fundo escuro, texto branco) —
             // "Swatch/None"/preto/cor desconhecida resolvem para '' (resolveFillColor), sem efeito.
-            const color = resolveFillColor(rc.styles, csr.getAttribute('FillColor'), csr.getAttribute('FillTint'));
+            const color = resolveFillColor(rc.styles, csr.getAttribute('FillColor') || paraWhite, csr.getAttribute('FillTint'));
             processChildren(csr, fs, cap, pos, color);
         } else if (child.tagName === 'HyperlinkTextSource') {
             processChildren(child, paraFS, '', '', '');
@@ -447,6 +455,14 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
             continue;
         }
 
+        // Numeral de capítulo sozinho (caixa preta, ver renderPsr) → rótulo que se junta ao título
+        // seguinte, como o 'merge'; senão ficava como <p> no fim do capítulo anterior.
+        if (segs.length === 1 && segs[0].notes.length === 0 && segs[0].text.includes('background:#000')
+            && /^([IVXLCDM]+|\d+)$/i.test(segs[0].text.replace(/<[^>]+>/g, '').trim())) {
+            pendingLabel = segs[0].text; pendingLabelTag = 'h1'; pendingLabelClass = rawMap.cls || ''; // Centrado/Topo do mapeamento
+            continue;
+        }
+
         // Título disfarçado de corpo (centrado, ≤60 car, ≥13pt Medium) → h1.
         // Vence a classe de corpo: mesmo que o estilo (ex. TEXTO) tenha sido mapeado para um
         // estilo de parágrafo com classe (p-center, p-indent…), este parágrafo específico é
@@ -481,7 +497,7 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
         const map = (indexBody || suppressHeading) ? { tag: 'p' as const } : rawMap;
         // Honrar o LeftIndent do IDML só em <p> PLANO e NÃO mapeado (estilo escolhido vence; índice = auto).
         const mapped = !indexBody && !suppressHeading && !!(mapping[sn] && mapping[sn].target !== 'auto');
-        const { tag, cls } = heurTitle ? { tag: 'h1' as const, cls: '' } : map;
+        const { tag, cls } = heurTitle ? { tag: 'h1' as const, cls: 'p-center' } : map; // isHeuristicTitle exige CenterAlign → o h1 fica centrado
         const spacing = tag === 'p' ? spacingClasses(rc, psr, fullPS) : '';
         // Alinhamento centrado é um OVERRIDE inline do parágrafo (desvio do default do estilo,
         // ex. nomes de personagem em peças de teatro, mesmo estilo "TXT" do corpo) — sinal
@@ -507,7 +523,8 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
                 pendingLabelClass = baseClasses.join(' '); // idem para as classes (p-center/p-top/…)
                 continue;
             }
-            if (pendingLabel) { body = `${pendingLabel}<br>${body}`; pendingLabel = ''; }
+            // Título sem classes próprias herda as do rótulo (ex. numeral mapeado h1 + Centrado).
+            if (pendingLabel) { body = `${pendingLabel}<br>${body}`; if (!baseClasses.length && pendingLabelClass) baseClasses.push(pendingLabelClass); pendingLabel = ''; pendingLabelClass = ''; }
             // Heading CONSECUTIVO do mesmo ESTILO do anterior (ver lastHeadingStyle) → funde no
             // <hN> já emitido (linha extra, <br>) em vez de abrir um novo.
             if (sn && sn === lastHeadingStyle && out.length > 0 && out[out.length - 1].endsWith(`</${tag}>`)) {
