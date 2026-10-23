@@ -4,29 +4,12 @@ import { editBlocks } from './blockEdit';
 import { MARK } from './ephemeral';
 import { INLINE_FORMATS } from './selectionProps';
 import { isCharStyle } from '../../../utils/char-styles';
+import { readInlineStyle, setInlineFormat } from './selectionFormats';
 import { ensureCharStyleFormat, registeredCharStyles } from './formats';
 
 /** Adapter TinyMCE do seam EditorLike (blockEditing.ts). */
 export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
-    // Só spans inline que tocam na seleção: o style do próprio bloco é "Este bloco", não da seleção. Depois de aplicar um
-    // formato o getNode() sobe ao bloco (a seleção acaba fora do span), por isso parte-se do início da seleção e,
-    // se não houver valor, procura-se nos spans que a intersetam.
-    const readInline = (css: string): string => {
-        const rng = editor.selection.getRng();
-        const start = rng.startContainer;
-        for (let el: HTMLElement | null = start.nodeType === 1 ? (start as HTMLElement) : start.parentElement; el && !editor.dom.isBlock(el); el = el.parentElement) {
-            const v = el.style.getPropertyValue(css);
-            if (v) return v;
-        }
-        const root = rng.commonAncestorContainer;
-        const scope = (root.nodeType === 1 ? root : root.parentElement) as HTMLElement | null;
-        for (const el of Array.from(scope?.querySelectorAll<HTMLElement>('span[style]') ?? [])) {
-            if (!rng.intersectsNode(el)) continue;
-            const v = el.style.getPropertyValue(css);
-            if (v) return v;
-        }
-        return '';
-    };
+    const readInline = (css: string): string => readInlineStyle(editor.selection.getRng(), (el) => editor.dom.isBlock(el), css);
     return {
         selectionNode: () => editor.selection.getNode(),
         // marcado por useBlockOverlays (data-mce-psbox) ao clicar na área da caixa/grelha
@@ -51,12 +34,6 @@ export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
             if (isCharStyle(format)) ensureCharStyleFormat(editor, format);
             editor.formatter.toggle(format);
         },
-        applyInline: (format, css, value) => {
-            if (value) return editor.formatter.apply(format, { value });
-            editor.formatter.remove(format, { value: null }, undefined, true);
-            // Os formatos sem remove_similar (tamanho, família) só saem pelo valor exato que lá está.
-            const current = readInline(css);
-            if (current) editor.formatter.remove(format, { value: current });
-        },
+        applyInline: (format, css, value) => setInlineFormat(editor.formatter, readInline, format, css, value),
     };
 }
