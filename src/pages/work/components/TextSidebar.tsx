@@ -57,7 +57,7 @@ export const TextSidebar: React.FC<TextSidebarProps> = ({ info, onEdit, onClose,
                         <Row label="Espaço entre letras"><LenInput value={selection.letterSpacing} minEm={-0.2} maxEm={1} stepEm={0.01} onChange={(v) => set({ letterSpacing: v })} /></Row>
                         <Row label="Tipo de letra"><Select value={selection.fontFamily} options={FONT_FAMILIES} onChange={(v) => set({ fontFamily: v })} /></Row>
                         <button type="button" onClick={() => set(EMPTY_SELECTION)}
-                            className="self-start flex items-center gap-1.5 text-xs text-text-muted hover:text-text-main"><RotateCcw size={12} /> Repor cor, fundo, tamanho, letras e tipo</button>
+                            className="self-start flex items-center gap-1.5 text-xs text-text-muted hover:text-text-main"><RotateCcw size={12} /> Repor</button>
                     </Section>
                 </div>
             )}
