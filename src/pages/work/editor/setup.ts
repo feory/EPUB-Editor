@@ -567,16 +567,6 @@ export function createEditorSetup(deps: SetupDeps) {
             items: 'psmorehead blockalignmenu psh1 psh2 psh3 edithtml',
         });
 
-        editor.ui.registry.addToggleButton('smalltext', {
-            icon: 'ps-smalltext',
-            tooltip: 'Texto Pequeno (small)',
-            onAction: undoable(() => editor.formatter.toggle('small-text')),
-            onSetup: (api) => {
-                editor.formatter.formatChanged('small-text', (active) => api.setActive(active));
-                return () => {};
-            },
-        });
-
         // Versaletes: sobre uma seleção reescreve o texto em Maiúscula+minúsculas dentro do span (as versaletes
         // do TinyMCE só mudam o tamanho das maiúsculas existentes).
         const toggleSmallCaps = undoable(() => {
@@ -592,26 +582,6 @@ export function createEditorSetup(deps: SetupDeps) {
             const cased = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
             editor.selection.setContent(`<span class="small-caps">${editor.dom.encode(cased)}</span>`);
         });
-        editor.ui.registry.addToggleButton('smallcaps', {
-            icon: 'ps-smallcaps',
-            tooltip: 'Versaletes (small-caps)',
-            onAction: toggleSmallCaps,
-            onSetup: (api) => {
-                editor.formatter.formatChanged('small-caps', (active) => api.setActive(active));
-                return () => {};
-            },
-        });
-
-        editor.ui.registry.addToggleButton('uppercase', {
-            icon: 'ps-uppercase',
-            tooltip: 'Maiúsculas',
-            onAction: undoable(() => editor.formatter.toggle('uppercase')),
-            onSetup: (api) => {
-                editor.formatter.formatChanged('uppercase', (active) => api.setActive(active));
-                return () => {};
-            },
-        });
-
         // Versaletes, texto pequeno e maiúsculas num só botão da barra da seleção (itens com visto = ativo).
         const caseItems: [string, string, () => void][] = [
             ['small-caps', 'Versaletes', toggleSmallCaps],
