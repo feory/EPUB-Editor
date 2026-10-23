@@ -427,12 +427,28 @@ export function createEditorSetup(deps: SetupDeps) {
 
         // Barra da seleção (negrito, itálico, cor…): o quickbars não deixa condicionar o predicado, por isso é
         // nossa (quickbars_selection_toolbar desligado em WorkEditor) — esconde-se com o painel "Editor de Texto" aberto.
-        editor.ui.registry.addContextToolbar('textselection-ps', {
+        // Com estilos de caracteres criados (formatos `c-…`, ver formats.ts) a barra ganha o menu "Estilos"; sem eles não há botão.
+        const charStyleNames = () => Object.keys(editor.formatter.get()).filter((f) => f.startsWith('c-'));
+        const selectionBar = (withStyles: boolean) => ({
             predicate: (node: Node) => !live.current.textPanelOpen && node.nodeName !== 'IMG' && !editor.selection.isCollapsed()
-                && editor.dom.getContentEditableParent(node) !== 'false',
-            items: QUICKBARS_SELECTION_TOOLBAR,
-            position: 'selection',
-            scope: 'editor',
+                && editor.dom.getContentEditableParent(node) !== 'false' && (charStyleNames().length > 0) === withStyles,
+            items: withStyles ? QUICKBARS_SELECTION_TOOLBAR.replace('casemenu', 'casemenu charstyles') : QUICKBARS_SELECTION_TOOLBAR,
+            position: 'selection' as const,
+            scope: 'editor' as const,
+        });
+        editor.ui.registry.addContextToolbar('textselection-ps', selectionBar(false));
+        editor.ui.registry.addContextToolbar('textselection-ps-styles', selectionBar(true));
+        editor.ui.registry.addMenuButton('charstyles', {
+            icon: 'format',
+            tooltip: 'Estilos de caracteres',
+            fetch: (callback) => callback(charStyleNames().map((format) => ({
+                type: 'togglemenuitem' as const, text: format.slice(2), onAction: undoable(() => editor.formatter.toggle(format)),
+                onSetup: (api: { setActive(state: boolean): void }) => {
+                    api.setActive(editor.formatter.match(format));
+                    editor.formatter.formatChanged(format, (active) => api.setActive(active));
+                    return () => {};
+                },
+            }))),
         });
         // Botão "Editor de Texto" na barra da seleção → abre o painel lateral (formato, cor, fundo, tamanho, estilos de caracteres).
         editor.ui.registry.addButton('edittext', {
