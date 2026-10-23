@@ -560,22 +560,25 @@ export function createEditorSetup(deps: SetupDeps) {
             },
         });
 
+        // Versaletes: sobre uma seleção reescreve o texto em Maiúscula+minúsculas dentro do span (as versaletes
+        // do TinyMCE só mudam o tamanho das maiúsculas existentes).
+        const toggleSmallCaps = undoable(() => {
+            if (editor.formatter.match('small-caps')) {
+                editor.formatter.remove('small-caps');
+                return;
+            }
+            const text = editor.selection.getContent({ format: 'text' });
+            if (!text) {
+                editor.formatter.apply('small-caps');
+                return;
+            }
+            const cased = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+            editor.selection.setContent(`<span class="small-caps">${editor.dom.encode(cased)}</span>`);
+        });
         editor.ui.registry.addToggleButton('smallcaps', {
             icon: 'ps-smallcaps',
             tooltip: 'Versaletes (small-caps)',
-            onAction: undoable(() => {
-                if (editor.formatter.match('small-caps')) {
-                    editor.formatter.remove('small-caps');
-                    return;
-                }
-                const text = editor.selection.getContent({ format: 'text' });
-                if (!text) {
-                    editor.formatter.apply('small-caps');
-                    return;
-                }
-                const cased = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
-                editor.selection.setContent(`<span class="small-caps">${editor.dom.encode(cased)}</span>`);
-            }),
+            onAction: toggleSmallCaps,
             onSetup: (api) => {
                 editor.formatter.formatChanged('small-caps', (active) => api.setActive(active));
                 return () => {};
@@ -590,6 +593,25 @@ export function createEditorSetup(deps: SetupDeps) {
                 editor.formatter.formatChanged('uppercase', (active) => api.setActive(active));
                 return () => {};
             },
+        });
+
+        // Versaletes, texto pequeno e maiúsculas num só botão da barra da seleção (itens com visto = ativo).
+        const caseItems: [string, string, () => void][] = [
+            ['small-caps', 'Versaletes', toggleSmallCaps],
+            ['small-text', 'Texto pequeno', undoable(() => editor.formatter.toggle('small-text'))],
+            ['uppercase', 'Maiúsculas', undoable(() => editor.formatter.toggle('uppercase'))],
+        ];
+        editor.ui.registry.addMenuButton('casemenu', {
+            icon: 'ps-smallcaps',
+            tooltip: 'Versaletes, texto pequeno, maiúsculas',
+            fetch: (callback) => callback(caseItems.map(([format, text, onAction]) => ({
+                type: 'togglemenuitem' as const, text, onAction,
+                onSetup: (api: { setActive(state: boolean): void }) => {
+                    api.setActive(editor.formatter.match(format));
+                    editor.formatter.formatChanged(format, (active) => api.setActive(active));
+                    return () => {};
+                },
+            }))),
         });
 
         editor.ui.registry.addToggleButton('pdfview', {
