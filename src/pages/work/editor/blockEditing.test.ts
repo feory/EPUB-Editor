@@ -95,3 +95,17 @@ test('apply class: junta e tira estilos sem afetar os outros', () => {
     applyBlockEdit(ed, { target: 'class', cls: 'p-indent', on: false });
     expect(ed.root.querySelector('p')!.className).toBe('p-bold');
 });
+
+test('seleção: sem texto selecionado selection é null; com texto lê só os spans inline e aplica por formato', () => {
+    const base = fakeEditor('<p style="color:red">olá <span style="background-color: rgb(255, 224, 102); font-size: 1.2em">mundo</span></p>', (r) => r.querySelector('span')!);
+    expect(inspectBlock(base).selection).toBeNull(); // adapter sem selectedText = cursor recolhido
+    const ops: [string, string | null][] = [];
+    const ed: EditorLike = {
+        ...base,
+        selectedText: () => ({ read: (css) => (base.root.querySelector('span') as HTMLElement).style.getPropertyValue(css) }),
+        applyInline: (format, value) => { ops.push([format, value]); },
+    };
+    expect(inspectBlock(ed).selection).toMatchObject({ background: '#ffe066', fontSize: { n: 1.2, u: 'em' }, color: '' });
+    applyBlockEdit(ed, { target: 'selection', patch: { background: '', letterSpacing: { n: 0.05, u: 'em' } } });
+    expect(ops).toEqual([['hilitecolor', null], ['letterspacing', '0.05em']]);
+});

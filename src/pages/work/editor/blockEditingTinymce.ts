@@ -23,5 +23,23 @@ export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
         transact: (mutate) => editBlocks(editor, mutate),
         formatBlock: (tag) => editor.execCommand('FormatBlock', false, tag),
         applyFormat: (format) => editor.formatter.apply(format),
+        selectedText: () => {
+            if (editor.selection.isCollapsed()) return null;
+            const node = editor.selection.getNode();
+            return {
+                // Só spans inline à volta da seleção: o style do próprio bloco é "Este bloco", não da seleção.
+                read: (css) => {
+                    for (let el: HTMLElement | null = node.nodeType === 1 ? (node as HTMLElement) : node.parentElement; el && !editor.dom.isBlock(el); el = el.parentElement) {
+                        const v = el.style.getPropertyValue(css);
+                        if (v) return v;
+                    }
+                    return '';
+                },
+            };
+        },
+        applyInline: (format, value) => {
+            if (value) editor.formatter.apply(format, { value });
+            else editor.formatter.remove(format, { value: null }, undefined, true);
+        },
     };
 }

@@ -6,6 +6,7 @@ import { readBoxProps, applyBoxProps, type BoxProps } from './boxProps';
 import { textPropsFrom, applyTextProps, type TextProps, type TextBlockInfo } from './textProps';
 import { readImageProps, applyImageProps, type ImageProps } from './imageProps';
 import { readGridProps, applyGridProps, applyGridToCells, type GridProps } from './gridProps';
+import { readSelectionProps, selectionPatchOps, type SelectionProps } from './selectionProps';
 import { BLOCK_STYLE_OPTIONS } from './config';
 
 /** Seletor dos blocos de texto editáveis (parágrafo, títulos, item de lista). */
@@ -17,10 +18,12 @@ export interface BlockInfo {
     text: TextBlockInfo | null;
     image: ImageProps | null;       // imagem selecionada
     grid: GridProps | null;   // bloco .grid à volta do cursor
+    selection: SelectionProps | null; // caracteres selecionados num bloco de texto (null com o cursor recolhido)
 }
 
 export type BlockEdit =
     | { target: 'box'; patch: Partial<BoxProps> }
+    | { target: 'selection'; patch: Partial<SelectionProps> } // span inline à volta da seleção
     | { target: 'text'; patch: Partial<TextProps> }   // style inline do bloco ("Este bloco")
     | { target: 'image'; patch: Partial<ImageProps> }
     | { target: 'grid'; patch: Partial<GridProps> }
@@ -44,6 +47,10 @@ export interface EditorLike {
     transact(mutate: () => void): void;
     formatBlock(tag: string): void;
     applyFormat(format: string): void;
+    /** Há texto selecionado (não só cursor)? `read` lê um valor CSS inline dos spans que o rodeiam (não do bloco). */
+    selectedText?(): { read(cssName: string): string } | null;
+    /** Aplica (value) ou tira (null) um formato inline por propriedade na seleção. */
+    applyInline?(format: string, value: string | null): void;
 }
 
 /** Caixa/grelha alvo: a selecionada pelo clique na sua área, senão a que rodeia o cursor. */
@@ -62,6 +69,7 @@ export function inspectBlock(ed: EditorLike): BlockInfo {
         box: box ? readBoxProps(box) : null,
         grid: grid ? readGridProps(grid) : null,
         image: node.nodeName === 'IMG' ? readImageProps(node as HTMLElement) : null,
+        selection: isText && ed.selectedText ? ((sel) => (sel ? readSelectionProps(sel.read) : null))(ed.selectedText()) : null,
         text: isText ? {
             tag: el.nodeName.toLowerCase(),
             classes: Array.from(el.classList).filter((c) => !/^(mce-|diff-)/.test(c)),
@@ -91,6 +99,10 @@ export function applyBlockEdit(ed: EditorLike, edit: BlockEdit): void {
         case 'image':
             if (node.nodeName === 'IMG') ed.transact(() => applyImageProps(ed, node as HTMLElement, edit.patch));
             return;
+        case 'selection': {
+            if (ed.selectedText?.() && ed.applyInline) ed.transact(() => selectionPatchOps(edit.patch).forEach((op) => ed.applyInline!(op.format, op.value)));
+            return;
+        }
         case 'text': {
             const el = ed.closest(node, TEXT_BLOCK_SELECTOR);
             if (el) ed.transact(() => applyTextProps({ setStyle: (e, n, v) => ed.setImportantStyle(e, n, v) }, el, edit.patch));

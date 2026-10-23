@@ -34,6 +34,8 @@ export function registerBlockFormats(editor: Editor) {
         // dentro de um título (p-uppercase de bloco é removido de headings — ver PARA_STYLE_CLASSES).
         editor.formatter.register('uppercase', { inline: 'span', classes: 'p-uppercase' });
         editor.formatter.register('box', { block: 'div', classes: 'box', wrapper: true });
+        // Espaço entre letras da seleção (painel "Texto selecionado"); cor/fundo/tamanho/família usam os formatos nativos.
+        editor.formatter.register('letterspacing', { inline: 'span', styles: { letterSpacing: '%value' }, remove_similar: true });
     });
 }
 
