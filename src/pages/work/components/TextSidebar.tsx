@@ -1,13 +1,16 @@
-import React from 'react';
-import { X, RotateCcw, Bold, Italic, Underline, Strikethrough, Superscript, Subscript } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, RotateCcw, Plus, Bold, Italic, Underline, Strikethrough, Superscript, Subscript } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { Row, Select, Section, Color, LenInput } from './BlockSidebar';
-import { FONT_FAMILIES, INLINE_FORMATS, EMPTY_SELECTION, type SelectionProps } from '../editor/selectionProps';
+import { FONT_FAMILIES, INLINE_FORMATS, EMPTY_SELECTION, selectionToCss, type SelectionProps, type SelectionInfo } from '../editor/selectionProps';
+import { listCharStyles, charStyleClassOf } from '../../../utils/book-css';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 
 interface TextSidebarProps {
     info: BlockInfo;                                  // só interessa o texto selecionado
+    css: string;                                      // CSS atual do livro (estilos de caracteres existentes)
     onEdit: (edit: BlockEdit) => void;
+    onCreateStyle: (cls: string, body: string) => string | null; // devolve o erro, ou null se criou
     onClose: () => void;
     width: number;
     onResize: (width: number) => void;
@@ -19,16 +22,64 @@ const ICONS: Record<string, React.ReactNode> = {
     'small-caps': <span className="text-[11px] font-semibold">Sc</span>, 'small-text': <span className="text-[10px] font-semibold">a</span>, uppercase: <span className="text-[11px] font-semibold">AA</span>,
 };
 
-// Painel "Editar texto": só os caracteres selecionados — formato (negrito, itálico…), cor, fundo, tamanho, espaço entre
+// Painel "Editor de Texto": só os caracteres selecionados — formato (negrito, itálico…), cor, fundo, tamanho, espaço entre
 // letras e tipo de letra. Cada campo escreve/tira UM formato inline; o parágrafo é do Mini-menu e do painel do bloco.
-export const TextSidebar: React.FC<TextSidebarProps> = ({ info, onEdit, onClose, width, onResize }) => {
+// Estilos de caracteres: classes `.c-nome` na secção de estilos do livro; aplicam-se à seleção como <span class>. Criar um
+// estilo guarda o que a seleção tem agora (formatos + aspeto) e aplica-o à seleção.
+const CharStyles: React.FC<{ selection: SelectionInfo; css: string; onEdit: (edit: BlockEdit) => void; onCreate: (cls: string, body: string) => string | null }> = ({ selection, css, onEdit, onCreate }) => {
+    const [name, setName] = useState<string | null>(null);
+    const [error, setError] = useState('');
+    const create = () => {
+        const cls = charStyleClassOf(name ?? '');
+        if (!cls) return setError('Dá um nome ao estilo.');
+        const body = selectionToCss(selection);
+        if (!body) return setError('A seleção não tem formato nem aspeto para guardar.');
+        const err = onCreate(cls, body);
+        if (err) return setError(err);
+        onEdit({ target: 'inlineFormat', format: cls }); // aplica já à seleção
+        setName(null); setError('');
+    };
+    return (
+        <Section title="Estilos de caracteres">
+            <div className="flex flex-wrap items-center gap-1.5">
+                {listCharStyles(css).map((cls) => {
+                    const on = selection.formats.includes(cls);
+                    return (
+                        <button key={cls} type="button" aria-pressed={on} onClick={() => onEdit({ target: 'inlineFormat', format: cls })}
+                            className={`h-8 px-3 rounded-full border text-xs transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
+                            {cls.slice(2)}
+                        </button>
+                    );
+                })}
+                {name === null && (
+                    <button type="button" onClick={() => setName('')} className="h-8 px-3 rounded-full border border-dashed border-slate-300 text-xs text-text-muted hover:text-text-main flex items-center gap-1"><Plus size={12} /> Novo estilo</button>
+                )}
+            </div>
+            {name !== null && (
+                <div className="flex flex-col gap-2">
+                    <input autoFocus placeholder="Nome (ex.: Destaque)" value={name} onChange={(e) => { setName(e.target.value); setError(''); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') create(); if (e.key === 'Escape') { setName(null); setError(''); } }}
+                        className="h-9 rounded-lg border border-border px-2 text-sm outline-none focus:border-primary" />
+                    <p className="text-xs text-text-muted">Guarda o formato e o aspeto da seleção atual como estilo.</p>
+                    {error && <div className="text-xs text-rose-600">{error}</div>}
+                    <div className="flex gap-2">
+                        <button type="button" onClick={create} className="h-8 px-3 rounded-lg bg-slate-700 text-white text-xs hover:bg-slate-800">Criar estilo</button>
+                        <button type="button" onClick={() => { setName(null); setError(''); }} className="h-8 px-3 rounded-lg border border-border text-xs hover:bg-slate-50">Cancelar</button>
+                    </div>
+                </div>
+            )}
+        </Section>
+    );
+};
+
+export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onCreateStyle, onClose, width, onResize }) => {
     const { selection } = info;
     const set = (patch: Partial<SelectionProps>) => onEdit({ target: 'selection', patch });
     return (
         <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
             <PanelResizeHandle width={width} onResize={onResize} />
             <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
-                <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Editar texto</h3>
+                <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Editor de Texto</h3>
                 <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-500 transition-all"><X size={16} /></button>
             </div>
             {!selection ? (
@@ -50,6 +101,7 @@ export const TextSidebar: React.FC<TextSidebarProps> = ({ info, onEdit, onClose,
                             })}
                         </div>
                     </Section>
+                    <CharStyles selection={selection} css={css} onEdit={onEdit} onCreate={onCreateStyle} />
                     <Section title="Aspeto">
                         <Row label="Cor do texto"><Color value={selection.color} fallback="#000000" onChange={(v) => set({ color: v })} /></Row>
                         <Row label="Cor de fundo"><Color value={selection.background} fallback="#ffe066" onChange={(v) => set({ background: v })} /></Row>

@@ -603,7 +603,9 @@ export function WorkPage() {
       {sidebars.showTextSidebar && (
         <TextSidebar
           info={blockInfo}
+          css={getCurrentCss()}
           onEdit={(edit) => editorRef.current?.editBlock(edit)}
+          onCreateStyle={handleCreateStyle}
           onClose={() => sidebars.setShowTextSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}

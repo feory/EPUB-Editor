@@ -21,6 +21,24 @@ export const INLINE_FORMATS = [
     ['small-caps', 'Versaletes'], ['small-text', 'Texto pequeno'], ['uppercase', 'Maiúsculas'],
 ] as const;
 
+// Formato inline → declaração CSS equivalente (para criar um estilo de caracteres a partir da seleção).
+const FORMAT_CSS: Record<string, string> = {
+    bold: 'font-weight: bold', italic: 'font-style: italic', underline: 'text-decoration: underline', strikethrough: 'text-decoration: line-through',
+    superscript: 'vertical-align: super; font-size: smaller', subscript: 'vertical-align: sub; font-size: smaller',
+    'small-caps': 'font-variant: small-caps', 'small-text': 'font-size: smaller', uppercase: 'text-transform: uppercase',
+};
+
+/** O que a seleção tem agora (formatos + aspeto) como declarações CSS de uma regra; '' se não tem nada. */
+export function selectionToCss(sel: SelectionInfo): string {
+    const decls: string[] = sel.formats.flatMap((f) => (FORMAT_CSS[f] ? [FORMAT_CSS[f]] : []));
+    for (const k of KEYS) {
+        const v = sel[k];
+        if (v === '' || v === null) continue;
+        decls.push(`${FIELDS[k][0]}: ${typeof v === 'object' ? `${v.n}${v.u}` : v}`);
+    }
+    return decls.map((d) => `${d};`).join(' ');
+}
+
 export const EMPTY_SELECTION: SelectionProps = { color: '', background: '', fontSize: null, letterSpacing: null, fontFamily: '' };
 
 export const FONT_FAMILIES = [['', 'Padrão'], ['serif', 'Serifa'], ['sans-serif', 'Sem serifa'], ['monospace', 'Monoespaçada']] as const;

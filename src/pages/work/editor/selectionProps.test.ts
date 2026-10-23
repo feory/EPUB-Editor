@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { toHex, readSelectionProps, selectionPatchOps, EMPTY_SELECTION } from './selectionProps';
+import { toHex, readSelectionProps, selectionPatchOps, selectionToCss, EMPTY_SELECTION } from './selectionProps';
 
 test('toHex: rgb()/hex normalizam; nomes e vazio dão ""', () => {
     expect(toHex('rgb(255, 224, 102)')).toBe('#ffe066');
@@ -24,4 +24,10 @@ test('selectionPatchOps: só o que está no patch, por ordem dos campos; vazio/n
         { format: 'fontsize', css: 'font-size', value: '1.2em' },
         { format: 'letterspacing', css: 'letter-spacing', value: null },
     ]);
+});
+
+test('selectionToCss: formatos e aspeto viram declarações; vazio dá ""', () => {
+    expect(selectionToCss({ ...EMPTY_SELECTION, formats: [] })).toBe('');
+    expect(selectionToCss({ ...EMPTY_SELECTION, formats: ['bold', 'small-caps'], background: '#ffe066', letterSpacing: { n: 0.05, u: 'em' } }))
+        .toBe('font-weight: bold; font-variant: small-caps; background-color: #ffe066; letter-spacing: 0.05em;');
 });

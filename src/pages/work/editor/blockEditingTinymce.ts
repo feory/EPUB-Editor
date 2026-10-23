@@ -43,8 +43,12 @@ export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
         transact: (mutate) => editBlocks(editor, mutate),
         formatBlock: (tag) => editor.execCommand('FormatBlock', false, tag),
         applyFormat: (format) => editor.formatter.apply(format),
-        selectedText: () => (editor.selection.isCollapsed() ? null : { read: readInline, formats: () => INLINE_FORMATS.map(([f]) => f as string).filter((f) => editor.formatter.match(f)) }),
-        toggleInline: (format) => editor.formatter.toggle(format),
+        selectedText: () => (editor.selection.isCollapsed() ? null : { read: readInline, formats: () => [...INLINE_FORMATS.map(([f]) => f as string), ...Object.keys(editor.formatter.get()).filter((f) => f.startsWith('c-'))].filter((f) => editor.formatter.match(f)) }),
+        toggleInline: (format) => {
+            // Estilo de caracteres acabado de criar: o CSS do livro só regista o formato no render seguinte.
+            if (format.startsWith('c-') && !editor.formatter.has(format)) editor.formatter.register(format, { inline: 'span', classes: format });
+            editor.formatter.toggle(format);
+        },
         applyInline: (format, css, value) => {
             if (value) return editor.formatter.apply(format, { value });
             editor.formatter.remove(format, { value: null }, undefined, true);

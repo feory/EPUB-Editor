@@ -21,7 +21,7 @@ import { applyBlockEdit, type BlockEdit, type BlockInfo } from '../editor/blockE
 import { tinymceEditorLike } from '../editor/blockEditingTinymce';
 import { createEditorSetup } from '../editor/setup';
 import { syncCustomStyleFormats } from '../editor/formats';
-import { listCustomStyles } from '../../../utils/book-css';
+import { listCustomStyles, listCharStyles } from '../../../utils/book-css';
 import { useLive } from '../editor/liveProps';
 import { editBlocks } from '../editor/blockEdit';
 import { buildContentStyle } from '../editor/contentStyles';
@@ -240,7 +240,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             editorDoc.head.appendChild(styleElement);
         }
         styleElement.textContent = currentCss + editorFontCss(editorFont, editorFontSize);
-        syncCustomStyleFormats(editor, listCustomStyles(currentCss));
+        syncCustomStyleFormats(editor, listCustomStyles(currentCss), listCharStyles(currentCss));
     }, [currentCss, editorFont, editorFontSize]);
 
     useEffect(() => {

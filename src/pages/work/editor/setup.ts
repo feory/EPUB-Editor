@@ -21,7 +21,7 @@ export interface SetupLive {
     onToggleFocusMode?: () => void;
     onTogglePrintPdf?: () => void;
     showPrintPdfPanel?: boolean;                    // painel de PDF aberto → botão "Ver PDF" ativo
-    textPanelOpen?: boolean;                        // painel "Editar texto" aberto → a barra da seleção esconde-se
+    textPanelOpen?: boolean;                        // painel "Editor de Texto" aberto → a barra da seleção esconde-se
     chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
     activeChapterIndex: number;
 }
@@ -426,7 +426,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.on('NodeChange', updateCssInfo);
 
         // Barra da seleção (negrito, itálico, cor…): o quickbars não deixa condicionar o predicado, por isso é
-        // nossa (quickbars_selection_toolbar desligado em WorkEditor) — esconde-se com o painel "Editar texto" aberto.
+        // nossa (quickbars_selection_toolbar desligado em WorkEditor) — esconde-se com o painel "Editor de Texto" aberto.
         editor.ui.registry.addContextToolbar('textselection-ps', {
             predicate: (node: Node) => !live.current.textPanelOpen && node.nodeName !== 'IMG' && !editor.selection.isCollapsed()
                 && editor.dom.getContentEditableParent(node) !== 'false',
@@ -434,10 +434,10 @@ export function createEditorSetup(deps: SetupDeps) {
             position: 'selection',
             scope: 'editor',
         });
-        // Botão "Editar texto" na barra da seleção → abre o painel lateral com cor/fundo/tamanho/espaço entre letras.
+        // Botão "Editor de Texto" na barra da seleção → abre o painel lateral (formato, cor, fundo, tamanho, estilos de caracteres).
         editor.ui.registry.addButton('edittext', {
             icon: 'edit-block',
-            tooltip: 'Editar texto',
+            tooltip: 'Editor de Texto',
             onAction: () => onEditTextStyle(),
         });
         // Botão "Editar HTML" no mini-menu → abre a edição inline do bloco de topo.
