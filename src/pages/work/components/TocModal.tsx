@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { ListTree, GripVertical, Check, Info, Plus, Edit2, Trash2, X } from 'lucide-react';
+import { ListTree, GripVertical, Check, Info, Plus, Edit2, Trash2, X, Copy } from 'lucide-react';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 import { UNTITLED_RE, type ChapterLevel } from '../../../utils/chapters';
+import type { ChapterActions } from '../chapterActions';
 
 interface Chapter {
     title: string;
@@ -11,11 +12,7 @@ interface Chapter {
 
 interface TocModalProps {
     chapters: Chapter[];
-    onReorderChapter: (from: number, to: number) => void;
-    onEditChapterTitle: (index: number, newTitle: string) => void;
-    onChangeChapterLevel: (index: number, level: Chapter['level']) => void;
-    onAddChapter: () => void;
-    onDeleteChapter: (index: number) => void;
+    actions: ChapterActions;
     onClose: () => void;
 }
 
@@ -23,7 +20,7 @@ const LEVEL_LABEL: Record<Chapter['level'], string> = { h1: 'Título 1', h2: 'T�
 const LEVEL_INDENT: Record<Chapter['level'], string> = { h1: '', h2: 'ml-6', h3: 'ml-10', break: '' };
 const LEVEL_OPTIONS = Object.keys(LEVEL_LABEL) as Chapter['level'][];
 
-const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter, onEditChapterTitle, onChangeChapterLevel, onAddChapter, onDeleteChapter, onClose }) => {
+const TocModalComponent: React.FC<TocModalProps> = ({ chapters, actions, onClose }) => {
     useBodyScrollLock();
     const [dragIndex, setDragIndex] = useState<number | null>(null);
     const [overIndex, setOverIndex] = useState<number | null>(null);
@@ -32,15 +29,15 @@ const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter
 
     // Ler do closure (não dentro do updater de setState: o StrictMode corre-o 2× → toast duplo).
     const drop = useCallback((index: number) => {
-        if (dragIndex !== null && dragIndex !== index) onReorderChapter(dragIndex, index);
+        if (dragIndex !== null && dragIndex !== index) actions.reorder(dragIndex, index);
         setDragIndex(null);
         setOverIndex(null);
-    }, [dragIndex, onReorderChapter]);
+    }, [dragIndex, actions]);
 
     const commitEdit = useCallback(() => {
-        if (editing) onEditChapterTitle(editing.index, editing.value);
+        if (editing) actions.rename(editing.index, editing.value);
         setEditing(null);
-    }, [editing, onEditChapterTitle]);
+    }, [editing, actions]);
 
     const startEdit = useCallback((index: number, title: string) => {
         setEditing({ index, value: UNTITLED_RE.test(title) ? '' : title });
@@ -63,7 +60,7 @@ const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter
                     </h2>
                     <div className="flex items-center gap-1">
                         <button
-                            onClick={onAddChapter}
+                            onClick={actions.add}
                             title="Novo capítulo"
                             className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all"
                         >
@@ -95,7 +92,7 @@ const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter
                             <GripVertical size={15} className="shrink-0 text-slate-300 cursor-grab active:cursor-grabbing" />
                             <select
                                 value={chapter.level}
-                                onChange={e => onChangeChapterLevel(index, e.target.value as Chapter['level'])}
+                                onChange={e => actions.changeLevel(index, e.target.value as Chapter['level'])}
                                 title="Nível"
                                 className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400 bg-transparent border border-transparent hover:border-slate-200 rounded-lg px-1 h-6 w-[72px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300"
                             >
@@ -126,7 +123,7 @@ const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter
                             ) : confirmDelete === index ? (
                                 <>
                                     <button
-                                        onClick={() => { onDeleteChapter(index); setConfirmDelete(null); }}
+                                        onClick={() => { actions.remove(index); setConfirmDelete(null); }}
                                         title="Confirmar eliminação"
                                         className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors"
                                     >
@@ -148,6 +145,13 @@ const TocModalComponent: React.FC<TocModalProps> = ({ chapters, onReorderChapter
                                         className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-200 hover:text-slate-700 transition-all"
                                     >
                                         <Edit2 size={13} />
+                                    </button>
+                                    <button
+                                        onClick={() => actions.duplicate(index)}
+                                        title="Duplicar capítulo"
+                                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-200 hover:text-slate-700 transition-all"
+                                    >
+                                        <Copy size={13} />
                                     </button>
                                     <button
                                         onClick={() => setConfirmDelete(index)}

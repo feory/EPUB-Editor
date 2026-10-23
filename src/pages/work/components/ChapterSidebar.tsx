@@ -4,6 +4,7 @@ import { ModalCloseButton } from '../../../components/ModalCloseButton';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { subtreeRange } from '../../../utils/toc';
 import { UNTITLED_RE, type ChapterLevel } from '../../../utils/chapters';
+import type { ChapterActions } from '../chapterActions';
 
 interface Chapter {
     title: string;
@@ -17,10 +18,7 @@ interface ChapterSidebarProps {
     isSidebarOpen: boolean;
     onToggleSidebar: () => void;
     onSelectChapter: (index: number) => void;
-    onEditChapterTitle: (index: number, newTitle: string) => void;
-    onReorderChapter: (from: number, to: number) => void;
-    onDeleteChapter: (index: number) => void;
-    onDuplicateChapter: (index: number) => void;
+    actions: ChapterActions;
     readOnly?: boolean;
 }
 
@@ -186,7 +184,7 @@ const EditTitleModal: React.FC<EditTitleModalProps> = ({ initialValue, onConfirm
 
 const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
     chapters, activeChapterIndex, isFocusMode, isSidebarOpen,
-    onToggleSidebar, onSelectChapter, onEditChapterTitle, onReorderChapter, onDeleteChapter, onDuplicateChapter, readOnly,
+    onToggleSidebar, onSelectChapter, actions, readOnly,
 }) => {
     const [editing, setEditing] = useState<{ index: number; value: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
@@ -196,22 +194,22 @@ const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
     const handleRequestEdit = useCallback((index: number, currentTitle: string) => {
         setEditing({ index, value: currentTitle });
     }, []);
-    const handleRequestDuplicate = useCallback((index: number) => onDuplicateChapter(index), [onDuplicateChapter]);
+    const handleRequestDuplicate = actions.duplicate;
     const handleRequestDelete = useCallback((index: number) => setConfirmDelete(index), []);
     const handleCancelDelete = useCallback(() => setConfirmDelete(null), []);
     const handleConfirmDelete = useCallback((index: number) => {
-        onDeleteChapter(index);
+        actions.remove(index);
         setConfirmDelete(null);
-    }, [onDeleteChapter]);
+    }, [actions]);
     const handleDragStart = useCallback((index: number) => setDragIndex(index), []);
     const handleDragOverItem = useCallback((index: number) => setOverIndex(index), []);
     const handleDragEnd = useCallback(() => { setDragIndex(null); setOverIndex(null); }, []);
     const handleDropItem = useCallback((index: number) => {
         // Ler do closure (não dentro do updater de setState: o StrictMode corre-o 2× → toast duplo).
-        if (dragIndex !== null && dragIndex !== index) onReorderChapter(dragIndex, index);
+        if (dragIndex !== null && dragIndex !== index) actions.reorder(dragIndex, index);
         setDragIndex(null);
         setOverIndex(null);
-    }, [dragIndex, onReorderChapter]);
+    }, [dragIndex, actions]);
     // childCount só serve aos botões de duplicar/eliminar (escondidos em readOnly) — não vale a pena calcular lá.
     const childCounts = useMemo(() => {
         if (readOnly) return [];
@@ -300,7 +298,7 @@ const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
         {editing && (
             <EditTitleModal
                 initialValue={editing.value}
-                onConfirm={(value) => { onEditChapterTitle(editing.index, value); setEditing(null); }}
+                onConfirm={(value) => { actions.rename(editing.index, value); setEditing(null); }}
                 onClose={() => setEditing(null)}
             />
         )}

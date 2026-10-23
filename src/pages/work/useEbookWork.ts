@@ -18,7 +18,8 @@ import type { PageAnchor } from '../../services/page-list/page-list';
 
 import { createSaver } from './saver';
 import * as bookEdit from './bookEdit';
-import type { Book, BookEdit, Level } from './bookEdit';
+import type { Book, BookEdit } from './bookEdit';
+import type { ChapterActions } from './chapterActions';
 import { contentReducer, initialContentState } from './hooks/contentReducer';
 import { useChapterSync } from './hooks/useChapterSync';
 import { useEbookImport } from './hooks/useEbookImport';
@@ -242,17 +243,14 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         if (edit.notice) showNotification(edit.notice.type, edit.notice.text);
     }, [commitHtml, isbn, save, showNotification]);
 
-    const handleEditChapterTitle = useCallback((chapterIndex: number, newTitle: string) =>
-        applyEdit(bookEdit.renameChapter(getBook(), chapterIndex, newTitle)), [applyEdit, getBook]);
-    const handleReorderChapter = useCallback((from: number, to: number) =>
-        applyEdit(bookEdit.moveChapter(getBook(), from, to)), [applyEdit, getBook]);
-    const handleChangeChapterLevel = useCallback((index: number, level: Level) =>
-        applyEdit(bookEdit.changeLevel(getBook(), index, level)), [applyEdit, getBook]);
-    const handleDeleteChapter = useCallback((index: number) =>
-        applyEdit(bookEdit.deleteChapter(getBook(), index)), [applyEdit, getBook]);
-    const handleDuplicateChapter = useCallback((index: number) =>
-        applyEdit(bookEdit.duplicateChapter(getBook(), index)), [applyEdit, getBook]);
-    const handleAddChapter = useCallback(() => applyEdit(bookEdit.addChapter(getBook())), [applyEdit, getBook]);
+    const chapterActions = useMemo<ChapterActions>(() => ({
+        rename: (index, title) => applyEdit(bookEdit.renameChapter(getBook(), index, title)),
+        reorder: (from, to) => applyEdit(bookEdit.moveChapter(getBook(), from, to)),
+        changeLevel: (index, level) => applyEdit(bookEdit.changeLevel(getBook(), index, level)),
+        remove: (index) => applyEdit(bookEdit.deleteChapter(getBook(), index)),
+        duplicate: (index) => applyEdit(bookEdit.duplicateChapter(getBook(), index)),
+        add: () => applyEdit(bookEdit.addChapter(getBook())),
+    }), [applyEdit, getBook]);
     const handleRemoveCommentAnchor = useCallback((anchorId: string) =>
         applyEdit(bookEdit.removeCommentAnchor(getBook(), anchorId)), [applyEdit, getBook]);
     const handleApplyDropCaps = useCallback(() => applyEdit(bookEdit.applyDropCaps(getBook())), [applyEdit, getBook]);
@@ -361,12 +359,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         handleResolveIssue: grammar.handleResolveIssue,
         handleResolveMultiple: grammar.handleResolveMultiple,
 
-        handleEditChapterTitle,
-        handleReorderChapter,
-        handleDeleteChapter,
-        handleDuplicateChapter,
-        handleAddChapter,
-        handleChangeChapterLevel,
+        chapterActions,
         handleApplyDropCaps,
         handleRemoveCommentAnchor,
         handleLinkIndiceEntries,

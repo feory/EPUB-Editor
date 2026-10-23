@@ -55,3 +55,16 @@ test('renderStory: numeral (estilo a branco) junta-se ao título seguinte num s�
     const html = renderStory(rc, xml, { n: 0, star: 0, defs: [] }, {});
     expect(html).toMatch(/^<h1 class="p-center">.*background:#000.*>IV<\/span><br>.*AGORA ANTES\..*<\/h1>$/);
 });
+
+test('renderStory: numeral sem título a seguir sai sozinho, com as classes do mapeamento (rótulo órfão)', async () => {
+    await import('../../indesign/happy-dom');
+    const { renderStory } = await import('./story');
+    const xml = `<idPkg:Story xmlns:idPkg="x"><Story>
+<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/numeros"><CharacterStyleRange><Content>IV</Content><Br/></CharacterStyleRange></ParagraphStyleRange>
+<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/texto"><CharacterStyleRange><Content>Corpo normal.</Content><Br/></CharacterStyleRange></ParagraphStyleRange>
+</Story></idPkg:Story>`;
+    const paraIndents = new Map([['ParagraphStyle/numeros', { left: 0, first: 0, spaceBefore: 0, spaceAfter: 0, fill: 'Color/Paper' }]]);
+    const rc = { styles: { colors: new Map([['Color/Paper', { space: 'CMYK', values: [0, 0, 0, 0] }]]), paraIndents, charStyles: new Map() } } as unknown as RenderContext;
+    const html = renderStory(rc, xml, { n: 0, star: 0, defs: [] }, { numeros: { target: 'h1', centered: true } });
+    expect(html).toMatch(/^<h1 class="p-center">.*>IV<\/span><\/h1>\n<p[^>]*>Corpo normal\.<\/p>$/);
+});

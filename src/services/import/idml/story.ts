@@ -423,6 +423,29 @@ export function isHeuristicTitle(psr: Element): boolean {
 
 const INDEX_TITLE_RE = /^índice(\s+remissivo)?$/i;
 
+// Rótulo de capítulo/parte (nº) à espera do título seguinte: junta-se a ele, ou, se o corpo vier primeiro, sai sozinho
+// no tag/classes que tinha. Tag e classes escrevem-se sempre com o texto.
+function createPendingLabel() {
+    let text = '', tag = 'h1', cls = '';
+    return {
+        set(t: string, labelTag = 'h1', labelCls = '') { text = t; tag = labelTag; cls = labelCls; },
+        /** Junta o rótulo ao corpo do título (`<br>`); um título sem classes próprias herda as do rótulo (muta `classes`). */
+        mergeInto(body: string, classes: string[]): string {
+            if (!text) return body;
+            const merged = `${text}<br>${body}`;
+            if (!classes.length && cls) classes.push(cls);
+            text = ''; cls = '';
+            return merged;
+        },
+        /** Sem título a seguir: emite o rótulo sozinho (nunca fica à espera de um heading de outra secção). */
+        flushInto(out: string[]): void {
+            if (!text) return;
+            out.push(`<${tag}${cls ? ` class="${cls}"` : ''}>${text}</${tag}>`);
+            text = ''; cls = '';
+        },
+    };
+}
+
 export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter, mapping: DocxStyleMapping): string {
     const doc = new DOMParser().parseFromString(xml, 'application/xml');
     // Atenção: o root é <idPkg:Story> (localName também "Story"); querySelector('Story')
@@ -431,9 +454,7 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
     const story = doc.getElementsByTagName('Story')[0];
     if (!story) return '';
     const out: string[] = [];
-    let pendingLabel = ''; // nº de capítulo/parte à espera do título seguinte
-    let pendingLabelTag: string = 'h1'; // tag do próprio rótulo (h1/h2/…) — usado se ficar sem título
-    let pendingLabelClass = ''; // classes do próprio rótulo (p-center/p-top/…) — idem
+    const label = createPendingLabel(); // nº de capítulo/parte à espera do título seguinte
     // Dentro de um capítulo "Índice"/"Índice remissivo": abre por título heurístico (abaixo) OU,
     // aqui, quando o 1º parágrafo não-vazio da story É literalmente "índice"/"índice remissivo" —
     // cobre o caso (este livro) em que esse título não tem Justification/PointSize inline
@@ -459,14 +480,14 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
 
         if (rawMap === 'merge') {
             const text = segs.map(s => s.text).join(' ').trim();
-            if (text) { pendingLabel = text; pendingLabelTag = 'h1'; pendingLabelClass = ''; }
+            if (text) label.set(text);
             continue;
         }
 
         // Numeral de capítulo sozinho (caixa preta, ver renderPsr) → rótulo que se junta ao título
         // seguinte, como o 'merge'; senão ficava como <p> no fim do capítulo anterior.
         if (segs.length === 1 && segs[0].notes.length === 0 && segs[0].boxedNumeral) {
-            pendingLabel = segs[0].text; pendingLabelTag = 'h1'; pendingLabelClass = rawMap.cls || ''; // Centrado/Topo do mapeamento
+            label.set(segs[0].text, 'h1', rawMap.cls || ''); // Centrado/Topo do mapeamento
             continue;
         }
 
@@ -525,13 +546,11 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
             // título seguinte, tal como o 'merge' — nunca funde por TAG (isso fundiria também
             // duas heading NÃO relacionadas, ex. divisória de Parte + 1º capítulo).
             if (/^(cap[íi]tulo|parte)?\s*\d{1,3}\.?$/i.test(body) && segs.every(s => s.notes.length === 0)) {
-                pendingLabel = body;
-                pendingLabelTag = tag; // preserva o alvo escolhido pelo utilizador (h1/h2/…) para quando ficar sem título a seguir
-                pendingLabelClass = baseClasses.join(' '); // idem para as classes (p-center/p-top/…)
+                label.set(body, tag, baseClasses.join(' ')); // preserva o alvo do utilizador (h1/h2/…) e as classes, p/ quando ficar sem título
                 continue;
             }
             // Título sem classes próprias herda as do rótulo (ex. numeral mapeado h1 + Centrado).
-            if (pendingLabel) { body = `${pendingLabel}<br>${body}`; if (!baseClasses.length && pendingLabelClass) baseClasses.push(pendingLabelClass); pendingLabel = ''; pendingLabelClass = ''; }
+            body = label.mergeInto(body, baseClasses);
             // Heading CONSECUTIVO do mesmo ESTILO do anterior (ver lastHeadingStyle) → funde no
             // <hN> já emitido (linha extra, <br>) em vez de abrir um novo.
             if (sn && sn === lastHeadingStyle && out.length > 0 && out[out.length - 1].endsWith(`</${tag}>`)) {
@@ -560,11 +579,7 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
             // espera indefinidamente do PRÓXIMO heading (por vezes muitos parágrafos de corpo
             // depois), fundindo-se com o título de uma secção totalmente não relacionada (ex.
             // interlúdio "Caderno da Autora") e apagando o capítulo numerado do import.
-            if (pendingLabel) {
-                const attr = pendingLabelClass ? ` class="${pendingLabelClass}"` : '';
-                out.push(`<${pendingLabelTag}${attr}>${pendingLabel}</${pendingLabelTag}>`);
-                pendingLabel = '';
-            }
+            label.flushInto(out);
         }
         for (const seg of segs) {
             if (seg.raw) { out.push(seg.raw); continue; } // tabela — já é HTML de bloco, não envolver em <tag>
@@ -597,10 +612,7 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
             for (const def of seg.notes) out.push(def);
         }
     }
-    if (pendingLabel) {
-        const attr = pendingLabelClass ? ` class="${pendingLabelClass}"` : '';
-        out.push(`<${pendingLabelTag}${attr}>${pendingLabel}</${pendingLabelTag}>`);
-    }
+    label.flushInto(out);
     return out.join('\n');
 }
 

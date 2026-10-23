@@ -495,10 +495,7 @@ export function WorkPage() {
               isSidebarOpen={sidebars.isSidebarOpen}
               onToggleSidebar={handleToggleSidebar}
               onSelectChapter={work.setActiveChapterIndex}
-              onEditChapterTitle={work.handleEditChapterTitle}
-              onReorderChapter={work.handleReorderChapter}
-              onDeleteChapter={work.handleDeleteChapter}
-              onDuplicateChapter={work.handleDuplicateChapter}
+              actions={work.chapterActions}
               readOnly={work.readOnly}
             />
 
@@ -749,11 +746,7 @@ export function WorkPage() {
       {showToc && (
         <TocModal
           chapters={work.chapters}
-          onReorderChapter={work.handleReorderChapter}
-          onEditChapterTitle={work.handleEditChapterTitle}
-          onChangeChapterLevel={work.handleChangeChapterLevel}
-          onAddChapter={work.handleAddChapter}
-          onDeleteChapter={work.handleDeleteChapter}
+          actions={work.chapterActions}
           onClose={() => setShowToc(false)}
         />
       )}
