@@ -13,7 +13,7 @@ interface TextSidebarProps {
     css: string;                                      // CSS atual do livro (estilos de caracteres existentes)
     onEdit: (edit: BlockEdit) => void;
     onCreateStyle: (cls: string, body: string) => string | null; // devolve o erro, ou null se criou
-    onUpdateStyle: (cls: string, body: string) => string | null; // idem, ao editar um estilo
+    onUpdateStyle: (cls: string, body: string, newCls: string) => string | null; // idem, ao guardar um estilo (newCls = nome novo, ou o mesmo)
     onDeleteStyle: (cls: string) => void;                        // apaga a regra e retira o estilo do texto
     onClose: () => void;
     width: number;
@@ -57,8 +57,9 @@ const FormatFields: React.FC<{ value: SelectionInfo; onToggle: (format: string) 
 // Editar um estilo de caracteres: os mesmos controlos, sobre um rascunho lido das declarações do estilo. As declarações que os
 // controlos não representam (`rest`) mantêm-se ao guardar. Apagar pede confirmação.
 const StyleEditor: React.FC<{
-    cls: string; css: string; onSave: (body: string) => string | null; onDelete: () => void; onCancel: () => void;
+    cls: string; css: string; onSave: (body: string, newCls: string) => string | null; onDelete: () => void; onCancel: () => void;
 }> = ({ cls, css, onSave, onDelete, onCancel }) => {
+    const [name, setName] = useState(charStyleLabel(cls));
     const [{ selection: initial, rest }] = useState(() => cssToSelection(readCustomStyle(css, cls)));
     const [baseCss] = useState(css); // o CSS do livro sem a pré-visualização
     const [draft, setDraft] = useState<SelectionInfo>(initial);
@@ -79,13 +80,19 @@ const StyleEditor: React.FC<{
         setError('');
     };
     const save = () => {
-        const err = onSave(bodyOf(draft));
+        const newCls = name.trim() === charStyleLabel(cls) ? cls : charStyleClassOf(name);
+        if (!newCls) return setError('Dá um nome ao estilo.');
+        const err = onSave(bodyOf(draft), newCls);
         if (err) setError(err);
     };
     return (
         <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
-            <Section title={`Estilo "${charStyleLabel(cls)}"`}>
-                <p className="text-xs text-text-muted">A alteração vale em todo o livro, onde o estilo foi aplicado.</p>
+            <Section title="Estilo">
+                <Row label="Nome">
+                    <input value={name} onChange={(e) => { setName(e.target.value); setError(''); }} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} aria-label="Nome do estilo"
+                        className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2 text-sm outline-none focus:border-primary" />
+                </Row>
+                <p className="text-xs text-text-muted">As alterações, incluindo o nome, valem em todo o livro, onde o estilo foi aplicado.</p>
                 {error && <div className="text-xs text-rose-600">{error}</div>}
                 {confirming ? (
                     <div className="flex flex-col gap-2">
@@ -225,7 +232,7 @@ export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onC
             </div>
             {editingCls ? (
                 <StyleEditor key={editingCls} cls={editingCls} css={css}
-                    onSave={(body) => { const err = onUpdateStyle(editingCls, body); if (!err) setEditingCls(null); return err; }}
+                    onSave={(body, newCls) => { const err = onUpdateStyle(editingCls, body, newCls); if (!err) setEditingCls(null); return err; }}
                     onDelete={() => { onDeleteStyle(editingCls); setEditingCls(null); }}
                     onCancel={() => setEditingCls(null)} />
             ) : !selection ? (

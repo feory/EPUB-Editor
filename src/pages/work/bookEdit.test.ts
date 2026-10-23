@@ -112,3 +112,9 @@ test('removeCharStyle: retira o estilo do livro; null se ninguém o usa', () => 
     expect(r?.html).toContain('<p>a b</p>');
     expect(be.removeCharStyle(b, 'c-outro')).toBeNull();
 });
+
+test('renameCharStyle: troca a classe no livro; null se ninguém a usa', () => {
+    const b = book('<p class="chapter-break" data-title="x"></p><p>a <span class="c-x">b</span></p>');
+    expect(be.renameCharStyle(b, 'c-x', 'c-novo')?.html).toContain('<span class="c-novo">b</span>');
+    expect(be.renameCharStyle(b, 'c-outro', 'c-novo')).toBeNull();
+});

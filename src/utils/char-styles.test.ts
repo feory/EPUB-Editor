@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { isCharStyle, charStyleClassOf, charStyleLabel, charStyleFormat, removeCharStyleFromHtml, cloneCharStyleClass } from './char-styles';
+import { isCharStyle, charStyleClassOf, charStyleLabel, charStyleFormat, removeCharStyleFromHtml, renameCharStyleInHtml, cloneCharStyleClass } from './char-styles';
 import '../services/indesign/happy-dom';
 
 test('charStyleClassOf: slug com prefixo c-, sem acentos nem duplicar o prefixo; vazio dá ""', () => {
@@ -27,4 +27,11 @@ test('cloneCharStyleClass: -copia, depois -copia-2, -copia-3…', () => {
     expect(cloneCharStyleClass(['c-x'], 'c-x')).toBe('c-x-copia');
     expect(cloneCharStyleClass(['c-x', 'c-x-copia'], 'c-x')).toBe('c-x-copia-2');
     expect(cloneCharStyleClass(['c-x', 'c-x-copia', 'c-x-copia-2'], 'c-x')).toBe('c-x-copia-3');
+});
+
+test('renameCharStyleInHtml: troca só essa classe (mesmo em spans com mais classes); sem uso devolve o mesmo html', () => {
+    const html = '<p><span class="c-x">a</span> <span class="c-x c-y" style="color: red">b</span> <span class="c-x-copia">c</span></p>';
+    expect(renameCharStyleInHtml(html, 'c-x', 'c-z')).toBe('<p><span class="c-z">a</span> <span class="c-z c-y" style="color: red">b</span> <span class="c-x-copia">c</span></p>');
+    const plain = '<p>nada</p>';
+    expect(renameCharStyleInHtml(plain, 'c-x', 'c-z')).toBe(plain);
 });

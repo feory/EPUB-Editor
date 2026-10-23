@@ -36,6 +36,10 @@ export const readRuleBody = (css: string, selector: string): string => (ruleRe(s
 export const replaceRuleBody = (css: string, selector: string, body: string): string =>
     css.replace(ruleRe(selector), (_all, pre: string, gap: string) => `${pre}${gap}${selector} { ${body} }`);
 
+/** Troca o seletor da regra (mantém o corpo); sem a regra devolve o CSS igual. */
+export const renameRule = (css: string, from: string, to: string): string =>
+    css.replace(ruleRe(from), (_all, pre: string, gap: string, body: string) => `${pre}${gap}${to} {${body}}`);
+
 /** Tira a regra (e a linha dela); sem a regra devolve o CSS igual. */
 export const removeRule = (css: string, selector: string): string =>
     css.replace(ruleRe(selector), (_all, pre: string, gap: string) => `${pre}${gap.replace(/[ \t]*$/, '')}`) // o intervalo antes (comentários, ex. cabeçalho de secção) fica

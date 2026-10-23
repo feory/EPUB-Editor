@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { styleClassOf, listCharStyles, readCustomStyle, updateCustomStyle, deleteCustomStyle, listCustomStyles, createCustomStyle, forExport, forEditor } from './book-css';
+import { styleClassOf, listCharStyles, readCustomStyle, updateCustomStyle, renameCustomStyle, deleteCustomStyle, listCustomStyles, createCustomStyle, forExport, forEditor } from './book-css';
 
 const EDITOR = '/* === EDITOR (não exportado para EPUB) === */';
 const create = (css: string, cls: string, body: string) => {
@@ -105,4 +105,17 @@ test('editar e apagar um estilo personalizado: lê, troca as declarações, recu
     const del = deleteCustomStyle(upd.css, 'c-destaque');
     expect(listCharStyles(del)).toEqual(['c-nota']);
     expect(del).toContain('body { color: black; }');
+});
+
+test('renameCustomStyle: troca a classe mantendo o corpo; recusa nome existente ou estilo inexistente', () => {
+    const a = createCustomStyle('body { }', 'c-a', 'font-weight: bold;');
+    if (!('css' in a)) throw new Error(a.error);
+    const b = createCustomStyle(a.css, 'c-b', 'color: red;');
+    if (!('css' in b)) throw new Error(b.error);
+    const r = renameCustomStyle(b.css, 'c-a', 'c-novo');
+    if (!('css' in r)) throw new Error(r.error);
+    expect(listCharStyles(r.css)).toEqual(['c-novo', 'c-b']);
+    expect(readCustomStyle(r.css, 'c-novo')).toBe('font-weight: bold;');
+    expect(renameCustomStyle(b.css, 'c-a', 'c-b')).toEqual({ error: 'Já existe um estilo ".c-b".' });
+    expect('error' in renameCustomStyle(b.css, 'c-nao', 'c-x')).toBe(true);
 });

@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { useStyles } from '../../../context/StyleContext';
 import { applyRule } from '../../../utils/css-rule';
-import { createCustomStyle, updateCustomStyle, deleteCustomStyle } from '../../../utils/book-css';
+import { createCustomStyle, updateCustomStyle, renameCustomStyle, deleteCustomStyle } from '../../../utils/book-css';
 import { textPatchToDecls, type TextProps } from '../editor/textProps';
 
 /**
@@ -39,7 +39,18 @@ export function useBookCss(isbn: string | undefined, debounceMs = 600) {
         return null;
     }, [commit, getCurrentCss]);
 
+    /** Guardar um estilo: novas declarações e, se `newCls` mudou, novo nome — numa só gravação do CSS. Devolve o erro, ou null. */
+    const saveStyle = useCallback((cls: string, body: string, newCls: string): string | null => {
+        const updated = updateCustomStyle(getCurrentCss(), cls, body);
+        if ('error' in updated) return updated.error;
+        if (newCls === cls) { commit(updated.css); return null; }
+        const renamed = renameCustomStyle(updated.css, cls, newCls);
+        if ('error' in renamed) return renamed.error;
+        commit(renamed.css);
+        return null;
+    }, [commit, getCurrentCss]);
+
     const deleteStyle = useCallback((cls: string) => commit(deleteCustomStyle(getCurrentCss(), cls)), [commit, getCurrentCss]);
 
-    return { editRule, createStyle, updateStyle, deleteStyle };
+    return { editRule, createStyle, updateStyle, saveStyle, deleteStyle };
 }

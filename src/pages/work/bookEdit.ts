@@ -14,7 +14,7 @@ import type { ChapterLevel } from '../../utils/chapters';
 import { applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import { linkIndiceEntries, linkOneIndiceEntry, unlinkOneIndiceEntry, listSubtitles } from '../../utils/indice-links';
 import { unwrapCommentAnchor } from '../../utils/comment-anchor';
-import { removeCharStyleFromHtml, charStyleLabel } from '../../utils/char-styles';
+import { removeCharStyleFromHtml, renameCharStyleInHtml, charStyleLabel } from '../../utils/char-styles';
 import { fixLinks, validateLinks } from '../../services/validation/link-validator';
 import { insertPageBreaks } from '../../services/page-list/page-list';
 import type { PageAnchor } from '../../services/page-list/page-list';
@@ -88,6 +88,12 @@ export function addChapter(book: Book): BookEdit {
 export function removeCharStyle(book: Book, cls: string): BookEdit | null {
     const html = removeCharStyleFromHtml(book.html, cls);
     return html === book.html ? null : keep(html, `Estilo "${charStyleLabel(cls)}" retirado do texto.`);
+}
+
+/** Mudar o nome de um estilo de caracteres: troca a classe nos spans do livro (o CSS muda à parte). null se ninguém o usa. */
+export function renameCharStyle(book: Book, from: string, to: string): BookEdit | null {
+    const html = renameCharStyleInHtml(book.html, from, to);
+    return html === book.html ? null : keep(html, `Estilo "${charStyleLabel(from)}" renomeado para "${charStyleLabel(to)}".`);
 }
 
 export function applyDropCaps(book: Book): BookEdit {

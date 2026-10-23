@@ -43,3 +43,13 @@ export function cloneCharStyleClass(existing: string[], cls: string): string {
     while (existing.includes(`${base}-${n}`)) n++;
     return `${base}-${n}`;
 }
+
+/** Muda a classe `from` para `to` nos spans do livro; o mesmo HTML se o estilo não é usado (sem reserializar). */
+export function renameCharStyleInHtml(html: string, from: string, to: string): string {
+    if (!html.includes(from)) return html;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const used = Array.from(doc.body.querySelectorAll(`span.${from}`));
+    if (used.length === 0) return html;
+    for (const span of used) span.classList.replace(from, to);
+    return doc.body.innerHTML;
+}
