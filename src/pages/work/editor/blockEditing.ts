@@ -6,7 +6,7 @@ import { readBoxProps, applyBoxProps, type BoxProps } from './boxProps';
 import { textPropsFrom, applyTextProps, type TextProps, type TextBlockInfo } from './textProps';
 import { readImageProps, applyImageProps, type ImageProps } from './imageProps';
 import { readGridProps, applyGridProps, applyGridToCells, type GridProps } from './gridProps';
-import { readSelectionProps, selectionPatchOps, type SelectionProps } from './selectionProps';
+import { readSelectionProps, selectionPatchOps, type SelectionProps, type SelectionInfo } from './selectionProps';
 import { BLOCK_STYLE_OPTIONS } from './config';
 
 /** Seletor dos blocos de texto editáveis (parágrafo, títulos, item de lista). */
@@ -18,12 +18,13 @@ export interface BlockInfo {
     text: TextBlockInfo | null;
     image: ImageProps | null;       // imagem selecionada
     grid: GridProps | null;   // bloco .grid à volta do cursor
-    selection: SelectionProps | null; // caracteres selecionados num bloco de texto (null com o cursor recolhido)
+    selection: SelectionInfo | null; // caracteres selecionados num bloco de texto (null com o cursor recolhido)
 }
 
 export type BlockEdit =
     | { target: 'box'; patch: Partial<BoxProps> }
     | { target: 'selection'; patch: Partial<SelectionProps> } // span inline à volta da seleção
+    | { target: 'inlineFormat'; format: string }               // liga/desliga negrito, itálico… na seleção
     | { target: 'text'; patch: Partial<TextProps> }   // style inline do bloco ("Este bloco")
     | { target: 'image'; patch: Partial<ImageProps> }
     | { target: 'grid'; patch: Partial<GridProps> }
@@ -48,7 +49,9 @@ export interface EditorLike {
     formatBlock(tag: string): void;
     applyFormat(format: string): void;
     /** Há texto selecionado (não só cursor)? `read` lê um valor CSS inline dos spans que o rodeiam (não do bloco). */
-    selectedText?(): { read(cssName: string): string } | null;
+    selectedText?(): { read(cssName: string): string; formats(): string[] } | null;
+    /** Liga/desliga um formato inline (negrito, itálico…) na seleção. */
+    toggleInline?(format: string): void;
     /** Aplica (value) ou tira (null) um formato inline por propriedade (`css`) na seleção. */
     applyInline?(format: string, css: string, value: string | null): void;
 }
@@ -69,7 +72,7 @@ export function inspectBlock(ed: EditorLike): BlockInfo {
         box: box ? readBoxProps(box) : null,
         grid: grid ? readGridProps(grid) : null,
         image: node.nodeName === 'IMG' ? readImageProps(node as HTMLElement) : null,
-        selection: isText && ed.selectedText ? ((sel) => (sel ? readSelectionProps(sel.read) : null))(ed.selectedText()) : null,
+        selection: isText && ed.selectedText ? ((sel) => (sel ? { ...readSelectionProps(sel.read), formats: sel.formats() } : null))(ed.selectedText()) : null,
         text: isText ? {
             tag: el.nodeName.toLowerCase(),
             classes: Array.from(el.classList).filter((c) => !/^(mce-|diff-)/.test(c)),
@@ -103,6 +106,9 @@ export function applyBlockEdit(ed: EditorLike, edit: BlockEdit): void {
             if (ed.selectedText?.() && ed.applyInline) ed.transact(() => selectionPatchOps(edit.patch).forEach((op) => ed.applyInline!(op.format, op.css, op.value)));
             return;
         }
+        case 'inlineFormat':
+            if (ed.selectedText?.() && ed.toggleInline) ed.transact(() => ed.toggleInline!(edit.format));
+            return;
         case 'text': {
             const el = ed.closest(node, TEXT_BLOCK_SELECTOR);
             if (el) ed.transact(() => applyTextProps({ setStyle: (e, n, v) => ed.setImportantStyle(e, n, v) }, el, edit.patch));

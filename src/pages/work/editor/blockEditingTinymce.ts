@@ -2,6 +2,7 @@ import type { TinyMCEEditor } from './types';
 import type { EditorLike } from './blockEditing';
 import { editBlocks } from './blockEdit';
 import { MARK } from './ephemeral';
+import { INLINE_FORMATS } from './selectionProps';
 
 /** Adapter TinyMCE do seam EditorLike (blockEditing.ts). */
 export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
@@ -32,7 +33,8 @@ export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
         transact: (mutate) => editBlocks(editor, mutate),
         formatBlock: (tag) => editor.execCommand('FormatBlock', false, tag),
         applyFormat: (format) => editor.formatter.apply(format),
-        selectedText: () => (editor.selection.isCollapsed() ? null : { read: readInline }),
+        selectedText: () => (editor.selection.isCollapsed() ? null : { read: readInline, formats: () => INLINE_FORMATS.map(([f]) => f as string).filter((f) => editor.formatter.match(f)) }),
+        toggleInline: (format) => editor.formatter.toggle(format),
         applyInline: (format, css, value) => {
             if (value) return editor.formatter.apply(format, { value });
             editor.formatter.remove(format, { value: null }, undefined, true);

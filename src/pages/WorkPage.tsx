@@ -523,7 +523,6 @@ export function WorkPage() {
                 onAddComment={(anchorId) => { commentSync.startDraft(anchorId); panels.open('comments'); }}
                 onEditBox={() => panels.open('box')}
                 onEditText={() => panels.open('text')}
-                textPanelOpen={sidebars.showTextSidebar}
                 onBlockChange={setBlockInfo}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}

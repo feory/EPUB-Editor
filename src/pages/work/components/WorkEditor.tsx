@@ -92,7 +92,6 @@ interface WorkEditorProps {
     onAddComment?: (anchorId: string) => void;
     onEditBox?: () => void;
     onEditText?: () => void;
-    textPanelOpen?: boolean;
     onBlockChange?: (info: BlockInfo) => void;
     readOnly?: boolean;
     editorFont?: string;
@@ -176,7 +175,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onEditBox, onEditText, textPanelOpen, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onEditBox, onEditText, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -186,7 +185,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     const live = useLive({
         htmlContent, setHtmlContent, grammarCache, onGrammarCheck, onImageUploaded, onVisiblePageChange,
         onToggleFocusMode, onTogglePrintPdf, showPrintPdfPanel, ebookLabel, chapters, activeChapterIndex,
-        onEditBox, onEditText, textPanelOpen, onBlockChange, readOnly,
+        onEditBox, onEditText, onBlockChange, readOnly,
     });
     const indiceLinkPanel = useIndiceLinkPanel(editorRef, { chapters, activeChapterIndex, getSubtitles: getIndiceSubtitles, onLink: onLinkIndiceEntry });
     const syncEditorHeightRef = useRef<() => void>(() => {});
@@ -203,7 +202,6 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     // Troca de capítulo / carregamento: o reducer mudou o conteúdo → carregar com o undo a zero
     // (desfazer não pode trazer outro capítulo). Eco de um report (estado → prop) não recarrega.
     useEffect(() => { channelRef.current?.load(htmlContent, { undo: 'reset' }); }, [htmlContent]);
-    useEffect(() => { editorRef.current?.nodeChanged(); }, [textPanelOpen]); // o Mini-menu relê live.textPanelOpen
     useEffect(() => { editorRef.current?.dispatch('pdfpanelchange'); }, [showPrintPdfPanel]); // o botão "Ver PDF" relê live.showPrintPdfPanel
     useEffect(() => {
         const el = editorRef.current?.getContainer()?.querySelector('[data-ps-ebook-label]') as HTMLElement | null;

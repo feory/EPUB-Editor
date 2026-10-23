@@ -11,6 +11,16 @@ export interface SelectionProps {
     fontFamily: string;       // família genérica (serif…): segura num EPUB, ao contrário de um nome de fonte
 }
 
+/** O que o painel mostra da seleção: propriedades de estilo + formatos inline ligados (negrito, itálico…). */
+export type SelectionInfo = SelectionProps & { formats: string[] };
+
+/** Formatos inline ligáveis/desligáveis (nomes dos formatos do TinyMCE), por ordem no painel. */
+export const INLINE_FORMATS = [
+    ['bold', 'Negrito'], ['italic', 'Itálico'], ['underline', 'Sublinhado'], ['strikethrough', 'Rasurado'],
+    ['superscript', 'Sobrescrito'], ['subscript', 'Subscrito'],
+    ['small-caps', 'Versaletes'], ['small-text', 'Texto pequeno'], ['uppercase', 'Maiúsculas'],
+] as const;
+
 export const EMPTY_SELECTION: SelectionProps = { color: '', background: '', fontSize: null, letterSpacing: null, fontFamily: '' };
 
 export const FONT_FAMILIES = [['', 'Padrão'], ['serif', 'Serifa'], ['sans-serif', 'Sem serifa'], ['monospace', 'Monoespaçada']] as const;
