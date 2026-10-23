@@ -4,7 +4,7 @@ import { MANUAL_ANCHOR_CLASS, manualAnchorHtml, newManualAnchorId } from '../../
 import { CONTAINER_SELECTOR } from '../../../utils/containers';
 import { planChapterMarkers, isLevelMarkerClass } from '../../../utils/chapters';
 import { registerEditorIcons } from './icons';
-import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
+import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES, QUICKBARS_SELECTION_TOOLBAR } from './config';
 import type { TinyMCEEditor } from './types';
 import { editBlocks } from './blockEdit';
 import { BOX_VARIANTS } from './boxProps';
@@ -21,6 +21,7 @@ export interface SetupLive {
     onToggleFocusMode?: () => void;
     onTogglePrintPdf?: () => void;
     showPrintPdfPanel?: boolean;                    // painel de PDF aberto → botão "Ver PDF" ativo
+    textPanelOpen?: boolean;                        // painel "Editar texto" aberto → a barra da seleção esconde-se
     chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
     activeChapterIndex: number;
 }
@@ -424,6 +425,15 @@ export function createEditorSetup(deps: SetupDeps) {
         });
         editor.on('NodeChange', updateCssInfo);
 
+        // Barra da seleção (negrito, itálico, cor…): o quickbars não deixa condicionar o predicado, por isso é
+        // nossa (quickbars_selection_toolbar desligado em WorkEditor) — esconde-se com o painel "Editar texto" aberto.
+        editor.ui.registry.addContextToolbar('textselection-ps', {
+            predicate: (node: Node) => !live.current.textPanelOpen && node.nodeName !== 'IMG' && !editor.selection.isCollapsed()
+                && editor.dom.getContentEditableParent(node) !== 'false',
+            items: QUICKBARS_SELECTION_TOOLBAR,
+            position: 'selection',
+            scope: 'editor',
+        });
         // Botão "Editar texto" na barra da seleção → abre o painel lateral com cor/fundo/tamanho/espaço entre letras.
         editor.ui.registry.addButton('edittext', {
             icon: 'edit-block',
