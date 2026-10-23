@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, FileText, ChevronLeft, ChevronRight, Loader2, Upload, ZoomIn, ZoomOut } from 'lucide-react';
-import type { PDFDocumentProxy } from 'pdfjs-dist';
+import type { PDFDocumentProxy, TextLayer } from 'pdfjs-dist';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { extractPdfPageAnchors } from '../../../services/page-list/page-list';
 import type { PageAnchor } from '../../../services/page-list/page-list';
@@ -93,7 +93,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     useEffect(() => {
         if (status !== 'ready' || !pdfRef.current || !canvasRef.current) return;
         let cancelled = false;
-        let textLayer: { cancel(): void } | undefined;
+        let textLayer: TextLayer | undefined;
         (async () => {
             const pdfPage = await pdfRef.current!.getPage(page);
             if (cancelled) return;

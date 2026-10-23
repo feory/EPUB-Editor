@@ -45,7 +45,7 @@ test('várias alterações seguidas: aplica cada uma já e grava só a última, 
 
 test('createStyle: cria e grava; repetir a mesma classe devolve o erro e não grava', async () => {
     const { book, css, saved } = mount('978');
-    let first: string | null = 'x', second: string | null = null;
+    let first = 'x' as string | null, second = null as string | null; // o TS não vê as atribuições dentro de act()
     act(() => { first = book().createStyle('p-nota', 'color: red;'); });
     await act(async () => { await wait(60); });
     act(() => { second = book().createStyle('p-nota', 'color: blue;'); });
