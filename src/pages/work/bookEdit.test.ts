@@ -104,3 +104,11 @@ test('criar capítulo num livro sem h1: vai para o topo', () => {
     const b = book('<p class="chapter-break" data-title="x"></p><p>a</p>');
     expect(be.addChapter(b).html?.startsWith('<p class="chapter-break-h1" data-title="Novo Capítulo"')).toBe(true);
 });
+
+test('removeCharStyle: retira o estilo do livro; null se ninguém o usa', () => {
+    const b = book('<p class="chapter-break" data-title="x"></p><p>a <span class="c-x">b</span></p>');
+    const r = be.removeCharStyle(b, 'c-x');
+    expect(r?.commit).toBe('keep');
+    expect(r?.html).toContain('<p>a b</p>');
+    expect(be.removeCharStyle(b, 'c-outro')).toBeNull();
+});

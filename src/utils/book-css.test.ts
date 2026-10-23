@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { styleClassOf, listCharStyles, listCustomStyles, createCustomStyle, forExport, forEditor } from './book-css';
+import { styleClassOf, listCharStyles, readCustomStyle, updateCustomStyle, deleteCustomStyle, listCustomStyles, createCustomStyle, forExport, forEditor } from './book-css';
 
 const EDITOR = '/* === EDITOR (não exportado para EPUB) === */';
 const create = (css: string, cls: string, body: string) => {
@@ -88,4 +88,21 @@ test('estilos de caracteres: c- à parte dos de parágrafo na mesma secção', (
     if (!('css' in second)) throw new Error(second.error);
     expect(listCharStyles(second.css)).toEqual(['c-destaque']);
     expect(listCustomStyles(second.css)).toEqual(['p-nota']);
+});
+
+test('editar e apagar um estilo personalizado: lê, troca as declarações, recusa vazio/inexistente, apaga só essa regra', () => {
+    const a = createCustomStyle('body { color: black; }', 'c-destaque', 'font-weight: bold;');
+    if (!('css' in a)) throw new Error(a.error);
+    const b = createCustomStyle(a.css, 'c-nota', 'color: red;');
+    if (!('css' in b)) throw new Error(b.error);
+    expect(readCustomStyle(b.css, 'c-destaque')).toBe('font-weight: bold;');
+    const upd = updateCustomStyle(b.css, 'c-destaque', 'font-style: italic; color: #c00;');
+    if (!('css' in upd)) throw new Error(upd.error);
+    expect(readCustomStyle(upd.css, 'c-destaque')).toBe('font-style: italic; color: #c00;');
+    expect(readCustomStyle(upd.css, 'c-nota')).toBe('color: red;');
+    expect(updateCustomStyle(b.css, 'c-destaque', '  ')).toEqual({ error: 'Define pelo menos uma declaração.' });
+    expect('error' in updateCustomStyle(b.css, 'c-nao-existe', 'color: red;')).toBe(true);
+    const del = deleteCustomStyle(upd.css, 'c-destaque');
+    expect(listCharStyles(del)).toEqual(['c-nota']);
+    expect(del).toContain('body { color: black; }');
 });

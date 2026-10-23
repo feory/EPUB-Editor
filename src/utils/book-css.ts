@@ -5,7 +5,7 @@
 //   forExport(css)  — o que vai para o EPUB: corta a parte só-editor (mantendo os estilos personalizados)
 //   createCustomStyle / listCustomStyles / styleClassOf — estilos personalizados
 import { ensureBaselineCss } from './baseline-css';
-import { hasRule } from './css-rule';
+import { hasRule, readRuleBody, replaceRuleBody, removeRule } from './css-rule';
 import { isCharStyle } from './char-styles';
 
 const SECTION = '/* === ESTILOS PERSONALIZADOS === */';
@@ -55,6 +55,20 @@ export function createCustomStyle(css: string, cls: string, body: string): { css
     if (hasRule(css, `.${cls}`)) return { error: `Já existe um estilo ".${cls}".` };
     return { css: addCustomStyle(css, cls, body) };
 }
+
+/** O corpo (declarações) do estilo `.cls`, ou '' se não existe. */
+export const readCustomStyle = (css: string, cls: string): string => readRuleBody(css, `.${cls}`);
+
+/** Troca as declarações do estilo `.cls`, ou devolve o erro (não existe / corpo vazio). */
+export function updateCustomStyle(css: string, cls: string, body: string): { css: string } | { error: string } {
+    if (!hasRule(css, `.${cls}`)) return { error: `O estilo ".${cls}" já não existe.` };
+    const clean = body.replace(/[{}]/g, '').trim();
+    if (!clean) return { error: 'Define pelo menos uma declaração.' };
+    return { css: replaceRuleBody(css, `.${cls}`, clean) };
+}
+
+/** Apaga o estilo `.cls` do CSS do livro. */
+export const deleteCustomStyle = (css: string, cls: string): string => removeRule(css, `.${cls}`);
 
 /** Corrige o style.css guardado de livros antigos (marcador de capítulo, fontes) e acrescenta as regras-base em falta. */
 export function forEditor(css: string): string {

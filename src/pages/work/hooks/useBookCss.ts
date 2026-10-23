@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { useStyles } from '../../../context/StyleContext';
 import { applyRule } from '../../../utils/css-rule';
-import { createCustomStyle } from '../../../utils/book-css';
+import { createCustomStyle, updateCustomStyle, deleteCustomStyle } from '../../../utils/book-css';
 import { textPatchToDecls, type TextProps } from '../editor/textProps';
 
 /**
@@ -31,5 +31,15 @@ export function useBookCss(isbn: string | undefined, debounceMs = 600) {
         return null;
     }, [commit, getCurrentCss]);
 
-    return { editRule, createStyle };
+    /** Editar as declarações de um estilo: devolve o erro, ou null se gravou. */
+    const updateStyle = useCallback((cls: string, body: string): string | null => {
+        const updated = updateCustomStyle(getCurrentCss(), cls, body);
+        if ('error' in updated) return updated.error;
+        commit(updated.css);
+        return null;
+    }, [commit, getCurrentCss]);
+
+    const deleteStyle = useCallback((cls: string) => commit(deleteCustomStyle(getCurrentCss(), cls)), [commit, getCurrentCss]);
+
+    return { editRule, createStyle, updateStyle, deleteStyle };
 }

@@ -29,4 +29,16 @@ export function applyRule(css: string, selector: string, decls: [string, string 
     if (m) return css.replace(ruleRe(selector), (_all, pre: string, gap: string) => `${pre}${gap}${selector} { ${body} }`);
     return body ? `${css.trimEnd()}\n\n    ${selector} { ${body} }\n` : css;
 }
+/** Declarações da regra tal como estão escritas (`a: b; c: d;`), ou '' se não existe. */
+export const readRuleBody = (css: string, selector: string): string => (ruleRe(selector).exec(css)?.[3] ?? '').trim();
+
+/** Troca TODO o corpo da regra (mantém o resto do CSS); sem a regra devolve o CSS igual. */
+export const replaceRuleBody = (css: string, selector: string, body: string): string =>
+    css.replace(ruleRe(selector), (_all, pre: string, gap: string) => `${pre}${gap}${selector} { ${body} }`);
+
+/** Tira a regra (e a linha dela); sem a regra devolve o CSS igual. */
+export const removeRule = (css: string, selector: string): string =>
+    css.replace(ruleRe(selector), (_all, pre: string, gap: string) => `${pre}${gap.replace(/[ \t]*$/, '')}`) // o intervalo antes (comentários, ex. cabeçalho de secção) fica
+        .replace(/\n[ \t]*\n[ \t]*\n/g, '\n\n');
+
 export const hasRule = (css: string, selector: string): boolean => ruleRe(selector).test(css);

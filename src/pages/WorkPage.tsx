@@ -387,7 +387,7 @@ export function WorkPage() {
   };
 
   // CSS do livro editado a partir do editor (modo "Estilo" do painel, "Criar estilo…"): aplica já, grava com debounce.
-  const { editRule: handleTextStyle, createStyle: handleCreateStyle } = useBookCss(isbn);
+  const { editRule: handleTextStyle, createStyle: handleCreateStyle, updateStyle: handleUpdateStyle, deleteStyle: handleDeleteStyle } = useBookCss(isbn);
 
   const anySidebarOpen = panels.anyOpen;
 
@@ -606,6 +606,8 @@ export function WorkPage() {
           css={getCurrentCss()}
           onEdit={(edit) => editorRef.current?.editBlock(edit)}
           onCreateStyle={handleCreateStyle}
+          onUpdateStyle={handleUpdateStyle}
+          onDeleteStyle={(cls) => { handleDeleteStyle(cls); work.handleRemoveCharStyle(cls); }}
           onClose={() => sidebars.setShowTextSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}

@@ -14,6 +14,7 @@ import type { ChapterLevel } from '../../utils/chapters';
 import { applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import { linkIndiceEntries, linkOneIndiceEntry, unlinkOneIndiceEntry, listSubtitles } from '../../utils/indice-links';
 import { unwrapCommentAnchor } from '../../utils/comment-anchor';
+import { removeCharStyleFromHtml, charStyleLabel } from '../../utils/char-styles';
 import { fixLinks, validateLinks } from '../../services/validation/link-validator';
 import { insertPageBreaks } from '../../services/page-list/page-list';
 import type { PageAnchor } from '../../services/page-list/page-list';
@@ -81,6 +82,12 @@ export function duplicateChapter(book: Book, index: number): BookEdit | null {
 
 export function addChapter(book: Book): BookEdit {
     return reset(insertChapterPart(book.parts, 'Novo Capítulo'), 'Capítulo criado!');
+}
+
+/** Apagar um estilo de caracteres: retira-o dos spans do livro (o CSS apaga-se à parte). null se ninguém o usa. */
+export function removeCharStyle(book: Book, cls: string): BookEdit | null {
+    const html = removeCharStyleFromHtml(book.html, cls);
+    return html === book.html ? null : keep(html, `Estilo "${charStyleLabel(cls)}" retirado do texto.`);
 }
 
 export function applyDropCaps(book: Book): BookEdit {

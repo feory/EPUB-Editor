@@ -52,6 +52,7 @@ export const registeredCharStyles = (editor: Editor): string[] => Object.keys(ed
 // menu "Formats" → "Parágrafos". O TinyMCE só lê `style_formats` no arranque; `addStyleModifications`
 // (replace) refaz a lista, lida de novo cada vez que o menu abre.
 export function syncCustomStyleFormats(editor: Editor, custom: string[], charStyles: string[] = []) {
+    registeredCharStyles(editor).filter((c) => !charStyles.includes(c)).forEach((c) => editor.formatter.unregister(c)); // estilo apagado
     charStyles.forEach((c) => ensureCharStyleFormat(editor, c));
     custom.forEach((c) => { if (!editor.formatter.has(c)) editor.formatter.register(c, { selector: 'p,li', classes: c }); });
     (editor as unknown as { dispatch(name: string, args: object): void })

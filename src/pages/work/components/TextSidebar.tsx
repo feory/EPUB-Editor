@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { X, RotateCcw, Plus, Bold, Italic, Underline, Strikethrough, Superscript, Subscript } from 'lucide-react';
+import { X, RotateCcw, Plus, Pencil, Trash2, Bold, Italic, Underline, Strikethrough, Superscript, Subscript } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { Row, Select, Section, Color, LenInput } from './panelFields';
 import { FONT_FAMILIES, INLINE_FORMATS, EMPTY_SELECTION, selectionToCss, type SelectionProps, type SelectionInfo } from '../editor/selectionProps';
-import { listCharStyles } from '../../../utils/book-css';
+import { listCharStyles, readCustomStyle } from '../../../utils/book-css';
 import { charStyleClassOf, charStyleLabel } from '../../../utils/char-styles';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 
@@ -12,6 +12,8 @@ interface TextSidebarProps {
     css: string;                                      // CSS atual do livro (estilos de caracteres existentes)
     onEdit: (edit: BlockEdit) => void;
     onCreateStyle: (cls: string, body: string) => string | null; // devolve o erro, ou null se criou
+    onUpdateStyle: (cls: string, body: string) => string | null; // idem, ao editar as declarações
+    onDeleteStyle: (cls: string) => void;                        // apaga a regra e retira o estilo do texto
     onClose: () => void;
     width: number;
     onResize: (width: number) => void;
@@ -27,9 +29,21 @@ const ICONS: Record<string, React.ReactNode> = {
 // letras e tipo de letra. Cada campo escreve/tira UM formato inline; o parágrafo é do Mini-menu e do painel do bloco.
 // Estilos de caracteres: classes `.c-nome` na secção de estilos do livro; aplicam-se à seleção como <span class>. Criar um
 // estilo guarda o que a seleção tem agora (formatos + aspeto) e aplica-o à seleção.
-const CharStyles: React.FC<{ selection: SelectionInfo; css: string; onEdit: (edit: BlockEdit) => void; onCreate: (cls: string, body: string) => string | null }> = ({ selection, css, onEdit, onCreate }) => {
+const CharStyles: React.FC<{
+    selection: SelectionInfo; css: string; onEdit: (edit: BlockEdit) => void;
+    onCreate: (cls: string, body: string) => string | null; onUpdate: (cls: string, body: string) => string | null; onDelete: (cls: string) => void;
+}> = ({ selection, css, onEdit, onCreate, onUpdate, onDelete }) => {
     const [name, setName] = useState<string | null>(null);
     const [error, setError] = useState('');
+    // Editar um estilo: as declarações CSS dele, uma por linha; apagar pede confirmação.
+    const [editing, setEditing] = useState<{ cls: string; body: string; confirmDelete: boolean } | null>(null);
+    const startEdit = (cls: string) => { setName(null); setError(''); setEditing({ cls, body: readCustomStyle(css, cls).split(';').map((d) => d.trim()).filter(Boolean).map((d) => `${d};`).join('\n'), confirmDelete: false }); };
+    const save = () => {
+        if (!editing) return;
+        const err = onUpdate(editing.cls, editing.body.split('\n').join(' '));
+        if (err) return setError(err);
+        setEditing(null); setError('');
+    };
     const create = () => {
         const cls = charStyleClassOf(name ?? '');
         if (!cls) return setError('Dá um nome ao estilo.');
@@ -45,7 +59,7 @@ const CharStyles: React.FC<{ selection: SelectionInfo; css: string; onEdit: (edi
             <div className="flex items-center justify-between">
                 <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Estilos de caracteres</h4>
                 {name === null && (
-                    <button type="button" onClick={() => setName('')} title="Novo estilo" aria-label="Novo estilo"
+                    <button type="button" onClick={() => { setEditing(null); setError(''); setName(''); }} title="Novo estilo" aria-label="Novo estilo"
                         className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"><Plus size={16} /></button>
                 )}
             </div>
@@ -53,14 +67,40 @@ const CharStyles: React.FC<{ selection: SelectionInfo; css: string; onEdit: (edi
                 {listCharStyles(css).map((cls) => {
                     const on = selection.formats.includes(cls);
                     return (
-                        <button key={cls} type="button" aria-pressed={on} onClick={() => onEdit({ target: 'inlineFormat', format: cls })}
-                            className={`h-8 px-3 rounded-full border text-xs transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
-                            {charStyleLabel(cls)}
-                        </button>
+                        <span key={cls} className={`group inline-flex items-center h-8 rounded-full border text-xs transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
+                            <button type="button" aria-pressed={on} onClick={() => onEdit({ target: 'inlineFormat', format: cls })} className="h-full pl-3 pr-2 rounded-l-full">{charStyleLabel(cls)}</button>
+                            <button type="button" title="Editar estilo" aria-label={`Editar ${charStyleLabel(cls)}`} onClick={() => startEdit(cls)}
+                                className="h-full pr-2.5 pl-0.5 rounded-r-full opacity-50 hover:opacity-100"><Pencil size={11} /></button>
+                        </span>
                     );
                 })}
                 {listCharStyles(css).length === 0 && name === null && <span className="text-xs text-text-muted">Ainda não há estilos.</span>}
             </div>
+            {editing && (
+                <div className="flex flex-col gap-2">
+                    <p className="text-xs font-semibold text-text-main">Estilo "{charStyleLabel(editing.cls)}"</p>
+                    <textarea value={editing.body} rows={5} spellCheck={false} onChange={(e) => { setEditing({ ...editing, body: e.target.value }); setError(''); }}
+                        placeholder="font-weight: bold;&#10;color: #c00;" className="rounded-lg border border-border px-2 py-1.5 text-xs font-mono outline-none focus:border-primary" />
+                    <p className="text-xs text-text-muted">Declarações CSS, uma por linha. A alteração vale em todo o livro.</p>
+                    {error && <div className="text-xs text-rose-600">{error}</div>}
+                    {editing.confirmDelete ? (
+                        <div className="flex flex-col gap-2">
+                            <p className="text-xs text-rose-700">Apagar o estilo e retirá-lo de todo o texto onde foi aplicado?</p>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => { onDelete(editing.cls); setEditing(null); setError(''); }} className="h-8 px-3 rounded-lg bg-rose-600 text-white text-xs hover:bg-rose-700">Apagar</button>
+                                <button type="button" onClick={() => setEditing({ ...editing, confirmDelete: false })} className="h-8 px-3 rounded-lg border border-border text-xs hover:bg-slate-50">Cancelar</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            <button type="button" onClick={save} className="h-8 px-3 rounded-lg bg-slate-700 text-white text-xs hover:bg-slate-800">Guardar</button>
+                            <button type="button" onClick={() => { setEditing(null); setError(''); }} className="h-8 px-3 rounded-lg border border-border text-xs hover:bg-slate-50">Cancelar</button>
+                            <button type="button" onClick={() => setEditing({ ...editing, confirmDelete: true })} title="Apagar estilo" aria-label="Apagar estilo"
+                                className="ml-auto h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 size={14} /></button>
+                        </div>
+                    )}
+                </div>
+            )}
             {name !== null && (
                 <div className="flex flex-col gap-2">
                     <input autoFocus placeholder="Nome (ex.: Destaque)" value={name} onChange={(e) => { setName(e.target.value); setError(''); }}
@@ -78,7 +118,7 @@ const CharStyles: React.FC<{ selection: SelectionInfo; css: string; onEdit: (edi
     );
 };
 
-export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onCreateStyle, onClose, width, onResize }) => {
+export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onCreateStyle, onUpdateStyle, onDeleteStyle, onClose, width, onResize }) => {
     const { selection } = info;
     const set = (patch: Partial<SelectionProps>) => onEdit({ target: 'selection', patch });
     return (
@@ -94,7 +134,7 @@ export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onC
                 </div>
             ) : (
                 <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
-                    <CharStyles selection={selection} css={css} onEdit={onEdit} onCreate={onCreateStyle} />
+                    <CharStyles selection={selection} css={css} onEdit={onEdit} onCreate={onCreateStyle} onUpdate={onUpdateStyle} onDelete={onDeleteStyle} />
                     <Section title="Formato">
                         <div className="grid grid-cols-3 gap-2">
                             {INLINE_FORMATS.map(([format, label]) => {
