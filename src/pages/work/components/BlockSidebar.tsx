@@ -436,7 +436,7 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
                 {info.selection && <SelectionSection selection={info.selection} onChange={(patch) => onEdit({ target: 'selection', patch })} />}
                 {info.image && <ImageSection image={info.image} onChange={(patch) => onEdit({ target: 'image', patch })} />}
-                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={onCreateStyle} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
+                {info.text && !info.selection && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={onCreateStyle} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
                 {info.grid && <GridSection grid={info.grid} onChange={(patch) => onEdit({ target: 'grid', patch })} onApplyToCells={() => onEdit({ target: 'gridCells' })} />}
                 {info.box && <BoxSection box={info.box} onChange={(patch) => onEdit({ target: 'box', patch })} />}
             </div>
