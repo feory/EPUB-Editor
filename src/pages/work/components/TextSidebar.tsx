@@ -40,7 +40,14 @@ const CharStyles: React.FC<{ selection: SelectionInfo; css: string; onEdit: (edi
         setName(null); setError('');
     };
     return (
-        <Section title="Estilos de caracteres">
+        <Section>
+            <div className="flex items-center justify-between">
+                <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Estilos de caracteres</h4>
+                {name === null && (
+                    <button type="button" onClick={() => setName('')} title="Novo estilo" aria-label="Novo estilo"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"><Plus size={16} /></button>
+                )}
+            </div>
             <div className="flex flex-wrap items-center gap-1.5">
                 {listCharStyles(css).map((cls) => {
                     const on = selection.formats.includes(cls);
@@ -51,9 +58,7 @@ const CharStyles: React.FC<{ selection: SelectionInfo; css: string; onEdit: (edi
                         </button>
                     );
                 })}
-                {name === null && (
-                    <button type="button" onClick={() => setName('')} className="h-8 px-3 rounded-full border border-dashed border-slate-300 text-xs text-text-muted hover:text-text-main flex items-center gap-1"><Plus size={12} /> Novo estilo</button>
-                )}
+                {listCharStyles(css).length === 0 && name === null && <span className="text-xs text-text-muted">Ainda não há estilos.</span>}
             </div>
             {name !== null && (
                 <div className="flex flex-col gap-2">
@@ -88,6 +93,7 @@ export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onC
                 </div>
             ) : (
                 <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
+                    <CharStyles selection={selection} css={css} onEdit={onEdit} onCreate={onCreateStyle} />
                     <Section title="Formato">
                         <div className="grid grid-cols-3 gap-2">
                             {INLINE_FORMATS.map(([format, label]) => {
@@ -101,7 +107,6 @@ export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onC
                             })}
                         </div>
                     </Section>
-                    <CharStyles selection={selection} css={css} onEdit={onEdit} onCreate={onCreateStyle} />
                     <Section title="Aspeto">
                         <Row label="Cor do texto"><Color value={selection.color} fallback="#000000" onChange={(v) => set({ color: v })} /></Row>
                         <Row label="Cor de fundo"><Color value={selection.background} fallback="#ffe066" onChange={(v) => set({ background: v })} /></Row>
