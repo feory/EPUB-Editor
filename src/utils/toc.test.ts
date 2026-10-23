@@ -97,3 +97,8 @@ test('renameChapterPart: parte sem marcador ganha marcador plano (permite [hidde
     expect(out).toBe('<p class="chapter-break" data-title="Nota [hidden]"></p><p>corpo</p>');
     expect(matchChapterBoundary(out)?.title).toBe('Nota [hidden]');
 });
+
+test('renameChapterPart: marcador sem data-title ou com data-title antes da classe também é renomeado', () => {
+    expect(renameChapterPart('<p class="chapter-break-h2"></p><h2>X</h2>', 'Novo')).toBe('<p class="chapter-break-h2" data-title="Novo"></p><h2>X</h2>');
+    expect(renameChapterPart('<p data-title="Old" class="chapter-break-h2">&nbsp;</p><h2>X</h2>', 'A & B')).toBe('<p data-title="A &amp; B" class="chapter-break-h2">&nbsp;</p><h2>X</h2>');
+});

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Edit2, GripVertical, Trash2, Check, X } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Edit2, GripVertical, Trash2, Check, X, Copy } from 'lucide-react';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { subtreeRange } from '../../../utils/toc';
@@ -20,6 +20,7 @@ interface ChapterSidebarProps {
     onEditChapterTitle: (index: number, newTitle: string) => void;
     onReorderChapter: (from: number, to: number) => void;
     onDeleteChapter: (index: number) => void;
+    onDuplicateChapter: (index: number) => void;
     readOnly?: boolean;
 }
 
@@ -33,6 +34,7 @@ interface ChapterItemProps {
     childCount: number;
     onSelectChapter: (index: number) => void;
     onRequestEdit: (index: number, currentTitle: string) => void;
+    onRequestDuplicate: (index: number) => void;
     onRequestDelete: (index: number) => void;
     onConfirmDelete: (index: number) => void;
     onCancelDelete: () => void;
@@ -50,7 +52,7 @@ const editValue = (c: Chapter) => UNTITLED_RE.test(c.title) ? '' : c.title;
 // not on every parent re-render (keystroke). Requires stable callback props.
 const ChapterItem = React.memo<ChapterItemProps>(({
     chapter, index, isActive, isDragging, dropBefore, confirmingDelete, childCount, onSelectChapter, onRequestEdit,
-    onRequestDelete, onConfirmDelete, onCancelDelete, onDragStart, onDragOverItem, onDropItem, onDragEnd, readOnly,
+    onRequestDuplicate, onRequestDelete, onConfirmDelete, onCancelDelete, onDragStart, onDragOverItem, onDropItem, onDragEnd, readOnly,
 }) => (
     <div
         className={`relative group/item rounded-xl transition-opacity ${dropBefore ? 'border-t-2 border-slate-500' : 'border-t-2 border-transparent'} ${isDragging ? 'opacity-40' : ''}`}
@@ -68,7 +70,7 @@ const ChapterItem = React.memo<ChapterItemProps>(({
     >
         <button
             onClick={() => onSelectChapter(index)}
-            className={`w-full text-left ${readOnly ? 'pl-4' : 'pl-8'} ${confirmingDelete ? 'pr-24' : 'pr-16'} py-2.5 rounded-xl text-sm font-semibold transition-all flex items-start gap-3 ${
+            className={`w-full text-left ${readOnly ? 'pl-4' : 'pl-8'} pr-24 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-start gap-3 ${
                 isActive
                     ? 'bg-slate-200 text-slate-800'
                     : 'hover:bg-slate-50 text-text-muted'
@@ -109,6 +111,13 @@ const ChapterItem = React.memo<ChapterItemProps>(({
                         title="Editar título"
                     >
                         <Edit2 size={14} />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onRequestDuplicate(index); }}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-all"
+                        title={childCount > 0 ? `Duplicar capítulo (+${childCount} sub-capítulo${childCount > 1 ? 's' : ''})` : 'Duplicar capítulo'}
+                    >
+                        <Copy size={14} />
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); onRequestDelete(index); }}
@@ -177,7 +186,7 @@ const EditTitleModal: React.FC<EditTitleModalProps> = ({ initialValue, onConfirm
 
 const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
     chapters, activeChapterIndex, isFocusMode, isSidebarOpen,
-    onToggleSidebar, onSelectChapter, onEditChapterTitle, onReorderChapter, onDeleteChapter, readOnly,
+    onToggleSidebar, onSelectChapter, onEditChapterTitle, onReorderChapter, onDeleteChapter, onDuplicateChapter, readOnly,
 }) => {
     const [editing, setEditing] = useState<{ index: number; value: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
@@ -187,6 +196,7 @@ const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
     const handleRequestEdit = useCallback((index: number, currentTitle: string) => {
         setEditing({ index, value: currentTitle });
     }, []);
+    const handleRequestDuplicate = useCallback((index: number) => onDuplicateChapter(index), [onDuplicateChapter]);
     const handleRequestDelete = useCallback((index: number) => setConfirmDelete(index), []);
     const handleCancelDelete = useCallback(() => setConfirmDelete(null), []);
     const handleConfirmDelete = useCallback((index: number) => {
@@ -202,7 +212,7 @@ const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
         setDragIndex(null);
         setOverIndex(null);
     }, [dragIndex, onReorderChapter]);
-    // childCount só serve ao botão de eliminar (escondido em readOnly) — não vale a pena calcular lá.
+    // childCount só serve aos botões de duplicar/eliminar (escondidos em readOnly) — não vale a pena calcular lá.
     const childCounts = useMemo(() => {
         if (readOnly) return [];
         const levels = chapters.map(c => c.level);
@@ -255,6 +265,7 @@ const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
                             childCount={childCounts[index] ?? 0}
                             onSelectChapter={onSelectChapter}
                             onRequestEdit={handleRequestEdit}
+                            onRequestDuplicate={handleRequestDuplicate}
                             onRequestDelete={handleRequestDelete}
                             onConfirmDelete={handleConfirmDelete}
                             onCancelDelete={handleCancelDelete}

@@ -9,7 +9,7 @@
  *  - 'reset' — reorder/eliminar/criar: o índice do capítulo ativo deixa de valer depois de
  *    mover/eliminar, restaurá-lo seria a posição errada → o ebook recarrega sem capítulo ativo.
  */
-import { renameChapterPart, changeChapterLevel, moveChapters, deleteChapterPart, insertChapterPart } from '../../utils/toc';
+import { renameChapterPart, changeChapterLevel, moveChapters, deleteChapterPart, duplicateChapterPart, insertChapterPart } from '../../utils/toc';
 import type { ChapterLevel } from '../../utils/chapters';
 import { applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import { linkIndiceEntries, linkOneIndiceEntry, unlinkOneIndiceEntry, listSubtitles } from '../../utils/indice-links';
@@ -72,6 +72,11 @@ export function deleteChapter(book: Book, index: number): BookEdit | null {
     if (!book.chapters[index]) return null;
     const html = deleteChapterPart(book.parts, levelsOf(book), index);
     return reset(html, `Capítulo ${book.chapters[index].title} eliminado!`);
+}
+
+export function duplicateChapter(book: Book, index: number): BookEdit | null {
+    if (!book.chapters[index]) return null;
+    return reset(duplicateChapterPart(book.parts, levelsOf(book), index), `Capítulo ${book.chapters[index].title} duplicado!`);
 }
 
 export function addChapter(book: Book): BookEdit {

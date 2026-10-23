@@ -3,7 +3,7 @@
  * for optimal performance across the application
  */
 
-import { insertChapterMarkers, refreshChapterMarkers } from './chapters';
+import { insertChapterMarkers, refreshChapterMarkers, chapterMarkerHtml } from './chapters';
 import { isColumnPlaceholder } from './containers';
 
 // Ocorrências de uma substring literal (split/join, não RegExp — sem escaping de caracteres
@@ -460,7 +460,7 @@ export function prependFichaTecnica(html: string): string {
   }
   // Já abre com uma quebra de capítulo (ex. IDML: Frontespício + Ficha Técnica próprios) → não duplicar.
   if (doc.body.firstElementChild?.classList.contains('chapter-break')) return doc.body.innerHTML;
-  return '<p class="chapter-break" data-title="Ficha Técnica"></p>' + doc.body.innerHTML;
+  return chapterMarkerHtml(null, 'Ficha Técnica') + doc.body.innerHTML;
 }
 
 const DROP_CAP_SKIP_CLASSES = ['footnote', 'alinea', 'p-quote', 'p-center'];

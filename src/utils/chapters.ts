@@ -42,6 +42,70 @@ export function flattenHeadingText(inner: string): string {
 const escapeAttr = (s: string) => s.replace(/"/g, '&quot;');
 
 /**
+ * O marcador de capítulo como HTML: `level` null = quebra plana. `escapedTitle` já vem escapado para atributo
+ * (quem o escreve escolhe o escape: texto de heading vs. valor RAW de um data-title existente). Único construtor.
+ */
+export const chapterMarkerHtml = (level: 'h1' | 'h2' | 'h3' | null, escapedTitle: string): string =>
+    `<p class="chapter-break${level ? `-${level}` : ''}" data-title="${escapedTitle}"></p>`;
+
+/** Marcador de nível h1/h2 (o que o editor cria/sincroniza), pelo nome de classe. */
+export const isLevelMarkerClass = (className: string): boolean => /\bchapter-break-h[12]\b/.test(className);
+
+/**
+ * Troca (ou acrescenta) o data-title na ETIQUETA DE ABERTURA de um marcador, esteja ele antes ou depois da classe
+ * ou falte de todo (marcador escrito à mão no "editar HTML"). `escapedTitle` já escapado.
+ */
+export function retitleMarkerTag(openTag: string, escapedTitle: string): string {
+    return HR_DATA_TITLE_PATTERN.test(openTag)
+        ? openTag.replace(HR_DATA_TITLE_PATTERN, () => `data-title="${escapedTitle}"`)
+        : openTag.replace(/\s*\/?>$/, m => ` data-title="${escapedTitle}"${m.trimStart()}`);
+}
+
+/** Um bloco do editor visto pelo planeador de marcadores (sem DOM: testável). */
+export interface MarkerBlock {
+    heading: 'h1' | 'h2' | null;
+    text: string;
+    /** Já há um marcador de nível mesmo antes deste bloco (ou antes do contentor de topo que o contém). */
+    markerBefore: boolean;
+    /** O bloco vem logo a seguir ao anterior da lista no documento. */
+    followsPrevious: boolean;
+}
+export type MarkerAction =
+    | { kind: 'create'; block: number; level: 'h1' | 'h2'; title: string }
+    | { kind: 'setLevel'; block: number; level: 'h1' | 'h2' }
+    | { kind: 'remove'; block: number };
+
+/**
+ * O que fazer aos marcadores depois de mudar o estilo de `blocks` (por ordem de documento):
+ *  - título sem marcador → cria; com marcador → só acerta o nível (o nome só se edita na Estrutura);
+ *  - deixou de ser título → remove o marcador;
+ *  - títulos SEGUIDOS (ex. nº + título selecionados juntos) = um só capítulo: um marcador cobre-os, e o nome
+ *    do marcador criado agora junta os textos.
+ */
+export function planChapterMarkers(blocks: MarkerBlock[]): MarkerAction[] {
+    const actions: MarkerAction[] = [];
+    let run: { create: Extract<MarkerAction, { kind: 'create' }> | null } | null = null;
+    blocks.forEach((b, i) => {
+        if (b.heading && run && b.followsPrevious) {
+            if (run.create) run.create.title = `${run.create.title} ${b.text}`.trim();
+            return;
+        }
+        run = null;
+        if (b.heading) {
+            if (b.markerBefore) {
+                actions.push({ kind: 'setLevel', block: i, level: b.heading });
+                run = { create: null };
+            } else {
+                const create: Extract<MarkerAction, { kind: 'create' }> = { kind: 'create', block: i, level: b.heading, title: b.text };
+                actions.push(create);
+                run = { create };
+            }
+        } else if (b.markerBefore) actions.push({ kind: 'remove', block: i });
+    });
+    return actions;
+}
+
+/**
  * Matches a chapter-break <p> marker as a WHOLE element (open tag through </p>) at the
  * start of `content` — non-greedy, since the marker doesn't always serialize empty
  * (TinyMCE can fill it with &nbsp;/<br> to keep the block focusable). Shared by
@@ -98,11 +162,11 @@ export function insertChapterMarkers(html: string): string {
     if (/class=["'][^"']*chapter-break-h[12][^"']*["']/i.test(html)) return html;
     // Legacy titleless break headings → titleless break markers.
     let out = html.replace(/<(h[12])[^>]*class=["'][^"']*chapter-break[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi,
-        (_m, _tag, inner) => `<p class="chapter-break" data-title="${escapeAttr(flattenHeadingText(inner))}"></p>`);
+        (_m, _tag, inner) => chapterMarkerHtml(null, escapeAttr(flattenHeadingText(inner))));
     // Marker before every remaining heading (the heading itself stays intact).
     out = out.replace(/<(h[12])([^>]*)>([\s\S]*?)<\/\1>/gi, (m, tag, _attrs, inner) => {
-        const level = (tag as string).toLowerCase();
-        return `<p class="chapter-break-${level}" data-title="${escapeAttr(flattenHeadingText(inner))}"></p>${m}`;
+        const level = (tag as string).toLowerCase() as 'h1' | 'h2';
+        return `${chapterMarkerHtml(level, escapeAttr(flattenHeadingText(inner)))}${m}`;
     });
     return out;
 }
@@ -134,5 +198,5 @@ export function matchChapterBoundary(content: string): { raw: string; level: 'h1
 // panel's own rename action (renameChapterPart).
 export function refreshChapterMarkers(html: string): string {
     return html.replace(/<(h[12])[^>]*class=["'][^"']*chapter-break[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi,
-        (_m, _tag, inner) => `<p class="chapter-break" data-title="${escapeAttr(flattenHeadingText(inner))}"></p>`);
+        (_m, _tag, inner) => chapterMarkerHtml(null, escapeAttr(flattenHeadingText(inner))));
 }

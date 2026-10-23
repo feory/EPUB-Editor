@@ -1,6 +1,8 @@
 import type { Editor } from 'tinymce';
 import { isIndiceChapterTitle, entryIndexOf } from '../../../utils/indice-links';
 import { MANUAL_ANCHOR_CLASS, manualAnchorHtml, newManualAnchorId } from '../../../utils/indice-marker';
+import { CONTAINER_SELECTOR } from '../../../utils/containers';
+import { planChapterMarkers, isLevelMarkerClass } from '../../../utils/chapters';
 import { registerEditorIcons } from './icons';
 import { SLASH_ITEMS, PARAGRAPH_QUICK_STYLES } from './config';
 import type { TinyMCEEditor } from './types';
@@ -297,23 +299,40 @@ export function createEditorSetup(deps: SetupDeps) {
         // (atalho/botão/menu) — nunca no NodeChange — para que apagar o marcador à mão
         // (h2 vira subtítulo dentro do capítulo) NÃO seja re-inserido ao clicar.
         function syncChapterMarker() {
-            const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
-            if (!block) return;
-            const prev = block.previousElementSibling as HTMLElement | null;
-            const prevIsMarker = !!prev && prev.nodeName === 'P' && /\bchapter-break-h[12]\b/.test(prev.className);
-            if (/^H[12]$/.test(block.nodeName)) {
-                const level = block.nodeName.toLowerCase();
-                if (prevIsMarker) {
+            // Seleção de vários blocos: getNode() é o ancestral comum (sem bloco) — usar os blocos selecionados.
+            const selected = (editor.selection.getSelectedBlocks() as HTMLElement[]).filter(b => /^(P|H[1-6])$/.test(b.nodeName) && !/\bchapter-break/.test(b.className));
+            const first = blockOf(editor.selection.getNode()) as HTMLElement | null;
+            const blocks = selected.length ? selected : first ? [first] : [];
+            if (!blocks.length) return;
+            // Dentro de caixa/grelha o marcador vai antes do contentor de topo: no meio do div partiria
+            // o capítulo (HTML por fechar). O heading continua dentro da caixa.
+            const anchors = blocks.map((block) => {
+                let anchor: HTMLElement = block;
+                for (let c = block.parentElement?.closest(CONTAINER_SELECTOR); c; c = c.parentElement?.closest(CONTAINER_SELECTOR)) anchor = c as HTMLElement;
+                return anchor;
+            });
+            const prevMarker = (anchor: HTMLElement) => {
+                const prev = anchor.previousElementSibling as HTMLElement | null;
+                return prev && prev.nodeName === 'P' && isLevelMarkerClass(prev.className) ? prev : null;
+            };
+            const plan = planChapterMarkers(blocks.map((block, i) => ({
+                heading: /^H[12]$/.test(block.nodeName) ? (block.nodeName.toLowerCase() as 'h1' | 'h2') : null,
+                text: (block.textContent || '').replace(/\s+/g, ' ').trim(),
+                markerBefore: !!prevMarker(anchors[i]),
+                followsPrevious: i > 0 && blocks[i - 1].nextElementSibling === block,
+            })));
+            for (const action of plan) {
+                const anchor = anchors[action.block];
+                if (action.kind === 'create') {
+                    const marker = editor.dom.create('p', { class: `chapter-break-${action.level}`, 'data-title': action.title });
+                    anchor.parentNode!.insertBefore(marker, anchor);
+                } else if (action.kind === 'setLevel') {
                     // Só sincroniza o nível (classe) — o título é só editável pelo botão
                     // de edição da Estrutura/TOC, nunca ao escrever no heading do editor.
-                    editor.dom.setAttrib(prev, 'class', `chapter-break-${level}`);
+                    editor.dom.setAttrib(prevMarker(anchor)!, 'class', `chapter-break-${action.level}`);
                 } else {
-                    const title = (block.textContent || '').replace(/\s+/g, ' ').trim();
-                    const marker = editor.dom.create('p', { class: `chapter-break-${level}`, 'data-title': title });
-                    block.parentNode!.insertBefore(marker, block);
+                    editor.dom.remove(prevMarker(anchor)!); // heading despromovido → remover o seu marcador
                 }
-            } else if (prevIsMarker) {
-                editor.dom.remove(prev); // heading despromovido → remover o seu marcador
             }
             editor.dispatch('Change');
         }

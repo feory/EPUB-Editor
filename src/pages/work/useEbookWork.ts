@@ -250,6 +250,8 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         applyEdit(bookEdit.changeLevel(getBook(), index, level)), [applyEdit, getBook]);
     const handleDeleteChapter = useCallback((index: number) =>
         applyEdit(bookEdit.deleteChapter(getBook(), index)), [applyEdit, getBook]);
+    const handleDuplicateChapter = useCallback((index: number) =>
+        applyEdit(bookEdit.duplicateChapter(getBook(), index)), [applyEdit, getBook]);
     const handleAddChapter = useCallback(() => applyEdit(bookEdit.addChapter(getBook())), [applyEdit, getBook]);
     const handleRemoveCommentAnchor = useCallback((anchorId: string) =>
         applyEdit(bookEdit.removeCommentAnchor(getBook(), anchorId)), [applyEdit, getBook]);
@@ -362,6 +364,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         handleEditChapterTitle,
         handleReorderChapter,
         handleDeleteChapter,
+        handleDuplicateChapter,
         handleAddChapter,
         handleChangeChapterLevel,
         handleApplyDropCaps,

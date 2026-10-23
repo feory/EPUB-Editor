@@ -40,6 +40,16 @@ test('mover/eliminar/criar usam commit reset (o índice ativo deixa de valer)', 
     expect(added.html?.startsWith('<p class="chapter-break-h1" data-title="Novo Capítulo"')).toBe(true);
 });
 
+test('duplicar: cópia logo a seguir, sem ids e com título "(cópia)"', () => {
+    const b = book('<p class="chapter-break-h1" data-title="A"></p><h1 id="x">A</h1><p>t</p>' + ch('B'));
+    const d = be.duplicateChapter(b, 0);
+    expect(d?.commit).toBe('reset');
+    expect(d?.html).toContain('data-title="A (cópia)"');
+    expect(d?.html?.match(/id="x"/g)?.length).toBe(1); // a cópia perde o id
+    expect(book(d!.html!).chapters.map(c => c.title).slice(0, 3)).toEqual(['A', 'A (cópia)', 'B']);
+    expect(be.duplicateChapter(b, 99)).toBeNull();
+});
+
 test('mudar nível: mesmo nível = nada; senão keep', () => {
     const b = book(HTML);
     expect(be.changeLevel(b, 0, 'h1')).toBeNull();

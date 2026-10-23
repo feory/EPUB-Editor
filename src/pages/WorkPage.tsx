@@ -498,6 +498,7 @@ export function WorkPage() {
               onEditChapterTitle={work.handleEditChapterTitle}
               onReorderChapter={work.handleReorderChapter}
               onDeleteChapter={work.handleDeleteChapter}
+              onDuplicateChapter={work.handleDuplicateChapter}
               readOnly={work.readOnly}
             />
 

@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { splitChapters, splitChapterSegments, countChapterMarkers, matchChapterBoundary, classifyChapterPart, insertChapterMarkers } from './chapters';
+import { splitChapters, splitChapterSegments, countChapterMarkers, matchChapterBoundary, classifyChapterPart, insertChapterMarkers, chapterMarkerHtml, retitleMarkerTag, planChapterMarkers, isLevelMarkerClass, type MarkerBlock } from './chapters';
 
 const BOOK = '<p>Ficha</p>'
     + '<p class="chapter-break-h1" data-title="Um"></p><h1>Um</h1><p>a</p>'
@@ -42,4 +42,41 @@ test('classifyChapterPart: capítulo sem título (parte sem marcador, quebra pla
     // com título (Ficha Técnica, Frontespício…) também é h1; só [hidden] fica quebra
     expect(classifyChapterPart('<p class="chapter-break" data-title="Ficha Técnica"></p>', 0)).toEqual({ title: 'Ficha Técnica', level: 'h1' });
     expect(classifyChapterPart('<p class="chapter-break" data-title="[hidden]Índice"></p>', 0)).toMatchObject({ level: 'break' });
+});
+
+test('chapterMarkerHtml: nível e quebra plana', () => {
+    expect(chapterMarkerHtml('h2', 'A')).toBe('<p class="chapter-break-h2" data-title="A"></p>');
+    expect(chapterMarkerHtml(null, 'A')).toBe('<p class="chapter-break" data-title="A"></p>');
+    expect(isLevelMarkerClass('chapter-break-h2')).toBe(true);
+    expect(isLevelMarkerClass('chapter-break')).toBe(false);
+});
+
+test('retitleMarkerTag: com data-title (antes ou depois da classe) e sem data-title', () => {
+    expect(retitleMarkerTag('<p class="chapter-break-h2" data-title="Old">', 'N')).toBe('<p class="chapter-break-h2" data-title="N">');
+    expect(retitleMarkerTag('<p data-title="Old" class="chapter-break-h2">', 'N')).toBe('<p data-title="N" class="chapter-break-h2">');
+    expect(retitleMarkerTag('<p class="chapter-break-h2">', 'N')).toBe('<p class="chapter-break-h2" data-title="N">');
+});
+
+const blk = (heading: MarkerBlock['heading'], text: string, o: Partial<MarkerBlock> = {}): MarkerBlock =>
+    ({ heading, text, markerBefore: false, followsPrevious: false, ...o });
+
+test('planChapterMarkers: um título sem marcador cria-o; com marcador só acerta o nível', () => {
+    expect(planChapterMarkers([blk('h2', 'A')])).toEqual([{ kind: 'create', block: 0, level: 'h2', title: 'A' }]);
+    expect(planChapterMarkers([blk('h1', 'A', { markerBefore: true })])).toEqual([{ kind: 'setLevel', block: 0, level: 'h1' }]);
+});
+
+test('planChapterMarkers: deixar de ser título remove o marcador; sem marcador não faz nada', () => {
+    expect(planChapterMarkers([blk(null, 'A', { markerBefore: true })])).toEqual([{ kind: 'remove', block: 0 }]);
+    expect(planChapterMarkers([blk(null, 'A')])).toEqual([]);
+});
+
+test('planChapterMarkers: títulos seguidos selecionados juntos = um só capítulo, com os textos juntos', () => {
+    const plan = planChapterMarkers([blk('h2', 'XV'), blk('h2', 'AGORA ANTES.', { followsPrevious: true })]);
+    expect(plan).toEqual([{ kind: 'create', block: 0, level: 'h2', title: 'XV AGORA ANTES.' }]);
+});
+
+test('planChapterMarkers: títulos não adjacentes são capítulos distintos; marcador já existente não é renomeado', () => {
+    expect(planChapterMarkers([blk('h2', 'A'), blk('h2', 'B')]).map(a => a.kind)).toEqual(['create', 'create']);
+    const plan = planChapterMarkers([blk('h2', 'XV', { markerBefore: true }), blk('h2', 'T', { followsPrevious: true })]);
+    expect(plan).toEqual([{ kind: 'setLevel', block: 0, level: 'h2' }]);
 });

@@ -1,7 +1,8 @@
 // Operações puras do Editor de TOC: reordenar (por subárvore) e renomear capítulos.
 // Trabalham sobre as `parts` do split de capítulos (1:1 com `chapters[]`), sem tocar no DOM.
 
-import { matchChapterBoundary, isExplicitH1Part, type ChapterLevel as Level } from './chapters';
+import { decodeEntities } from './entities';
+import { matchChapterBoundary, isExplicitH1Part, chapterMarkerHtml, retitleMarkerTag, type ChapterLevel as Level } from './chapters';
 
 const escapeHtml = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -38,7 +39,7 @@ export function moveChapters(parts: string[], levels: Level[], from: number, to:
  * que vem antes dos capítulos. Devolve o novo fullHtml.
  */
 export function insertChapterPart(parts: string[], title: string): string {
-    const part = `${changeChapterLevel(`<p class="chapter-break" data-title="${escapeHtml(title)}"></p>`, 'h1')}<p></p>`;
+    const part = `${changeChapterLevel(chapterMarkerHtml(null, escapeHtml(title)), 'h1')}<p></p>`;
     const firstH1 = parts.findIndex(isExplicitH1Part);
     const at = firstH1 === -1 ? 0 : firstH1;
     return [...parts.slice(0, at), part, ...parts.slice(at)].join('');
@@ -54,6 +55,18 @@ export function deleteChapterPart(parts: string[], levels: Level[], index: numbe
 }
 
 /**
+ * Duplica a subárvore de `index` (h1 → o próprio + filhos) logo a seguir a ela. A cópia perde os `id` (duplicados
+ * partiriam links/notas: ficam a apontar para o original) e o 1.º título ganha " (cópia)". Devolve o novo fullHtml.
+ */
+export function duplicateChapterPart(parts: string[], levels: Level[], index: number): string {
+    const [s, e] = subtreeRange(levels, index);
+    const copy = parts.slice(s, e).map(p => p.replace(/\s+id=("[^"]*"|'[^']*')/gi, ''));
+    const title = matchChapterBoundary(copy[0])?.title ?? '';
+    copy[0] = renameChapterPart(copy[0], `${decodeEntities(title)} (cópia)`.trim());
+    return [...parts.slice(0, e), ...copy, ...parts.slice(e)].join('');
+}
+
+/**
  * Renomeia uma parte de capítulo: só atualiza o `data-title` do marcador (a entrada da
  * Estrutura/TOC). Nunca toca no heading (h1/h2/h3) do corpo — o botão de editar muda o
  * capítulo, não o título escrito no editor; o inverso (editar o heading) também não
@@ -62,11 +75,9 @@ export function deleteChapterPart(parts: string[], levels: Level[], index: numbe
 export function renameChapterPart(part: string, newTitle: string): string {
     const safe = escapeHtml(newTitle.trim());
     // Parte sem marcador (quebra implícita): o 1.º rename cria o marcador plano.
-    if (!matchChapterBoundary(part)) return `<p class="chapter-break" data-title="${safe}"></p>${part}`;
-    return part.replace(
-        /(class=["'][^"']*chapter-break[^"']*["'][^>]*data-title=)(?:"[^"]*"|'[^']*')/i,
-        `$1"${safe}"`,
-    );
+    if (!matchChapterBoundary(part)) return `${chapterMarkerHtml(null, safe)}${part}`;
+    const open = part.match(/^<(?:p|hr)\b[^>]*>/i)![0];
+    return retitleMarkerTag(open, safe) + part.slice(open.length);
 }
 
 /**
@@ -86,11 +97,11 @@ export function changeChapterLevel(part: string, newLevel: Level): string {
 
     if (newLevel === 'break') {
         const newRest = headingMatch ? `<p>${headingMatch[2]}</p>${rest.slice(headingMatch[0].length)}` : rest;
-        return `<p class="chapter-break" data-title="${title}"></p>${newRest}`;
+        return `${chapterMarkerHtml(null, title)}${newRest}`;
     }
 
     const n = newLevel.slice(1);
-    const newMarker = `<p class="chapter-break-h${n}" data-title="${title}"></p>`;
+    const newMarker = chapterMarkerHtml(`h${n}` as 'h1' | 'h2' | 'h3', title);
     if (headingMatch) return `${newMarker}<h${n}>${headingMatch[2]}</h${n}>${rest.slice(headingMatch[0].length)}`;
     return `${newMarker}<h${n}>${title}</h${n}>${rest}`;
 }
