@@ -92,7 +92,6 @@ const StyleEditor: React.FC<{
                     <input value={name} onChange={(e) => { setName(e.target.value); setError(''); }} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} aria-label="Nome do estilo"
                         className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2 text-sm outline-none focus:border-primary" />
                 </Row>
-                <p className="text-xs text-text-muted">As alterações, incluindo o nome, valem em todo o livro, onde o estilo foi aplicado.</p>
                 {error && <div className="text-xs text-rose-600">{error}</div>}
                 {confirming ? (
                     <div className="flex flex-col gap-2">
