@@ -3,7 +3,8 @@ import { X, RotateCcw, Plus, MoreHorizontal, Pencil, Copy, Trash2, Bold, Italic,
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { Row, Select, Section, Color, LenInput } from './panelFields';
 import { FONT_FAMILIES, INLINE_FORMATS, EMPTY_SELECTION, selectionToCss, cssToSelection, type SelectionProps, type SelectionInfo } from '../editor/selectionProps';
-import { listCharStyles, readCustomStyle } from '../../../utils/book-css';
+import { listCharStyles, readCustomStyle, updateCustomStyle } from '../../../utils/book-css';
+import { useStyles } from '../../../context/StyleContext';
 import { charStyleClassOf, charStyleLabel, cloneCharStyleClass } from '../../../utils/char-styles';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 
@@ -59,7 +60,17 @@ const StyleEditor: React.FC<{
     cls: string; css: string; onSave: (body: string) => string | null; onDelete: () => void; onCancel: () => void;
 }> = ({ cls, css, onSave, onDelete, onCancel }) => {
     const [{ selection: initial, rest }] = useState(() => cssToSelection(readCustomStyle(css, cls)));
+    const [baseCss] = useState(css); // o CSS do livro sem a pré-visualização
     const [draft, setDraft] = useState<SelectionInfo>(initial);
+    const { setTempCss } = useStyles();
+    const bodyOf = (d: SelectionInfo) => [selectionToCss(d), ...rest.map((x) => `${x};`)].filter(Boolean).join(' ');
+    // Em tempo real: cada alteração do rascunho aplica-se já ao CSS do editor (temporário); cancelar, guardar ou fechar desfaz.
+    useEffect(() => {
+        const preview = updateCustomStyle(baseCss, cls, bodyOf(draft));
+        setTempCss('css' in preview ? preview.css : baseCss);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draft]);
+    useEffect(() => () => setTempCss(null), [setTempCss]);
     const [error, setError] = useState('');
     const [confirming, setConfirming] = useState(false);
     const change = (patch: Partial<SelectionProps>) => { setDraft({ ...draft, ...patch }); setError(''); };
@@ -68,8 +79,7 @@ const StyleEditor: React.FC<{
         setError('');
     };
     const save = () => {
-        const body = [selectionToCss(draft), ...rest.map((d) => `${d};`)].filter(Boolean).join(' ');
-        const err = onSave(body);
+        const err = onSave(bodyOf(draft));
         if (err) setError(err);
     };
     return (
