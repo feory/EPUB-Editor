@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { toHex, readSelectionProps, selectionPatchOps, selectionToCss, EMPTY_SELECTION } from './selectionProps';
+import { toHex, readSelectionProps, selectionPatchOps, selectionToCss, cssToSelection, EMPTY_SELECTION } from './selectionProps';
 
 test('toHex: rgb()/hex normalizam; nomes e vazio dão ""', () => {
     expect(toHex('rgb(255, 224, 102)')).toBe('#ffe066');
@@ -30,4 +30,26 @@ test('selectionToCss: formatos e aspeto viram declarações; vazio dá ""', () =
     expect(selectionToCss({ ...EMPTY_SELECTION, formats: [] })).toBe('');
     expect(selectionToCss({ ...EMPTY_SELECTION, formats: ['bold', 'small-caps'], background: '#ffe066', letterSpacing: { n: 0.05, u: 'em' } }))
         .toBe('font-weight: bold; font-variant: small-caps; background-color: #ffe066; letter-spacing: 0.05em;');
+});
+
+test('cssToSelection: o inverso de selectionToCss (formatos, aspeto, sublinhado+rasurado juntos)', () => {
+    const sel = { ...EMPTY_SELECTION, formats: ['bold', 'underline', 'strikethrough', 'small-caps', 'uppercase'], color: '#c00000', background: '#ffe066', fontSize: { n: 1.2, u: 'em' as const }, letterSpacing: { n: 0.05, u: 'em' as const }, fontFamily: 'serif' };
+    const css = selectionToCss(sel);
+    expect(css).toContain('text-decoration: underline line-through;');
+    const back = cssToSelection(css);
+    expect(back.selection).toEqual(sel);
+    expect(back.rest).toEqual([]);
+});
+
+test('cssToSelection: sobrescrito/subscrito não viram "texto pequeno"; font-size smaller sozinho sim', () => {
+    expect(cssToSelection('vertical-align: super; font-size: smaller;').selection.formats).toEqual(['superscript']);
+    expect(cssToSelection('font-size: smaller;').selection.formats).toEqual(['small-text']);
+    expect(cssToSelection(selectionToCss({ ...EMPTY_SELECTION, formats: ['subscript'] })).selection.formats).toEqual(['subscript']);
+});
+
+test('cssToSelection: o que os controlos não representam volta em rest e é preservado', () => {
+    const { selection, rest } = cssToSelection('color: red; font-size: 80%; margin-left: 2em; font-weight: 300; font-style: italic;');
+    expect(selection.formats).toEqual(['italic']);
+    expect(selection.color).toBe('');
+    expect(rest).toEqual(['color: red', 'font-size: 80%', 'margin-left: 2em', 'font-weight: 300']);
 });

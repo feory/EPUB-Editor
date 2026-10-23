@@ -30,13 +30,60 @@ const FORMAT_CSS: Record<string, string> = {
 
 /** O que a seleção tem agora (formatos + aspeto) como declarações CSS de uma regra; '' se não tem nada. */
 export function selectionToCss(sel: SelectionInfo): string {
-    const decls: string[] = sel.formats.flatMap((f) => (FORMAT_CSS[f] ? [FORMAT_CSS[f]] : []));
+    // Sublinhado e rasurado partilham text-decoration: juntam-se numa só declaração (senão uma anulava a outra).
+    const lines = ['underline', 'strikethrough'].filter((f) => sel.formats.includes(f)).map((f) => (f === 'underline' ? 'underline' : 'line-through'));
+    const decls: string[] = sel.formats.flatMap((f) => (f === 'underline' || f === 'strikethrough' ? [] : FORMAT_CSS[f] ? [FORMAT_CSS[f]] : []));
+    if (lines.length) decls.push(`text-decoration: ${lines.join(' ')}`);
     for (const k of KEYS) {
         const v = sel[k];
         if (v === '' || v === null) continue;
         decls.push(`${FIELDS[k][0]}: ${typeof v === 'object' ? `${v.n}${v.u}` : v}`);
     }
     return decls.map((d) => `${d};`).join(' ');
+}
+
+/**
+ * O inverso de selectionToCss: lê as declarações de um estilo de caracteres para os controlos do painel. O que os controlos
+ * não representam (nomes de cor, %, propriedades alheias…) volta em `rest` e é preservado ao guardar.
+ */
+export function cssToSelection(body: string): { selection: SelectionInfo; rest: string[] } {
+    const decls = body.split(';').map((d) => d.trim()).filter(Boolean).map((d): [string, string] => {
+        const i = d.indexOf(':');
+        return [d.slice(0, i).trim().toLowerCase(), d.slice(i + 1).trim()];
+    });
+    const formats = new Set<string>();
+    const rest: string[] = [];
+    const sel: SelectionInfo = { ...EMPTY_SELECTION, formats: [] };
+    let smaller = false;
+    for (const [name, value] of decls) {
+        const v = value.toLowerCase();
+        const keep = () => rest.push(`${name}: ${value}`);
+        if (name === 'font-weight') { if (v === 'bold' || v === '700') formats.add('bold'); else keep(); }
+        else if (name === 'font-style') { if (v === 'italic') formats.add('italic'); else keep(); }
+        else if (name === 'text-decoration') {
+            const tokens = v.split(/\s+/);
+            if (tokens.every((t) => t === 'underline' || t === 'line-through')) tokens.forEach((t) => formats.add(t === 'underline' ? 'underline' : 'strikethrough'));
+            else keep();
+        } else if (name === 'vertical-align') { if (v === 'super') formats.add('superscript'); else if (v === 'sub') formats.add('subscript'); else keep(); }
+        else if (name === 'font-variant') { if (v === 'small-caps') formats.add('small-caps'); else keep(); }
+        else if (name === 'text-transform') { if (v === 'uppercase') formats.add('uppercase'); else keep(); }
+        else if (name === 'color' || name === 'background-color') {
+            const hex = toHex(value);
+            if (hex) sel[name === 'color' ? 'color' : 'background'] = hex; else keep();
+        } else if (name === 'font-size') {
+            const len = parseLen(v);
+            if (v === 'smaller') smaller = true; else if (len) sel.fontSize = len; else keep();
+        } else if (name === 'letter-spacing') {
+            const len = parseLen(v);
+            if (len) sel.letterSpacing = len; else keep();
+        } else if (name === 'font-family') {
+            if (FONT_FAMILIES.some(([f]) => f && f === v)) sel.fontFamily = v; else keep();
+        } else keep();
+    }
+    // `font-size: smaller` acompanha sobrescrito/subscrito (ver FORMAT_CSS); sozinho é o "texto pequeno".
+    if (smaller && !formats.has('superscript') && !formats.has('subscript')) formats.add('small-text');
+    sel.formats = INLINE_FORMATS.map(([f]) => f as string).filter((f) => formats.has(f));
+    return { selection: sel, rest };
 }
 
 export const EMPTY_SELECTION: SelectionProps = { color: '', background: '', fontSize: null, letterSpacing: null, fontFamily: '' };
