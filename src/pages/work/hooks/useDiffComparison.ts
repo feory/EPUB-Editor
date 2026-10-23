@@ -123,9 +123,11 @@ export function useDiffComparison({ htmlContent, editorRef, onOpen }: UseDiffCom
     }, [htmlContent, showDiffSidebar, isDiffLoading, runDiff]);
 
     const closeDiffSidebar = useCallback(() => {
+        // Só limpa se havia comparação aberta: abrir outro painel chama isto sempre e o clear mexia na seleção do utilizador.
+        const wasOpen = showDiffSidebarRef.current;
         setShowDiffSidebar(false);
         showDiffSidebarRef.current = false;
-        editorRef.current?.clearDiffHighlights();
+        if (wasOpen) editorRef.current?.clearDiffHighlights();
     }, [editorRef]);
 
     return {
