@@ -30,21 +30,27 @@ const ICONS: Record<string, React.ReactNode> = {
 const FormatFields: React.FC<{ value: SelectionInfo; onToggle: (format: string) => void; onChange: (patch: Partial<SelectionProps>) => void }> = ({ value, onToggle, onChange }) => (
     <>
         <Section title="Formato">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-wrap gap-2">
                 {INLINE_FORMATS.map(([format, label]) => {
                     const on = value.formats.includes(format);
                     return (
-                        <button key={format} type="button" title={label} aria-pressed={on} onClick={() => onToggle(format)}
-                            className={`h-9 rounded-lg border text-xs flex items-center justify-center gap-1.5 transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
-                            {ICONS[format]}<span className="truncate">{label}</span>
+                        <button key={format} type="button" title={label} aria-label={label} aria-pressed={on} onClick={() => onToggle(format)}
+                            className={`h-9 w-9 rounded-lg border text-xs flex items-center justify-center transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
+                            {ICONS[format]}
                         </button>
                     );
                 })}
             </div>
         </Section>
         <Section title="Aspeto">
-            <Row label="Cor do texto"><Color value={value.color} fallback="#000000" onChange={(v) => onChange({ color: v })} /></Row>
-            <Row label="Cor de fundo"><Color value={value.background} fallback="#ffe066" onChange={(v) => onChange({ background: v })} /></Row>
+            <div className="flex gap-4">
+                {([['Texto', 'color', '#000000'], ['Fundo', 'background', '#ffffff']] as const).map(([label, key, fallback]) => (
+                    <label key={key} className="flex-1 min-w-0 flex items-center gap-2 text-sm font-medium text-text-main">
+                        <span>{label}</span>
+                        <span className="flex-1 flex items-center"><Color value={value[key]} fallback={fallback} onChange={(v) => onChange({ [key]: v })} /></span>
+                    </label>
+                ))}
+            </div>
             <Row label="Tamanho"><LenInput value={value.fontSize} minEm={0.5} maxEm={4} stepEm={0.05} onChange={(v) => onChange({ fontSize: v })} /></Row>
             <Row label="Espaço entre letras"><LenInput value={value.letterSpacing} minEm={-0.2} maxEm={1} stepEm={0.01} onChange={(v) => onChange({ letterSpacing: v })} /></Row>
             <Row label="Tipo de letra"><Select value={value.fontFamily} options={FONT_FAMILIES} onChange={(v) => onChange({ fontFamily: v })} /></Row>
@@ -171,13 +177,6 @@ const CharStyles: React.FC<{
     };
     return (
         <Section>
-            <div className="flex items-center justify-between">
-                <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Estilos de caracteres</h4>
-                {name === null && (
-                    <button type="button" onClick={() => setName('')} title="Novo estilo" aria-label="Novo estilo"
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"><Plus size={16} /></button>
-                )}
-            </div>
             <div className="flex flex-wrap items-center gap-1.5">
                 {listCharStyles(css).map((cls) => {
                     const on = selection.formats.includes(cls);
@@ -188,7 +187,12 @@ const CharStyles: React.FC<{
                         </span>
                     );
                 })}
-                {listCharStyles(css).length === 0 && name === null && <span className="text-xs text-text-muted">Ainda não há estilos.</span>}
+                {name === null && (
+                    <button type="button" onClick={() => setName('')}
+                        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-dashed border-border text-xs text-text-muted hover:text-slate-700 hover:bg-slate-50">
+                        <Plus size={12} /> Criar estilo…
+                    </button>
+                )}
             </div>
             {deleting && (
                 <div className="flex flex-col gap-2">
@@ -226,7 +230,7 @@ export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onC
         <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
             <PanelResizeHandle width={width} onResize={onResize} />
             <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
-                <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Editor de Texto</h3>
+                <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Estilos de Caracteres</h3>
                 <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-500 transition-all"><X size={16} /></button>
             </div>
             {editingCls ? (

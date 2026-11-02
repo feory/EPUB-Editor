@@ -457,6 +457,12 @@ export function createEditorSetup(deps: SetupDeps) {
             tooltip: 'Editor de Texto',
             onAction: () => onEditTextStyle(),
         });
+        // Botão "Editar bloco" no mini-menu do título → abre o painel do bloco.
+        editor.ui.registry.addButton('editblock', {
+            icon: 'edit-block',
+            tooltip: 'Editar bloco',
+            onAction: () => onEditBoxStyle(),
+        });
         // Botão "Editar HTML" no mini-menu → abre a edição inline do bloco de topo.
         editor.ui.registry.addButton('edithtml', {
             icon: 'ps-htmledit',
@@ -564,7 +570,7 @@ export function createEditorSetup(deps: SetupDeps) {
             },
             position: 'node',
             scope: 'node',
-            items: 'psmorehead blockalignmenu psh1 psh2 psh3 edithtml',
+            items: 'psmorehead blockalignmenu psh1 psh2 psh3 editblock edithtml',
         });
 
         // Versaletes: sobre uma seleção reescreve o texto em Maiúscula+minúsculas dentro do span (as versaletes
