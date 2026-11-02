@@ -521,8 +521,7 @@ export function WorkPage() {
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 getIndiceSubtitles={work.getIndiceSubtitles}
                 onAddComment={(anchorId) => { commentSync.startDraft(anchorId); panels.open('comments'); }}
-                onEditBox={() => panels.open('box')}
-                onEditText={() => panels.open('text')}
+                onOpenPanel={(panel) => panels.open(panel)}
                 textPanelOpen={sidebars.showTextSidebar}
                 onBlockChange={setBlockInfo}
                 htmlContent={work.htmlContent}

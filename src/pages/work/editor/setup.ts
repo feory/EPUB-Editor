@@ -36,8 +36,7 @@ interface SetupDeps {
     openIndiceLinkPanel: (pIndex: number, currentTarget: string) => void; // '' = entrada sem ligação
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
-    onEditBoxStyle: () => void;
-    onEditTextStyle: () => void;
+    openPanel: (panel: 'box' | 'text') => void;   // painel lateral de edição: 'box' = bloco, 'text' = texto selecionado
     // Props que mudam a cada render, lidas por ref: setup() só corre 1x no mount, uma prop direta ficava presa à
     // closure desse 1.º render (livro ainda vazio nessa altura) e nunca via as edições seguintes.
     live: React.MutableRefObject<SetupLive>;
@@ -50,7 +49,7 @@ interface SetupDeps {
 /** Constrói o `setup(editor)` do TinyMCE: botões, formatos, marcadores de UI, menus e wiring dos overlays. */
 export function createEditorSetup(deps: SetupDeps) {
     const { onGrammarClick, onSave, onExport, startHtmlEdit, openStyleMenu, openIndiceLinkPanel,
-        live, wireOverlays, onCropImage, onAddComment, onEditBoxStyle, onEditTextStyle } = deps;
+        live, wireOverlays, onCropImage, onAddComment, openPanel } = deps;
 
     return (editor: Editor) => {
         // Ação de menu/atalho como edição de bloco (blockEdit.ts): passo de undo + change + nodeChanged.
@@ -188,7 +187,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addMenuItem('boxedit-item', {
             text: 'Edição',
             icon: 'edit-block',
-            onAction: () => onEditBoxStyle(),
+            onAction: () => openPanel('box'),
         });
         // Variante da caixa (classe box--X; o CSS vive no livro e o export dá-lhe epub:type).
         const blocks = tinymceEditorLike(editor);
@@ -209,13 +208,13 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addMenuItem('blockedit-item', {
             text: 'Editar bloco',
             icon: 'edit-block',
-            onAction: () => onEditBoxStyle(),
+            onAction: () => openPanel('box'),
         });
         // Imagem selecionada: abre o painel (alinhamento, largura, margens, alt).
         editor.ui.registry.addMenuItem('imageedit-item', {
             text: 'Editar imagem',
             icon: 'edit-image',
-            onAction: () => onEditBoxStyle(),
+            onAction: () => openPanel('box'),
         });
         editor.ui.registry.addContextMenu('imageedit', {
             update: (element) => element.nodeName === 'IMG' ? ['imageedit-item'] : [],
@@ -455,13 +454,13 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addButton('edittext', {
             icon: 'edit-block',
             tooltip: 'Editor de Texto',
-            onAction: () => onEditTextStyle(),
+            onAction: () => openPanel('text'),
         });
         // Botão "Editar bloco" no mini-menu do título → abre o painel do bloco.
         editor.ui.registry.addButton('editblock', {
             icon: 'edit-block',
             tooltip: 'Editar bloco',
-            onAction: () => onEditBoxStyle(),
+            onAction: () => openPanel('box'),
         });
         // Botão "Editar HTML" no mini-menu → abre a edição inline do bloco de topo.
         editor.ui.registry.addButton('edithtml', {

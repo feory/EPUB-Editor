@@ -90,8 +90,7 @@ interface WorkEditorProps {
     onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) => void; // null = remover ligação
     getIndiceSubtitles?: () => IndiceLinkSubtitle[];
     onAddComment?: (anchorId: string) => void;
-    onEditBox?: () => void;
-    onEditText?: () => void;
+    onOpenPanel?: (panel: 'box' | 'text') => void; // abre o painel de edição do bloco ('box') ou do texto selecionado ('text')
     textPanelOpen?: boolean;
     onBlockChange?: (info: BlockInfo) => void;
     readOnly?: boolean;
@@ -176,7 +175,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onEditBox, onEditText, textPanelOpen, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onOpenPanel, textPanelOpen, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -186,14 +185,14 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     const live = useLive({
         htmlContent, setHtmlContent, grammarCache, onGrammarCheck, onImageUploaded, onVisiblePageChange,
         onToggleFocusMode, onTogglePrintPdf, showPrintPdfPanel, ebookLabel, chapters, activeChapterIndex,
-        onEditBox, onEditText, textPanelOpen, onBlockChange, readOnly,
+        onOpenPanel, textPanelOpen, onBlockChange, readOnly,
     });
     const indiceLinkPanel = useIndiceLinkPanel(editorRef, { chapters, activeChapterIndex, getSubtitles: getIndiceSubtitles, onLink: onLinkIndiceEntry });
     const syncEditorHeightRef = useRef<() => void>(() => {});
     const overlays = useBlockOverlays(editorRef, {
         activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook,
         readOnly, wholeBookLoaded: activeChapterIndex === -1, chapterLabel: chapters[activeChapterIndex]?.title || 'Capítulo',
-        onOpenPanel: () => live.current.onEditBox?.(),
+        onOpenPanel: () => live.current.onOpenPanel?.('box'),
     });
     const isDiffHighlightingRef = useRef(false);
     // Canal de conteúdo (editor/contentChannel.ts): o ÚNICO caminho de entrada (load) e saída
@@ -1036,8 +1035,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
                             onAddComment,
-                            onEditBoxStyle: () => live.current.onEditBox?.(),
-                            onEditTextStyle: () => live.current.onEditText?.(),
+                            openPanel: (panel) => live.current.onOpenPanel?.(panel),
                         }),
                         automatic_uploads: true,
                         paste_data_images: true,
