@@ -1,5 +1,6 @@
 import type { Editor } from 'tinymce';
 import { styleFormatsWith } from './config';
+import { charFormats } from './selectionProps';
 import { isCharStyle, charStyleFormat } from '../../../utils/char-styles';
 
 // Formatos de parágrafo/inline do editor (classes do livro). Registados no init do editor.
@@ -35,27 +36,8 @@ export function registerBlockFormats(editor: Editor) {
         // dentro de um título (p-uppercase de bloco é removido de headings — ver PARA_STYLE_CLASSES).
         editor.formatter.register('uppercase', { inline: 'span', classes: 'p-uppercase' });
         editor.formatter.register('box', { block: 'div', classes: 'box', wrapper: true });
-        // Espaço entre letras da seleção (painel "Texto selecionado"); cor/fundo/tamanho/família usam os formatos nativos.
-        editor.formatter.register('letterspacing', { inline: 'span', styles: { letterSpacing: '%value' }, remove_similar: true });
-        // Personalização extra da seleção (mesmo CSS que os estilos de caracteres). A largura é que liga o contorno.
-        const clone = { boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' };
-        const simple = (name: string, styles: Record<string, string>) => editor.formatter.register(name, { inline: 'span', styles, remove_similar: true });
-        simple('bordercolor', { borderColor: '%value' });
-        simple('borderwidth', { borderWidth: '%value', borderStyle: 'solid', ...clone });
-        simple('borderradius', { borderRadius: '%value', ...clone });
-        simple('charpadtop', { paddingTop: '%value', ...clone });
-        simple('charpadright', { paddingRight: '%value', ...clone });
-        simple('charpadbottom', { paddingBottom: '%value', ...clone });
-        simple('charpadleft', { paddingLeft: '%value', ...clone });
-        simple('charmargintop', { marginTop: '%value' });
-        simple('charmarginright', { marginRight: '%value' });
-        simple('charmarginbottom', { marginBottom: '%value' });
-        simple('charmarginleft', { marginLeft: '%value' });
-        simple('underlinestyle', { textDecorationLine: 'underline', textDecorationStyle: '%value' });
-        simple('underlinecolor', { textDecorationColor: '%value' });
-        simple('underlinethickness', { textDecorationThickness: '%value' });
-        simple('texttransform', { textTransform: '%value' });
-        simple('fontweight', { fontWeight: '%value' });
+        // Personalização da seleção/estilo de caracteres: os formatos vêm da tabela em selectionProps.ts (cor, fundo, tamanho e família usam os nativos).
+        charFormats().forEach(({ name, styles }) => editor.formatter.register(name, { inline: 'span', styles, remove_similar: true }));
     });
 }
 

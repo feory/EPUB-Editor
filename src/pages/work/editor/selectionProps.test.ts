@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { toHex, readSelectionProps, selectionPatchOps, selectionToCss, cssToSelection, EMPTY_SELECTION } from './selectionProps';
+import { toHex, readSelectionProps, selectionPatchOps, selectionToCss, cssToSelection, charFormats, EMPTY_SELECTION } from './selectionProps';
 
 test('toHex: rgb()/hex normalizam; nomes e vazio dão ""', () => {
     expect(toHex('rgb(255, 224, 102)')).toBe('#ffe066');
@@ -63,4 +63,18 @@ test('personalização extra: ida e volta pelo CSS (caixa, sublinhado, maiúscul
     const back = cssToSelection(css);
     expect(back.rest).toEqual([]);
     expect(back.selection).toEqual({ ...sel, formats: ['underline'] });
+});
+
+test('charFormats: um formato por propriedade não nativa, com o que a tabela arrasta', () => {
+    const byName = Object.fromEntries(charFormats().map((f) => [f.name, f.styles]));
+    expect(byName.letterspacing).toEqual({ letterSpacing: '%value' });
+    expect(byName.forecolor).toBeUndefined(); // nativos não se registam
+    expect(byName.bordercolor).toEqual({ borderColor: '%value' });
+    expect(byName.borderwidth).toEqual({ borderWidth: '%value', borderStyle: 'solid', WebkitBoxDecorationBreak: 'clone', boxDecorationBreak: 'clone' });
+    expect(byName.charpadleft).toEqual({ paddingLeft: '%value', WebkitBoxDecorationBreak: 'clone', boxDecorationBreak: 'clone' });
+    expect(byName.charmargintop).toEqual({ marginTop: '%value' });
+    expect(byName.underlinestyle).toEqual({ textDecorationStyle: '%value', textDecorationLine: 'underline' });
+    // todo o nome de formato do patch tem formato registado ou é nativo
+    const ops = selectionPatchOps({ ...EMPTY_SELECTION, borderColor: '#000000' }).map((o) => o.format);
+    expect(ops.every((f) => byName[f] || ['forecolor', 'hilitecolor', 'fontsize', 'fontname'].includes(f))).toBe(true);
 });
