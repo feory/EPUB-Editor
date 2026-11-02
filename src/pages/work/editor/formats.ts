@@ -43,7 +43,14 @@ export function registerBlockFormats(editor: Editor) {
         simple('bordercolor', { borderColor: '%value' });
         simple('borderwidth', { borderWidth: '%value', borderStyle: 'solid', ...clone });
         simple('borderradius', { borderRadius: '%value', ...clone });
-        simple('charpadding', { padding: '%value', ...clone });
+        simple('charpadtop', { paddingTop: '%value', ...clone });
+        simple('charpadright', { paddingRight: '%value', ...clone });
+        simple('charpadbottom', { paddingBottom: '%value', ...clone });
+        simple('charpadleft', { paddingLeft: '%value', ...clone });
+        simple('charmargintop', { marginTop: '%value' });
+        simple('charmarginright', { marginRight: '%value' });
+        simple('charmarginbottom', { marginBottom: '%value' });
+        simple('charmarginleft', { marginLeft: '%value' });
         simple('underlinestyle', { textDecorationLine: 'underline', textDecorationStyle: '%value' });
         simple('underlinecolor', { textDecorationColor: '%value' });
         simple('underlinethickness', { textDecorationThickness: '%value' });

@@ -27,9 +27,20 @@ const ICONS: Record<string, React.ReactNode> = {
 };
 
 // Os controlos de formato e aspeto: servem a seleção do texto (escrevem no editor) e o editor de um estilo (escrevem num rascunho).
-const FormatFields: React.FC<{ value: SelectionInfo; onToggle: (format: string) => void; onChange: (patch: Partial<SelectionProps>) => void }> = ({ value, onToggle, onChange }) => (
+const TABS = [['formato', 'Formato'], ['aspeto', 'Aspeto'], ['sublinhado', 'Sublinhado'], ['caixa', 'Caixa']] as const;
+
+const FormatFields: React.FC<{ value: SelectionInfo; onToggle: (format: string) => void; onChange: (patch: Partial<SelectionProps>) => void }> = ({ value, onToggle, onChange }) => {
+    const [tab, setTab] = useState<(typeof TABS)[number][0]>('formato');
+    return (
     <>
-        <Section title="Formato">
+        <div className="flex rounded-lg border border-border p-0.5 bg-slate-50" role="tablist">
+            {TABS.map(([t, label]) => (
+                <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
+                    className={`flex-1 px-2 py-1.5 rounded-md text-xs font-bold transition-colors ${tab === t ? 'bg-white shadow-sm text-slate-800' : 'text-text-muted hover:text-slate-700'}`}>{label}</button>
+            ))}
+        </div>
+        {tab === 'formato' && (
+        <Section>
             <div className="flex flex-wrap gap-2">
                 {INLINE_FORMATS.map(([format, label]) => {
                     const on = value.formats.includes(format);
@@ -42,7 +53,9 @@ const FormatFields: React.FC<{ value: SelectionInfo; onToggle: (format: string) 
                 })}
             </div>
         </Section>
-        <Section title="Aspeto">
+        )}
+        {tab === 'aspeto' && (
+        <Section>
             <Row label="Cor do texto"><Color value={value.color} fallback="#000000" onChange={(v) => onChange({ color: v })} /></Row>
             <Row label="Cor de fundo"><Color value={value.background} fallback="#ffffff" onChange={(v) => onChange({ background: v })} /></Row>
             <Row label="Tamanho"><LenInput value={value.fontSize} minEm={0.5} maxEm={4} stepEm={0.05} onChange={(v) => onChange({ fontSize: v })} /></Row>
@@ -51,19 +64,30 @@ const FormatFields: React.FC<{ value: SelectionInfo; onToggle: (format: string) 
             <Row label="Maiúsculas"><Select value={value.transform} options={TRANSFORMS} onChange={(v) => onChange({ transform: v })} /></Row>
             <Row label="Peso"><Select value={value.weight} options={WEIGHTS} onChange={(v) => onChange({ weight: v })} /></Row>
         </Section>
-        <Section title="Sublinhado">
+        )}
+        {tab === 'sublinhado' && (
+        <Section>
             <Row label="Tipo"><Select value={value.underlineStyle} options={UNDERLINE_STYLES} onChange={(v) => onChange({ underlineStyle: v })} /></Row>
             <Row label="Cor"><Color value={value.underlineColor} fallback="#000000" onChange={(v) => onChange({ underlineColor: v, ...(v && !value.underlineStyle ? { underlineStyle: 'double' } : {}) })} /></Row>
             <Row label="Espessura"><LenInput value={value.underlineThickness} minEm={0.02} maxEm={0.3} stepEm={0.01} onChange={(v) => onChange({ underlineThickness: v, ...(v && !value.underlineStyle ? { underlineStyle: 'double' } : {}) })} /></Row>
         </Section>
-        <Section title="Caixa">
+        )}
+        {tab === 'caixa' && (
+        <Section>
             <Row label="Cor do contorno"><Color value={value.borderColor} fallback="#000000" onChange={(v) => onChange({ borderColor: v, ...(v && !value.borderWidth ? { borderWidth: { n: 1, u: 'px' } } : {}) })} /></Row>
             <Row label="Espessura"><LenInput value={value.borderWidth} placeholder={{ n: 1, u: 'px' }} minEm={0} maxEm={0.5} stepEm={0.01} onChange={(v) => onChange({ borderWidth: v })} /></Row>
             <Row label="Cantos arredondados"><LenInput value={value.radius} minEm={0} maxEm={2} stepEm={0.05} onChange={(v) => onChange({ radius: v })} /></Row>
-            <Row label="Espaço interior"><LenInput value={value.padding} minEm={0} maxEm={1} stepEm={0.05} onChange={(v) => onChange({ padding: v })} /></Row>
+            {([['Espaço em cima', 'padTop'], ['Espaço à direita', 'padRight'], ['Espaço em baixo', 'padBottom'], ['Espaço à esquerda', 'padLeft']] as const).map(([label, key]) => (
+                <Row key={key} label={label}><LenInput value={value[key]} minEm={0} maxEm={1} stepEm={0.05} onChange={(v) => onChange({ [key]: v })} /></Row>
+            ))}
+            {([['Margem em cima', 'marginTop'], ['Margem à direita', 'marginRight'], ['Margem em baixo', 'marginBottom'], ['Margem à esquerda', 'marginLeft']] as const).map(([label, key]) => (
+                <Row key={key} label={label}><LenInput value={value[key]} minEm={0} maxEm={2} stepEm={0.05} onChange={(v) => onChange({ [key]: v })} /></Row>
+            ))}
         </Section>
+        )}
     </>
-);
+    );
+};
 
 const PanelHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
@@ -197,10 +221,25 @@ const CharStyles: React.FC<{
     );
 };
 
+// Os campos da seleção mostram também o que os estilos de caracteres aplicados lhe dão (o valor próprio da seleção vence).
+function withStyleValues(sel: SelectionInfo | null, css: string): SelectionInfo | null {
+    if (!sel) return sel;
+    const out: Record<string, unknown> = { ...sel };
+    for (const cls of listCharStyles(css)) {
+        if (!sel.formats.includes(cls)) continue;
+        const from = cssToSelection(readCustomStyle(css, cls)).selection;
+        for (const k of Object.keys(EMPTY_SELECTION) as (keyof SelectionProps)[]) {
+            const own = sel[k];
+            if ((own === '' || own === null) && from[k] !== '' && from[k] !== null) out[k] = from[k];
+        }
+    }
+    return out as unknown as SelectionInfo;
+}
+
 // Painel "Editor de Texto": só os caracteres selecionados — formato (negrito, itálico…), cor, fundo, tamanho, espaço entre
 // letras, tipo de letra e estilos de caracteres. O parágrafo é do Mini-menu e do painel do bloco.
 export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onCreateStyle, onUpdateStyle, onDeleteStyle, onClose, width, onResize }) => {
-    const { selection } = info;
+    const selection = withStyleValues(info.selection, css);
     const [editingCls, setEditingCls] = useState<string | null>(null);
     const [newName, setNewName] = useState<string | null>(null); // a criar um estilo: nome em curso (null = não está a criar)
     const [newError, setNewError] = useState('');

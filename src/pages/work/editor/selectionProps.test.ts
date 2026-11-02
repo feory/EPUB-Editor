@@ -48,15 +48,15 @@ test('cssToSelection: sobrescrito/subscrito não viram "texto pequeno"; font-siz
 });
 
 test('cssToSelection: o que os controlos não representam volta em rest e é preservado', () => {
-    const { selection, rest } = cssToSelection('color: red; font-size: 80%; margin-left: 2em; font-weight: 350; font-style: italic;');
+    const { selection, rest } = cssToSelection('color: red; font-size: 80%; margin: 1em 2em; font-weight: 350; font-style: italic;');
     expect(selection.formats).toEqual(['italic']);
     expect(selection.color).toBe('');
-    expect(rest).toEqual(['color: red', 'font-size: 80%', 'margin-left: 2em', 'font-weight: 350']);
+    expect(rest).toEqual(['color: red', 'font-size: 80%', 'margin: 1em 2em', 'font-weight: 350']);
 });
 
 test('personalização extra: ida e volta pelo CSS (caixa, sublinhado, maiúsculas, peso)', () => {
     const sel = { ...EMPTY_SELECTION, formats: [], borderColor: '#ff0000', borderWidth: { n: 2, u: 'px' as const }, radius: { n: 0.3, u: 'em' as const },
-        padding: { n: 0.2, u: 'em' as const }, underlineStyle: 'wavy', underlineColor: '#00ff00', underlineThickness: { n: 2, u: 'px' as const }, transform: 'capitalize', weight: '300' };
+        padTop: { n: 0.2, u: 'em' as const }, padLeft: { n: 0.5, u: 'em' as const }, marginTop: { n: 0.5, u: 'em' as const }, marginBottom: { n: 0.75, u: 'em' as const }, marginLeft: { n: 1, u: 'em' as const }, marginRight: { n: 0.25, u: 'em' as const }, underlineStyle: 'wavy', underlineColor: '#00ff00', underlineThickness: { n: 2, u: 'px' as const }, transform: 'capitalize', weight: '300' };
     const css = selectionToCss(sel);
     expect(css).toContain('border-style: solid');
     expect(css).toContain('text-decoration: underline'); // sublinhado personalizado liga o sublinhado

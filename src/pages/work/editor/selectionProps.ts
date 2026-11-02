@@ -12,7 +12,14 @@ export interface SelectionProps {
     borderColor: string;      // #rrggbb — caixa à volta do texto (a largura liga o contorno; ver selectionToCss)
     borderWidth: Len | null;
     radius: Len | null;
-    padding: Len | null;
+    padTop: Len | null;       // espaço interior de cada lado
+    padRight: Len | null;
+    padBottom: Len | null;
+    padLeft: Len | null;
+    marginTop: Len | null;    // em texto corrido (inline) as margens verticais não têm efeito
+    marginRight: Len | null;
+    marginBottom: Len | null;
+    marginLeft: Len | null;
     underlineStyle: string;   // double | dotted | dashed | wavy ('' = normal)
     underlineColor: string;   // #rrggbb
     underlineThickness: Len | null;
@@ -52,7 +59,7 @@ export function selectionToCss(sel: SelectionInfo): string {
     }
     if (sel.borderColor || sel.borderWidth) decls.push('border-style: solid');
     // a caixa repete-se em cada linha quando o texto quebra
-    if (sel.borderColor || sel.borderWidth || sel.radius || sel.padding) decls.push('-webkit-box-decoration-break: clone', 'box-decoration-break: clone');
+    if (sel.borderColor || sel.borderWidth || sel.radius || sel.padTop || sel.padRight || sel.padBottom || sel.padLeft) decls.push('-webkit-box-decoration-break: clone', 'box-decoration-break: clone');
     return decls.map((d) => `${d};`).join(' ');
 }
 
@@ -87,10 +94,20 @@ export function cssToSelection(body: string): { selection: SelectionInfo; rest: 
         } else if (name === 'border-color' || name === 'text-decoration-color') {
             const hex = toHex(value);
             if (hex) sel[name === 'border-color' ? 'borderColor' : 'underlineColor'] = hex; else keep();
-        } else if (name === 'border-width' || name === 'border-radius' || name === 'padding' || name === 'text-decoration-thickness') {
+        } else if (name === 'border-width' || name === 'border-radius' || name === 'text-decoration-thickness' || name.startsWith('padding') || name === 'margin' || name.startsWith('margin-')) {
             const len = parseLen(v);
-            const key = { 'border-width': 'borderWidth', 'border-radius': 'radius', padding: 'padding', 'text-decoration-thickness': 'underlineThickness' }[name] as 'borderWidth' | 'radius' | 'padding' | 'underlineThickness';
-            if (len) sel[key] = len; else keep();
+            if (name === 'padding') {
+                // `padding: X` (um só valor) vale para os quatro lados; mais valores não são representados → rest
+                if (len) Object.assign(sel, { padTop: len, padRight: len, padBottom: len, padLeft: len }); else keep();
+                continue;
+            }
+            if (name === 'margin') {
+                // `margin: X` (um só valor) vale para os quatro lados; mais valores não são representados → rest
+                if (len) Object.assign(sel, { marginTop: len, marginRight: len, marginBottom: len, marginLeft: len }); else keep();
+                continue;
+            }
+            const key = { 'border-width': 'borderWidth', 'border-radius': 'radius', 'padding-top': 'padTop', 'padding-right': 'padRight', 'padding-bottom': 'padBottom', 'padding-left': 'padLeft', 'margin-top': 'marginTop', 'margin-right': 'marginRight', 'margin-bottom': 'marginBottom', 'margin-left': 'marginLeft', 'text-decoration-thickness': 'underlineThickness' }[name] as 'borderWidth' | 'radius' | 'padTop' | 'padRight' | 'padBottom' | 'padLeft' | 'marginTop' | 'marginRight' | 'marginBottom' | 'marginLeft' | 'underlineThickness' | undefined;
+            if (len && key) sel[key] = len; else keep();
         } else if (name === 'border-style' && v === 'solid') { /* implícito em borderColor/borderWidth */ }
         else if ((name === '-webkit-box-decoration-break' || name === 'box-decoration-break') && v === 'clone') { /* idem */ }
         else if (name === 'text-decoration-style') { if (UNDERLINE_STYLES.some(([x]) => x && x === v)) sel.underlineStyle = v; else keep(); }
@@ -112,7 +129,7 @@ export function cssToSelection(body: string): { selection: SelectionInfo; rest: 
 
 export const EMPTY_SELECTION: SelectionProps = {
     color: '', background: '', fontSize: null, letterSpacing: null, fontFamily: '',
-    borderColor: '', borderWidth: null, radius: null, padding: null,
+    borderColor: '', borderWidth: null, radius: null, padTop: null, padRight: null, padBottom: null, padLeft: null, marginTop: null, marginRight: null, marginBottom: null, marginLeft: null,
     underlineStyle: '', underlineColor: '', underlineThickness: null, transform: '', weight: '',
 };
 
@@ -132,7 +149,14 @@ const FIELDS: { [K in keyof SelectionProps]: [string, string] } = {
     borderColor: ['border-color', 'bordercolor'],
     borderWidth: ['border-width', 'borderwidth'],
     radius: ['border-radius', 'borderradius'],
-    padding: ['padding', 'charpadding'],
+    padTop: ['padding-top', 'charpadtop'],
+    padRight: ['padding-right', 'charpadright'],
+    padBottom: ['padding-bottom', 'charpadbottom'],
+    padLeft: ['padding-left', 'charpadleft'],
+    marginTop: ['margin-top', 'charmargintop'],
+    marginRight: ['margin-right', 'charmarginright'],
+    marginBottom: ['margin-bottom', 'charmarginbottom'],
+    marginLeft: ['margin-left', 'charmarginleft'],
     underlineStyle: ['text-decoration-style', 'underlinestyle'],
     underlineColor: ['text-decoration-color', 'underlinecolor'],
     underlineThickness: ['text-decoration-thickness', 'underlinethickness'],
@@ -161,7 +185,14 @@ export function readSelectionProps(read: (cssName: string) => string): Selection
         borderColor: toHex(get('borderColor')),
         borderWidth: parseLen(get('borderWidth')),
         radius: parseLen(get('radius')),
-        padding: parseLen(get('padding')),
+        padTop: parseLen(get('padTop')),
+        padRight: parseLen(get('padRight')),
+        padBottom: parseLen(get('padBottom')),
+        padLeft: parseLen(get('padLeft')),
+        marginTop: parseLen(get('marginTop')),
+        marginRight: parseLen(get('marginRight')),
+        marginBottom: parseLen(get('marginBottom')),
+        marginLeft: parseLen(get('marginLeft')),
         underlineStyle: UNDERLINE_STYLES.some(([x]) => x && x === get('underlineStyle')) ? get('underlineStyle') : '',
         underlineColor: toHex(get('underlineColor')),
         underlineThickness: parseLen(get('underlineThickness')),
