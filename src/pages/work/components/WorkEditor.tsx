@@ -107,6 +107,8 @@ export interface WorkEditorRef {
     scrollToContent: (text: string, paragraphIndex?: number) => void;
     /** N-ésimo parágrafo NÃO vazio (índice de `extractParagraphs`): ignora marcadores de capítulo e `<p>` vazios. */
     scrollToParagraph: (index: number, placeCursor?: boolean) => void;
+    /** Elemento do capítulo carregado que corresponde ao HTML de um relatório (id, ou etiqueta + src/href/alt + texto). Devolve se o achou. */
+    scrollToHtml: (html: string) => boolean;
     /** Índice (como em `scrollToParagraph`) do parágrafo com o cursor; null sem editor/cursor. */
     cursorParagraph: () => number | null;
     /** Corre `fn` uma vez, depois da PRÓXIMA troca de capítulo (conteúdo carregado e scroll reposto). */
@@ -758,6 +760,24 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 blocks[paragraphIndex].scrollIntoView({ behavior: 'instant', block: 'center' });
                 pulseHighlight(blocks[paragraphIndex]);
             }
+        },
+
+        scrollToHtml: (html: string) => {
+            const editor = editorRef.current;
+            const body = editor?.getBody();
+            if (!editor || !body) return false;
+            const want = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body.firstElementChild;
+            if (!want) return false;
+            const text = (want.textContent ?? '').replace(/\s+/g, ' ').trim();
+            const attrs = ['id', 'src', 'href', 'alt'].filter((a) => want.getAttribute(a));
+            const same = (el: Element) => attrs.every((a) => el.getAttribute(a) === want.getAttribute(a))
+                && (!text || (el.textContent ?? '').replace(/\s+/g, ' ').trim() === text);
+            const target = Array.from<Element>(body.querySelectorAll(want.tagName.toLowerCase())).find(same);
+            if (!target) return false;
+            editor.focus();
+            target.scrollIntoView({ behavior: 'instant', block: 'center' });
+            pulseHighlight(target);
+            return true;
         },
 
         cursorParagraph: () => {

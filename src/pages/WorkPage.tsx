@@ -34,6 +34,7 @@ import { useComments } from './work/hooks/useComments';
 import { useCommentEditorSync } from './work/hooks/useCommentEditorSync';
 import { useAuth } from '../context/AuthContext';
 import { ValidationSidebar } from './work/components/ValidationSidebar';
+import type { IssueTarget } from './work/components/ValidationContent';
 import { ImageGallerySidebar } from './work/components/ImageGallerySidebar';
 import { DiffSidebar } from './work/components/DiffSidebar';
 import { PrintPdfSidebar } from './work/components/PrintPdfSidebar';
@@ -302,6 +303,18 @@ export function WorkPage() {
 
   const handleGoToIssue = (context: string, paragraphIndex?: number) => {
     editorRef.current?.scrollToContent(context, paragraphIndex);
+  };
+
+  // Validação (ACE): o editor só tem um capítulo carregado → `sectionN.xhtml` do relatório é o capítulo N-1; primeiro o elemento
+  // pelo HTML do relatório (cobre imagens e outros sem texto), depois o texto.
+  const handleGoToValidationIssue = (context: string, target?: IssueTarget) => {
+    const go = () => { if (!(target?.html && editorRef.current?.scrollToHtml(target.html))) handleGoToIssue(context); };
+    const n = /section(\d+)\.xhtml/.exec(target?.file ?? '');
+    const chapter = n ? Number(n[1]) - 1 : -1;
+    if (chapter >= 0 && chapter < work.chapters.length && work.activeChapterIndex !== -1 && chapter !== work.activeChapterIndex) {
+      editorRef.current?.afterChapterChange(go);
+      work.setActiveChapterIndex(chapter);
+    } else go();
   };
 
   // Clique numa página do painel de PDF → salta para o marcador de page-list correspondente;
@@ -694,7 +707,7 @@ export function WorkPage() {
           footnoteResults={work.footnoteValidation}
           linkResults={work.linkValidation}
           onClose={() => { sidebars.setShowValidationSidebar(false); work.setValidationResults(null); work.setFootnoteValidation(null); work.setLinkValidation(null); }}
-          onGoToIssue={handleGoToIssue}
+          onGoToIssue={handleGoToValidationIssue}
           onFixLinks={work.handleFixLinks}
           width={panelWidth}
           onResize={handlePanelResize}

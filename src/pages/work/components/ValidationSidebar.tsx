@@ -3,7 +3,7 @@ import { X, CheckCircle2, AlertCircle } from 'lucide-react';
 import type { ValidationResult } from '../../../api/ebooks-api';
 import type { ValidationReport } from '../../../services/validation/footnote-validator';
 import type { LinkReport } from '../../../services/validation/link-validator';
-import { ValidationContent } from './ValidationContent';
+import { ValidationContent, type IssueTarget } from './ValidationContent';
 import { PanelResizeHandle } from './PanelResizeHandle';
 
 interface ValidationSidebarProps {
@@ -11,7 +11,7 @@ interface ValidationSidebarProps {
   footnoteResults: ValidationReport | null;
   linkResults?: LinkReport | null;
   onClose: () => void;
-  onGoToIssue?: (context: string) => void;
+  onGoToIssue?: (context: string, target?: IssueTarget) => void;
   onFixLinks?: () => void;
   width: number;
   onResize: (width: number) => void;

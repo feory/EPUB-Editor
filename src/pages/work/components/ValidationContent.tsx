@@ -5,6 +5,9 @@ import type { ValidationReport } from '../../../services/validation/footnote-val
 import type { LinkReport } from '../../../services/validation/link-validator';
 
 // Extract plain text from an HTML string (e.g. "<h3 xmlns="...">Title</h3>" → "Title")
+/** Onde está o problema no EPUB exportado: ficheiro (`sectionN.xhtml`) e o HTML do elemento (pode não ter texto, ex. imagem). */
+export interface IssueTarget { file?: string; html?: string }
+
 const extractTextFromHtml = (html: string): string =>
   html.replace(/<[^>]+>/g, '').trim();
 
@@ -12,7 +15,7 @@ interface ValidationContentProps {
   results: ValidationResult | null;
   footnoteResults: ValidationReport | null;
   linkResults?: LinkReport | null;
-  onGoToIssue?: (context: string) => void;
+  onGoToIssue?: (context: string, target?: IssueTarget) => void;
   onFixLinks?: () => void;
   variant?: 'sidebar' | 'modal';
 }
@@ -93,7 +96,7 @@ export const ValidationContent: React.FC<ValidationContentProps> = ({
                   <div
                     key={`err-${i}`}
                     className={`bg-white border border-rose-200 rounded-xl p-3 shadow-sm transition-all ${isNavigable ? 'cursor-pointer hover:border-primary hover:shadow-md' : ''}`}
-                    onClick={() => { if (isNavigable) onGoToIssue!(extractTextFromHtml(html!)); }}
+                    onClick={() => { if (isNavigable) onGoToIssue!(extractTextFromHtml(html!), { file, html }); }}
                     title={isNavigable ? 'Clique para ir ao local no editor' : undefined}
                   >
                     <div className="flex items-start gap-2.5">
@@ -174,7 +177,7 @@ export const ValidationContent: React.FC<ValidationContentProps> = ({
                   <div
                     key={`warn-${i}`}
                     className={`bg-white border ${borderColor} rounded-xl p-3 shadow-sm transition-all ${isNavigable ? 'cursor-pointer hover:border-primary hover:shadow-md' : ''}`}
-                    onClick={() => { if (isNavigable) onGoToIssue!(extractTextFromHtml(html!)); }}
+                    onClick={() => { if (isNavigable) onGoToIssue!(extractTextFromHtml(html!), { file, html }); }}
                     title={isNavigable ? 'Clique para ir ao local no editor' : undefined}
                   >
                     <div className="flex items-start gap-2.5">
