@@ -106,7 +106,9 @@ export interface WorkEditorRef {
     // Navegação / scroll
     scrollToContent: (text: string, paragraphIndex?: number) => void;
     /** N-ésimo parágrafo NÃO vazio (índice de `extractParagraphs`): ignora marcadores de capítulo e `<p>` vazios. */
-    scrollToParagraph: (index: number) => void;
+    scrollToParagraph: (index: number, placeCursor?: boolean) => void;
+    /** Índice (como em `scrollToParagraph`) do parágrafo com o cursor; null sem editor/cursor. */
+    cursorParagraph: () => number | null;
     /** Corre `fn` uma vez, depois da PRÓXIMA troca de capítulo (conteúdo carregado e scroll reposto). */
     afterChapterChange: (fn: () => void) => void;
     scrollToImage: (imageId: string) => boolean;
@@ -758,13 +760,23 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             }
         },
 
-        scrollToParagraph: (index: number) => {
+        cursorParagraph: () => {
+            const editor = editorRef.current;
+            const body = editor?.getBody();
+            if (!editor || !body) return null;
+            const node = editor.selection.getStart();
+            const i = getNonEmptyBlocks(body).findIndex((b) => b.contains(node));
+            return i < 0 ? null : i;
+        },
+
+        scrollToParagraph: (index: number, placeCursor = false) => {
             const editor = editorRef.current;
             const body = editor?.getBody();
             if (!editor || !body) return;
             const block = getNonEmptyBlocks(body)[index];
             if (!block) return;
             editor.focus();
+            if (placeCursor) editor.selection.setCursorLocation(block, 0);
             block.scrollIntoView({ behavior: 'instant', block: 'center' });
             pulseHighlight(block);
         },

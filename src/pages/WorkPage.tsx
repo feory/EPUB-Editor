@@ -28,6 +28,8 @@ import { BlockSidebar } from './work/components/BlockSidebar';
 import { TextSidebar } from './work/components/TextSidebar';
 import type { BlockInfo } from './work/editor/blockEditing';
 import { useBookCss } from './work/hooks/useBookCss';
+import { useResumePosition } from './work/hooks/useResumePosition';
+import { ResumeModal } from './work/components/ResumeModal';
 import { useComments } from './work/hooks/useComments';
 import { useCommentEditorSync } from './work/hooks/useCommentEditorSync';
 import { useAuth } from '../context/AuthContext';
@@ -75,6 +77,10 @@ export function WorkPage() {
   const work = useEbookWork(isbn, editorRef);
   const { user } = useAuth();
   const comments = useComments(isbn);
+  const resume = useResumePosition({
+    isbn, userId: user?.id, editorRef, ready: !work.isLoadingChapter && work.fullHtmlContent.length > 0,
+    chapterCount: work.chapters.length, activeChapterIndex: work.activeChapterIndex, setActiveChapterIndex: work.setActiveChapterIndex,
+  });
 
   useEffect(() => {
     if (work.status === 'completed') {
@@ -727,6 +733,14 @@ export function WorkPage() {
         <ErrorBoundary><Suspense fallback={<ModalLoadingFallback />}>
           <EpubPreviewModal epubBlob={work.previewBlob} onClose={work.closePreview} title={work.title} />
         </Suspense></ErrorBoundary>
+      )}
+
+      {resume.pending && (
+        <ResumeModal
+          chapterTitle={resume.pending.chapter === -1 ? 'Documento completo' : work.chapters[resume.pending.chapter]?.title || `Capítulo ${resume.pending.chapter + 1}`}
+          onResume={resume.resume}
+          onDismiss={resume.dismiss}
+        />
       )}
 
       {showStyleEditor && (
