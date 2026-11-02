@@ -37,6 +37,18 @@ export function registerBlockFormats(editor: Editor) {
         editor.formatter.register('box', { block: 'div', classes: 'box', wrapper: true });
         // Espaço entre letras da seleção (painel "Texto selecionado"); cor/fundo/tamanho/família usam os formatos nativos.
         editor.formatter.register('letterspacing', { inline: 'span', styles: { letterSpacing: '%value' }, remove_similar: true });
+        // Personalização extra da seleção (mesmo CSS que os estilos de caracteres). A largura é que liga o contorno.
+        const clone = { boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' };
+        const simple = (name: string, styles: Record<string, string>) => editor.formatter.register(name, { inline: 'span', styles, remove_similar: true });
+        simple('bordercolor', { borderColor: '%value' });
+        simple('borderwidth', { borderWidth: '%value', borderStyle: 'solid', ...clone });
+        simple('borderradius', { borderRadius: '%value', ...clone });
+        simple('charpadding', { padding: '%value', ...clone });
+        simple('underlinestyle', { textDecorationLine: 'underline', textDecorationStyle: '%value' });
+        simple('underlinecolor', { textDecorationColor: '%value' });
+        simple('underlinethickness', { textDecorationThickness: '%value' });
+        simple('texttransform', { textTransform: '%value' });
+        simple('fontweight', { fontWeight: '%value' });
     });
 }
 

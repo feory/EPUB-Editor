@@ -11,7 +11,7 @@ test('toHex: rgb()/hex normalizam; nomes e vazio dão ""', () => {
 test('readSelectionProps: lê cada propriedade; família só se for genérica conhecida', () => {
     const css: Record<string, string> = { color: 'rgb(0, 0, 255)', 'background-color': '#ffe066', 'font-size': '1.2em', 'letter-spacing': '0.05em', 'font-family': 'Serif' };
     expect(readSelectionProps((n) => css[n] ?? '')).toEqual({
-        color: '#0000ff', background: '#ffe066', fontSize: { n: 1.2, u: 'em' }, letterSpacing: { n: 0.05, u: 'em' }, fontFamily: 'serif',
+        ...EMPTY_SELECTION, color: '#0000ff', background: '#ffe066', fontSize: { n: 1.2, u: 'em' }, letterSpacing: { n: 0.05, u: 'em' }, fontFamily: 'serif',
     });
     expect(readSelectionProps(() => '')).toEqual(EMPTY_SELECTION);
     expect(readSelectionProps((n) => (n === 'font-family' ? '"Lora", serif' : '')).fontFamily).toBe('');
@@ -48,8 +48,19 @@ test('cssToSelection: sobrescrito/subscrito não viram "texto pequeno"; font-siz
 });
 
 test('cssToSelection: o que os controlos não representam volta em rest e é preservado', () => {
-    const { selection, rest } = cssToSelection('color: red; font-size: 80%; margin-left: 2em; font-weight: 300; font-style: italic;');
+    const { selection, rest } = cssToSelection('color: red; font-size: 80%; margin-left: 2em; font-weight: 350; font-style: italic;');
     expect(selection.formats).toEqual(['italic']);
     expect(selection.color).toBe('');
-    expect(rest).toEqual(['color: red', 'font-size: 80%', 'margin-left: 2em', 'font-weight: 300']);
+    expect(rest).toEqual(['color: red', 'font-size: 80%', 'margin-left: 2em', 'font-weight: 350']);
+});
+
+test('personalização extra: ida e volta pelo CSS (caixa, sublinhado, maiúsculas, peso)', () => {
+    const sel = { ...EMPTY_SELECTION, formats: [], borderColor: '#ff0000', borderWidth: { n: 2, u: 'px' as const }, radius: { n: 0.3, u: 'em' as const },
+        padding: { n: 0.2, u: 'em' as const }, underlineStyle: 'wavy', underlineColor: '#00ff00', underlineThickness: { n: 2, u: 'px' as const }, transform: 'capitalize', weight: '300' };
+    const css = selectionToCss(sel);
+    expect(css).toContain('border-style: solid');
+    expect(css).toContain('text-decoration: underline'); // sublinhado personalizado liga o sublinhado
+    const back = cssToSelection(css);
+    expect(back.rest).toEqual([]);
+    expect(back.selection).toEqual({ ...sel, formats: ['underline'] });
 });

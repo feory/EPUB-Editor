@@ -9,6 +9,15 @@ export interface SelectionProps {
     fontSize: Len | null;
     letterSpacing: Len | null;
     fontFamily: string;       // família genérica (serif…): segura num EPUB, ao contrário de um nome de fonte
+    borderColor: string;      // #rrggbb — caixa à volta do texto (a largura liga o contorno; ver selectionToCss)
+    borderWidth: Len | null;
+    radius: Len | null;
+    padding: Len | null;
+    underlineStyle: string;   // double | dotted | dashed | wavy ('' = normal)
+    underlineColor: string;   // #rrggbb
+    underlineThickness: Len | null;
+    transform: string;        // lowercase | capitalize
+    weight: string;           // 300 | 400 | 500 | 600 | 800 | 900
 }
 
 /** O que o painel mostra da seleção: propriedades de estilo + formatos inline ligados (negrito, itálico…). */
@@ -31,7 +40,9 @@ const FORMAT_CSS: Record<string, string> = {
 /** O que a seleção tem agora (formatos + aspeto) como declarações CSS de uma regra; '' se não tem nada. */
 export function selectionToCss(sel: SelectionInfo): string {
     // Sublinhado e rasurado partilham text-decoration: juntam-se numa só declaração (senão uma anulava a outra).
-    const lines = ['underline', 'strikethrough'].filter((f) => sel.formats.includes(f)).map((f) => (f === 'underline' ? 'underline' : 'line-through'));
+    // Um sublinhado personalizado só se vê com o sublinhado ligado.
+    const custom = sel.underlineStyle || sel.underlineColor || sel.underlineThickness;
+    const lines = ['underline', 'strikethrough'].filter((f) => sel.formats.includes(f) || (f === 'underline' && custom)).map((f) => (f === 'underline' ? 'underline' : 'line-through'));
     const decls: string[] = sel.formats.flatMap((f) => (f === 'underline' || f === 'strikethrough' ? [] : FORMAT_CSS[f] ? [FORMAT_CSS[f]] : []));
     if (lines.length) decls.push(`text-decoration: ${lines.join(' ')}`);
     for (const k of KEYS) {
@@ -39,6 +50,9 @@ export function selectionToCss(sel: SelectionInfo): string {
         if (v === '' || v === null) continue;
         decls.push(`${FIELDS[k][0]}: ${typeof v === 'object' ? `${v.n}${v.u}` : v}`);
     }
+    if (sel.borderColor || sel.borderWidth) decls.push('border-style: solid');
+    // a caixa repete-se em cada linha quando o texto quebra
+    if (sel.borderColor || sel.borderWidth || sel.radius || sel.padding) decls.push('-webkit-box-decoration-break: clone', 'box-decoration-break: clone');
     return decls.map((d) => `${d};`).join(' ');
 }
 
@@ -58,7 +72,7 @@ export function cssToSelection(body: string): { selection: SelectionInfo; rest: 
     for (const [name, value] of decls) {
         const v = value.toLowerCase();
         const keep = () => rest.push(`${name}: ${value}`);
-        if (name === 'font-weight') { if (v === 'bold' || v === '700') formats.add('bold'); else keep(); }
+        if (name === 'font-weight') { if (v === 'bold' || v === '700') formats.add('bold'); else if (WEIGHTS.some(([x]) => x && x === v)) sel.weight = v; else keep(); }
         else if (name === 'font-style') { if (v === 'italic') formats.add('italic'); else keep(); }
         else if (name === 'text-decoration') {
             const tokens = v.split(/\s+/);
@@ -66,11 +80,21 @@ export function cssToSelection(body: string): { selection: SelectionInfo; rest: 
             else keep();
         } else if (name === 'vertical-align') { if (v === 'super') formats.add('superscript'); else if (v === 'sub') formats.add('subscript'); else keep(); }
         else if (name === 'font-variant') { if (v === 'small-caps') formats.add('small-caps'); else keep(); }
-        else if (name === 'text-transform') { if (v === 'uppercase') formats.add('uppercase'); else keep(); }
+        else if (name === 'text-transform') { if (v === 'uppercase') formats.add('uppercase'); else if (TRANSFORMS.some(([x]) => x && x === v)) sel.transform = v; else keep(); }
         else if (name === 'color' || name === 'background-color') {
             const hex = toHex(value);
             if (hex) sel[name === 'color' ? 'color' : 'background'] = hex; else keep();
-        } else if (name === 'font-size') {
+        } else if (name === 'border-color' || name === 'text-decoration-color') {
+            const hex = toHex(value);
+            if (hex) sel[name === 'border-color' ? 'borderColor' : 'underlineColor'] = hex; else keep();
+        } else if (name === 'border-width' || name === 'border-radius' || name === 'padding' || name === 'text-decoration-thickness') {
+            const len = parseLen(v);
+            const key = { 'border-width': 'borderWidth', 'border-radius': 'radius', padding: 'padding', 'text-decoration-thickness': 'underlineThickness' }[name] as 'borderWidth' | 'radius' | 'padding' | 'underlineThickness';
+            if (len) sel[key] = len; else keep();
+        } else if (name === 'border-style' && v === 'solid') { /* implícito em borderColor/borderWidth */ }
+        else if ((name === '-webkit-box-decoration-break' || name === 'box-decoration-break') && v === 'clone') { /* idem */ }
+        else if (name === 'text-decoration-style') { if (UNDERLINE_STYLES.some(([x]) => x && x === v)) sel.underlineStyle = v; else keep(); }
+        else if (name === 'font-size') {
             const len = parseLen(v);
             if (v === 'smaller') smaller = true; else if (len) sel.fontSize = len; else keep();
         } else if (name === 'letter-spacing') {
@@ -86,7 +110,15 @@ export function cssToSelection(body: string): { selection: SelectionInfo; rest: 
     return { selection: sel, rest };
 }
 
-export const EMPTY_SELECTION: SelectionProps = { color: '', background: '', fontSize: null, letterSpacing: null, fontFamily: '' };
+export const EMPTY_SELECTION: SelectionProps = {
+    color: '', background: '', fontSize: null, letterSpacing: null, fontFamily: '',
+    borderColor: '', borderWidth: null, radius: null, padding: null,
+    underlineStyle: '', underlineColor: '', underlineThickness: null, transform: '', weight: '',
+};
+
+export const UNDERLINE_STYLES = [['', 'Normal'], ['double', 'Duplo'], ['dotted', 'Ponteado'], ['dashed', 'Tracejado'], ['wavy', 'Ondulado']] as const;
+export const TRANSFORMS = [['', 'Nenhuma'], ['lowercase', 'minúsculas'], ['capitalize', 'Cada Palavra']] as const;
+export const WEIGHTS = [['', 'Padrão'], ['300', 'Leve'], ['400', 'Normal'], ['500', 'Médio'], ['600', 'Seminegrito'], ['800', 'Extranegrito'], ['900', 'Preto']] as const;
 
 export const FONT_FAMILIES = [['', 'Padrão'], ['serif', 'Serifa'], ['sans-serif', 'Sem serifa'], ['monospace', 'Monoespaçada']] as const;
 
@@ -97,6 +129,15 @@ const FIELDS: { [K in keyof SelectionProps]: [string, string] } = {
     fontSize: ['font-size', 'fontsize'],
     letterSpacing: ['letter-spacing', 'letterspacing'],
     fontFamily: ['font-family', 'fontname'],
+    borderColor: ['border-color', 'bordercolor'],
+    borderWidth: ['border-width', 'borderwidth'],
+    radius: ['border-radius', 'borderradius'],
+    padding: ['padding', 'charpadding'],
+    underlineStyle: ['text-decoration-style', 'underlinestyle'],
+    underlineColor: ['text-decoration-color', 'underlinecolor'],
+    underlineThickness: ['text-decoration-thickness', 'underlinethickness'],
+    transform: ['text-transform', 'texttransform'],
+    weight: ['font-weight', 'fontweight'],
 };
 const KEYS = Object.keys(FIELDS) as (keyof SelectionProps)[];
 
@@ -117,6 +158,15 @@ export function readSelectionProps(read: (cssName: string) => string): Selection
         fontSize: parseLen(get('fontSize')),
         letterSpacing: parseLen(get('letterSpacing')),
         fontFamily: FONT_FAMILIES.some(([v]) => v && v === family) ? family : '',
+        borderColor: toHex(get('borderColor')),
+        borderWidth: parseLen(get('borderWidth')),
+        radius: parseLen(get('radius')),
+        padding: parseLen(get('padding')),
+        underlineStyle: UNDERLINE_STYLES.some(([x]) => x && x === get('underlineStyle')) ? get('underlineStyle') : '',
+        underlineColor: toHex(get('underlineColor')),
+        underlineThickness: parseLen(get('underlineThickness')),
+        transform: TRANSFORMS.some(([x]) => x && x === get('transform')) ? get('transform') : '',
+        weight: WEIGHTS.some(([x]) => x && x === get('weight')) ? get('weight') : '',
     };
 }
 
