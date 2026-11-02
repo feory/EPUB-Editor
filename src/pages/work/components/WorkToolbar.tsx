@@ -363,10 +363,14 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
             )}
           </div>
 
-          {/* Avisos (partilhas e comentários) — o mesmo sino da Home */}
-          <NotificationsBell onOpenEbook={(isbn) => navigate(`/work/${isbn}`)} />
 
         </div>
+      </div>
+
+      {/* Avisos (partilhas e comentários) — o mesmo sino da Home, na mesma posição: a Home tem o contentor de 80rem (max-w-7xl),
+          px-6, e o avatar (36px + 8px de espaço) à direita do sino. */}
+      <div className="absolute top-1/2 -translate-y-1/2" style={{ right: 'calc(max(0px, (100vw - 80rem) / 2) + 4.25rem)' }}>
+        <NotificationsBell onOpenEbook={(isbn) => navigate(`/work/${isbn}`)} />
       </div>
     </nav>
   );

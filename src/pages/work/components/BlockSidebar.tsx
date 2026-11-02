@@ -102,16 +102,7 @@ const BoxSection: React.FC<{ box: BoxProps; onChange: (patch: Partial<BoxProps>)
         <Row label="Espaço interior"><Num value={box.padding} unit="em" min={0} max={5} step={0.1} onChange={padding => onChange({ padding })} /></Row>
         <Row label="Margem cima/baixo"><Num value={box.marginY} unit="em" min={0} max={5} step={0.1} onChange={marginY => onChange({ marginY })} /></Row>
         <Row label="Largura"><Num value={box.width} unit="%" min={30} max={100} onChange={width => onChange({ width })} /></Row>
-        <ResetButton onClick={() => onChange(RESET)} />
     </Section>
-);
-
-const ResetButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-    <button type="button" onClick={onClick}
-        className="self-start inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors">
-        <RotateCcw size={16} />
-        <span>Repor</span>
-    </button>
 );
 
 // Estilos combináveis de um parágrafo/item (tudo o que não é título nem o 'Padrão').
@@ -239,7 +230,6 @@ const ImageSection: React.FC<{ image: ImageProps; onChange: (patch: Partial<Imag
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitAlt(); } }}
                     className="w-full rounded-lg border border-border px-2 py-1.5 text-sm outline-none focus:border-primary resize-none" />
             </label>
-            <ResetButton onClick={() => onChange({ ...EMPTY_IMAGE, align: image.align, alt: image.alt })} />
         </Section>
     );
 };
@@ -258,7 +248,6 @@ const GridSection: React.FC<{
         <Row label="Espaço interior"><Num value={grid.padding} unit="em" min={0} max={5} step={0.1} onChange={padding => onChange({ padding })} /></Row>
         <p className="text-xs text-text-muted">A linha tracejada cinzenta é só do editor. Em ecrãs estreitos as células passam a uma por linha.</p>
         <div className="flex flex-wrap gap-2">
-            <ResetButton onClick={() => onChange(EMPTY_GRID)} />
             <button type="button" onClick={onApplyToCells} title="Copia contorno, cantos e fundo a cada célula da grelha"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-text-muted hover:bg-slate-50 transition-colors">
                 <Grid2x2 size={16} />
@@ -269,13 +258,14 @@ const GridSection: React.FC<{
 );
 
 const MODES = [['block', 'Este bloco'], ['style', 'Estilo']] as const;
+type Mode = (typeof MODES)[number][0];
 
 const TextSection: React.FC<{
     text: NonNullable<BlockInfo['text']>; css: string;
     onInline: (patch: Partial<TextProps>) => void; onStyle: (selector: string, patch: Partial<TextProps>) => void;
     onToggleClass: (cls: string, on: boolean) => void; onCreateStyle: (cls: string, body: string) => string | null;
-}> = ({ text, css, onInline, onStyle, onToggleClass, onCreateStyle }) => {
-    const [mode, setMode] = useState<'block' | 'style'>('block');
+    mode: Mode; setMode: (m: Mode) => void;
+}> = ({ text, css, onInline, onStyle, onToggleClass, onCreateStyle, mode, setMode }) => {
     const [picked, setPicked] = useState('');
     const [draft, setDraft] = useState<StyleDraft | null>(null); // criar estilo: esconde os campos do bloco/regra atual
     const startDraft = () => setDraft({ name: '', props: EMPTY_TEXT, error: '' });
@@ -315,7 +305,6 @@ const TextSection: React.FC<{
                 {mode === 'block' ? (draft ? null : (
                     <>
                         <TextFields value={text.inline} defaults={defaults} onChange={onInline} classes={text.classes} onToggleClass={onToggleClass} />
-                        <ResetButton onClick={() => onInline(EMPTY_TEXT)} />
                     </>
                 )) : (
                     <>
@@ -331,12 +320,26 @@ const TextSection: React.FC<{
     );
 };
 
-export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, onTextStyle, onCreateStyle, onClose, width, onResize }) => (
+export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, onTextStyle, onCreateStyle, onClose, width, onResize }) => {
+    const [mode, setMode] = useState<Mode>('block');
+    // Repor: tudo o que o painel mostra com valores próprios; o "Estilo" do texto edita regras do livro, não se repõe aqui.
+    const resetText = !!info.text && mode === 'block';
+    const canReset = !!(info.box || info.image || info.grid || resetText);
+    const reset = () => {
+        if (info.image) onEdit({ target: 'image', patch: { ...EMPTY_IMAGE, align: info.image.align, alt: info.image.alt } });
+        if (resetText) onEdit({ target: 'text', patch: EMPTY_TEXT });
+        if (info.grid) onEdit({ target: 'grid', patch: EMPTY_GRID });
+        if (info.box) onEdit({ target: 'box', patch: RESET });
+    };
+    return (
     <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
         <PanelResizeHandle width={width} onResize={onResize} />
         <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Edição do Bloco</h3>
-            <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-500 transition-all"><X size={16} /></button>
+            <div className="flex items-center gap-1">
+                {canReset && <button onClick={reset} title="Repor" aria-label="Repor" className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-text-main transition-all"><RotateCcw size={16} /></button>}
+                <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-rose-500 transition-all"><X size={16} /></button>
+            </div>
         </div>
         {!info.box && !info.text && !info.image && !info.grid ? (
             <div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-text-muted">
@@ -345,10 +348,11 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
         ) : (
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
                 {info.image && <ImageSection image={info.image} onChange={(patch) => onEdit({ target: 'image', patch })} />}
-                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={onCreateStyle} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
+                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} mode={mode} setMode={setMode} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={onCreateStyle} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
                 {info.grid && <GridSection grid={info.grid} onChange={(patch) => onEdit({ target: 'grid', patch })} onApplyToCells={() => onEdit({ target: 'gridCells' })} />}
                 {info.box && <BoxSection box={info.box} onChange={(patch) => onEdit({ target: 'box', patch })} />}
             </div>
         )}
     </aside>
-);
+    );
+};
