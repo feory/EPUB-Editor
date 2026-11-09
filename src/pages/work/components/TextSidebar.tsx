@@ -7,6 +7,7 @@ import { readCustomStyle, updateCustomStyle } from '../../../utils/book-css';
 import { useStyles } from '../../../context/StyleContext';
 import { charStyles } from '../../../utils/user-styles';
 import type { StyleCatalogue } from '../hooks/useStyleCatalogue';
+import { useEditorFrame } from '../hooks/useEditorFrame';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 
 interface TextSidebarProps {
@@ -208,6 +209,7 @@ function withStyleValues(sel: SelectionInfo | null, css: string): SelectionInfo 
 // letras, tipo de letra e estilos de caracteres. O parágrafo é do Mini-menu e do painel do bloco.
 export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, styles, onClose, width, onResize }) => {
     const { create: onCreateStyle, save: onUpdateStyle, remove: onDeleteStyle } = styles.char;
+    const frame = useEditorFrame();
     const selection = withStyleValues(info.selection, css);
     const [editingCls, setEditingCls] = useState<string | null>(null);
     const [newName, setNewName] = useState<string | null>(null); // a criar um estilo: nome em curso (null = não está a criar)
@@ -224,7 +226,7 @@ export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, sty
     };
     const cancelCreate = () => { setNewName(null); setNewError(''); };
     return (
-        <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">
+        <aside style={{ width, ...frame }} className="fixed right-4 top-[var(--wp-header-h,57px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">
             <PanelResizeHandle width={width} onResize={onResize} />
             {!editingCls && (
                 <PanelHeader>

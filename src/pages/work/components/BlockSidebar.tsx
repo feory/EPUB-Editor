@@ -5,6 +5,7 @@ import { Row, Select, Section, Color, Num, LenInput, StyleMenu } from './panelFi
 import { BOX_VARIANTS, boxToCss, cssToBox, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
 import { boxStyles, paragraphStyles } from '../../../utils/user-styles';
 import type { StyleCatalogue, StyleSet } from '../hooks/useStyleCatalogue';
+import { useEditorFrame } from '../hooks/useEditorFrame';
 import { useStyles } from '../../../context/StyleContext';
 import { EMPTY_TEXT, textPropsFrom, textPatchToDecls, type TextProps, type TextAlign, type Len } from '../editor/textProps';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
@@ -448,6 +449,7 @@ const TextSection: React.FC<{
 };
 
 export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, onTextStyle, styles, onClose, width, onResize }) => {
+    const frame = useEditorFrame();
     const [mode, setMode] = useState<Mode>('block');
     const [tab, setTab] = useState<'bloco' | 'caixa'>('bloco');
     const showBox = !!info.box && (tab === 'caixa' || !(info.text || info.image || info.grid)); // separador "Caixa" só existe dentro de uma caixa; caixa sozinha = só ele
@@ -461,7 +463,7 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
         if (info.box) onEdit({ target: 'box', patch: RESET });
     };
     return (
-    <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">
+    <aside style={{ width, ...frame }} className="fixed right-4 top-[var(--wp-header-h,57px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">
         <PanelResizeHandle width={width} onResize={onResize} />
         <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Edição do Bloco</h3>

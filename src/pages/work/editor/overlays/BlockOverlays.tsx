@@ -13,7 +13,7 @@ type Pos = { top: number; left: number };
 export type ElementAction = 'copy' | 'cut' | 'duplicate' | 'before' | 'after' | 'copyStyles' | 'pasteStyles'
     | 'group' | 'ungroup' | 'delete' | 'selectContainer' | 'duplicateContainer' | 'deleteContainer';
 /** Menu "⋮" do elemento selecionado: posição + o que o menu oferece. `up`: abre para cima do botão. */
-export interface ElementMenuState extends Pos { up: boolean; hasStyles: boolean; boxed: boolean; container: 'grid' | 'box' | null }
+export interface ElementMenuState extends Pos { hasStyles: boolean; boxed: boolean; container: 'grid' | 'box' | null }
 
 // Único sítio que define esta forma — useBlockOverlays deriva o seu "internal" bag daqui
 // via Omit (readOnly é o único que atravessa de fora). A edição de HTML inline vive à parte
@@ -257,8 +257,8 @@ export function BlockOverlays({
                 <>
                     <div className="fixed inset-0 z-[110]" onMouseDown={(e) => { e.preventDefault(); closeElementMenu(); }} />
                     <div
-                        style={{ position: 'fixed', top: elMenu.top, left: elMenu.left, transform: `translate(-100%, ${elMenu.up ? '-100%' : '0'})`, zIndex: 111 }}
-                        className="w-60 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
+                        style={{ position: 'fixed', top: elMenu.top, left: elMenu.left, maxHeight: `calc(100vh - ${elMenu.top}px - 8px)`, zIndex: 111 }}
+                        className="w-60 overflow-y-auto p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
                     >
                         {([
                             [['copy', 'Copiar', Copy], ['cut', 'Cortar', Scissors], ['duplicate', 'Duplicar', CopyPlus],

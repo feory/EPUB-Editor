@@ -64,6 +64,6 @@ test('pega → elemento: continua escondido, sem repor e esconder de novo', () =
     const { menus, log } = setup();
     menus.show({ kind: 'grip', pos });
     log.length = 0;
-    menus.show({ kind: 'element', state: { ...pos, up: false, hasStyles: false, boxed: false, container: null } });
+    menus.show({ kind: 'element', state: { ...pos, hasStyles: false, boxed: false, container: null } });
     expect(log).toEqual([]);
 });

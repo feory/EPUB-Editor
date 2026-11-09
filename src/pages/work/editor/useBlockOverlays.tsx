@@ -144,9 +144,11 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         const el = menuTargetRef.current;
         if (!el) return;
         const container = bm.containerOf(el);
-        const up = window.innerHeight - rect.bottom < 380; // sem espaço por baixo → abre para cima
+        // Abre sempre por baixo do botão (com scroll se faltar espaço), com a esquerda do menu (w-60 = 240px) na do botão e a estender-se
+        // para a direita; se não couber, encosta ao lado direito do editor.
+        const right = editorRef.current?.getContainer()?.getBoundingClientRect().right ?? window.innerWidth;
         menus.show({ kind: 'element', state: {
-            top: up ? rect.top - 4 : rect.bottom + 4, left: rect.right, up,
+            top: rect.bottom + 4, left: Math.max(Math.min(rect.left, right - 248), 8),
             hasStyles: !!styleClipRef.current, boxed: !!bm.boxOf(el),
             container: container ? (container.classList.contains('grid') ? 'grid' : 'box') : null,
         } });
