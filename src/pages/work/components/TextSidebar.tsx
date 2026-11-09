@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Check, RotateCcw, Plus, MoreHorizontal, Pencil, Copy, Trash2, Bold, Italic, Underline, Strikethrough, Superscript, Subscript } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Check, RotateCcw, Plus, Bold, Italic, Underline, Strikethrough, Superscript, Subscript } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
-import { Row, Select, Section, Color, LenInput } from './panelFields';
+import { Row, Select, Section, Color, LenInput, StyleMenu } from './panelFields';
 import { FONT_FAMILIES, INLINE_FORMATS, EMPTY_SELECTION, UNDERLINE_STYLES, TRANSFORMS, WEIGHTS, selectionToCss, cssToSelection, type SelectionProps, type SelectionInfo } from '../editor/selectionProps';
 import { readCustomStyle, updateCustomStyle } from '../../../utils/book-css';
 import { useStyles } from '../../../context/StyleContext';
@@ -143,37 +143,6 @@ const StyleEditor: React.FC<{
             <FormatFields value={draft} onToggle={toggle} onChange={change} />
         </div>
         </>
-    );
-};
-
-// Menu "⋯" de um estilo: clonar, editar, apagar. Fecha com clique fora ou Esc.
-export const StyleMenu: React.FC<{ label: string; onClone: () => void; onEdit: () => void; onDelete: () => void; light: boolean }> = ({ label, onClone, onEdit, onDelete, light }) => {
-    const [open, setOpen] = useState(false);
-    const ref = useRef<HTMLSpanElement>(null);
-    useEffect(() => {
-        if (!open) return;
-        const away = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
-        const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-        document.addEventListener('mousedown', away);
-        document.addEventListener('keydown', esc);
-        return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
-    }, [open]);
-    const item = (text: string, icon: React.ReactNode, run: () => void, danger = false) => (
-        <button type="button" role="menuitem" onClick={() => { setOpen(false); run(); }}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-slate-50 ${danger ? 'text-rose-600' : 'text-text-main'}`}>{icon}{text}</button>
-    );
-    return (
-        <span ref={ref} className="h-full flex">
-            <button type="button" title="Mais opções" aria-label={`Mais opções de ${label}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}
-                className={`h-full pr-2.5 pl-0.5 rounded-r-full ${light ? 'opacity-80' : 'opacity-50'} hover:opacity-100`}><MoreHorizontal size={14} /></button>
-            {open && (
-                <div role="menu" className="absolute left-0 top-9 z-20 w-36 rounded-lg border border-border bg-white shadow-md py-1 text-text-main">
-                    {item('Clonar', <Copy size={12} />, onClone)}
-                    {item('Editar', <Pencil size={12} />, onEdit)}
-                    {item('Apagar', <Trash2 size={12} />, onDelete, true)}
-                </div>
-            )}
-        </span>
     );
 };
 

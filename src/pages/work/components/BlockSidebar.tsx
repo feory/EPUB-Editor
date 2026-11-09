@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Check, RotateCcw, Grid2x2, Pencil, Plus } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
-import { Row, Select, Section, Color, Num, LenInput } from './panelFields';
+import { Row, Select, Section, Color, Num, LenInput, StyleMenu } from './panelFields';
 import { BOX_VARIANTS, boxToCss, cssToBox, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
 import { boxStyles, paragraphStyles } from '../../../utils/user-styles';
 import type { StyleCatalogue, StyleSet } from '../hooks/useStyleCatalogue';
 import { useStyles } from '../../../context/StyleContext';
-import { StyleMenu } from './TextSidebar';
 import { EMPTY_TEXT, textPropsFrom, textPatchToDecls, type TextProps, type TextAlign, type Len } from '../editor/textProps';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 import { readRule, hasRule } from '../../../utils/css-rule';

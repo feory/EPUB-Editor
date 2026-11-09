@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, MoreHorizontal, Pencil, Copy, Trash2 } from 'lucide-react';
 import { convertLen, type Len, type Unit } from '../editor/textProps';
 
 // Campos de formulário dos painéis laterais (Edição do Bloco, Editor de Texto): linha rotulada, secção, seletor, cor,
@@ -79,5 +79,36 @@ export const LenInput: React.FC<{ value: Len | null; placeholder?: Len | null; m
                 </select>
             }
             onChange={(n) => onChange(n === null ? null : { n, u: unit })} />
+    );
+};
+
+// Menu "⋯" de um estilo: clonar, editar, apagar. Fecha com clique fora ou Esc.
+export const StyleMenu: React.FC<{ label: string; onClone: () => void; onEdit: () => void; onDelete: () => void; light: boolean }> = ({ label, onClone, onEdit, onDelete, light }) => {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLSpanElement>(null);
+    useEffect(() => {
+        if (!open) return;
+        const away = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+        const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', away);
+        document.addEventListener('keydown', esc);
+        return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
+    }, [open]);
+    const item = (text: string, icon: React.ReactNode, run: () => void, danger = false) => (
+        <button type="button" role="menuitem" onClick={() => { setOpen(false); run(); }}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-slate-50 ${danger ? 'text-rose-600' : 'text-text-main'}`}>{icon}{text}</button>
+    );
+    return (
+        <span ref={ref} className="h-full flex">
+            <button type="button" title="Mais opções" aria-label={`Mais opções de ${label}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}
+                className={`h-full pr-2.5 pl-0.5 rounded-r-full ${light ? 'opacity-80' : 'opacity-50'} hover:opacity-100`}><MoreHorizontal size={14} /></button>
+            {open && (
+                <div role="menu" className="absolute left-0 top-9 z-20 w-36 rounded-lg border border-border bg-white shadow-md py-1 text-text-main">
+                    {item('Clonar', <Copy size={12} />, onClone)}
+                    {item('Editar', <Pencil size={12} />, onEdit)}
+                    {item('Apagar', <Trash2 size={12} />, onDelete, true)}
+                </div>
+            )}
+        </span>
     );
 };
