@@ -30,13 +30,6 @@ export const generateNavXhtml = (sections: Section[], pageEntries: { section: nu
         .filter(Boolean)
         .join('\n      ');
 
-    // Entrada única no Índice para a página de conteúdo "Lista de Páginas" (pagelist.xhtml,
-    // já no spine, em ordem de leitura linear a seguir à última secção) — diferente do nav
-    // "page-list" abaixo (esse tem 1 link POR página, violaria NAV-011 se estivesse aqui
-    // dentro; isto é só 1 link normal, sem esse problema).
-    const pageListTocItem = pageEntries.length === 0 ? '' :
-        `\n      <li><a href="pagelist.xhtml">Lista de Páginas</a></li>`;
-
     // "page-list" tem de ser um nav PRÓPRIO, separado do "toc" — a regra de reading-order do
     // ACE/epubcheck (NAV-011: "toc nav must be in reading order") só se aplica ao nav epub:type
     // "toc"; ancorar página a página de volta a secções anteriores (section3#page-6 depois de já
@@ -64,34 +57,9 @@ export const generateNavXhtml = (sections: Section[], pageEntries: { section: nu
   <nav epub:type="toc" id="toc" role="doc-toc">
     <h1>Índice</h1>
     <ol>
-      ${navItems}${pageListTocItem}
+      ${navItems}
     </ol>
   </nav>${pageListNav}
-</body>
-</html>`;
-};
-
-// Página de conteúdo dedicada (entra no spine como página própria "Lista de Páginas").
-// Usa lista simples de links (sem epub:type="page-list" — esse é o do nav.xhtml, canónico).
-export const generatePageListXhtml = (pageEntries: { section: number; page: number }[]): string => {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="pt" xml:lang="pt">
-<head>
-  <title>Lista de Páginas</title>
-  <meta charset="utf-8" />
-  <link rel="stylesheet" type="text/css" href="style.css" />
-  <style>
-    ol { list-style-type: none; padding-left: 0; }
-  </style>
-</head>
-<body>
-  <section aria-label="Lista de Páginas">
-    <h1>Lista de Páginas</h1>
-    <ol>
-      ${pageEntries.map(e => `<li><a href="section${e.section}.xhtml#page-${e.page}">${e.page}</a></li>`).join('\n      ')}
-    </ol>
-  </section>
 </body>
 </html>`;
 };
@@ -147,7 +115,6 @@ export const generateContentOpf = (
     ${manifestItems}
     ${imageManifestItems}
     ${fontManifestItems}
-    ${hasPageList ? '<item id="pagelist" href="pagelist.xhtml" media-type="application/xhtml+xml"/>' : ''}
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="style" href="style.css" media-type="text/css"/>
     <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
@@ -155,7 +122,6 @@ export const generateContentOpf = (
   <spine toc="ncx">
     ${cover.spineItem}
     ${spineItems}
-    ${hasPageList ? '<itemref idref="pagelist"/>' : ''}
     <itemref idref="nav" linear="yes"/>
   </spine>
 </package>`;

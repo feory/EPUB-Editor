@@ -6,7 +6,7 @@ import { cleanHtmlForXhtml, linkUrls } from './epub/html-utils';
 import { removeInaccessibleColors, removeInaccessibleCssColors } from './epub/color-utils';
 import { replaceImageUrlsInContent, stripPlaceholderImages, addImagesToArchive } from './epub/image-utils';
 import { buildSections } from './epub/chapters';
-import { generateNavXhtml, generatePageListXhtml, generateContentOpf, generateTocNcx, type CoverAssets } from './epub/assets';
+import { generateNavXhtml, generateContentOpf, generateTocNcx, type CoverAssets } from './epub/assets';
 import { convertPageBreaks } from '../page-list/page-list';
 import { buildIdToSectionMap, convertIndexLinks } from './epub/index-links';
 import { prepareTextForXml } from './epub/html-utils';
@@ -256,7 +256,6 @@ export const generateEpubBlob = async (htmlContent: string, metadata: BookMetada
     });
 
     oebps.file('nav.xhtml', generateNavXhtml(sections, pageEntries));
-    if (pageEntries.length > 0) oebps.file('pagelist.xhtml', generatePageListXhtml(pageEntries));
     oebps.file('content.opf', generateContentOpf(sections, metadata, uniqueId, imageManifestItems, '', cover, pageEntries.length > 0));
     oebps.file('toc.ncx', generateTocNcx(sections, uniqueId, metadata.title));
 
