@@ -43,7 +43,6 @@ test('content_style inclui o bloco ativo e o "+" com o diâmetro e os cortes das
     expect(css).toContain(activeBlockCss());
     expect(css).toContain(`width: ${PLUS_SIZE}px; height: ${PLUS_SIZE}px`);
     expect(css).toContain(`calc(var(--plus-dy, 0px) - ${PLUS_SIZE / 2}px)`);
-    expect(css).toContain(`-${PLUS_SIZE / 2 + PLUS_CUT}px 0 0 -7px #fff, ${PLUS_SIZE / 2 + PLUS_CUT}px 0 0 -7px #fff`); // faixa estreita (raio 3), não cópias do círculo
 });
 
 // Pega em CSS: centrada na linha esquerda do anel; topo = gripTop (a meio da parte visível).

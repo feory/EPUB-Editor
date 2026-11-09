@@ -218,6 +218,14 @@ export function WorkPage() {
     }
   }, [work.validationResults, work.footnoteValidation, work.linkValidation, openPanel, closeAllPanels]);
 
+  // Com um painel de edição aberto, o que se seleciona escolhe qual: texto selecionado → painel do texto; só o cursor/bloco → painel do bloco.
+  const editPanel = sidebars.activePanel === 'box' || sidebars.activePanel === 'text' ? sidebars.activePanel : null;
+  useEffect(() => {
+    if (!editPanel) return;
+    const want = blockInfo.selection ? 'text' : blockInfo.box || blockInfo.text || blockInfo.image || blockInfo.grid ? 'box' : null;
+    if (want && want !== editPanel) openPanel(want);
+  }, [editPanel, blockInfo, openPanel]);
+
   // Grammar highlights
   useEffect(() => {
     if (suppressHighlightRef.current) { suppressHighlightRef.current = false; return; }

@@ -255,7 +255,7 @@ export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onC
     };
     const cancelCreate = () => { setNewName(null); setNewError(''); };
     return (
-        <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
+        <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">
             <PanelResizeHandle width={width} onResize={onResize} />
             {!editingCls && (
                 <PanelHeader>

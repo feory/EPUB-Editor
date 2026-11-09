@@ -1,11 +1,8 @@
-import { activeBlockCss, gridActiveCss, gripCss, PLUS_SIZE, PLUS_CUT, COL_OUTLINE_OFFSET } from './blockGeometry';
+import { activeBlockCss, gridActiveCss, gripCss, PLUS_SIZE, COL_OUTLINE_OFFSET } from './blockGeometry';
 import { MARK, BODY_CLASS } from './ephemeral';
 
 // content_style do editor: o CSS do livro + estilos só-editor (diff/spell/noBreak/
 // marcadores de UI/hr). Os marcadores `data-mce-*` nunca exportam para EPUB.
-const CUT_R = 3; // raio dos círculos da faixa branca ao lado do "+"
-const PLUS_CUTS = [PLUS_SIZE / 2, PLUS_SIZE / 2 + CUT_R, PLUS_SIZE / 2 + PLUS_CUT]
-    .flatMap((d) => [-d, d]).map((d) => `${d}px 0 0 -${PLUS_SIZE / 2 - CUT_R}px #fff`).join(', ');
 
 export function buildContentStyle(currentCss: string): string {
     return currentCss + `
@@ -49,9 +46,6 @@ body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-
   content: "+"; position: absolute; z-index: 1; display: block; box-sizing: border-box;
   width: ${PLUS_SIZE}px; height: ${PLUS_SIZE}px; margin: calc(var(--plus-dy, 0px) - ${PLUS_SIZE / 2}px) 0 0 calc(50cqw - ${PLUS_SIZE / 2}px);
   border: 1px solid #e2e8f0; border-radius: 50%; background: #fff;
-  /* Faixa branca estreita (círculos de 3px de raio) em cada lado: corta a linha da borda junto ao círculo (ilusão de espaço)
-     sem tapar o fundo/seleção do bloco (cópias do tamanho do "+" deixavam "orelhas" por cima). */
-  box-shadow: ${PLUS_CUTS};
   color: #334155; font: 400 15px/15.5px system-ui, sans-serif; text-align: center; text-indent: 0;
   letter-spacing: 0; text-transform: none; cursor: pointer; user-select: none;
   visibility: hidden; opacity: 0; transform: scale(.6);

@@ -332,7 +332,7 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
         if (info.box) onEdit({ target: 'box', patch: RESET });
     };
     return (
-    <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40 animate-in slide-in-from-right duration-300">
+    <aside style={{ width }} className="fixed right-4 top-[calc(var(--wp-header-h,57px)_+_32px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">
         <PanelResizeHandle width={width} onResize={onResize} />
         <div className="px-6 py-4 min-h-[64px] border-b border-border bg-slate-50/50 flex items-center justify-between whitespace-nowrap">
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Edição do Bloco</h3>
