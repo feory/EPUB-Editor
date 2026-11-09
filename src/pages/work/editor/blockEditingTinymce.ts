@@ -5,7 +5,7 @@ import { MARK } from './ephemeral';
 import { INLINE_FORMATS } from './selectionProps';
 import { isCharStyle } from '../../../utils/char-styles';
 import { readInlineStyle, setInlineFormat } from './selectionFormats';
-import { ensureCharStyleFormat, registeredCharStyles } from './formats';
+import { registeredCharStyles, toggleCharStyle } from './formats';
 
 /** Adapter TinyMCE do seam EditorLike (blockEditing.ts). */
 export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
@@ -31,8 +31,7 @@ export function tinymceEditorLike(editor: TinyMCEEditor): EditorLike {
         selectedText: () => (editor.selection.isCollapsed() ? null : { read: readInline, formats: () => [...INLINE_FORMATS.map(([f]) => f as string), ...registeredCharStyles(editor)].filter((f) => editor.formatter.match(f)) }),
         toggleInline: (format) => {
             // Estilo de caracteres acabado de criar: o CSS do livro só regista o formato no render seguinte.
-            if (isCharStyle(format)) ensureCharStyleFormat(editor, format);
-            editor.formatter.toggle(format);
+            if (isCharStyle(format)) toggleCharStyle(editor, format); else editor.formatter.toggle(format);
         },
         applyInline: (format, css, value) => setInlineFormat(editor.formatter, readInline, format, css, value),
     };

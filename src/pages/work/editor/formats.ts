@@ -46,6 +46,28 @@ export function ensureCharStyleFormat(editor: Editor, cls: string) {
     if (!editor.formatter.has(cls)) editor.formatter.register(cls, charStyleFormat(cls));
 }
 
+/**
+ * Ao tirar um estilo de caracteres, o texto pode ter, além da classe, as mesmas propriedades como `style` inline (o estilo foi
+ * criado a partir da seleção): sem as limpar o aspeto ficava. Só se tiram as que valem o mesmo que na classe (diferentes = edição do utilizador).
+ */
+function clearInlineDuplicates(editor: Editor, cls: string) {
+    const rule = [...editor.getDoc().styleSheets].flatMap((sheet) => [...sheet.cssRules]).find((r): r is CSSStyleRule => (r as CSSStyleRule).selectorText === `.${cls}`);
+    if (!rule) return;
+    const rng = editor.selection.getRng();
+    (editor.dom.select(`span.${cls}`) as HTMLElement[]).filter((el) => rng.intersectsNode(el)).forEach((el) => {
+        for (const prop of rule.style) if (el.style.getPropertyValue(prop) === rule.style.getPropertyValue(prop)) el.style.removeProperty(prop);
+        el.removeAttribute('data-mce-style');
+        if (!el.getAttribute('style')) el.removeAttribute('style');
+    });
+}
+
+/** Liga/desliga um estilo de caracteres (ao desligar, limpa também o inline que duplica a classe). */
+export function toggleCharStyle(editor: Editor, cls: string) {
+    ensureCharStyleFormat(editor, cls);
+    if (editor.formatter.match(cls)) clearInlineDuplicates(editor, cls);
+    editor.formatter.toggle(cls);
+}
+
 /** Estilos de caracteres já registados no editor (nomes dos formatos). */
 export const registeredCharStyles = (editor: Editor): string[] => Object.keys(editor.formatter.get()).filter(isCharStyle);
 

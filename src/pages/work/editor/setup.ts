@@ -11,7 +11,7 @@ import { BOX_VARIANTS } from './boxProps';
 import { inspectBlock, applyBlockEdit, createBlockWatcher, TEXT_BLOCK_SELECTOR, type BlockInfo } from './blockEditing';
 import { tinymceEditorLike } from './blockEditingTinymce';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
-import { registerBlockFormats, registeredCharStyles } from './formats';
+import { registerBlockFormats, registeredCharStyles, toggleCharStyle } from './formats';
 import { charStyleLabel } from '../../../utils/char-styles';
 import { registerImageTools } from './imageTools';
 import { MARK, registerEphemeralMarks } from './ephemeral';
@@ -442,7 +442,7 @@ export function createEditorSetup(deps: SetupDeps) {
             icon: 'format',
             tooltip: 'Estilos de caracteres',
             fetch: (callback) => callback(charStyleNames().map((format) => ({
-                type: 'togglemenuitem' as const, text: charStyleLabel(format), onAction: undoable(() => editor.formatter.toggle(format)),
+                type: 'togglemenuitem' as const, text: charStyleLabel(format), onAction: undoable(() => toggleCharStyle(editor, format)),
                 onSetup: (api: { setActive(state: boolean): void }) => {
                     api.setActive(editor.formatter.match(format));
                     editor.formatter.formatChanged(format, (active) => api.setActive(active));
@@ -533,7 +533,7 @@ export function createEditorSetup(deps: SetupDeps) {
                     type: 'togglemenuitem',
                     text: label,
                     active: active.has(format),
-                    onAction: undoable(() => editor.formatter.toggle(format)),
+                    onAction: undoable(() => toggleCharStyle(editor, format)),
                 })));
             },
         });
