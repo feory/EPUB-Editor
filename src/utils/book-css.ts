@@ -3,31 +3,18 @@
 // criados pelo utilizador (`.p-nome { … }` numa secção própria). Regex para o formato deste projeto, não um parser CSS.
 //   forEditor(css)  — corrige livros antigos e acrescenta as regras-base em falta
 //   forExport(css)  — o que vai para o EPUB: corta a parte só-editor (mantendo os estilos personalizados)
-//   createCustomStyle / listCustomStyles / styleClassOf — estilos personalizados
+//   createCustomStyle / readCustomStyle / … — regras dos estilos personalizados (os tipos e as suas convenções: user-styles.ts)
 import { ensureBaselineCss } from './baseline-css';
 import { hasRule, readRuleBody, replaceRuleBody, removeRule, renameRule } from './css-rule';
-import { isCharStyle } from './char-styles';
 
 const SECTION = '/* === ESTILOS PERSONALIZADOS === */';
 const SECTION_RE = /\/\* === ESTILOS PERSONALIZADOS === \*\/([\s\S]*?)(?=\/\* === |$)/;
 
-/** "Epígrafe final" → "p-epigrafe-final" ('' se não sobrar nada utilizável). */
-export function styleClassOf(name: string): string {
-    const slug = name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^p-/, '');
-    return slug ? `p-${slug}` : '';
-}
-
 /** A secção inteira (cabeçalho incluído), ou '' — o export recoloca-a se o corte do editor-only a apanhou. */
 const customStylesSection = (css: string): string => SECTION_RE.exec(css)?.[0].trimEnd() ?? '';
 
-const customClasses = (css: string): string[] => [...(SECTION_RE.exec(css)?.[1] ?? '').matchAll(/\.([\w-]+)\s*\{/g)].map((m) => m[1]);
-
-/** Estilos de PARÁGRAFO criados pelo utilizador. */
-export const listCustomStyles = (css: string): string[] => customClasses(css).filter((c) => !isCharStyle(c));
-
-/** Estilos de CARACTERES criados pelo utilizador (`.c-nome`). */
-export const listCharStyles = (css: string): string[] => customClasses(css).filter(isCharStyle);
+/** Todas as classes da secção de estilos personalizados (qualquer tipo; user-styles.ts separa-as). */
+export const customStyleClasses = (css: string): string[] => [...(SECTION_RE.exec(css)?.[1] ?? '').matchAll(/\.([\w-]+)\s*\{/g)].map((m) => m[1]);
 
 // Marcador a partir do qual o style.css é só do editor (cortado no export).
 const EDITOR_CSS_MARKER = '/* === EDITOR (não exportado para EPUB) === */';

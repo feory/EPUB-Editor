@@ -90,3 +90,7 @@ _Avoid_: handlers de capítulo, transformações
 **Menu aberto**:
 Qual dos menus flutuantes do editor está aberto — inserção ("+"), pega, elemento ⋮, grelha ou "Mais estilos". No máximo um: `editor/openMenu.ts` (`createMenus`) é o único que abre/fecha, e o que se esconde enquanto está aberto (Mini-menu, botão "+", marca do bloco) deriva dele através de um adapter (`MenuHost`). O hover da divisória (`hrCtl`) e a edição de HTML não são menus abertos.
 _Avoid_: popup, dropdown, overlay (o overlay é só o render)
+
+**Estilo de utilizador**:
+Uma classe criada pelo utilizador na secção de estilos personalizados do livro (`style.css`) e aplicada ao HTML. Três tipos com a mesma interface: parágrafo (`p-nome`), caracteres (`c-nome`, num `span`) e caixa (`b-nome`, na `div.box`). `utils/user-styles.ts` é o único dono das convenções (prefixo, nome para mostrar, clone, onde a classe vive no HTML, retirar/renomear no HTML); `utils/book-css.ts` só sabe as regras CSS da secção. Não confundir com os estilos fixos do editor (`p-indent`, `p-quote`…), que vêm no CSS base.
+_Avoid_: estilo personalizado (é o nome da secção no CSS), classe

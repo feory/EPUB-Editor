@@ -3,18 +3,17 @@ import { X, Check, RotateCcw, Plus, MoreHorizontal, Pencil, Copy, Trash2, Bold, 
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { Row, Select, Section, Color, LenInput } from './panelFields';
 import { FONT_FAMILIES, INLINE_FORMATS, EMPTY_SELECTION, UNDERLINE_STYLES, TRANSFORMS, WEIGHTS, selectionToCss, cssToSelection, type SelectionProps, type SelectionInfo } from '../editor/selectionProps';
-import { listCharStyles, readCustomStyle, updateCustomStyle } from '../../../utils/book-css';
+import { readCustomStyle, updateCustomStyle } from '../../../utils/book-css';
 import { useStyles } from '../../../context/StyleContext';
-import { charStyleClassOf, charStyleLabel, cloneCharStyleClass } from '../../../utils/char-styles';
+import { charStyles } from '../../../utils/user-styles';
+import type { StyleCatalogue } from '../hooks/useStyleCatalogue';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 
 interface TextSidebarProps {
     info: BlockInfo;                                  // só interessa o texto selecionado
     css: string;                                      // CSS atual do livro (estilos de caracteres existentes)
     onEdit: (edit: BlockEdit) => void;
-    onCreateStyle: (cls: string, body: string) => string | null; // devolve o erro, ou null se criou
-    onUpdateStyle: (cls: string, body: string, newCls: string) => string | null; // idem, ao guardar um estilo (newCls = nome novo, ou o mesmo)
-    onDeleteStyle: (cls: string) => void;                        // apaga a regra e retira o estilo do texto
+    styles: StyleCatalogue;                                      // criar / guardar / apagar estilos (usa `styles.char`)
     onClose: () => void;
     width: number;
     onResize: (width: number) => void;
@@ -102,7 +101,7 @@ const HEADER_ICON = 'p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transiti
 const StyleEditor: React.FC<{
     cls: string; css: string; onSave: (body: string, newCls: string) => string | null; onCancel: () => void;
 }> = ({ cls, css, onSave, onCancel }) => {
-    const [name, setName] = useState(charStyleLabel(cls));
+    const [name, setName] = useState(charStyles.label(cls));
     const [{ selection: initial, rest }] = useState(() => cssToSelection(readCustomStyle(css, cls)));
     const [baseCss] = useState(css); // o CSS do livro sem a pré-visualização
     const [draft, setDraft] = useState<SelectionInfo>(initial);
@@ -122,7 +121,7 @@ const StyleEditor: React.FC<{
         setError('');
     };
     const save = () => {
-        const newCls = name.trim() === charStyleLabel(cls) ? cls : charStyleClassOf(name);
+        const newCls = name.trim() === charStyles.label(cls) ? cls : charStyles.classOf(name);
         if (!newCls) return setError('Dá um nome ao estilo.');
         const err = onSave(bodyOf(draft), newCls);
         if (err) setError(err);
@@ -148,7 +147,7 @@ const StyleEditor: React.FC<{
 };
 
 // Menu "⋯" de um estilo: clonar, editar, apagar. Fecha com clique fora ou Esc.
-const StyleMenu: React.FC<{ label: string; onClone: () => void; onEdit: () => void; onDelete: () => void; light: boolean }> = ({ label, onClone, onEdit, onDelete, light }) => {
+export const StyleMenu: React.FC<{ label: string; onClone: () => void; onEdit: () => void; onDelete: () => void; light: boolean }> = ({ label, onClone, onEdit, onDelete, light }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLSpanElement>(null);
     useEffect(() => {
@@ -187,18 +186,18 @@ const CharStyles: React.FC<{
     const [error, setError] = useState('');
     const [deleting, setDeleting] = useState<string | null>(null); // estilo à espera de confirmação para apagar
     const clone = (cls: string) => {
-        const err = onCreate(cloneCharStyleClass(listCharStyles(css), cls), readCustomStyle(css, cls));
+        const err = onCreate(charStyles.clone(charStyles.list(css), cls), readCustomStyle(css, cls));
         setError(err ?? '');
     };
     return (
         <Section>
             <div className="flex flex-wrap items-center gap-1.5">
-                {listCharStyles(css).map((cls) => {
+                {charStyles.list(css).map((cls) => {
                     const on = selection.formats.includes(cls);
                     return (
                         <span key={cls} className={`relative inline-flex items-center h-8 rounded-full border text-xs transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
-                            <button type="button" aria-pressed={on} onClick={() => onEdit({ target: 'inlineFormat', format: cls })} className="h-full pl-3 pr-2 rounded-l-full">{charStyleLabel(cls)}</button>
-                            <StyleMenu label={charStyleLabel(cls)} light={on} onClone={() => clone(cls)} onEdit={() => onStartEdit(cls)} onDelete={() => setDeleting(cls)} />
+                            <button type="button" aria-pressed={on} onClick={() => onEdit({ target: 'inlineFormat', format: cls })} className="h-full pl-3 pr-2 rounded-l-full">{charStyles.label(cls)}</button>
+                            <StyleMenu label={charStyles.label(cls)} light={on} onClone={() => clone(cls)} onEdit={() => onStartEdit(cls)} onDelete={() => setDeleting(cls)} />
                         </span>
                     );
                 })}
@@ -209,7 +208,7 @@ const CharStyles: React.FC<{
             </div>
             {deleting && (
                 <div className="flex flex-col gap-2">
-                    <p className="text-xs text-rose-700">Apagar o estilo "{charStyleLabel(deleting)}" e retirá-lo de todo o texto onde foi aplicado?</p>
+                    <p className="text-xs text-rose-700">Apagar o estilo "{charStyles.label(deleting)}" e retirá-lo de todo o texto onde foi aplicado?</p>
                     <div className="flex gap-2">
                         <button type="button" onClick={() => { onDelete(deleting); setDeleting(null); }} className="h-8 px-3 rounded-lg bg-rose-600 text-white text-xs hover:bg-rose-700">Apagar</button>
                         <button type="button" onClick={() => setDeleting(null)} className="h-8 px-3 rounded-lg border border-border text-xs hover:bg-slate-50">Cancelar</button>
@@ -225,7 +224,7 @@ const CharStyles: React.FC<{
 function withStyleValues(sel: SelectionInfo | null, css: string): SelectionInfo | null {
     if (!sel) return sel;
     const out: Record<string, unknown> = { ...sel };
-    for (const cls of listCharStyles(css)) {
+    for (const cls of charStyles.list(css)) {
         if (!sel.formats.includes(cls)) continue;
         const from = cssToSelection(readCustomStyle(css, cls)).selection;
         for (const k of Object.keys(EMPTY_SELECTION) as (keyof SelectionProps)[]) {
@@ -238,13 +237,14 @@ function withStyleValues(sel: SelectionInfo | null, css: string): SelectionInfo 
 
 // Painel "Editor de Texto": só os caracteres selecionados — formato (negrito, itálico…), cor, fundo, tamanho, espaço entre
 // letras, tipo de letra e estilos de caracteres. O parágrafo é do Mini-menu e do painel do bloco.
-export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, onCreateStyle, onUpdateStyle, onDeleteStyle, onClose, width, onResize }) => {
+export const TextSidebar: React.FC<TextSidebarProps> = ({ info, css, onEdit, styles, onClose, width, onResize }) => {
+    const { create: onCreateStyle, save: onUpdateStyle, remove: onDeleteStyle } = styles.char;
     const selection = withStyleValues(info.selection, css);
     const [editingCls, setEditingCls] = useState<string | null>(null);
     const [newName, setNewName] = useState<string | null>(null); // a criar um estilo: nome em curso (null = não está a criar)
     const [newError, setNewError] = useState('');
     const create = () => {
-        const cls = charStyleClassOf(newName ?? '');
+        const cls = charStyles.classOf(newName ?? '');
         if (!cls) return setNewError('Dá um nome ao estilo.');
         const body = selection ? selectionToCss(selection) : '';
         if (!body) return setNewError('A seleção não tem formato nem aspeto para guardar.');

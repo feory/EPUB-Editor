@@ -14,7 +14,7 @@ import type { ChapterLevel } from '../../utils/chapters';
 import { applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import { linkIndiceEntries, linkOneIndiceEntry, unlinkOneIndiceEntry, listSubtitles } from '../../utils/indice-links';
 import { unwrapCommentAnchor } from '../../utils/comment-anchor';
-import { removeCharStyleFromHtml, renameCharStyleInHtml, charStyleLabel } from '../../utils/char-styles';
+import type { UserStyleKind } from '../../utils/user-styles';
 import { fixLinks, validateLinks } from '../../services/validation/link-validator';
 import { insertPageBreaks } from '../../services/page-list/page-list';
 import type { PageAnchor } from '../../services/page-list/page-list';
@@ -84,16 +84,16 @@ export function addChapter(book: Book): BookEdit {
     return reset(insertChapterPart(book.parts, 'Novo Capítulo'), 'Capítulo criado!');
 }
 
-/** Apagar um estilo de caracteres: retira-o dos spans do livro (o CSS apaga-se à parte). null se ninguém o usa. */
-export function removeCharStyle(book: Book, cls: string): BookEdit | null {
-    const html = removeCharStyleFromHtml(book.html, cls);
-    return html === book.html ? null : keep(html, `Estilo "${charStyleLabel(cls)}" retirado do texto.`);
+/** Apagar um estilo de utilizador: retira-o do HTML do livro (o CSS apaga-se à parte). null se ninguém o usa. */
+export function removeStyle(book: Book, kind: UserStyleKind, cls: string): BookEdit | null {
+    const html = kind.removeFromHtml(book.html, cls);
+    return html === book.html ? null : keep(html, `Estilo "${kind.label(cls)}" retirado ${kind.where}.`);
 }
 
-/** Mudar o nome de um estilo de caracteres: troca a classe nos spans do livro (o CSS muda à parte). null se ninguém o usa. */
-export function renameCharStyle(book: Book, from: string, to: string): BookEdit | null {
-    const html = renameCharStyleInHtml(book.html, from, to);
-    return html === book.html ? null : keep(html, `Estilo "${charStyleLabel(from)}" renomeado para "${charStyleLabel(to)}".`);
+/** Mudar o nome de um estilo de utilizador: troca a classe no HTML do livro (o CSS muda à parte). null se ninguém o usa. */
+export function renameStyle(book: Book, kind: UserStyleKind, from: string, to: string): BookEdit | null {
+    const html = kind.renameInHtml(book.html, from, to);
+    return html === book.html ? null : keep(html, `Estilo "${kind.label(from)}" renomeado para "${kind.label(to)}".`);
 }
 
 export function applyDropCaps(book: Book): BookEdit {

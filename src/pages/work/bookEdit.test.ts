@@ -4,6 +4,7 @@ import '../../services/indesign/happy-dom'; // DOMParser no bun
 Object.assign(globalThis, { NodeFilter: { SHOW_TEXT: 4 } });
 import { splitChapters, classifyChapterPart } from '../../utils/chapters';
 import * as be from './bookEdit';
+import { charStyles } from '../../utils/user-styles';
 import type { Book } from './bookEdit';
 
 const ch = (t: string, body = '<p>texto</p>') => `<p class="chapter-break-h1" data-title="${t}"></p><h1>${t}</h1>${body}`;
@@ -105,16 +106,16 @@ test('criar capítulo num livro sem h1: vai para o topo', () => {
     expect(be.addChapter(b).html?.startsWith('<p class="chapter-break-h1" data-title="Novo Capítulo"')).toBe(true);
 });
 
-test('removeCharStyle: retira o estilo do livro; null se ninguém o usa', () => {
+test('removeStyle (caracteres): retira o estilo do livro; null se ninguém o usa', () => {
     const b = book('<p class="chapter-break" data-title="x"></p><p>a <span class="c-x">b</span></p>');
-    const r = be.removeCharStyle(b, 'c-x');
+    const r = be.removeStyle(b, charStyles, 'c-x');
     expect(r?.commit).toBe('keep');
     expect(r?.html).toContain('<p>a b</p>');
-    expect(be.removeCharStyle(b, 'c-outro')).toBeNull();
+    expect(be.removeStyle(b, charStyles, 'c-outro')).toBeNull();
 });
 
-test('renameCharStyle: troca a classe no livro; null se ninguém a usa', () => {
+test('renameStyle (caracteres): troca a classe no livro; null se ninguém a usa', () => {
     const b = book('<p class="chapter-break" data-title="x"></p><p>a <span class="c-x">b</span></p>');
-    expect(be.renameCharStyle(b, 'c-x', 'c-novo')?.html).toContain('<span class="c-novo">b</span>');
-    expect(be.renameCharStyle(b, 'c-outro', 'c-novo')).toBeNull();
+    expect(be.renameStyle(b, charStyles, 'c-x', 'c-novo')?.html).toContain('<span class="c-novo">b</span>');
+    expect(be.renameStyle(b, charStyles, 'c-outro', 'c-novo')).toBeNull();
 });

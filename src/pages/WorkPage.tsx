@@ -28,6 +28,7 @@ import { BlockSidebar } from './work/components/BlockSidebar';
 import { TextSidebar } from './work/components/TextSidebar';
 import type { BlockInfo } from './work/editor/blockEditing';
 import { useBookCss } from './work/hooks/useBookCss';
+import { useStyleCatalogue } from './work/hooks/useStyleCatalogue';
 import { useResumePosition } from './work/hooks/useResumePosition';
 import { ResumeModal } from './work/components/ResumeModal';
 import { useComments } from './work/hooks/useComments';
@@ -414,7 +415,8 @@ export function WorkPage() {
   };
 
   // CSS do livro editado a partir do editor (modo "Estilo" do painel, "Criar estilo…"): aplica já, grava com debounce.
-  const { editRule: handleTextStyle, createStyle: handleCreateStyle, saveStyle: handleSaveStyle, deleteStyle: handleDeleteStyle } = useBookCss(isbn);
+  const { editRule: handleTextStyle, createStyle, saveStyle, deleteStyle } = useBookCss(isbn);
+  const styles = useStyleCatalogue({ createStyle, saveStyle, deleteStyle }, { renameStyle: work.handleRenameStyle, removeStyle: work.handleRemoveStyle });
 
   const anySidebarOpen = panels.anyOpen;
 
@@ -619,7 +621,7 @@ export function WorkPage() {
           css={getCurrentCss()}
           onEdit={(edit) => editorRef.current?.editBlock(edit)}
           onTextStyle={handleTextStyle}
-          onCreateStyle={handleCreateStyle}
+          styles={styles}
           onClose={() => sidebars.setShowBoxSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}
@@ -631,13 +633,7 @@ export function WorkPage() {
           info={blockInfo}
           css={getCurrentCss()}
           onEdit={(edit) => editorRef.current?.editBlock(edit)}
-          onCreateStyle={handleCreateStyle}
-          onUpdateStyle={(cls, body, newCls) => {
-            const err = handleSaveStyle(cls, body, newCls);
-            if (!err && newCls !== cls) work.handleRenameCharStyle(cls, newCls); // o texto passa à classe nova
-            return err;
-          }}
-          onDeleteStyle={(cls) => { handleDeleteStyle(cls); work.handleRemoveCharStyle(cls); }}
+          styles={styles}
           onClose={() => sidebars.setShowTextSidebar(false)}
           width={panelWidth}
           onResize={handlePanelResize}

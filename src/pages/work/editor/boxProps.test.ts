@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { Window } from 'happy-dom';
-import { applyBoxProps, readBoxProps, type BoxDom } from './boxProps';
+import { applyBoxProps, readBoxProps, boxToCss, cssToBox, type BoxDom } from './boxProps';
 
 const doc = new Window().document;
 const dom: BoxDom = {
@@ -24,4 +24,22 @@ test('valores vazios/null removem o style; variante Padrão tira a classe; 100% 
     expect(el.className).toBe('');
     expect(el.style.backgroundColor).toBe('');
     expect(el.style.marginLeft).toBe('');
+});
+
+test('boxToCss / cssToBox: ida e volta; o que os controlos não representam fica em rest', () => {
+    const css = boxToCss({ variant: 'aviso', background: '#fee2e2', borderWidth: 3, padding: 1.5, width: 80 });
+    expect(css).toContain('background-color: #fee2e2;');
+    expect(css).not.toContain('box--');
+    const { box, rest } = cssToBox(`${css} font-weight: bold;`);
+    expect(box).toMatchObject({ background: '#fee2e2', borderWidth: 3, padding: 1.5, width: 80, classes: [] });
+    expect(rest).toEqual(['font-weight: bold']);
+});
+
+test('applyBoxProps: classes substitui só os estilos de caixa (b-…)', () => {
+    const el = box();
+    applyBoxProps(dom, el, { variant: 'nota' });
+    el.classList.add('b-um');
+    applyBoxProps(dom, el, { classes: ['b-dois'] });
+    expect(Array.from(el.classList).sort()).toEqual(['b-dois', 'box--nota']);
+    expect(readBoxProps(el).classes).toEqual(['b-dois']);
 });

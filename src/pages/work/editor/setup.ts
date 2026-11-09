@@ -12,7 +12,7 @@ import { inspectBlock, applyBlockEdit, createBlockWatcher, TEXT_BLOCK_SELECTOR, 
 import { tinymceEditorLike } from './blockEditingTinymce';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
 import { registerBlockFormats, registeredCharStyles, toggleCharStyle } from './formats';
-import { charStyleLabel } from '../../../utils/char-styles';
+import { charStyles } from '../../../utils/user-styles';
 import { registerImageTools } from './imageTools';
 import { MARK, registerEphemeralMarks } from './ephemeral';
 
@@ -442,7 +442,7 @@ export function createEditorSetup(deps: SetupDeps) {
             icon: 'format',
             tooltip: 'Estilos de caracteres',
             fetch: (callback) => callback(charStyleNames().map((format) => ({
-                type: 'togglemenuitem' as const, text: charStyleLabel(format), onAction: undoable(() => toggleCharStyle(editor, format)),
+                type: 'togglemenuitem' as const, text: charStyles.label(format), onAction: undoable(() => toggleCharStyle(editor, format)),
                 onSetup: (api: { setActive(state: boolean): void }) => {
                     api.setActive(editor.formatter.match(format));
                     editor.formatter.formatChanged(format, (active) => api.setActive(active));
@@ -548,19 +548,29 @@ export function createEditorSetup(deps: SetupDeps) {
             ]),
         });
         // Em parágrafo: "Mais estilos" (⋮) no canto esquerdo, alinhamento logo à direita, depois estilos inline.
-        editor.ui.registry.addContextToolbar('parastyles', {
+        // Dentro de uma caixa (.box) o mini-menu ganha "Editar caixa" (abre o painel na secção da caixa).
+        editor.ui.registry.addButton('editbox', {
+            icon: 'ps-box',
+            tooltip: 'Editar caixa',
+            onAction: () => openPanel('box'),
+        });
+        const PARA_ITEMS = 'psmorepara pscombopara blockalignmenu psindent pstop psquote psuppercase idxlinktarget edithtml';
+        const paraToolbar = (inBox: boolean) => ({
             // Só com o cursor colapsado — em seleção de texto mostra-se o bubble, não o mini-menu.
             // Também em <li> (blockOf não inclui 'li' — usado pelo sistema de pega/+ que não se
             // estende a listas; aqui só precisamos do mini-menu de estilos, por isso getParent
             // próprio em vez de alargar blockOf), para dar acesso a p-top/p-quote/etc. em bullets.
             predicate: (node: Node) => {
                 const block = blockOf(node) || editor.dom.getParent(node, 'li');
-                return !!block && (block.nodeName === 'P' || block.nodeName === 'LI') && !activeBlock.isCollapsed(block) && editor.selection.isCollapsed();
+                return !!block && (block.nodeName === 'P' || block.nodeName === 'LI') && !activeBlock.isCollapsed(block) && editor.selection.isCollapsed()
+                    && !!editor.dom.getParent(node, '.box') === inBox;
             },
-            position: 'node',
-            scope: 'node',
-            items: 'psmorepara pscombopara blockalignmenu psindent pstop psquote psuppercase idxlinktarget edithtml',
+            position: 'node' as const,
+            scope: 'node' as const,
+            items: inBox ? `${PARA_ITEMS} editbox` : PARA_ITEMS,
         });
+        editor.ui.registry.addContextToolbar('parastyles', paraToolbar(false));
+        editor.ui.registry.addContextToolbar('boxparastyles', paraToolbar(true));
         // Em título: "Mais estilos" (⋮) no canto esquerdo, alinhamento logo à direita, depois estilos inline.
         editor.ui.registry.addContextToolbar('headingstyles', {
             predicate: (node: Node) => {
@@ -632,7 +642,15 @@ export function createEditorSetup(deps: SetupDeps) {
                 } else {
                     const html = editor.selection.getContent({ format: 'html' });
                     if (html.trim()) {
-                        editor.selection.setContent(`<div class="box">${html}</div>`);
+                        // A caixa envolve os BLOCOS da seleção (nunca vai para dentro de um p/h2: seria HTML inválido e o título perdia-se ao recarregar).
+                        const body = editor.getBody();
+                        const tops = [...new Set(editor.selection.getSelectedBlocks()
+                            .map((b) => editor.dom.getParent(b, (n: Node) => n.parentNode === body) as HTMLElement | null)
+                            .filter((b): b is HTMLElement => !!b && !/chapter-break/.test(b.className)))];
+                        if (tops.length === 0) return editor.selection.setContent(`<div class="box">${html}</div>`);
+                        const box = editor.dom.create('div', { class: 'box' });
+                        tops[0].before(box);
+                        box.append(...tops);
                     }
                 }
             }),

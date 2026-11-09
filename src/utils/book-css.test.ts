@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import { styleClassOf, listCharStyles, readCustomStyle, updateCustomStyle, renameCustomStyle, deleteCustomStyle, listCustomStyles, createCustomStyle, forExport, forEditor } from './book-css';
+import { readCustomStyle, updateCustomStyle, renameCustomStyle, deleteCustomStyle, createCustomStyle, forExport, forEditor } from './book-css';
+import { charStyles, paragraphStyles } from './user-styles';
 
 const EDITOR = '/* === EDITOR (não exportado para EPUB) === */';
 const create = (css: string, cls: string, body: string) => {
@@ -8,18 +9,12 @@ const create = (css: string, cls: string, body: string) => {
     return r.css;
 };
 
-test('styleClassOf: slug com prefixo p-', () => {
-    expect(styleClassOf('Epígrafe final')).toBe('p-epigrafe-final');
-    expect(styleClassOf('p-nota')).toBe('p-nota');
-    expect(styleClassOf('!!!')).toBe('');
-});
-
 test('createCustomStyle: cria a secção e acrescenta sem tocar noutras', () => {
     let css = create('p { margin: 0; }\n', 'p-a', 'text-align: right;');
-    expect(listCustomStyles(css)).toEqual(['p-a']);
+    expect(paragraphStyles.list(css)).toEqual(['p-a']);
     css += '\n/* === OUTRA === */\n.x { color: red; }\n';
     css = create(css, 'p-b', 'color: blue;');
-    expect(listCustomStyles(css)).toEqual(['p-a', 'p-b']);
+    expect(paragraphStyles.list(css)).toEqual(['p-a', 'p-b']);
     expect(css).toContain('.x { color: red; }');
     expect(css.indexOf('.p-b')).toBeLessThan(css.indexOf('OUTRA'));
 });
@@ -34,12 +29,12 @@ test('createCustomStyle: a secção fica antes do marcador do editor (e migra se
     let css = create(base, 'p-a', 'color: red;');
     expect(css.indexOf('.p-a')).toBeLessThan(css.indexOf('EDITOR (não'));
     css = create(css, 'p-b', 'color: blue;');
-    expect(listCustomStyles(css)).toEqual(['p-a', 'p-b']);
+    expect(paragraphStyles.list(css)).toEqual(['p-a', 'p-b']);
     expect(css.indexOf('.p-b')).toBeLessThan(css.indexOf('EDITOR (não'));
     // livro com a secção já depois do marcador (versão anterior)
     const legacy = `${base}\n    /* === ESTILOS PERSONALIZADOS === */\n    .p-x { color: red; }\n`;
     const fixed = create(legacy, 'p-y', 'color: blue;');
-    expect(listCustomStyles(fixed)).toEqual(['p-x', 'p-y']);
+    expect(paragraphStyles.list(fixed)).toEqual(['p-x', 'p-y']);
     expect(fixed.indexOf('.p-x')).toBeLessThan(fixed.indexOf('EDITOR (não'));
     expect(fixed).toContain('hr.chapter-break');
 });
@@ -86,8 +81,8 @@ test('estilos de caracteres: c- à parte dos de parágrafo na mesma secção', (
     if (!('css' in first)) throw new Error(first.error);
     const second = createCustomStyle(first.css, 'c-destaque', 'font-weight: bold;');
     if (!('css' in second)) throw new Error(second.error);
-    expect(listCharStyles(second.css)).toEqual(['c-destaque']);
-    expect(listCustomStyles(second.css)).toEqual(['p-nota']);
+    expect(charStyles.list(second.css)).toEqual(['c-destaque']);
+    expect(paragraphStyles.list(second.css)).toEqual(['p-nota']);
 });
 
 test('editar e apagar um estilo personalizado: lê, troca as declarações, recusa vazio/inexistente, apaga só essa regra', () => {
@@ -103,7 +98,7 @@ test('editar e apagar um estilo personalizado: lê, troca as declarações, recu
     expect(updateCustomStyle(b.css, 'c-destaque', '  ')).toEqual({ error: 'Define pelo menos uma declaração.' });
     expect('error' in updateCustomStyle(b.css, 'c-nao-existe', 'color: red;')).toBe(true);
     const del = deleteCustomStyle(upd.css, 'c-destaque');
-    expect(listCharStyles(del)).toEqual(['c-nota']);
+    expect(charStyles.list(del)).toEqual(['c-nota']);
     expect(del).toContain('body { color: black; }');
 });
 
@@ -114,7 +109,7 @@ test('renameCustomStyle: troca a classe mantendo o corpo; recusa nome existente 
     if (!('css' in b)) throw new Error(b.error);
     const r = renameCustomStyle(b.css, 'c-a', 'c-novo');
     if (!('css' in r)) throw new Error(r.error);
-    expect(listCharStyles(r.css)).toEqual(['c-novo', 'c-b']);
+    expect(charStyles.list(r.css)).toEqual(['c-novo', 'c-b']);
     expect(readCustomStyle(r.css, 'c-novo')).toBe('font-weight: bold;');
     expect(renameCustomStyle(b.css, 'c-a', 'c-b')).toEqual({ error: 'Já existe um estilo ".c-b".' });
     expect('error' in renameCustomStyle(b.css, 'c-nao', 'c-x')).toBe(true);

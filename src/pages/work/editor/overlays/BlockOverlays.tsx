@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
 import { BOX_VARIANTS, type BoxVariant } from '../boxProps';
+import { useStyles } from '../../../../context/StyleContext';
+import { paragraphStyles } from '../../../../utils/user-styles';
 
 type Pos = { top: number; left: number };
 
@@ -57,6 +59,9 @@ export function BlockOverlays({
     dismissGripMenu, gripAction, setHrWidth, deleteHr,
     styleMenu, styleAction, anchorAction, closeStyleMenu, readOnly,
 }: Props) {
+    const { getCurrentCss } = useStyles();
+    // Estilos de parágrafo criados pelo utilizador (aplicam-se também a títulos) vêm a seguir aos fixos.
+    const customParaStyles = styleMenu ? paragraphStyles.list(getCurrentCss()).map((c) => [c, c] as const) : [];
     return (
         <>
             {plusMenu && (
@@ -122,7 +127,7 @@ export function BlockOverlays({
                     >
                         <div className="px-2 pt-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Estilos</div>
                         <div className="grid grid-cols-2 gap-0.5">
-                            {(styleMenu.kind === 'para' ? MORE_STYLES_PARA : MORE_STYLES_HEAD).map(([format, label]) => (
+                            {[...(styleMenu.kind === 'para' ? MORE_STYLES_PARA : MORE_STYLES_HEAD), ...customParaStyles].map(([format, label]) => (
                                 <button
                                     key={format}
                                     type="button"

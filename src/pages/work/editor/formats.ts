@@ -1,7 +1,7 @@
 import type { Editor } from 'tinymce';
 import { styleFormatsWith } from './config';
 import { charFormats } from './selectionProps';
-import { isCharStyle, charStyleFormat } from '../../../utils/char-styles';
+import { charStyles } from '../../../utils/user-styles';
 
 // Formatos de parágrafo/inline do editor (classes do livro). Registados no init do editor.
 export function registerBlockFormats(editor: Editor) {
@@ -43,7 +43,7 @@ export function registerBlockFormats(editor: Editor) {
 
 /** Regista o formato de um estilo de caracteres (se ainda não existe): o nome do formato é a própria classe. */
 export function ensureCharStyleFormat(editor: Editor, cls: string) {
-    if (!editor.formatter.has(cls)) editor.formatter.register(cls, charStyleFormat(cls));
+    if (!editor.formatter.has(cls)) editor.formatter.register(cls, { inline: 'span', classes: cls });
 }
 
 /**
@@ -69,7 +69,7 @@ export function toggleCharStyle(editor: Editor, cls: string) {
 }
 
 /** Estilos de caracteres já registados no editor (nomes dos formatos). */
-export const registeredCharStyles = (editor: Editor): string[] => Object.keys(editor.formatter.get()).filter(isCharStyle);
+export const registeredCharStyles = (editor: Editor): string[] => Object.keys(editor.formatter.get()).filter(charStyles.isStyle);
 
 // Estilos personalizados do livro (utils/custom-styles): registam-se como os de parágrafo e entram no
 // menu "Formats" → "Parágrafos". O TinyMCE só lê `style_formats` no arranque; `addStyleModifications`
@@ -77,7 +77,7 @@ export const registeredCharStyles = (editor: Editor): string[] => Object.keys(ed
 export function syncCustomStyleFormats(editor: Editor, custom: string[], charStyles: string[] = []) {
     registeredCharStyles(editor).filter((c) => !charStyles.includes(c)).forEach((c) => editor.formatter.unregister(c)); // estilo apagado
     charStyles.forEach((c) => ensureCharStyleFormat(editor, c));
-    custom.forEach((c) => { if (!editor.formatter.has(c)) editor.formatter.register(c, { selector: 'p,li', classes: c }); });
+    custom.forEach((c) => { if (!editor.formatter.has(c)) editor.formatter.register(c, { selector: 'p,li,h1,h2,h3,h4,h5,h6', classes: c }); });
     (editor as unknown as { dispatch(name: string, args: object): void })
         .dispatch('addStyleModifications', { items: styleFormatsWith(custom), replace: true });
 }

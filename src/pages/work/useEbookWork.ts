@@ -30,6 +30,7 @@ import { useVersionDiff } from './hooks/useVersionDiff';
 import { useEbookGrammar } from './hooks/useEbookGrammar';
 import { usePresence } from './hooks/usePresence';
 import type { WorkEditorRef } from './components/WorkEditor';
+import type { UserStyleKind } from '../../utils/user-styles';
 
 export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<WorkEditorRef | null>) {
     const queryClient = useQueryClient();
@@ -251,10 +252,10 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         duplicate: (index) => applyEdit(bookEdit.duplicateChapter(getBook(), index)),
         add: () => applyEdit(bookEdit.addChapter(getBook())),
     }), [applyEdit, getBook]);
-    const handleRenameCharStyle = useCallback((from: string, to: string) =>
-        applyEdit(bookEdit.renameCharStyle(getBook(), from, to)), [applyEdit, getBook]);
-    const handleRemoveCharStyle = useCallback((cls: string) =>
-        applyEdit(bookEdit.removeCharStyle(getBook(), cls)), [applyEdit, getBook]);
+    const handleRenameStyle = useCallback((kind: UserStyleKind, from: string, to: string) =>
+        applyEdit(bookEdit.renameStyle(getBook(), kind, from, to)), [applyEdit, getBook]);
+    const handleRemoveStyle = useCallback((kind: UserStyleKind, cls: string) =>
+        applyEdit(bookEdit.removeStyle(getBook(), kind, cls)), [applyEdit, getBook]);
     const handleRemoveCommentAnchor = useCallback((anchorId: string) =>
         applyEdit(bookEdit.removeCommentAnchor(getBook(), anchorId)), [applyEdit, getBook]);
     const handleApplyDropCaps = useCallback(() => applyEdit(bookEdit.applyDropCaps(getBook())), [applyEdit, getBook]);
@@ -366,8 +367,8 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         chapterActions,
         handleApplyDropCaps,
         handleRemoveCommentAnchor,
-        handleRemoveCharStyle,
-        handleRenameCharStyle,
+        handleRemoveStyle,
+        handleRenameStyle,
         handleLinkIndiceEntries,
         handleLinkIndiceEntryManual,
         getIndiceSubtitles,

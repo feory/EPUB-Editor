@@ -2,28 +2,32 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Check, RotateCcw, Grid2x2, Pencil, Plus } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { Row, Select, Section, Color, Num, LenInput } from './panelFields';
-import { BOX_VARIANTS, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
+import { BOX_VARIANTS, boxToCss, cssToBox, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
+import { boxStyles, paragraphStyles } from '../../../utils/user-styles';
+import type { StyleCatalogue, StyleSet } from '../hooks/useStyleCatalogue';
+import { useStyles } from '../../../context/StyleContext';
+import { StyleMenu } from './TextSidebar';
 import { EMPTY_TEXT, textPropsFrom, textPatchToDecls, type TextProps, type TextAlign, type Len } from '../editor/textProps';
 import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 import { readRule, hasRule } from '../../../utils/css-rule';
 import { GRID_RATIOS, EMPTY_GRID, type GridProps } from '../editor/gridProps';
 import { IMAGE_ALIGNS, EMPTY_IMAGE, type ImageProps } from '../editor/imageProps';
 import { BLOCK_STYLE_OPTIONS } from '../editor/config';
-import { listCustomStyles, styleClassOf } from '../../../utils/book-css';
+import { readCustomStyle, updateCustomStyle } from '../../../utils/book-css';
 
 interface BlockSidebarProps {
     info: BlockInfo;                                  // caixa / bloco de texto sob o cursor
     css: string;                                      // CSS atual do livro (modo "Estilo")
     onEdit: (edit: BlockEdit) => void;                                     // edita o que está sob o cursor
     onTextStyle: (selector: string, patch: Partial<TextProps>) => void;    // modo "Estilo": regra CSS do livro
-    onCreateStyle: (cls: string, body: string) => string | null;          // estilo personalizado novo; devolve o erro, ou null se criou
+    styles: StyleCatalogue;                                                // criar / guardar / apagar estilos (`styles.paragraph`, `styles.box`)
     onClose: () => void;
     width: number;
     onResize: (width: number) => void;
 }
 
 // Sem valores próprios: a caixa volta ao que o CSS do livro define para .box.
-const RESET: BoxProps = { variant: '', background: '', color: '', borderColor: '', borderWidth: null, borderStyle: '', radius: null, padding: null, marginY: null, width: null };
+const RESET: BoxProps = { variant: '', classes: [], background: '', color: '', borderColor: '', borderWidth: null, borderStyle: '', radius: null, padding: null, marginY: null, width: null };
 
 const ALIGNS: Array<[TextAlign, string]> = [['', 'Padrão'], ['left', 'Esquerda'], ['center', 'Centro'], ['right', 'Direita'], ['justify', 'Justificado']];
 
@@ -90,9 +94,10 @@ const FormatCombo: React.FC<{
 
 const BORDER_STYLES: Array<[BoxBorderStyle, string]> = [['', 'Padrão'], ['solid', 'Sólido'], ['dashed', 'Tracejado'], ['dotted', 'Pontilhado']];
 
-const BoxSection: React.FC<{ box: BoxProps; onChange: (patch: Partial<BoxProps>) => void }> = ({ box, onChange }) => (
-    <Section title="Caixa">
-        <Row label="Tipo"><Select value={box.variant} options={BOX_VARIANTS} onChange={variant => onChange({ variant })} /></Row>
+// Os controlos de aspeto da caixa: servem uma caixa do texto (escrevem no editor) e o editor de um estilo (escrevem num rascunho).
+const BoxFields: React.FC<{ box: BoxProps; onChange: (patch: Partial<BoxProps>) => void; withVariant?: boolean }> = ({ box, onChange, withVariant = true }) => (
+    <>
+        {withVariant && <Row label="Tipo"><Select value={box.variant} options={BOX_VARIANTS} onChange={variant => onChange({ variant })} /></Row>}
         <Row label="Cor de fundo"><Color value={box.background} fallback="#ffffff" onChange={background => onChange({ background })} /></Row>
         <Row label="Cor do texto"><Color value={box.color} fallback="#000000" onChange={color => onChange({ color })} /></Row>
         <Row label="Cor do contorno"><Color value={box.borderColor} fallback="#000000" onChange={borderColor => onChange({ borderColor })} /></Row>
@@ -102,8 +107,131 @@ const BoxSection: React.FC<{ box: BoxProps; onChange: (patch: Partial<BoxProps>)
         <Row label="Espaço interior"><Num value={box.padding} unit="em" min={0} max={5} step={0.1} onChange={padding => onChange({ padding })} /></Row>
         <Row label="Margem cima/baixo"><Num value={box.marginY} unit="em" min={0} max={5} step={0.1} onChange={marginY => onChange({ marginY })} /></Row>
         <Row label="Largura"><Num value={box.width} unit="%" min={30} max={100} onChange={width => onChange({ width })} /></Row>
-    </Section>
+    </>
 );
+
+// Valores próprios da caixa que passam para o estilo ao criá-lo (a caixa fica só com a classe).
+const OWN_STYLE: Partial<BoxProps> = { background: '', color: '', borderColor: '', borderWidth: null, borderStyle: '', radius: null, padding: null, marginY: null, width: null };
+
+// Estilos de caixa: classes `.b-nome` na secção de estilos do livro; aplicam-se à caixa como classe. Criar um estilo guarda o
+// aspeto que a caixa tem agora e aplica-o à caixa.
+const BoxStyles: React.FC<{
+    box: BoxProps; css: string; onChange: (patch: Partial<BoxProps>) => void; onStartEdit: (cls: string) => void;
+    onCreate: (cls: string, body: string) => string | null; onDelete: (cls: string) => void;
+}> = ({ box, css, onChange, onStartEdit, onCreate, onDelete }) => {
+    const [name, setName] = useState<string | null>(null); // a criar: nome em curso (null = não está a criar)
+    const [error, setError] = useState('');
+    const [deleting, setDeleting] = useState<string | null>(null);
+    const create = () => {
+        const cls = boxStyles.classOf(name ?? '');
+        if (!cls) return setError('Dá um nome ao estilo.');
+        const body = boxToCss(box);
+        if (!body) return setError('A caixa não tem aspeto próprio para guardar.');
+        const err = onCreate(cls, body);
+        if (err) return setError(err);
+        onChange({ ...OWN_STYLE, classes: [...box.classes, cls] });
+        setName(null); setError('');
+    };
+    const clone = (cls: string) => setError(onCreate(boxStyles.clone(boxStyles.list(css), cls), readCustomStyle(css, cls)) ?? '');
+    const toggle = (cls: string, on: boolean) => onChange({ classes: on ? box.classes.filter((c) => c !== cls) : [...box.classes, cls] });
+    return (
+        <Section title="Estilos">
+            <div className="flex flex-wrap items-center gap-1.5">
+                {boxStyles.list(css).map((cls) => {
+                    const on = box.classes.includes(cls);
+                    return (
+                        <span key={cls} className={`relative inline-flex items-center h-8 rounded-full border text-xs transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
+                            <button type="button" aria-pressed={on} onClick={() => toggle(cls, on)} className="h-full pl-3 pr-2 rounded-l-full">{boxStyles.label(cls)}</button>
+                            <StyleMenu label={boxStyles.label(cls)} light={on} onClone={() => clone(cls)} onEdit={() => onStartEdit(cls)} onDelete={() => setDeleting(cls)} />
+                        </span>
+                    );
+                })}
+                {name === null && (
+                    <button type="button" onClick={() => setName('')}
+                        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-dashed border-border text-xs text-text-muted hover:text-slate-700 hover:bg-slate-50">
+                        <Plus size={12} /> Criar estilo…
+                    </button>
+                )}
+            </div>
+            {name !== null && (
+                <div className="flex gap-2">
+                    <input autoFocus placeholder="Nome (ex.: Destaque)" value={name} aria-label="Nome do estilo" onChange={(e) => { setName(e.target.value); setError(''); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') create(); if (e.key === 'Escape') { setName(null); setError(''); } }}
+                        className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2 text-sm outline-none focus:border-primary" />
+                    <button type="button" onClick={create} title="Criar estilo" aria-label="Criar estilo" className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-slate-500 hover:text-emerald-600"><Check size={16} /></button>
+                    <button type="button" onClick={() => { setName(null); setError(''); }} title="Cancelar" aria-label="Cancelar" className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-slate-500 hover:text-rose-500"><X size={16} /></button>
+                </div>
+            )}
+            {deleting && (
+                <div className="flex flex-col gap-2">
+                    <p className="text-xs text-rose-700">Apagar o estilo "{boxStyles.label(deleting)}" e retirá-lo de todas as caixas onde foi aplicado?</p>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => { onDelete(deleting); setDeleting(null); }} className="h-8 px-3 rounded-lg bg-rose-600 text-white text-xs hover:bg-rose-700">Apagar</button>
+                        <button type="button" onClick={() => setDeleting(null)} className="h-8 px-3 rounded-lg border border-border text-xs hover:bg-slate-50">Cancelar</button>
+                    </div>
+                </div>
+            )}
+            {error && <div className="text-xs text-rose-600">{error}</div>}
+        </Section>
+    );
+};
+
+// Editar um estilo de caixa: os mesmos controlos, sobre um rascunho lido das declarações do estilo; as que os controlos não
+// representam (`rest`) mantêm-se ao guardar. Em tempo real: cada alteração aplica-se já ao CSS do editor (temporário).
+const BoxStyleEditor: React.FC<{
+    cls: string; css: string; onSave: (body: string, newCls: string) => string | null; onCancel: () => void;
+}> = ({ cls, css, onSave, onCancel }) => {
+    const [name, setName] = useState(boxStyles.label(cls));
+    const [{ box: initial, rest }] = useState(() => cssToBox(readCustomStyle(css, cls)));
+    const [baseCss] = useState(css);
+    const [draft, setDraft] = useState<BoxProps>(initial);
+    const [error, setError] = useState('');
+    const { setTempCss } = useStyles();
+    const bodyOf = (d: BoxProps) => [boxToCss(d), ...rest.map((x) => `${x};`)].filter(Boolean).join(' ');
+    useEffect(() => {
+        const preview = updateCustomStyle(baseCss, cls, bodyOf(draft));
+        setTempCss('css' in preview ? preview.css : baseCss);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draft]);
+    useEffect(() => () => setTempCss(null), [setTempCss]);
+    const save = () => {
+        const newCls = name.trim() === boxStyles.label(cls) ? cls : boxStyles.classOf(name);
+        if (!newCls) return setError('Dá um nome ao estilo.');
+        const err = onSave(bodyOf(draft), newCls);
+        if (err) setError(err);
+    };
+    return (
+        <Section title="Editar estilo">
+            <Row label="Nome">
+                <input value={name} onChange={(e) => { setName(e.target.value); setError(''); }} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} aria-label="Nome do estilo"
+                    className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2 text-sm outline-none focus:border-primary" />
+            </Row>
+            <BoxFields box={draft} withVariant={false} onChange={(patch) => { setDraft({ ...draft, ...patch }); setError(''); }} />
+            {error && <div className="text-xs text-rose-600">{error}</div>}
+            <div className="flex gap-2">
+                <button type="button" onClick={save} className="h-8 px-3 rounded-lg bg-slate-700 text-white text-xs hover:bg-slate-800">Guardar</button>
+                <button type="button" onClick={onCancel} className="h-8 px-3 rounded-lg border border-border text-xs hover:bg-slate-50">Cancelar</button>
+            </div>
+        </Section>
+    );
+};
+
+const BoxSection: React.FC<{
+    box: BoxProps; css: string; onChange: (patch: Partial<BoxProps>) => void;
+    styles: StyleSet;
+}> = ({ box, css, onChange, styles }) => {
+    const [editing, setEditing] = useState<string | null>(null);
+    if (editing) {
+        return <BoxStyleEditor key={editing} cls={editing} css={css} onCancel={() => setEditing(null)}
+            onSave={(body, newCls) => { const err = styles.save(editing, body, newCls); if (!err) setEditing(null); return err; }} />;
+    }
+    return (
+        <>
+            <BoxStyles box={box} css={css} onChange={onChange} onStartEdit={setEditing} onCreate={styles.create} onDelete={styles.remove} />
+            <Section title="Caixa"><BoxFields box={box} onChange={onChange} /></Section>
+        </>
+    );
+};
 
 // Estilos combináveis de um parágrafo/item (tudo o que não é título nem o 'Padrão').
 const COMBINABLE_STYLES = BLOCK_STYLE_OPTIONS.filter(([f]) => !/^(h[1-3]|p)$/.test(f));
@@ -125,7 +253,7 @@ const NewStyleForm: React.FC<{
 }> = ({ draft, setDraft, onCreate, onCreated }) => {
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        const cls = styleClassOf(draft.name);
+        const cls = paragraphStyles.classOf(draft.name);
         if (!cls) return setDraft({ ...draft, error: 'Dá um nome ao estilo.' });
         // !important como as restantes classes de parágrafo do livro (.p-center…).
         const body = textPatchToDecls(draft.props).flatMap(([n, v]) => v === null ? [] : [`${n}: ${v} !important;`]).join(' ');
@@ -154,7 +282,7 @@ const NewStyleForm: React.FC<{
 const StyleChips: React.FC<{
     classes: string[]; css: string; creating: boolean; onNew: () => void; onToggle: (cls: string, on: boolean) => void;
 }> = ({ classes, css, creating, onNew, onToggle }) => {
-    const all: Array<readonly [string, string]> = [...COMBINABLE_STYLES, ...listCustomStyles(css).map((c) => [c, c] as const)];
+    const all: Array<readonly [string, string]> = [...COMBINABLE_STYLES, ...paragraphStyles.list(css).map((c) => [c, c] as const)];
     const active = all.filter(([f]) => classes.includes(f));
     const free = all.filter(([f]) => !classes.includes(f));
     return (
@@ -299,7 +427,7 @@ const TextSection: React.FC<{
                 ))}
             </div>
             <Section>
-                {mode === 'block' && (text.tag === 'p' || text.tag === 'li') && <StyleChips classes={text.classes} css={css} creating={!!draft} onNew={startDraft} onToggle={onToggleClass} />}
+                {mode === 'block' && <StyleChips classes={text.classes} css={css} creating={!!draft} onNew={startDraft} onToggle={onToggleClass} />}
                 {draft && <NewStyleForm draft={draft} setDraft={setDraft} onCreate={onCreateStyle}
                     onCreated={(cls) => { onToggleClass(cls, true); setPicked(`.${cls}`); }} />}
                 {mode === 'block' ? (draft ? null : (
@@ -320,8 +448,10 @@ const TextSection: React.FC<{
     );
 };
 
-export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, onTextStyle, onCreateStyle, onClose, width, onResize }) => {
+export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, onTextStyle, styles, onClose, width, onResize }) => {
     const [mode, setMode] = useState<Mode>('block');
+    const [tab, setTab] = useState<'bloco' | 'caixa'>('bloco');
+    const showBox = !!info.box && (tab === 'caixa' || !(info.text || info.image || info.grid)); // separador "Caixa" só existe dentro de uma caixa; caixa sozinha = só ele
     // Repor: tudo o que o painel mostra com valores próprios; o "Estilo" do texto edita regras do livro, não se repõe aqui.
     const resetText = !!info.text && mode === 'block';
     const canReset = !!(info.box || info.image || info.grid || resetText);
@@ -347,10 +477,18 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
             </div>
         ) : (
             <div className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-8">
-                {info.image && <ImageSection image={info.image} onChange={(patch) => onEdit({ target: 'image', patch })} />}
-                {info.text && <TextSection key={info.text.tag} text={info.text} css={css} mode={mode} setMode={setMode} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={onCreateStyle} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
-                {info.grid && <GridSection grid={info.grid} onChange={(patch) => onEdit({ target: 'grid', patch })} onApplyToCells={() => onEdit({ target: 'gridCells' })} />}
-                {info.box && <BoxSection box={info.box} onChange={(patch) => onEdit({ target: 'box', patch })} />}
+                {info.box && (info.text || info.image || info.grid) && (
+                    <div className="flex rounded-lg border border-border p-0.5 bg-slate-50" role="tablist">
+                        {([['bloco', 'Bloco'], ['caixa', 'Caixa']] as const).map(([k, label]) => (
+                            <button key={k} type="button" role="tab" aria-selected={showBox === (k === 'caixa')} onClick={() => setTab(k)}
+                                className={`flex-1 px-2 py-1.5 rounded-md text-xs font-bold transition-colors ${showBox === (k === 'caixa') ? 'bg-white shadow-sm text-slate-800' : 'text-text-muted hover:text-slate-700'}`}>{label}</button>
+                        ))}
+                    </div>
+                )}
+                {!showBox && info.image && <ImageSection image={info.image} onChange={(patch) => onEdit({ target: 'image', patch })} />}
+                {!showBox && info.text && <TextSection key={info.text.tag} text={info.text} css={css} mode={mode} setMode={setMode} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={styles.paragraph.create} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
+                {!showBox && info.grid && <GridSection grid={info.grid} onChange={(patch) => onEdit({ target: 'grid', patch })} onApplyToCells={() => onEdit({ target: 'gridCells' })} />}
+                {showBox && info.box && <BoxSection box={info.box} css={css} onChange={(patch) => onEdit({ target: 'box', patch })} styles={styles.box} />}
             </div>
         )}
     </aside>
