@@ -16,7 +16,7 @@ import { linkIndiceEntries, linkOneIndiceEntry, unlinkOneIndiceEntry, listSubtit
 import { unwrapCommentAnchor } from '../../utils/comment-anchor';
 import type { UserStyleKind } from '../../utils/user-styles';
 import { fixLinks, validateLinks } from '../../services/validation/link-validator';
-import { insertPageBreaks, movePageBreaksToChapterStart } from '../../services/page-list/page-list';
+import { insertPageBreaks } from '../../services/page-list/page-list';
 import type { PageAnchor } from '../../services/page-list/page-list';
 
 export type Level = ChapterLevel;
@@ -178,12 +178,6 @@ export function generatePageList(book: Book, anchors: PageAnchor[]): BookEdit {
     const { html, inserted, total } = insertPageBreaks(book.html, anchors);
     if (inserted === 0) return info('Nenhuma página do PDF foi encontrada no texto do livro.');
     return keep(html, `Page-list: ${inserted} de ${total} páginas marcadas.`);
-}
-
-/** Sobe os números de página que caem na abertura de um capítulo para entre o limite do capítulo e o título. */
-export function movePageNumbers(book: Book): BookEdit {
-    const html = movePageBreaksToChapterStart(book.html);
-    return html === book.html ? info('Nenhum número de página para mover.') : keep(html, 'Números de página movidos para o início dos capítulos.');
 }
 
 export const countInBook = (book: Book, find: string): number => countOccurrences(book.html, find);

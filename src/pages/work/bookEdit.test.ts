@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
 import '../../services/indesign/happy-dom'; // DOMParser no bun
 // o shim não traz NodeFilter (link-validator usa-o)
-Object.assign(globalThis, { NodeFilter: { SHOW_ELEMENT: 1, SHOW_TEXT: 4 } });
+Object.assign(globalThis, { NodeFilter: { SHOW_TEXT: 4 } });
 import { splitChapters, classifyChapterPart } from '../../utils/chapters';
 import * as be from './bookEdit';
 import { charStyles } from '../../utils/user-styles';
@@ -129,14 +129,4 @@ test('toggleHidden: esconde o capítulo do Índice (break com [hidden]) e, de no
     const back = be.toggleHidden(book(hidden!.html!), 1);
     expect(back?.html).toBe(HTML);
     expect(be.toggleHidden(b, 9)).toBeNull();
-});
-
-test('movePageNumbers: sobe o número de página da abertura do capítulo; sem nada a mover = aviso info', () => {
-    const PB = '<span class="pagebreak" data-page="17"></span>';
-    const html = `<p class="chapter-break-h1" data-title="A">&nbsp;</p><h1>A</h1><p><strong>${PB}ABERTO</strong> – texto</p>`;
-    const moved = be.movePageNumbers(book(html));
-    expect(moved.commit).toBe('keep');
-    expect(moved.html).toContain(`&nbsp;</p><p>${PB}</p><h1>A</h1><p><strong>ABERTO</strong>`);
-    const again = be.movePageNumbers(book(moved.html!));
-    expect(again.html).toBeUndefined();
 });

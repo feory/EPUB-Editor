@@ -484,7 +484,6 @@ export function WorkPage() {
           onLinkIndexPages={() => editorRef.current?.linkIndexPagesSelection()}
           onConversions={() => setShowConversions(true)}
           onUpdatePageList={() => setShowPagelistUpdate(true)}
-          onMovePageNumbers={work.handleMovePageNumbers}
           onLinkIndiceEntries={work.handleLinkIndiceEntries}
           onEditToc={() => setShowToc(true)}
           readOnly={work.readOnly}
