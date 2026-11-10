@@ -82,18 +82,19 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
   return (
     <nav className="bg-surface border-b border-border px-6 py-2.5 shadow-sm relative">
 
-        {/* Left: Back — preso ao canto esquerdo real do nav, fora do bloco centrado */}
+        {/* Left: Back — alinhado com a margem esquerda do conteúdo (a da Estrutura): mesmo contentor do <main> (1800px, px-6), não um desvio fixo */}
         <div
-          className="absolute left-48 top-1/2 -translate-y-1/2 flex items-center font-bold text-primary cursor-pointer select-none hover:text-primary-hover transition-colors"
+          className="absolute top-1/2 -translate-y-1/2 flex items-center font-bold text-primary cursor-pointer select-none hover:text-primary-hover transition-colors"
+          style={{ left: 'calc(max(0px, (100vw - 1800px) / 2) + 1.5rem)' }}
           onClick={() => navigate('/')}
         >
           <ArrowLeft size={18} />
         </div>
 
-      <div className="max-w-[1600px] mx-auto flex justify-start items-center gap-4">
+      <div className="mx-auto flex justify-center items-center gap-4">
 
-        {/* Center: Action Groups */}
-        <div className="flex items-center gap-2 ml-96">
+        {/* Center: Action Groups — centrados no ecrã (antes `ml-96`: desvio fixo que descentrava os botões em monitores largos) */}
+        <div className="flex items-center gap-2">
 
           {/* Group 1: Save */}
           <button
