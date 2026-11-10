@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { sanitizeImageFilename } from '../../../utils/format';
+import { sanitizeImageFilename, toRasterName } from '../../../utils/format';
 import { buildPdfLines, mapFolioToPdfPage, normalize as normalizeForMatch } from '../../page-list/page-list';
 
 /**
@@ -141,7 +141,7 @@ const RASTER = /\.(jpe?g|png|gif|tiff?|webp)$/i;
 // aqui, para o imageId calculado bater com a chave real da galeria (sanitizeImageFilename não
 // reconhece .pdf/.eps/.psd).
 const CONVERTIBLE = /\.(pdf|eps|psd)$/i;
-export const toRasterName = (n: string) => n.replace(/\.pdf$/i, '.jpg').replace(/\.eps$/i, '.png').replace(/\.psd$/i, '.png');
+export { toRasterName };
 
 export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promise<Figure[]> {
     const storyCache = new Map<string, string>();

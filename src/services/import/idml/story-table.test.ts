@@ -34,3 +34,23 @@ test('adoptTableNoteRefs: números que não estão na tabela → não mexe', () 
     const html = `<table><tr><td><sup>1</sup></td></tr></table>\n<p>${ref(1)} ${ref(2)}</p>`;
     expect(adoptTableNoteRefs(html)).toBe(html);
 });
+
+const figRect = (uri: string) => `<Rectangle ContentType="GraphicType"><PDF><Link LinkResourceURI="${uri}"/></PDF></Rectangle>`;
+
+test('figura ancorada no texto (Rectangle com PDF ligado): fica entre os parágrafos, com o id da galeria', () => {
+    const xml = `<idPkg:Story xmlns:idPkg="x"><Story>
+        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/Texto"><CharacterStyleRange><Content>Em diagrama, realçamos:</Content><Br/></CharacterStyleRange></ParagraphStyleRange>
+        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/Texto" Justification="CenterAlign"><CharacterStyleRange>${figRect('file:/Users/U/imagens/pagina%20325.pdf')}<Br/></CharacterStyleRange></ParagraphStyleRange>
+        <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/Texto"><CharacterStyleRange><Content>Depois da figura.</Content><Br/></CharacterStyleRange></ParagraphStyleRange>
+    </Story></idPkg:Story>`;
+    const html = renderStory({ styles: NO_STYLES, detectSpacing: false }, xml, { n: 0, star: 0, defs: [] }, {});
+    const i = html.indexOf('Em diagrama'), j = html.indexOf('data-image-id="pagina_325"'), k = html.indexOf('Depois da figura');
+    expect(i).toBeGreaterThan(-1);
+    expect(j).toBeGreaterThan(i);
+    expect(k).toBeGreaterThan(j);
+});
+
+test('Rectangle sem imagem ligada (caixa decorativa): nada a emitir', () => {
+    const xml = `<idPkg:Story xmlns:idPkg="x"><Story><ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/Texto"><CharacterStyleRange><Rectangle ContentType="GraphicType"/><Content>texto</Content></CharacterStyleRange></ParagraphStyleRange></Story></idPkg:Story>`;
+    expect(renderStory({ styles: NO_STYLES, detectSpacing: false }, xml, { n: 0, star: 0, defs: [] }, {})).not.toContain('data-image-id');
+});

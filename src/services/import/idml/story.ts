@@ -1,6 +1,7 @@
 import type { DocxStyleTarget, DocxStyleMapping } from '../document-importer';
 import { resolveFillColor, type IdmlStyles } from './styles';
 import { isWhite, isNumeral, boxedNumeralHtml } from './boxed';
+import { sanitizeImageFilename, toRasterName } from '../../../utils/format';
 
 // Contexto de renderização de histórias: estilos do pacote IDML em curso + opção de espaçamento.
 // (Antes: variáveis globais do módulo, repostas por extractIdml a cada idmlZip.)
@@ -237,6 +238,14 @@ export function renderPsr(rc: RenderContext, psr: Element, counter: NoteCounter)
                 if (cur.trim() || curNotes.length) flush(); else { cur = ''; curNotes = []; }
                 const table = renderIdmlTable(rc, el, counter);
                 if (table) segs.push({ text: '', notes: [], raw: table });
+            } else if (el.tagName === 'Rectangle') {
+                // Figura ancorada no texto (Rectangle com PDF/imagem ligada, sem legenda): vai para ESTE ponto, como bloco à parte
+                // (como a tabela). O id é o da galeria (Links/ → nome raster → sanitize), por isso a imagem enviada casa com o <img>.
+                const id = inlineFigureId(el);
+                if (id) {
+                    if (cur.trim() || curNotes.length) flush(); else { cur = ''; curNotes = []; }
+                    segs.push({ text: '', notes: [], raw: `<p class="p-center"><img data-image-id="${id}" src="placeholder" alt="" /></p>` });
+                }
             } else if (el.tagName === 'Br') {
                 flush(); // quebra de parágrafo
             } else if (el.tagName === 'Footnote') {
@@ -332,6 +341,18 @@ export function renderPsr(rc: RenderContext, psr: Element, counter: NoteCounter)
     // espaçamento nenhum. Só fecha aqui se sobrar conteúdo por gravar (ex. sem <Br/> final).
     if (cur.trim() || curNotes.length) flush();
     return segs; // inclui segmentos vazios (linha em branco = <Br/> duplo); o caller decide
+}
+
+/** imageId da figura ligada de um Rectangle ancorado (PDF/EPS/PSD/raster da Links/); null se não liga nenhuma imagem. */
+export function inlineFigureId(rect: Element): string | null {
+    for (const link of Array.from(rect.getElementsByTagName('Link'))) {
+        const uri = link.getAttribute('LinkResourceURI') || '';
+        if (!/\.(pdf|eps|psd|jpe?g|png|gif|webp)$/i.test(uri)) continue;
+        let base = uri.split('/').pop()!;
+        try { base = decodeURIComponent(base); } catch { /* nome já cru */ }
+        return sanitizeImageFilename(toRasterName(base)).imageId;
+    }
+    return null;
 }
 
 // Tabela nativa do InDesign (elemento <Table>, ancorada inline num CharacterStyleRange) → <table>

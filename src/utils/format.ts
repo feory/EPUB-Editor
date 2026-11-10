@@ -9,6 +9,9 @@ export function formatFileSize(bytes?: number): string {
 // Tem de gerar o MESMO nome que sanitizeName (server/routes/images.js) — o import IDML prevê
 // o imageId com esta função para casar imagem↔figura na colocação; políticas diferentes fazem
 // a previsão nunca bater com o ficheiro realmente guardado (ver server para o porquê do NFC).
+/** Nome com que uma figura vetorial/PSD da Links/ chega à galeria (PDF → JPEG; EPS e PSD → PNG). */
+export const toRasterName = (n: string) => n.replace(/\.pdf$/i, '.jpg').replace(/\.eps$/i, '.png').replace(/\.psd$/i, '.png');
+
 export function sanitizeImageFilename(name: string): { filename: string; imageId: string } {
   let filename = name
     .normalize('NFC') // pastas/ficheiros extraídos no macOS vêm em NFD ("ç" = "c"+cedilha combinável)
