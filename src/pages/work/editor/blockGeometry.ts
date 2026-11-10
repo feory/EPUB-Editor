@@ -7,7 +7,7 @@ import { MARK, BODY_CLASS } from './ephemeral';
  * mexe em todos por igual.
  *
  *        ┌──── anel: RING_GAP branco + RING_LINE linha, por fora da caixa do bloco ────┐
- *        │  padding ACTIVE_PAD_Y / ACTIVE_PAD_X (margem negativa = texto não mexe)      │
+ *        │  padding ACTIVE_PAD_Y / ACTIVE_PAD_X (somam-se ao padding próprio do bloco; margem negativa = texto não mexe)      │
  *        └──────────────────────────────── (+) ────────────────────────────────────────┘
  *                                           └ PLUS_SIZE, centrado na linha do anel
  */
@@ -119,17 +119,17 @@ export const plusCenterY = (contentBottom: number, isActive: boolean) =>
  * (p.chapter-break*, mais específica, sempre ganhou à regra antiga) — senão saltavam.
  */
 export const activeBlockCss = () => `[${MARK.active}] {
-  --plus-dy: ${PLUS_DY_ACTIVE}px;
+  --plus-dy: calc(var(--ps-pb, 0px) + ${PLUS_DY_ACTIVE}px);
   border-radius: 2px !important;
   box-shadow: 0 0 0 ${RING_GAP}px #fff, 0 0 0 ${RING}px #dbe2ea !important;
 }
 [${MARK.active}]:not([class*="chapter-break"]) {
-  padding: ${ACTIVE_PAD_Y}px ${ACTIVE_PAD_X}px !important;
+  padding: calc(var(--ps-pt, 0px) + ${ACTIVE_PAD_Y}px) calc(var(--ps-pr, 0px) + ${ACTIVE_PAD_X}px) calc(var(--ps-pb, 0px) + ${ACTIVE_PAD_Y}px) calc(var(--ps-pl, 0px) + ${ACTIVE_PAD_X}px) !important;
   margin-left: calc(var(--ps-ml, 0px) - ${ACTIVE_PAD_X}px) !important; margin-right: calc(var(--ps-mr, 0px) - ${ACTIVE_PAD_X}px) !important;
 }`;
 
 /** Bloco ativo dentro de uma célula da grelha (coluna ou parágrafo): padding lateral reduzido (texto não mexe — margem compensa). */
 export const gridActiveCss = () => `.grid > [${MARK.active}]:not([class*="chapter-break"]), .grid > .col > [${MARK.active}]:not([class*="chapter-break"]) {
-  padding-left: ${COL_PAD_X}px !important; padding-right: ${COL_PAD_X}px !important;
+  padding-left: calc(var(--ps-pl, 0px) + ${COL_PAD_X}px) !important; padding-right: calc(var(--ps-pr, 0px) + ${COL_PAD_X}px) !important;
   margin-left: calc(var(--ps-ml, 0px) - ${COL_PAD_X}px) !important; margin-right: calc(var(--ps-mr, 0px) - ${COL_PAD_X}px) !important;
 }`;

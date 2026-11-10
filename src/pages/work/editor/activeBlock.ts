@@ -54,12 +54,16 @@ export function attachActiveBlock(
         if (editor.hasFocus()) {
             const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
             if (block && block !== collapsed && block !== editor.getBody()) {
-                // Margens do bloco (citação, recuo inline) antes de a regra do anel as sobrepor:
-                // o CSS compensa o padding a partir delas em vez de as zerar.
+                // Margens e padding do bloco (citação, recuo inline, padding-left definido no CSS do livro) antes de a regra do
+                // anel os sobrepor: o CSS compensa e soma a partir deles em vez de os zerar (senão o texto encostava à esquerda).
                 const cs = editor.getWin().getComputedStyle(block);
                 const bs = editor.getBody().style;
                 bs.setProperty('--ps-ml', cs.marginLeft);
                 bs.setProperty('--ps-mr', cs.marginRight);
+                bs.setProperty('--ps-pt', cs.paddingTop);
+                bs.setProperty('--ps-pr', cs.paddingRight);
+                bs.setProperty('--ps-pb', cs.paddingBottom);
+                bs.setProperty('--ps-pl', cs.paddingLeft);
                 editor.dom.setAttrib(block, MARK.active, '1');
                 current = block;
             }
