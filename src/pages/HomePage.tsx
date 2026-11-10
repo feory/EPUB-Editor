@@ -116,8 +116,9 @@ export function HomePage() {
     const epubInputRef = useRef<HTMLInputElement>(null);
     const [scanningEpub, setScanningEpub] = useState(false);
     const [epubMapping, setEpubMapping] = useState<{ file: File; classes: EpubClassInfo[] } | null>(null);
+    const [importStep, setImportStep] = useState<string | null>(null); // etapa em curso, mostrada no véu
     const importEpubMutation = useMutation({
-        mutationFn: ({ file, mapping }: { file: File; mapping?: Record<string, string> }) => importEpub(file, mapping, ebooksApi),
+        mutationFn: ({ file, mapping }: { file: File; mapping?: Record<string, string> }) => importEpub(file, mapping, ebooksApi, setImportStep),
         onSuccess: (isbn) => { forgetEbookCache(isbn); queryClient.invalidateQueries({ queryKey: ['ebooks'] }); queryClient.invalidateQueries({ queryKey: ['activity-log'] }); navigate(`/work/${isbn}`); },
         onError: (e: AxiosError) => { showNotification('error', e?.response?.status === 409 ? 'Já existe um ebook com este ISBN.' : 'Erro ao importar o EPUB.'); },
     });
@@ -132,6 +133,7 @@ export function HomePage() {
         e.target.value = '';
         if (!file) return;
         setIndesignBusy(true);
+        setImportStep('A analisar o EPUB do InDesign…');
         try {
             const bytes = new Uint8Array(await file.arrayBuffer());
             const { map, alreadyOptimized, lineBreaks } = await analyzeBook(bytes, { baseStyles });
@@ -151,6 +153,7 @@ export function HomePage() {
     const confirmIndesign = async (map: BookMap, force: boolean, joinLineBreaks: boolean) => {
         if (!indesign) return;
         setIndesignBusy(true);
+        setImportStep('A optimizar para os estilos do editor…');
         try {
             // Política (o que bloqueia / o que só avisa) vive em optimizeBook — igual à CLI.
             const { bytes, problems, warnings } = await optimizeBook(indesign.bytes, map, editorExportCss(DEFAULT_CSS), { joinLineBreaks });
@@ -177,6 +180,7 @@ export function HomePage() {
         e.target.value = '';
         if (!file) return;
         setScanningEpub(true);
+        setImportStep('A analisar o EPUB…');
         try {
             const { legacy, classes } = await scanEpubClasses(file);
             if (legacy && classes.length) setEpubMapping({ file, classes });
@@ -533,7 +537,7 @@ export function HomePage() {
             )}
 
             {(importEpubMutation.isPending || scanningEpub || indesignBusy) && (
-                <BusyOverlay fixed message="A importar e processar o EPUB…" detail="Não feches esta página até terminar." />
+                <BusyOverlay fixed message={importStep ?? 'A importar e processar o EPUB…'} detail="Não feches esta página até terminar." />
             )}
 
             <button

@@ -177,7 +177,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         setDraft(null);
     }, [saver]);
 
-    const { importPdfMutation, importDocumentMutation } = useEbookImport({ isbn, onImport, showNotification });
+    const { importPdfMutation, importDocumentMutation, importStep } = useEbookImport({ isbn, onImport, showNotification });
 
     // --- Export & Preview ---
     const exportHook = useEbookExport({
@@ -308,6 +308,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
             isSaving ||
             exportHook.isPreviewing,
         isImporting: importPdfMutation.isPending || importDocumentMutation.isPending,
+        importStep,
         isLoadingChapter: contentState.isLoadingChapter,
         isLargeBook: chapterSync.isLargeBook,
         lastSaved,

@@ -54,3 +54,10 @@ test('importEpub: falha da capa não bloqueia; erro da API (ex. 409) propaga', a
     api.create = async () => { throw Object.assign(new Error('409'), { response: { status: 409 } }); };
     await expect(importEpub(await makeEpub(), undefined, api)).rejects.toThrow('409');
 });
+
+test('importEpub: avisa cada etapa pela ordem em que acontece', async () => {
+    const { api } = fakeApi();
+    const steps: string[] = [];
+    await importEpub(await makeEpub(), undefined, api, (s) => steps.push(s));
+    expect(steps).toEqual(['A ler e converter o EPUB…', 'A criar o ebook…', 'A enviar a capa…', 'A enviar as imagens e a limpar o texto…', 'A guardar o conteúdo…']);
+});

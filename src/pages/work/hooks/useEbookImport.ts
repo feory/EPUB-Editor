@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { extractFile, finalizeImport, type ImportDecisions } from '../../../services/import/import-file';
@@ -16,6 +17,7 @@ interface UseEbookImportOptions {
 
 export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImportOptions) {
     const queryClient = useQueryClient();
+    const [importStep, setImportStep] = useState<string | null>(null); // etapa em curso, mostrada no véu
     const { setCustomCss } = useStyles();
     const ports = () => ({ isbn: isbn!, uploadImages: (fd: FormData) => ebooksApi.uploadImages(isbn!, fd) });
 
@@ -34,12 +36,16 @@ export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImp
     };
 
     const importFromScratch = async (file: File, decisions: ImportDecisions) => {
+        setImportStep('A ler e converter o ficheiro…');
         const extracted = await extractFile(file, decisions);
+        setImportStep('A limpar o projeto anterior…');
         await clearOldProject(new Set(extracted.images.keys()));
+        setImportStep('A enviar as imagens e a limpar o texto…');
         const result = await finalizeImport(extracted, decisions, ports());
         // Mesmo id = mesmo src: o editor reaproveitava da memória as imagens do import anterior (e só recarregar
         // mostrava as novas). `?v=` força o pedido — o mesmo cache-bust do editor ao cortar/substituir imagens.
         result.html = bustImageSrcs(result.html);
+        setImportStep('A guardar…');
         await ebooksApi.saveStyle(isbn!, DEFAULT_CSS);
         setCustomCss(DEFAULT_CSS);
         return result;
@@ -86,5 +92,5 @@ export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImp
         },
     });
 
-    return { importPdfMutation, importDocumentMutation };
+    return { importPdfMutation, importDocumentMutation, importStep };
 }

@@ -24,7 +24,8 @@ async function coverForUpload(blob: Blob): Promise<Blob> {
 
 // Importa um EPUB como ebook novo: cria o registo, capa, imagens, conteúdo e metadados. Devolve o ISBN.
 // Erros da API propagam (ex. 409 = ISBN já existe), exceto a capa, que nunca bloqueia a importação.
-export async function importEpub(file: File, mapping: Record<string, string> | undefined, api: ImportEpubApi): Promise<string> {
+export async function importEpub(file: File, mapping: Record<string, string> | undefined, api: ImportEpubApi, onStep: (message: string) => void = () => {}): Promise<string> {
+    onStep('A ler e converter o EPUB…');
     const extracted = await extractFile(file, { epubClassMapping: mapping });
     const { metadata, cover } = extracted;
     const isbn = metadata?.ebook_isbn || file.name.replace(/\.epub$/i, '');
@@ -32,15 +33,19 @@ export async function importEpub(file: File, mapping: Record<string, string> | u
     const title = metadata?.title || file.name.replace(/\.epub$/i, '');
     const author = metadata?.author || '—';
     const physical_isbn = metadata?.physical_isbn || '';
+    onStep('A criar o ebook…');
     await api.create({ ebook_isbn: isbn, physical_isbn, title, author });
     if (cover) {
+        onStep('A enviar a capa…');
         try {
             const fd = new FormData();
             fd.append('cover', await coverForUpload(cover), 'cover.jpg');
             await api.uploadCover(isbn, fd);
         } catch { /* sem capa: o utilizador pode pô-la depois no botão de capa */ }
     }
+    onStep('A enviar as imagens e a limpar o texto…');
     const { html: finalHtml } = await finalizeImport(extracted, {}, { isbn, uploadImages: fd => api.uploadImages(isbn, fd) });
+    onStep('A guardar o conteúdo…');
     await api.saveContent(isbn, await compressHtmlAsync(finalHtml));
     if (metadata) await api.updateMetadata(isbn, {
         title, author, description: metadata.description,
