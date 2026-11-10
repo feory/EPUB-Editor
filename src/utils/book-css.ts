@@ -5,7 +5,7 @@
 //   forExport(css)  — o que vai para o EPUB: corta a parte só-editor (mantendo os estilos personalizados)
 //   createCustomStyle / readCustomStyle / … — regras dos estilos personalizados (os tipos e as suas convenções: user-styles.ts)
 import { ensureBaselineCss } from './baseline-css';
-import { hasRule, readRuleBody, replaceRuleBody, removeRule, renameRule } from './css-rule';
+import { applyRule, hasRule, readRuleBody, replaceRuleBody, removeRule, renameRule } from './css-rule';
 
 const SECTION = '/* === ESTILOS PERSONALIZADOS === */';
 const SECTION_RE = /\/\* === ESTILOS PERSONALIZADOS === \*\/([\s\S]*?)(?=\/\* === |$)/;
@@ -35,6 +35,22 @@ function addCustomStyle(css: string, cls: string, body: string): string {
     // `at` cai a meio da linha do marcador (indentação): recuar até ao início dela.
     const lineStart = rest.lastIndexOf('\n', at) + 1;
     return `${rest.slice(0, lineStart).trimEnd()}\n\n${section}\n${rest.slice(lineStart)}`;
+}
+
+/**
+ * Altera declarações da regra `selector` do livro (modo "Estilo" do painel de bloco: h3, p, .p-quote…). O export corta TUDO o que
+ * vem depois do marcador do editor, por isso a regra tem de ficar ANTES dele: a que não existe, ou que um livro já tem depois do
+ * marcador (applyRule acrescentava ao fim do ficheiro), passa para antes — senão a alteração via-se no editor mas não saía no EPUB.
+ */
+export function applyBookRule(css: string, selector: string, decls: [string, string | null][]): string {
+    const next = applyRule(css, selector, decls);
+    const marker = next.indexOf(EDITOR_CSS_MARKER);
+    if (marker === -1) return next;
+    const lineStart = next.lastIndexOf('\n', marker) + 1; // o marcador pode vir indentado
+    const head = next.slice(0, lineStart), tail = next.slice(lineStart);
+    if (hasRule(head, selector) || !hasRule(tail, selector)) return next; // já exporta (ou a regra ficou vazia/apagada)
+    const body = readRuleBody(tail, selector);
+    return `${head.trimEnd()}\n\n    ${selector} { ${body} }\n\n${removeRule(tail, selector)}`;
 }
 
 /** Cria o estilo `.cls`, ou devolve o erro (já existe). */

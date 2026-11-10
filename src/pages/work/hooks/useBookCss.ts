@@ -1,8 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { useStyles } from '../../../context/StyleContext';
-import { applyRule } from '../../../utils/css-rule';
-import { createCustomStyle, updateCustomStyle, renameCustomStyle, deleteCustomStyle } from '../../../utils/book-css';
+import { applyBookRule, createCustomStyle, updateCustomStyle, renameCustomStyle, deleteCustomStyle } from '../../../utils/book-css';
 import { textPatchToDecls, type TextProps } from '../editor/textProps';
 
 /**
@@ -21,7 +20,7 @@ export function useBookCss(isbn: string | undefined, debounceMs = 600) {
 
     /** Modo "Estilo" do painel de bloco: altera os campos da regra `selector`. */
     const editRule = useCallback((selector: string, patch: Partial<TextProps>) =>
-        commit(applyRule(getCurrentCss(), selector, textPatchToDecls(patch))), [commit, getCurrentCss]);
+        commit(applyBookRule(getCurrentCss(), selector, textPatchToDecls(patch))), [commit, getCurrentCss]);
 
     /** "Criar estilo…": devolve o erro, ou null se criou. */
     const createStyle = useCallback((cls: string, body: string): string | null => {

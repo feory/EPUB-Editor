@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { readCustomStyle, updateCustomStyle, renameCustomStyle, deleteCustomStyle, createCustomStyle, forExport, forEditor } from './book-css';
+import { applyBookRule, readCustomStyle, updateCustomStyle, renameCustomStyle, deleteCustomStyle, createCustomStyle, forExport, forEditor } from './book-css';
 import { charStyles, paragraphStyles } from './user-styles';
 
 const EDITOR = '/* === EDITOR (não exportado para EPUB) === */';
@@ -113,4 +113,29 @@ test('renameCustomStyle: troca a classe mantendo o corpo; recusa nome existente 
     expect(readCustomStyle(r.css, 'c-novo')).toBe('font-weight: bold;');
     expect(renameCustomStyle(b.css, 'c-a', 'c-b')).toEqual({ error: 'Já existe um estilo ".c-b".' });
     expect('error' in renameCustomStyle(b.css, 'c-nao', 'c-x')).toBe(true);
+});
+
+test('applyBookRule: a regra nova fica ANTES do marcador do editor e sai no export', () => {
+    const base = `p { margin: 0; }\n\n    ${EDITOR}\n    hr.chapter-break { border: 0; }\n`;
+    const css = applyBookRule(base, 'h3', [['margin-top', '2em']]);
+    expect(css.indexOf('h3 { margin-top: 2em; }')).toBeLessThan(css.indexOf('EDITOR (não'));
+    expect(css).toContain('hr.chapter-break { border: 0; }');
+    expect(forExport(css)).toContain('h3 { margin-top: 2em; }');
+});
+
+test('applyBookRule: a regra que um livro já tem DEPOIS do marcador passa para antes (e mantém as outras declarações)', () => {
+    const base = `p { margin: 0; }\n\n    ${EDITOR}\n    hr.chapter-break { border: 0; }\n\n    h3 { margin-top: 2em; color: red; }\n`;
+    expect(forExport(base)).not.toContain('h3 {'); // o bug: o export cortava-a
+    const css = applyBookRule(base, 'h3', [['font-size', '1.2em']]);
+    expect(css.indexOf('h3 {')).toBeLessThan(css.indexOf('EDITOR (não'));
+    expect(css.match(/h3 \{/g)).toHaveLength(1);
+    expect(forExport(css)).toMatch(/h3 \{[^}]*margin-top: 2em[^}]*color: red[^}]*font-size: 1.2em/);
+});
+
+test('applyBookRule: regra que já está antes do marcador fica onde está; sem marcador acrescenta ao fim', () => {
+    const before = `h3 { color: red; }\n\n    ${EDITOR}\n    hr.chapter-break { border: 0; }\n`;
+    const out = applyBookRule(before, 'h3', [['margin-top', '2em']]);
+    expect(out.indexOf('h3 {')).toBeLessThan(out.indexOf('EDITOR (não'));
+    expect(out).toContain('h3 { color: red; margin-top: 2em; }');
+    expect(applyBookRule('p { margin: 0; }\n', 'h3', [['margin-top', '2em']])).toContain('h3 { margin-top: 2em; }');
 });
