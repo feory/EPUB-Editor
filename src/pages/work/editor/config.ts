@@ -1,4 +1,5 @@
 // Dados estáticos da configuração do TinyMCE (sem referência ao `editor`).
+import { BLOCK_STYLES, type BlockStyle } from './blockStyles';
 
 export const EDITOR_PLUGINS = [
     'advlist', 'autolink', 'lists', 'link', 'image', 'charmap',
@@ -14,39 +15,18 @@ export const EDITOR_TOOLBAR =
     'align outdent indent bullist numlist | ' +
     'box noBreak | link image charmap code | pintoolbar pdfview focusmode';
 
+const toolbarItems = (group: BlockStyle['group']) => BLOCK_STYLES.filter((s) => s.group === group).map((s) => ({ title: s.toolbar ?? s.label, format: s.format }));
+// "Unido" fica fora de propósito: o menu Styles aplica via editor.formatter nativo, que funde vários <p> selecionados num só
+// bloco. O botão da toolbar (ps-union, setup.ts) faz o wrap manualmente (sem esse bug) — é o único caminho para "noBreak".
 export const STYLE_FORMATS = [
     { title: 'Títulos', items: [
         { title: 'Título 1', format: 'h1' },
         { title: 'Título 2', format: 'h2' },
         { title: 'Título 3', format: 'h3' },
     ]},
-    { title: 'Parágrafos', items: [
-        { title: 'Padrão', format: 'p' },
-        { title: 'Com Indentação', format: 'p-indent' },
-        { title: 'Topo', format: 'p-top' },
-        { title: 'Espaço Extra', format: 'p-space' },
-        { title: 'Texto Pequeno', format: 'p-small' },
-        { title: 'Legenda', format: 'p-legendas' },
-        { title: 'Negrito', format: 'p-bold' },
-        { title: 'Itálico', format: 'p-italic' },
-        { title: 'Negrito + Itálico', format: 'p-bold-italic' },
-        { title: 'Maiúsculas', format: 'p-uppercase' },
-        { title: 'Citação', format: 'p-quote' },
-        { title: 'Separador (*)', format: 'p-asterisk' },
-    ]},
-    { title: 'Bordas', items: [
-        { title: 'Borda Superior', format: 'p-border-top' },
-        { title: 'Borda Inferior', format: 'p-border-bottom' },
-        { title: 'Borda Lateral', format: 'p-border-sides' },
-    ]},
-    { title: 'Especial', items: [
-        { title: 'Capitular (Drop Cap)', format: 'drop-cap' },
-        { title: 'Nota de Rodapé', format: 'footnote' },
-        { title: 'Box', format: 'box' },
-        // "Unido" tirado daqui de propósito: o menu Styles aplica via editor.formatter nativo,
-        // que funde vários <p> selecionados num só bloco. O botão da toolbar (ps-union, setup.ts)
-        // faz o mesmo wrap manualmente (sem esse bug) — é o único caminho para "noBreak" agora.
-    ]},
+    { title: 'Parágrafos', items: [{ title: 'Padrão', format: 'p' }, ...toolbarItems('paragraph')] },
+    { title: 'Bordas', items: toolbarItems('border') },
+    { title: 'Especial', items: toolbarItems('special') },
 ];
 
 export const TEXT_PATTERNS = [
@@ -63,16 +43,9 @@ export const TEXT_PATTERNS = [
 // "Mais estilos" (botão ⋮ do mini-menu): estilos secundários mostrados em 2 colunas
 // num overlay React. Bloco parágrafo → oferece títulos + outros; bloco título → parágrafos + outros.
 const HEADING_STYLES = [['h1', 'Título 1'], ['h2', 'Título 2'], ['h3', 'Título 3']] as const;
-const PARAGRAPH_STYLES = [
-    ['p', 'Padrão'], ['p-indent', 'Com Indentação'], ['p-top', 'Topo'],
-    ['p-space', 'Espaço Extra'], ['p-small', 'Texto Pequeno'], ['p-quote', 'Citação'],
-    ['p-bold', 'Negrito'], ['p-italic', 'Itálico'], ['p-bold-italic', 'Negrito + Itálico'], ['p-uppercase', 'Maiúsculas'], ['p-legendas', 'Legenda'],
-] as const;
-const OTHER_STYLES = [
-    ['p-border-top', 'Borda Superior'], ['p-border-bottom', 'Borda Inferior'],
-    ['p-border-sides', 'Borda Lateral'], ['drop-cap', 'Capitular'],
-    ['footnote', 'Nota de Rodapé'], ['box', 'Box'],
-] as const;
+const moreStyles = (more: BlockStyle['more']) => BLOCK_STYLES.filter((s) => s.more === more).map((s) => [s.format, s.label] as const);
+const PARAGRAPH_STYLES = [['p', 'Padrão'] as const, ...moreStyles('paragraph')];
+const OTHER_STYLES = moreStyles('other');
 export const MORE_STYLES_PARA: ReadonlyArray<readonly [string, string]> = [...HEADING_STYLES, ...OTHER_STYLES];
 export const MORE_STYLES_HEAD: ReadonlyArray<readonly [string, string]> = [...PARAGRAPH_STYLES, ...OTHER_STYLES];
 

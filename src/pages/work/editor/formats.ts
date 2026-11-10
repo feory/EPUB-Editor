@@ -1,5 +1,6 @@
 import type { Editor } from 'tinymce';
 import { styleFormatsWith } from './config';
+import { BLOCK_CLASS_STYLES } from './blockStyles';
 import { charFormats } from './selectionProps';
 import { charStyles } from '../../../utils/user-styles';
 
@@ -10,22 +11,7 @@ export function registerBlockFormats(editor: Editor) {
         // block:'p' não fazia nada dentro de um <li> (o TinyMCE não troca a tag de um item
         // de lista por um <p>, quebraria a lista), impossibilitando estilo de parágrafo em
         // bullets. selector:'p,li' cobre ambos.
-        editor.formatter.register('p-indent', { selector: 'p,li', classes: 'p-indent' });
-        editor.formatter.register('p-top', { selector: 'p,li', classes: 'p-top' });
-        editor.formatter.register('p-space', { selector: 'p,li', classes: 'p-space' });
-        editor.formatter.register('footnote', { selector: 'p,li', classes: 'footnote' });
-        editor.formatter.register('drop-cap', { selector: 'p,li', classes: 'drop-cap' });
-        editor.formatter.register('p-small', { selector: 'p,li', classes: 'p-small' });
-        editor.formatter.register('p-legendas', { selector: 'p,li', classes: 'p-legendas' });
-        editor.formatter.register('p-bold', { selector: 'p,li', classes: 'p-bold' });
-        editor.formatter.register('p-italic', { selector: 'p,li', classes: 'p-italic' });
-        editor.formatter.register('p-bold-italic', { selector: 'p,li', classes: 'p-bold-italic' });
-        editor.formatter.register('p-uppercase', { selector: 'p,li', classes: 'p-uppercase' });
-        editor.formatter.register('p-quote', { selector: 'p,li', classes: 'p-quote' });
-        editor.formatter.register('p-asterisk', { selector: 'p,li', classes: 'p-asterisk' });
-        editor.formatter.register('p-border-top', { selector: 'p,li', classes: 'p-border-top' });
-        editor.formatter.register('p-border-bottom', { selector: 'p,li', classes: 'p-border-bottom' });
-        editor.formatter.register('p-border-sides', { selector: 'p,li', classes: 'p-border-sides' });
+        BLOCK_CLASS_STYLES.forEach(({ format }) => editor.formatter.register(format, { selector: 'p,li', classes: format }));
         editor.formatter.register('small-text', { inline: 'small' });
         // Override do formato nativo (senão sai <span style="text-decoration:underline">) —
         // <u> é o que o import de EPUB já produz (reverseUnderline), consistente e sem CSS.
