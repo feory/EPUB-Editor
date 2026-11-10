@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NotificationsBell } from '../../home/NotificationsBell';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, FileUp, Save, History, Download, Loader2, Eye, AlertTriangle, Keyboard, Hash, ChevronDown, ChevronRight, Palette, Shield, Accessibility, GitCompare, ListX, Wand2, Link2, Link, Wrench, Type, ListTree, RefreshCw, BookMarked, MessageSquare
+  ArrowLeft, FileUp, Save, History, Download, Loader2, Eye, AlertTriangle, Keyboard, Hash, ChevronDown, ChevronRight, Palette, Shield, Accessibility, GitCompare, ListX, Wand2, Link2, Link, Wrench, Type, ListTree, RefreshCw, ArrowUpToLine, BookMarked, MessageSquare
 } from 'lucide-react';
 
 interface WorkToolbarProps {
@@ -33,13 +33,14 @@ interface WorkToolbarProps {
   onConversions: () => void;
   onEditToc: () => void;
   onUpdatePageList: () => void;
+  onMovePageNumbers: () => void;
   onLinkIndiceEntries: () => void;
   readOnly?: boolean;
 }
 
 const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
   isLoading, htmlContent, lastSaved,
-  onSave, onFetchHistory, onValidate, onValidateEpub, onValidateAccessibility, onValidateLinks, onPreview, onExport, onFileSelect, onToggleGrammar, grammarAvailable, onToggleImageGallery, onToggleComments, unresolvedCommentsCount, onOpenCompare, onShowShortcuts, onShowStats, onShowStyleEditor, onShowFonts, onCleanIndex, onLinkIndexPages, onConversions, onEditToc, onUpdatePageList, onLinkIndiceEntries,
+  onSave, onFetchHistory, onValidate, onValidateEpub, onValidateAccessibility, onValidateLinks, onPreview, onExport, onFileSelect, onToggleGrammar, grammarAvailable, onToggleImageGallery, onToggleComments, unresolvedCommentsCount, onOpenCompare, onShowShortcuts, onShowStats, onShowStyleEditor, onShowFonts, onCleanIndex, onLinkIndexPages, onConversions, onEditToc, onUpdatePageList, onMovePageNumbers, onLinkIndiceEntries,
   readOnly
 }) => {
   const navigate = useNavigate();
@@ -191,6 +192,13 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
                     >
                       <RefreshCw size={16} className="text-slate-400" />
                       <span>Atualização Pagelist</span>
+                    </button>
+                    <button
+                      onClick={() => { onMovePageNumbers(); setActiveMenu(null); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
+                    >
+                      <ArrowUpToLine size={16} className="text-slate-400" />
+                      <span>Páginas no início do capítulo</span>
                     </button>
                     <button
                       onClick={() => { onConversions(); setActiveMenu(null); }}

@@ -484,6 +484,7 @@ export function WorkPage() {
           onLinkIndexPages={() => editorRef.current?.linkIndexPagesSelection()}
           onConversions={() => setShowConversions(true)}
           onUpdatePageList={() => setShowPagelistUpdate(true)}
+          onMovePageNumbers={work.handleMovePageNumbers}
           onLinkIndiceEntries={work.handleLinkIndiceEntries}
           onEditToc={() => setShowToc(true)}
           readOnly={work.readOnly}
@@ -531,7 +532,7 @@ export function WorkPage() {
             />
 
             <div className="min-w-0 flex-1 relative">
-              {work.isImporting && <BusyOverlay message="A importar e processar o documento…" detail="Pode demorar alguns minutos em livros grandes." />}
+              {work.isImporting && <BusyOverlay message="A importar e processar o documento…" />}
               {work.isLoadingChapter && (
                 <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-2xl">
                   <div className="flex flex-col items-center gap-3">

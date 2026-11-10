@@ -277,6 +277,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // PDF carregado DEPOIS do import: anchors já vêm calculados de PrintPdfSidebar.
     const handleGeneratePageList = useCallback((anchors: PageAnchor[]) =>
         applyEdit(bookEdit.generatePageList(getBook(), anchors)), [applyEdit, getBook]);
+    const handleMovePageNumbers = useCallback(() => applyEdit(bookEdit.movePageNumbers(getBook())), [applyEdit, getBook]);
     // Substituição no LIVRO todo (mini find/replace do editar HTML). getLatest inclui a edição
     // ainda presa no debounce.
     const countInWholeBook = useCallback((find: string): number => bookEdit.countInBook(getBook(), find), [getBook]);
@@ -376,6 +377,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         getIndiceSubtitles,
         handleFixLinks,
         handleGeneratePageList,
+        handleMovePageNumbers,
         countInWholeBook,
         handleReplaceInWholeBook,
 
