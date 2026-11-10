@@ -957,7 +957,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         // sintético (o sinal que o TinyMCE já escuta) força a reavaliação.
                         const container = editor.getContainer();
                         if (container) {
-                            const HEIGHT_KEY = 'wp-editor-height';
+                            const HEIGHT_KEY = 'wp-editor-height-v2'; // v2: o valor antigo guardava a altura AUTOMÁTICA de janelas pequenas e prendia o editor nela
                             let lastAutoHeight = 0;
 
                             // Altura fixa (700) deixava vazio por baixo em ecrãs grandes — por omissão
@@ -984,11 +984,16 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                                     roFrame = 0;
                                     window.dispatchEvent(new Event('resize'));
                                 });
-                                const h = Math.round(container.getBoundingClientRect().height);
-                                // Altura diferente da que o preenchimento automático tinha posto →
-                                // foi o utilizador a arrastar o canto — grava para persistir.
-                                if (Math.abs(h - lastAutoHeight) > 2) localStorage.setItem(HEIGHT_KEY, String(h));
+                                // Só grava enquanto o utilizador arrasta o canto (resize:true). Antes bastava a altura diferir da
+                                // automática, e qualquer mudança de janela/scroll gravava-a como "manual" e o editor deixava de acompanhar o ecrã.
+                                if (draggingResize) localStorage.setItem(HEIGHT_KEY, String(Math.round(container.getBoundingClientRect().height)));
                             });
+                            let draggingResize = false;
+                            const startDrag = (e: MouseEvent) => { if ((e.target as HTMLElement).closest('.tox-statusbar__resize-handle')) draggingResize = true; };
+                            const endDrag = () => { draggingResize = false; };
+                            container.addEventListener('mousedown', startDrag);
+                            window.addEventListener('mouseup', endDrag);
+                            editor.on('remove', () => window.removeEventListener('mouseup', endDrag));
                             ro.observe(container);
                             editor.on('remove', () => ro.disconnect());
 
