@@ -393,6 +393,28 @@ const GridSection: React.FC<{
     </Section>
 );
 
+// Nome de um estilo de parágrafo criado pelo utilizador: renomear = nova classe no CSS e em todos os parágrafos que a têm.
+const StyleNameField: React.FC<{ cls: string; onRename: (newCls: string) => string | null }> = ({ cls, onRename }) => {
+    const [name, setName] = useState(paragraphStyles.label(cls));
+    const [error, setError] = useState('');
+    const commit = () => {
+        if (name.trim() === paragraphStyles.label(cls)) return setError('');
+        const newCls = paragraphStyles.classOf(name);
+        if (!newCls) return setError('Dá um nome ao estilo.');
+        setError(onRename(newCls) ?? '');
+    };
+    return (
+        <>
+            <Row label="Nome">
+                <input value={name} onChange={(e) => { setName(e.target.value); setError(''); }} onBlur={commit} aria-label="Nome do estilo"
+                    onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setName(paragraphStyles.label(cls)); setError(''); } }}
+                    className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2 text-sm outline-none focus:border-primary" />
+            </Row>
+            {error && <div className="text-xs text-rose-600">{error}</div>}
+        </>
+    );
+};
+
 const MODES = [['block', 'Este bloco'], ['style', 'Estilo']] as const;
 type Mode = (typeof MODES)[number][0];
 
@@ -400,8 +422,9 @@ const TextSection: React.FC<{
     text: NonNullable<BlockInfo['text']>; css: string;
     onInline: (patch: Partial<TextProps>) => void; onStyle: (selector: string, patch: Partial<TextProps>) => void;
     onToggleClass: (cls: string, on: boolean) => void; onCreateStyle: (cls: string, body: string) => string | null; onDeleteStyle: (cls: string) => void;
+    onRenameStyle: (cls: string, newCls: string) => string | null;
     mode: Mode; setMode: (m: Mode) => void;
-}> = ({ text, css, onInline, onStyle, onToggleClass, onCreateStyle, onDeleteStyle, mode, setMode }) => {
+}> = ({ text, css, onInline, onStyle, onToggleClass, onCreateStyle, onDeleteStyle, onRenameStyle, mode, setMode }) => {
     const [picked, setPicked] = useState('');
     const [draft, setDraft] = useState<StyleDraft | null>(null); // criar estilo: esconde os campos do bloco/regra atual
     const startDraft = () => setDraft({ name: '', props: EMPTY_TEXT, error: '' });
@@ -451,6 +474,13 @@ const TextSection: React.FC<{
                                 onCreate={onCreateStyle} onDelete={onDeleteStyle} />
                             {!draft && <NewStyleButton onOpen={startDraft} />}
                         </div>
+                        {!draft && selector.startsWith('.') && paragraphStyles.list(css).includes(selector.slice(1)) && (
+                            <StyleNameField key={selector} cls={selector.slice(1)} onRename={(newCls) => {
+                                const err = onRenameStyle(selector.slice(1), newCls);
+                                if (!err) setPicked(`.${newCls}`);
+                                return err;
+                            }} />
+                        )}
                         {!draft && selector && <TextFields key={selector} value={textPropsFrom(readRule(css, selector))} defaults={defaults} onChange={(patch) => onStyle(selector, patch)} />}
                     </>
                 )}
@@ -498,7 +528,7 @@ export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, o
                     </div>
                 )}
                 {!showBox && info.image && <ImageSection image={info.image} onChange={(patch) => onEdit({ target: 'image', patch })} />}
-                {!showBox && info.text && <TextSection key={info.text.tag} text={info.text} css={css} mode={mode} setMode={setMode} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={styles.paragraph.create} onDeleteStyle={styles.paragraph.remove} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
+                {!showBox && info.text && <TextSection key={info.text.tag} text={info.text} css={css} mode={mode} setMode={setMode} onInline={(patch) => onEdit({ target: 'text', patch })} onStyle={onTextStyle} onCreateStyle={styles.paragraph.create} onDeleteStyle={styles.paragraph.remove} onRenameStyle={(cls, newCls) => styles.paragraph.save(cls, readCustomStyle(css, cls), newCls)} onToggleClass={(cls, on) => onEdit({ target: 'class', cls, on })} />}
                 {!showBox && info.grid && <GridSection grid={info.grid} onChange={(patch) => onEdit({ target: 'grid', patch })} onApplyToCells={() => onEdit({ target: 'gridCells' })} />}
                 {showBox && info.box && <BoxSection box={info.box} css={css} onChange={(patch) => onEdit({ target: 'box', patch })} styles={styles.box} />}
             </div>
