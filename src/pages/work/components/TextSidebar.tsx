@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, RotateCcw, Plus, Bold, Italic, Underline, Strikethrough, Superscript, Subscript } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
-import { Row, Select, Section, Color, LenInput, StyleMenu } from './panelFields';
+import { Row, Select, Section, Color, LenInput } from './panelFields';
+import { useUserStyleActions } from './userStyleActions';
 import { FONT_FAMILIES, INLINE_FORMATS, EMPTY_SELECTION, UNDERLINE_STYLES, TRANSFORMS, WEIGHTS, selectionToCss, cssToSelection, type SelectionProps, type SelectionInfo } from '../editor/selectionProps';
 import { readCustomStyle, updateCustomStyle } from '../../../utils/book-css';
 import { useStyles } from '../../../context/StyleContext';
@@ -153,12 +154,7 @@ const CharStyles: React.FC<{
     selection: SelectionInfo; css: string; onEdit: (edit: BlockEdit) => void; onStartEdit: (cls: string) => void; onNew: () => void;
     onCreate: (cls: string, body: string) => string | null; onDelete: (cls: string) => void;
 }> = ({ selection, css, onEdit, onStartEdit, onNew, onCreate, onDelete }) => {
-    const [error, setError] = useState('');
-    const [deleting, setDeleting] = useState<string | null>(null); // estilo à espera de confirmação para apagar
-    const clone = (cls: string) => {
-        const err = onCreate(charStyles.clone(charStyles.list(css), cls), readCustomStyle(css, cls));
-        setError(err ?? '');
-    };
+    const actions = useUserStyleActions(charStyles, css, { create: onCreate, remove: onDelete });
     return (
         <Section>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -167,7 +163,7 @@ const CharStyles: React.FC<{
                     return (
                         <span key={cls} className={`relative inline-flex items-center h-8 rounded-full border text-xs transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
                             <button type="button" aria-pressed={on} onClick={() => onEdit({ target: 'inlineFormat', format: cls })} className="h-full pl-3 pr-2 rounded-l-full">{charStyles.label(cls)}</button>
-                            <StyleMenu label={charStyles.label(cls)} light={on} onClone={() => clone(cls)} onEdit={() => onStartEdit(cls)} onDelete={() => setDeleting(cls)} />
+                            {actions.menu(cls, on, () => onStartEdit(cls))}
                         </span>
                     );
                 })}
@@ -176,16 +172,7 @@ const CharStyles: React.FC<{
                     <Plus size={12} /> Criar estilo…
                 </button>
             </div>
-            {deleting && (
-                <div className="flex flex-col gap-2">
-                    <p className="text-xs text-rose-700">Apagar o estilo "{charStyles.label(deleting)}" e retirá-lo de todo o texto onde foi aplicado?</p>
-                    <div className="flex gap-2">
-                        <button type="button" onClick={() => { onDelete(deleting); setDeleting(null); }} className="h-8 px-3 rounded-lg bg-rose-600 text-white text-xs hover:bg-rose-700">Apagar</button>
-                        <button type="button" onClick={() => setDeleting(null)} className="h-8 px-3 rounded-lg border border-border text-xs hover:bg-slate-50">Cancelar</button>
-                    </div>
-                </div>
-            )}
-            {error && <div className="text-xs text-rose-600">{error}</div>}
+            <div className="flex flex-wrap">{actions.notices}</div>
         </Section>
     );
 };

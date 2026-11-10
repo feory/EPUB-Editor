@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Check, RotateCcw, Grid2x2, Pencil, Plus } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
-import { Row, Select, Section, Color, Num, LenInput, StyleMenu } from './panelFields';
+import { Row, Select, Section, Color, Num, LenInput } from './panelFields';
+import { useUserStyleActions } from './userStyleActions';
 import { BOX_VARIANTS, boxToCss, cssToBox, type BoxProps, type BoxBorderStyle } from '../editor/boxProps';
 import { boxStyles, paragraphStyles } from '../../../utils/user-styles';
 import type { StyleCatalogue, StyleSet } from '../hooks/useStyleCatalogue';
@@ -121,7 +122,7 @@ const BoxStyles: React.FC<{
 }> = ({ box, css, onChange, onStartEdit, onCreate, onDelete }) => {
     const [name, setName] = useState<string | null>(null); // a criar: nome em curso (null = não está a criar)
     const [error, setError] = useState('');
-    const [deleting, setDeleting] = useState<string | null>(null);
+    const actions = useUserStyleActions(boxStyles, css, { create: onCreate, remove: onDelete });
     const create = () => {
         const cls = boxStyles.classOf(name ?? '');
         if (!cls) return setError('Dá um nome ao estilo.');
@@ -132,7 +133,6 @@ const BoxStyles: React.FC<{
         onChange({ ...OWN_STYLE, classes: [...box.classes, cls] });
         setName(null); setError('');
     };
-    const clone = (cls: string) => setError(onCreate(boxStyles.clone(boxStyles.list(css), cls), readCustomStyle(css, cls)) ?? '');
     const toggle = (cls: string, on: boolean) => onChange({ classes: on ? box.classes.filter((c) => c !== cls) : [...box.classes, cls] });
     return (
         <Section title="Estilos">
@@ -142,7 +142,7 @@ const BoxStyles: React.FC<{
                     return (
                         <span key={cls} className={`relative inline-flex items-center h-8 rounded-full border text-xs transition-colors ${on ? 'bg-slate-700 border-slate-700 text-white' : 'border-border text-text-main hover:bg-slate-50'}`}>
                             <button type="button" aria-pressed={on} onClick={() => toggle(cls, on)} className="h-full pl-3 pr-2 rounded-l-full">{boxStyles.label(cls)}</button>
-                            <StyleMenu label={boxStyles.label(cls)} light={on} onClone={() => clone(cls)} onEdit={() => onStartEdit(cls)} onDelete={() => setDeleting(cls)} />
+                            {actions.menu(cls, on, () => onStartEdit(cls))}
                         </span>
                     );
                 })}
@@ -162,15 +162,7 @@ const BoxStyles: React.FC<{
                     <button type="button" onClick={() => { setName(null); setError(''); }} title="Cancelar" aria-label="Cancelar" className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-slate-500 hover:text-rose-500"><X size={16} /></button>
                 </div>
             )}
-            {deleting && (
-                <div className="flex flex-col gap-2">
-                    <p className="text-xs text-rose-700">Apagar o estilo "{boxStyles.label(deleting)}" e retirá-lo de todas as caixas onde foi aplicado?</p>
-                    <div className="flex gap-2">
-                        <button type="button" onClick={() => { onDelete(deleting); setDeleting(null); }} className="h-8 px-3 rounded-lg bg-rose-600 text-white text-xs hover:bg-rose-700">Apagar</button>
-                        <button type="button" onClick={() => setDeleting(null)} className="h-8 px-3 rounded-lg border border-border text-xs hover:bg-slate-50">Cancelar</button>
-                    </div>
-                </div>
-            )}
+            <div className="flex flex-wrap">{actions.notices}</div>
             {error && <div className="text-xs text-rose-600">{error}</div>}
         </Section>
     );
@@ -309,10 +301,9 @@ const StyleChips: React.FC<{
 // (vale para todo o projeto), mais "Todos os <tag>".
 const StyleEditChips: React.FC<{
     targets: Array<readonly [string, string]>; selected: string; onPick: (sel: string) => void; css: string;
-    onClone: (cls: string) => string | null; onDelete: (cls: string) => void;
-}> = ({ targets, selected, onPick, css, onClone, onDelete }) => {
-    const [error, setError] = useState('');
-    const [deleting, setDeleting] = useState<string | null>(null); // estilo à espera de confirmação para apagar
+    onCreate: (cls: string, body: string) => string | null; onDelete: (cls: string) => void;
+}> = ({ targets, selected, onPick, css, onCreate, onDelete }) => {
+    const actions = useUserStyleActions(paragraphStyles, css, { create: onCreate, remove: onDelete });
     const userStyles = paragraphStyles.list(css);
     return (
         <>
@@ -327,21 +318,12 @@ const StyleEditChips: React.FC<{
                             {label}
                         </button>
                         {sel.startsWith('.') && userStyles.includes(cls) && (
-                            <StyleMenu label={cls} light={on} onClone={() => setError(onClone(cls) ?? '')} onEdit={() => onPick(sel)} onDelete={() => setDeleting(cls)} />
+                            actions.menu(cls, on, () => onPick(sel))
                         )}
                     </span>
                 );
             })}
-            {deleting && (
-                <div className="basis-full flex flex-col gap-2">
-                    <p className="text-xs text-rose-700">Apagar o estilo "{deleting}" e retirá-lo de todos os parágrafos onde foi aplicado?</p>
-                    <div className="flex gap-2">
-                        <button type="button" onClick={() => { onDelete(deleting); setDeleting(null); }} className="h-8 px-3 rounded-lg bg-rose-600 text-white text-xs hover:bg-rose-700">Apagar</button>
-                        <button type="button" onClick={() => setDeleting(null)} className="h-8 px-3 rounded-lg border border-border text-xs hover:bg-slate-50">Cancelar</button>
-                    </div>
-                </div>
-            )}
-            {error && <div className="basis-full text-xs text-rose-600">{error}</div>}
+            {actions.notices}
         </>
     );
 };
@@ -466,7 +448,7 @@ const TextSection: React.FC<{
                     <>
                         <div className="flex flex-wrap items-center gap-1.5">
                             <StyleEditChips targets={targets} selected={selector} onPick={setPicked} css={css}
-                                onClone={(cls) => onCreateStyle(paragraphStyles.clone(paragraphStyles.list(css), cls), readCustomStyle(css, cls))} onDelete={onDeleteStyle} />
+                                onCreate={onCreateStyle} onDelete={onDeleteStyle} />
                             {!draft && <NewStyleButton onOpen={startDraft} />}
                         </div>
                         {!draft && selector && <TextFields key={selector} value={textPropsFrom(readRule(css, selector))} defaults={defaults} onChange={(patch) => onStyle(selector, patch)} />}
