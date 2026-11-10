@@ -525,12 +525,13 @@ export function movePageBreaksToChapterStart(html: string): string {
             if (textLen > CHAPTER_OPENING_MAX) break;
         }
         if (!target || !firstText || textLen === 0) continue; // sem marcador na abertura, ou já está no início
-        // Bloco de topo que abre o capítulo (caixa ou título): o marcador fica ENTRE o limite do capítulo e esse bloco, num <p> próprio
-        // (o editor faria o mesmo a um span solto; assim a numeração dos <p> das Ligações do Índice é a mesma no texto e no editor).
+        // Bloco de topo que abre o capítulo (caixa ou título): o marcador fica ENTRE o limite do capítulo e esse bloco, numa <div>
+        // própria com um &nbsp; (como o marcador de capítulo). <div> e não <p>: não entra na contagem dos <p> das Ligações do Índice.
         let top: Node = firstText;
         while (top.parentNode && top.parentNode !== doc.body) top = top.parentNode;
-        const holder = doc.createElement('p');
+        const holder = doc.createElement('div');
         holder.appendChild(target);
+        holder.appendChild(doc.createTextNode('\u00a0'));
         top.parentNode!.insertBefore(holder, top);
         moved++;
     }
