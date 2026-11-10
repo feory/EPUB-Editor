@@ -2,7 +2,7 @@
 // Trabalham sobre as `parts` do split de capítulos (1:1 com `chapters[]`), sem tocar no DOM.
 
 import { decodeEntities } from './entities';
-import { matchChapterBoundary, isExplicitH1Part, chapterMarkerHtml, retitleMarkerTag, type ChapterLevel as Level } from './chapters';
+import { matchChapterBoundary, isExplicitH1Part, chapterMarkerHtml, retitleMarkerTag, stripHidden, flattenHeadingText, type ChapterLevel as Level } from './chapters';
 
 const escapeHtml = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -104,4 +104,33 @@ export function changeChapterLevel(part: string, newLevel: Level): string {
     const newMarker = chapterMarkerHtml(`h${n}` as 'h1' | 'h2' | 'h3', title);
     if (headingMatch) return `${newMarker}<h${n}>${headingMatch[2]}</h${n}>${rest.slice(headingMatch[0].length)}`;
     return `${newMarker}<h${n}>${title}</h${n}>${rest}`;
+}
+
+/**
+ * Esconde a parte do Índice do EPUB: fica quebra plana com `[hidden]` no data-title (o heading vira parágrafo; o capítulo
+ * continua no livro e na Estrutura). Só o `[hidden]` esconde — uma quebra plana sem ele conta como Título 1.
+ */
+export function hideChapterPart(part: string): string {
+    const broken = changeChapterLevel(part, 'break');
+    const boundary = matchChapterBoundary(broken);
+    if (!boundary) return part;
+    return renameChapterPart(broken, `[hidden] ${stripHidden(decodeEntities(boundary.title))}`.trim());
+}
+
+/**
+ * Volta a mostrar a parte no Índice: tira o `[hidden]` do título e devolve-a a Título 1. Se o 1.º parágrafo é o título (o que o
+ * hideChapterPart deixou), é ele que volta a ser o heading — senão o título ficava duplicado.
+ */
+export function showChapterPart(part: string): string {
+    const boundary = matchChapterBoundary(part);
+    if (!boundary) return part;
+    const title = stripHidden(decodeEntities(boundary.title));
+    const clean = renameChapterPart(part, title);
+    const cleanBoundary = matchChapterBoundary(clean)!;
+    const rest = clean.slice(cleanBoundary.raw.length);
+    const first = rest.match(/^\s*<p>([\s\S]*?)<\/p>/);
+    if (first && title && decodeEntities(flattenHeadingText(first[1])) === title) {
+        return `${chapterMarkerHtml('h1', escapeHtml(title))}<h1>${first[1]}</h1>${rest.slice(first[0].length)}`;
+    }
+    return changeChapterLevel(clean, 'h1');
 }

@@ -8,6 +8,8 @@ export interface ChapterActions {
     rename(index: number, title: string): void;
     reorder(from: number, to: number): void;
     changeLevel(index: number, level: Level): void;
+    /** Esconde o capítulo do Índice do EPUB (como `[hidden]` no título) ou volta a mostrá-lo. */
+    toggleHidden(index: number): void;
     remove(index: number): void;
     duplicate(index: number): void;
     add(): void;

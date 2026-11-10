@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Edit2, GripVertical, Trash2, Check, X, Copy } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Edit2, GripVertical, Trash2, Check, X, Copy, Eye, EyeOff } from 'lucide-react';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { subtreeRange } from '../../../utils/toc';
-import { UNTITLED_RE, type ChapterLevel } from '../../../utils/chapters';
+import { UNTITLED_RE, stripHidden, type ChapterLevel } from '../../../utils/chapters';
 import type { ChapterActions } from '../chapterActions';
 
 interface Chapter {
@@ -33,6 +33,7 @@ interface ChapterItemProps {
     onSelectChapter: (index: number) => void;
     onRequestEdit: (index: number, currentTitle: string) => void;
     onRequestDuplicate: (index: number) => void;
+    onToggleHidden: (index: number) => void;
     onRequestDelete: (index: number) => void;
     onConfirmDelete: (index: number) => void;
     onCancelDelete: () => void;
@@ -50,7 +51,7 @@ const editValue = (c: Chapter) => UNTITLED_RE.test(c.title) ? '' : c.title;
 // not on every parent re-render (keystroke). Requires stable callback props.
 const ChapterItem = React.memo<ChapterItemProps>(({
     chapter, index, isActive, isDragging, dropBefore, confirmingDelete, childCount, onSelectChapter, onRequestEdit,
-    onRequestDuplicate, onRequestDelete, onConfirmDelete, onCancelDelete, onDragStart, onDragOverItem, onDropItem, onDragEnd, readOnly,
+    onRequestDuplicate, onToggleHidden, onRequestDelete, onConfirmDelete, onCancelDelete, onDragStart, onDragOverItem, onDropItem, onDragEnd, readOnly,
 }) => (
     <div
         className={`relative group/item rounded-xl transition-opacity ${dropBefore ? 'border-t-2 border-slate-500' : 'border-t-2 border-transparent'} ${isDragging ? 'opacity-40' : ''}`}
@@ -68,15 +69,16 @@ const ChapterItem = React.memo<ChapterItemProps>(({
     >
         <button
             onClick={() => onSelectChapter(index)}
-            className={`w-full text-left ${readOnly ? 'pl-4' : 'pl-8'} pr-24 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-start gap-3 ${
+            className={`w-full text-left ${readOnly ? 'pl-4' : 'pl-8'} pr-32 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-start gap-3 ${
                 isActive
                     ? 'bg-slate-200 text-slate-800'
                     : 'hover:bg-slate-50 text-text-muted'
-            } ${chapter.level === 'h2' ? 'ml-4 scale-90' : chapter.level === 'h3' ? 'ml-8 scale-90' : ''}`}
+            } ${chapter.level === 'h2' ? 'ml-4 scale-90' : chapter.level === 'h3' ? 'ml-8 scale-90' : ''} ${chapter.level === 'break' ? 'opacity-60' : ''}`}
         >
             <span className={`flex-1 truncate ${chapter.level === 'h1' ? 'font-bold' : 'font-medium italic'}`}>
-                {chapter.title}
+                {stripHidden(chapter.title)}
             </span>
+            {chapter.level === 'break' && <EyeOff size={13} className="shrink-0 mt-0.5 text-slate-400" aria-label="Escondido do Índice" />}
         </button>
         {!readOnly && !confirmingDelete && (
             <span className="absolute left-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover/item:opacity-100 text-slate-300 cursor-grab active:cursor-grabbing transition-all" title="Arrastar para reordenar">
@@ -103,6 +105,13 @@ const ChapterItem = React.memo<ChapterItemProps>(({
                 </div>
             ) : (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onToggleHidden(index); }}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-all"
+                        title={chapter.level === 'break' ? 'Mostrar no Índice' : 'Esconder do Índice'}
+                    >
+                        {chapter.level === 'break' ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); onRequestEdit(index, editValue(chapter)); }}
                         className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-all"
@@ -195,6 +204,7 @@ const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
         setEditing({ index, value: currentTitle });
     }, []);
     const handleRequestDuplicate = actions.duplicate;
+    const handleToggleHidden = actions.toggleHidden;
     const handleRequestDelete = useCallback((index: number) => setConfirmDelete(index), []);
     const handleCancelDelete = useCallback(() => setConfirmDelete(null), []);
     const handleConfirmDelete = useCallback((index: number) => {
@@ -264,6 +274,7 @@ const ChapterSidebarComponent: React.FC<ChapterSidebarProps> = ({
                             onSelectChapter={onSelectChapter}
                             onRequestEdit={handleRequestEdit}
                             onRequestDuplicate={handleRequestDuplicate}
+                            onToggleHidden={handleToggleHidden}
                             onRequestDelete={handleRequestDelete}
                             onConfirmDelete={handleConfirmDelete}
                             onCancelDelete={handleCancelDelete}

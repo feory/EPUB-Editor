@@ -9,7 +9,7 @@
  *  - 'reset' — reorder/eliminar/criar: o índice do capítulo ativo deixa de valer depois de
  *    mover/eliminar, restaurá-lo seria a posição errada → o ebook recarrega sem capítulo ativo.
  */
-import { renameChapterPart, changeChapterLevel, moveChapters, deleteChapterPart, duplicateChapterPart, insertChapterPart } from '../../utils/toc';
+import { renameChapterPart, changeChapterLevel, hideChapterPart, showChapterPart, moveChapters, deleteChapterPart, duplicateChapterPart, insertChapterPart } from '../../utils/toc';
 import type { ChapterLevel } from '../../utils/chapters';
 import { applyDropCapToFirstParagraph, countOccurrences } from '../../utils/html-cleaner';
 import { linkIndiceEntries, linkOneIndiceEntry, unlinkOneIndiceEntry, listSubtitles } from '../../utils/indice-links';
@@ -60,6 +60,18 @@ export function changeLevel(book: Book, index: number, level: Level): BookEdit |
     const parts = [...book.parts];
     parts[index] = part;
     return keep(parts.join(''), 'Nível do capítulo atualizado!');
+}
+
+/** Esconde um capítulo do Índice do EPUB (ver hideChapterPart) ou, se já está escondido (nível `break`), volta a mostrá-lo. */
+export function toggleHidden(book: Book, index: number): BookEdit | null {
+    const chapter = book.chapters[index];
+    if (!chapter || !book.parts[index]) return null;
+    const hidden = chapter.level === 'break';
+    const part = hidden ? showChapterPart(book.parts[index]) : hideChapterPart(book.parts[index]);
+    if (part === book.parts[index]) return null;
+    const parts = [...book.parts];
+    parts[index] = part;
+    return keep(parts.join(''), hidden ? 'Capítulo visível no Índice!' : 'Capítulo escondido do Índice!');
 }
 
 export function moveChapter(book: Book, from: number, to: number): BookEdit | null {

@@ -248,6 +248,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         rename: (index, title) => applyEdit(bookEdit.renameChapter(getBook(), index, title)),
         reorder: (from, to) => applyEdit(bookEdit.moveChapter(getBook(), from, to)),
         changeLevel: (index, level) => applyEdit(bookEdit.changeLevel(getBook(), index, level)),
+        toggleHidden: (index) => applyEdit(bookEdit.toggleHidden(getBook(), index)),
         remove: (index) => applyEdit(bookEdit.deleteChapter(getBook(), index)),
         duplicate: (index) => applyEdit(bookEdit.duplicateChapter(getBook(), index)),
         add: () => applyEdit(bookEdit.addChapter(getBook())),

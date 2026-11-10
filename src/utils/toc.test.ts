@@ -102,3 +102,16 @@ test('renameChapterPart: marcador sem data-title ou com data-title antes da clas
     expect(renameChapterPart('<p class="chapter-break-h2"></p><h2>X</h2>', 'Novo')).toBe('<p class="chapter-break-h2" data-title="Novo"></p><h2>X</h2>');
     expect(renameChapterPart('<p data-title="Old" class="chapter-break-h2">&nbsp;</p><h2>X</h2>', 'A & B')).toBe('<p data-title="A &amp; B" class="chapter-break-h2">&nbsp;</p><h2>X</h2>');
 });
+
+test('hideChapterPart / showChapterPart: esconde do Índice com [hidden] e volta a Título 1 sem o resíduo no título', async () => {
+    const { hideChapterPart, showChapterPart } = await import('./toc');
+    const { classifyChapterPart } = await import('./chapters');
+    const part = '<p class="chapter-break-h1" data-title="Cap Um"></p><h1>Cap Um</h1><p>texto</p>';
+    const hidden = hideChapterPart(part);
+    expect(hidden).toBe('<p class="chapter-break" data-title="[hidden] Cap Um"></p><p>Cap Um</p><p>texto</p>');
+    expect(classifyChapterPart(hidden, 0).level).toBe('break');
+    expect(hideChapterPart(hidden)).toBe(hidden); // idempotente: [hidden] não se repete
+    const shown = showChapterPart(hidden);
+    expect(shown).toBe(part); // ida e volta devolve o original (sem título duplicado)
+    expect(classifyChapterPart(shown, 0)).toEqual({ title: 'Cap Um', level: 'h1' });
+});

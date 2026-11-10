@@ -119,3 +119,14 @@ test('renameStyle (caracteres): troca a classe no livro; null se ninguém a usa'
     expect(be.renameStyle(b, charStyles, 'c-x', 'c-novo')?.html).toContain('<span class="c-novo">b</span>');
     expect(be.renameStyle(b, charStyles, 'c-outro', 'c-novo')).toBeNull();
 });
+
+test('toggleHidden: esconde o capítulo do Índice (break com [hidden]) e, de novo, devolve o original', () => {
+    const b = book(HTML);
+    const hidden = be.toggleHidden(b, 1);
+    expect(hidden?.commit).toBe('keep');
+    expect(hidden?.html).toContain('data-title="[hidden] B"');
+    expect(hidden?.html).toContain('data-title="A"'); // os outros não mudam
+    const back = be.toggleHidden(book(hidden!.html!), 1);
+    expect(back?.html).toBe(HTML);
+    expect(be.toggleHidden(b, 9)).toBeNull();
+});
