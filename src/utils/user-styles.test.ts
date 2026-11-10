@@ -8,7 +8,7 @@ test('classOf: slug com o prefixo do tipo, sem acentos nem duplicar o prefixo; v
     expect(charStyles.classOf('Épígrafe')).toBe('c-epigrafe');
     expect(charStyles.classOf('c-nota')).toBe('c-nota');
     expect(boxStyles.classOf('Destaque Azul')).toBe('b-destaque-azul');
-    expect(paragraphStyles.classOf('Epígrafe final')).toBe('p-epigrafe-final');
+    expect(paragraphStyles.classOf('Epígrafe final')).toBe('epigrafe-final');
     for (const kind of Object.values(USER_STYLES)) expect(kind.classOf('  !!! ')).toBe('');
 });
 

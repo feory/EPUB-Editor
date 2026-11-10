@@ -76,7 +76,7 @@ export const charStyles = kind({
 export const boxStyles = kind({ prefix: 'b-', where: 'das caixas', selector: (cls) => `.box.${cls}` });
 
 export const paragraphStyles = kind({
-    prefix: 'p-', where: 'dos parágrafos', selector: (cls) => `.${cls}`,
+    prefix: '', where: 'dos parágrafos', selector: (cls) => `.${cls}`,
     isStyle: (cls) => !charStyles.isStyle(cls) && !boxStyles.isStyle(cls),
     label: (cls) => cls, // o painel mostra a classe inteira
 });

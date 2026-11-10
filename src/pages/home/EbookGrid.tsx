@@ -34,11 +34,11 @@ export const EbookGrid: React.FC<EbookGridProps> = ({
     }
 
     return (
-        <div className="p-4 flex flex-wrap gap-4">
+        <div className="p-4 grid grid-cols-5 auto-rows-fr gap-4">
             {ebooks.map((ebook) => {
                 const isInProgress = ebook.status !== 'completed';
                 return (
-                    <div key={ebook.ebook_isbn} className="group flex flex-col flex-1 basis-48 max-w-64 bg-white rounded-xl border border-border shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                    <div key={ebook.ebook_isbn} className="group flex flex-col w-full bg-white rounded-xl border border-border shadow-sm overflow-hidden hover:shadow-md transition-shadow">
                         {/* Cover */}
                         <div
                             className={`relative w-full bg-slate-100 flex items-center justify-center ${isInProgress && onNavigate ? 'cursor-pointer' : ''}`}
