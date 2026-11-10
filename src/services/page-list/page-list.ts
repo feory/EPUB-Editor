@@ -469,7 +469,7 @@ const pagesIn = (html: string): Set<number> =>
  * Idempotente: remove marcadores pré-existentes antes de inserir (reexecutar sobre um livro já
  * marcado, ex. page-list gerada de novo a partir de um PDF carregado mais tarde, não duplica).
  */
-export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: string; inserted: number; total: number } {
+function insertPageBreaksCore(html: string, anchors: PageAnchor[]): { html: string; inserted: number; total: number } {
     const stripped = stripPageBreaks(html);
     const pass1 = insertPageBreaksInSegment(stripped, anchors);
 
@@ -489,6 +489,55 @@ export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: s
         return r.html;
     });
     return { html: outSegments.join(''), inserted: pass1.inserted + extraInserted, total: anchors.length };
+}
+
+/** Texto (normalizado) máximo entre o marcador de capítulo e o marcador de página para este contar como "abertura do capítulo". */
+const CHAPTER_OPENING_MAX = 150;
+const CHAPTER_MARKER_SELECTOR = 'p[class*="chapter-break-h1"], p[class*="chapter-break-h2"]';
+
+/**
+ * Quando o marcador de página cai logo a seguir à abertura de um capítulo h1/h2 (só os blocos curtos do título — caixa com o
+ * número, subtítulo, etc. — entre o marcador de capítulo e o de página), é porque o capítulo abre nessa página: o marcador passa
+ * para o início do capítulo (antes do 1.º texto a seguir ao marcador de capítulo). O mesmo html se nada mexe (sem reserializar).
+ */
+export function movePageBreaksToChapterStart(html: string): string {
+    if (!html.includes('pagebreak')) return html;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    let moved = 0;
+    for (const marker of Array.from(doc.body.querySelectorAll(CHAPTER_MARKER_SELECTOR))) {
+        let firstText: Text | null = null;
+        let textLen = 0;
+        const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n && n !== marker; n = walker.nextNode()) { /* avança até ao marcador (currentNode não é fiável em todos os DOMs) */ }
+        let target: Element | null = null;
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (marker.contains(node)) continue; // o texto do próprio marcador (&nbsp;) não conta
+            if (node.nodeType === 1) {
+                const el = node as Element;
+                if (el.matches(CHAPTER_MARKER_SELECTOR) || el.matches('p[class*="chapter-break"]')) break; // chegou ao capítulo seguinte
+                if (el.matches('span.pagebreak')) { target = el; break; }
+                continue;
+            }
+            const text = (node.textContent ?? '').replace(/\s+/g, '');
+            if (!text) continue;
+            firstText ??= node as Text;
+            textLen += text.length;
+            if (textLen > CHAPTER_OPENING_MAX) break;
+        }
+        if (!target || !firstText || textLen === 0) continue; // sem marcador na abertura, ou já está no início
+        // Mais acima possível sem criar blocos novos: 1.º filho do bloco de topo que abre o capítulo (antes da caixa/título, não dentro
+        // do heading). Um span solto no corpo ganharia um <p> à volta e deslocava a numeração dos <p> (Ligações do Índice).
+        let top: Node = firstText;
+        while (top.parentNode && top.parentNode !== doc.body) top = top.parentNode;
+        top.insertBefore(target, top.firstChild);
+        moved++;
+    }
+    return moved > 0 ? doc.body.innerHTML : html;
+}
+
+export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: string; inserted: number; total: number } {
+    const res = insertPageBreaksCore(html, anchors);
+    return { ...res, html: movePageBreaksToChapterStart(res.html) };
 }
 
 /**
