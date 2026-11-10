@@ -33,6 +33,11 @@ test('já no início, sem marcador, ou com muito texto antes: não mexe (mesmo h
 test('não atravessa para o capítulo seguinte', () => {
     const html = `<p class="chapter-break-h2" data-title="A">&nbsp;</p><h2>A</h2><p class="chapter-break-h2" data-title="B">&nbsp;</p><h2>B</h2><p>${PB(5)}corpo de B</p>`;
     const out = movePageBreaksToChapterStart(html);
-    expect(out).toContain(`<h2>${PB(5)}B</h2>`); // B abre no próprio h2 (bloco de topo); A não rouba a página
+    expect(out).toContain(`<p>${PB(5)}</p><h2>B</h2>`); // B abre no próprio h2: o marcador fica antes do título; A não rouba a página
     expect(out).toContain('<h2>A</h2>');
+});
+
+test('título solto no corpo (sem caixa): o marcador vai para antes do h1, num <p> próprio', () => {
+    const html = `<p class="chapter-break-h1" data-title="Um">&nbsp;</p><h1>1<br>${PB(13)}O DOUTOR</h1><p>texto</p>`;
+    expect(movePageBreaksToChapterStart(html)).toBe(`<p class="chapter-break-h1" data-title="Um">&nbsp;</p><p>${PB(13)}</p><h1>1<br>O DOUTOR</h1><p>texto</p>`);
 });
