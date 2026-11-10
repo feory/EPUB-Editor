@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useEbookRow } from './ebookRow';
 import { ImageIcon, Download, Loader2, RotateCcw, PenLine } from 'lucide-react';
 import type { Ebook } from '../../api/ebooks-api';
 
@@ -14,7 +15,7 @@ interface EbookShelfProps {
 export const EbookShelf: React.FC<EbookShelfProps> = ({
     ebooks, onNavigate, coverVersions, onDownloadEpub, onReopen, emptyMessage,
 }) => {
-    const [downloadingIsbn, setDownloadingIsbn] = useState<string | null>(null);
+    const row = useEbookRow();
 
     if (ebooks.length === 0) {
         return <div className="py-12 text-center text-text-muted italic">{emptyMessage ?? 'Sem ebooks.'}</div>;
@@ -61,9 +62,9 @@ export const EbookShelf: React.FC<EbookShelfProps> = ({
                                         <button
                                             className="p-1.5 rounded bg-white/20 hover:bg-white/30 text-white transition-colors disabled:opacity-40"
                                             title="Descarregar EPUB"
-                                            disabled={downloadingIsbn === ebook.ebook_isbn}
-                                            onClick={async (e) => { e.stopPropagation(); setDownloadingIsbn(ebook.ebook_isbn); await onDownloadEpub(ebook.ebook_isbn); setDownloadingIsbn(null); }}>
-                                            {downloadingIsbn === ebook.ebook_isbn ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                                            disabled={row.downloading(ebook.ebook_isbn)}
+                                            onClick={async (e) => { e.stopPropagation(); await row.download(ebook.ebook_isbn, onDownloadEpub); }}>
+                                            {row.downloading(ebook.ebook_isbn) ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                                         </button>
                                         {onReopen && (
                                             <button

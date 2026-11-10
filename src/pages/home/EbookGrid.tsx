@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ImageIcon, Settings, Check, X, Loader2, Trash2, Download, RotateCcw, Share2, Info } from 'lucide-react';
+import { useEbookRow, deleteLabels, ebookMenuItems } from './ebookRow';
+import { ImageIcon, Check, X, Loader2, Trash2, Download, RotateCcw, Info } from 'lucide-react';
 import type { Ebook } from '../../api/ebooks-api';
 import { MetadataViewModal } from './CompletedTable';
 import { OverflowMenu } from '../../components/OverflowMenu';
@@ -24,9 +25,7 @@ interface EbookGridProps {
 export const EbookGrid: React.FC<EbookGridProps> = ({
     ebooks, onNavigate, onOpenMetadata, onOpenCover, onComplete, onShare, onDelete, isShared, ownerLabel, isDeleting, coverVersions, onDownloadEpub, onReopen, emptyMessage,
 }) => {
-    const [confirmingIsbn, setConfirmingIsbn] = useState<string | null>(null);
-    const [deletingIsbn, setDeletingIsbn] = useState<string | null>(null);
-    const [downloadingIsbn, setDownloadingIsbn] = useState<string | null>(null);
+    const row = useEbookRow();
     const [viewingEbook, setViewingEbook] = useState<Ebook | null>(null);
 
     if (ebooks.length === 0) {
@@ -65,64 +64,60 @@ export const EbookGrid: React.FC<EbookGridProps> = ({
                         <div className="px-3 pb-3 pt-1 flex gap-1" onClick={e => e.stopPropagation()}>
                             {isInProgress ? (
                                 <>
-                                    {confirmingIsbn !== ebook.ebook_isbn && deletingIsbn !== ebook.ebook_isbn && (
+                                    {row.idle(ebook.ebook_isbn) && (
                                         <button
                                             className="flex-1 flex items-center justify-center p-2 rounded border border-border text-text-muted hover:border-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all disabled:opacity-40"
                                             title="Descarregar EPUB"
-                                            disabled={downloadingIsbn === ebook.ebook_isbn}
-                                            onClick={async (e) => { e.stopPropagation(); setDownloadingIsbn(ebook.ebook_isbn); await onDownloadEpub(ebook.ebook_isbn); setDownloadingIsbn(null); }}>
-                                            {downloadingIsbn === ebook.ebook_isbn ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                            disabled={row.downloading(ebook.ebook_isbn)}
+                                            onClick={async (e) => { e.stopPropagation(); await row.download(ebook.ebook_isbn, onDownloadEpub); }}>
+                                            {row.downloading(ebook.ebook_isbn) ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                                         </button>
                                     )}
-                                    {deletingIsbn !== ebook.ebook_isbn && onComplete && (
-                                        confirmingIsbn === ebook.ebook_isbn ? (
+                                    {!row.deleting(ebook.ebook_isbn) && onComplete && (
+                                        row.confirming(ebook.ebook_isbn) ? (
                                             <>
                                                 <button className="flex-1 flex items-center justify-center p-2 rounded bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
-                                                    onClick={(e) => { onComplete(e, ebook); setConfirmingIsbn(null); }} title="Confirmar conclusão">
+                                                    onClick={(e) => { onComplete(e, ebook); row.cancel(); }} title="Confirmar conclusão">
                                                     <Check size={14} />
                                                 </button>
                                                 <button className="flex-1 flex items-center justify-center p-2 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); setConfirmingIsbn(null); }} title="Cancelar">
+                                                    onClick={(e) => { e.stopPropagation(); row.cancel(); }} title="Cancelar">
                                                     <X size={14} />
                                                 </button>
                                             </>
                                         ) : (
                                             <button className="flex-1 flex items-center justify-center p-2 rounded border border-border text-text-muted hover:border-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
-                                                onClick={(e) => { e.stopPropagation(); setConfirmingIsbn(ebook.ebook_isbn); setDeletingIsbn(null); }} title="Concluir">
+                                                onClick={(e) => { e.stopPropagation(); row.askComplete(ebook.ebook_isbn); }} title="Concluir">
                                                 <Check size={14} />
                                             </button>
                                         )
                                     )}
                                     {onDelete && (
-                                        deletingIsbn === ebook.ebook_isbn ? (
+                                        row.deleting(ebook.ebook_isbn) ? (
                                             <>
                                                 <button className="flex-1 flex items-center justify-center p-2 rounded bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50"
-                                                    onClick={(e) => { e.stopPropagation(); onDelete(ebook.ebook_isbn); setDeletingIsbn(null); }}
-                                                    disabled={isDeleting} title={isShared?.(ebook) ? 'Remover a partilha (o ebook continua com o dono)' : 'Enviar para a Reciclagem (recuperável 30 dias)'}>
+                                                    onClick={(e) => { e.stopPropagation(); onDelete(ebook.ebook_isbn); row.cancel(); }}
+                                                    disabled={isDeleting} title={deleteLabels(!!isShared?.(ebook)).confirm}>
                                                     {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                                                 </button>
                                                 <button className="flex-1 flex items-center justify-center p-2 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); setDeletingIsbn(null); }} title="Cancelar">
+                                                    onClick={(e) => { e.stopPropagation(); row.cancel(); }} title="Cancelar">
                                                     <X size={14} />
                                                 </button>
                                             </>
-                                        ) : confirmingIsbn !== ebook.ebook_isbn ? (
+                                        ) : !row.confirming(ebook.ebook_isbn) ? (
                                             <button className="flex-1 flex items-center justify-center p-2 rounded border border-border text-text-muted hover:border-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
-                                                onClick={(e) => { e.stopPropagation(); setDeletingIsbn(ebook.ebook_isbn); setConfirmingIsbn(null); }} title={isShared?.(ebook) ? 'Remover partilha' : 'Eliminar registo'}>
+                                                onClick={(e) => { e.stopPropagation(); row.askDelete(ebook.ebook_isbn); }} title={deleteLabels(!!isShared?.(ebook)).ask}>
                                                 <Trash2 size={14} />
                                             </button>
                                         ) : null
                                     )}
-                                    {confirmingIsbn !== ebook.ebook_isbn && deletingIsbn !== ebook.ebook_isbn && (onOpenMetadata || onOpenCover || (onShare && !isShared?.(ebook))) && (
+                                    {row.idle(ebook.ebook_isbn) && (onOpenMetadata || onOpenCover || (onShare && !isShared?.(ebook))) && (
                                         <OverflowMenu
                                             iconSize={14}
                                             direction="up"
                                             buttonClassName="flex-1 flex items-center justify-center p-2 rounded border border-border text-text-muted hover:border-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
-                                            items={[
-                                                ...(onOpenMetadata ? [{ icon: <Settings size={13} />, label: 'Edição da Informação', onClick: (e: React.MouseEvent) => onOpenMetadata(e, ebook) }] : []),
-                                                ...(onOpenCover ? [{ icon: <ImageIcon size={13} />, label: 'Capa', onClick: (e: React.MouseEvent) => onOpenCover(e, ebook) }] : []),
-                                                ...(onShare && !isShared?.(ebook) ? [{ icon: <Share2 size={13} />, label: 'Partilha', onClick: (e: React.MouseEvent) => onShare(e, ebook) }] : []),
-                                            ]}
+                                            items={ebookMenuItems(ebook, !!isShared?.(ebook), { onOpenMetadata, onOpenCover, onShare })}
                                         />
                                     )}
                                 </>
@@ -137,9 +132,9 @@ export const EbookGrid: React.FC<EbookGridProps> = ({
                                     <button
                                         className="flex-1 flex items-center justify-center p-2 rounded border border-border text-text-muted hover:border-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all disabled:opacity-40"
                                         title="Descarregar EPUB"
-                                        disabled={downloadingIsbn === ebook.ebook_isbn}
-                                        onClick={async (e) => { e.stopPropagation(); setDownloadingIsbn(ebook.ebook_isbn); await onDownloadEpub(ebook.ebook_isbn); setDownloadingIsbn(null); }}>
-                                        {downloadingIsbn === ebook.ebook_isbn ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                        disabled={row.downloading(ebook.ebook_isbn)}
+                                        onClick={async (e) => { e.stopPropagation(); await row.download(ebook.ebook_isbn, onDownloadEpub); }}>
+                                        {row.downloading(ebook.ebook_isbn) ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                                     </button>
                                     {onReopen && (
                                         <button className="flex-1 flex items-center justify-center p-2 rounded border border-border text-text-muted hover:border-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"

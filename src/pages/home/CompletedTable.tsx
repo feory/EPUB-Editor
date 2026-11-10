@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEbookRow } from './ebookRow';
 import { ImageIcon, Download, Loader2, RotateCcw, Info } from 'lucide-react';
 import type { Ebook } from '../../api/ebooks-api';
 import { ModalCloseButton } from '../../components/ModalCloseButton';
@@ -16,7 +17,7 @@ interface CompletedTableProps {
 export const CompletedTable: React.FC<CompletedTableProps> = ({
     ebooks, searchSlot, onReopen, coverVersions, onDownloadEpub, ownerLabel,
 }) => {
-    const [downloadingIsbn, setDownloadingIsbn] = useState<string | null>(null);
+    const row = useEbookRow();
     const [viewingEbook, setViewingEbook] = useState<Ebook | null>(null);
     useBodyScrollLock(!!viewingEbook);
     if (ebooks.length === 0) {
@@ -68,9 +69,9 @@ export const CompletedTable: React.FC<CompletedTableProps> = ({
                                     <button
                                         className="p-2 rounded-lg border border-border text-text-muted hover:border-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all disabled:opacity-40"
                                         title="Descarregar EPUB"
-                                        disabled={downloadingIsbn === ebook.ebook_isbn}
-                                        onClick={async (e) => { e.stopPropagation(); setDownloadingIsbn(ebook.ebook_isbn); await onDownloadEpub(ebook.ebook_isbn); setDownloadingIsbn(null); }}>
-                                        {downloadingIsbn === ebook.ebook_isbn ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                                        disabled={row.downloading(ebook.ebook_isbn)}
+                                        onClick={async (e) => { e.stopPropagation(); await row.download(ebook.ebook_isbn, onDownloadEpub); }}>
+                                        {row.downloading(ebook.ebook_isbn) ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
                                     </button>
                                     <button
                                         className="p-2 rounded-lg border border-border text-text-muted hover:border-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
