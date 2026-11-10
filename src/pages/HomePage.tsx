@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Loader2, Search, X, Trash2 } from 'lucide-react';
+import { BusyOverlay } from '../components/BusyOverlay';
 import { useAuth } from '../context/AuthContext';
 import { ebooksApi } from '../api/ebooks-api';
 import type { Ebook } from '../api/ebooks-api';
@@ -529,6 +530,10 @@ export function HomePage() {
                     onClose={() => setShowAccount(false)}
                     onSaved={(u) => { setUser(u); queryClient.invalidateQueries(); setShowAccount(false); showNotification('success', 'Conta atualizada.', 3000); }}
                 />
+            )}
+
+            {(importEpubMutation.isPending || scanningEpub || indesignBusy) && (
+                <BusyOverlay fixed message="A importar e processar o EPUB…" detail="Não feches esta página até terminar." />
             )}
 
             <button

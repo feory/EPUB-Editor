@@ -307,6 +307,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
             importDocumentMutation.isPending ||
             isSaving ||
             exportHook.isPreviewing,
+        isImporting: importPdfMutation.isPending || importDocumentMutation.isPending,
         isLoadingChapter: contentState.isLoadingChapter,
         isLargeBook: chapterSync.isLargeBook,
         lastSaved,
