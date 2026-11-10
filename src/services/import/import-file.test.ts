@@ -60,3 +60,13 @@ test('importFile: EPUB mínimo → HTML estruturado com metadados, sem Ficha Té
     expect(r.html).not.toContain('Ficha Técnica');
     expect(r.metadata?.title).toBe('Livro');
 });
+
+test('finalizeImport: com page-list, o número de página da abertura do capítulo sobe para uma <div> a seguir ao limite', async () => {
+    const PB = '<span class="pagebreak" data-page="17"></span>';
+    const html = `<h1>A</h1><p><strong>${PB}ABERTO, Romance</strong> – V. Composição</p><p>AÇÃO</p>`;
+    Object.assign(globalThis, { NodeFilter: { SHOW_ELEMENT: 1, SHOW_TEXT: 4, SHOW_ALL: 0xffffffff } });
+    const r = await finalizeImport({ format: 'idml', html, images: new Map(), pageBreaks: { inserted: 1, total: 1 } }, { options: OPTIONS }, noUpload);
+    expect(r.html).toMatch(/<p class="chapter-break-h1"[^>]*>[^<]*<\/p>\s*<div>\s*<span class="pagebreak" data-page="17"><\/span>(&nbsp;|\u00a0)<\/div>\s*<h1>A<\/h1>/);
+    const sem = await finalizeImport({ format: 'idml', html, images: new Map() }, { options: OPTIONS }, noUpload);
+    expect(sem.html).not.toContain('<div>'); // sem page-list nada se mexe
+});

@@ -74,10 +74,13 @@ export async function finalizeImport(
     extracted: ExtractedDocument & { format: ImportFormat }, decisions: ImportDecisions, ports: ImportPorts,
 ): Promise<ImportResult> {
     const uploaded = await uploadExtractedImages(ports.isbn, extracted.html, extracted.images, ports.uploadImages);
-    const html = isStructured(extracted.format)
+    let html = isStructured(extracted.format)
         ? cleanEditorHtml(uploaded)
         : prependFichaTecnica(applyImportOptions(cleanEditorHtml(uploaded), decisions.options ?? NO_OPTIONS));
     const { metadata, cover, printPdf, pageBreaks, figuresPlaced } = extracted;
+    // Os marcadores de capítulo só existem depois da limpeza (insertChapterMarkers): é só agora que um número de página que
+    // cai na abertura de um capítulo pode subir para junto do limite. (pdfjs só carrega se o import trouxe page-list.)
+    if (pageBreaks) html = (await import('../page-list/page-list')).movePageBreaksToChapterStart(html);
     return { html, metadata, cover, printPdf, pageBreaks, figuresPlaced };
 }
 
