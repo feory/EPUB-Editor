@@ -212,6 +212,7 @@ export const server = Bun.serve({
           if (sub === 'content'              && method === "POST") return content.saveContent(req, isbn);
           if (sub === 'content'              && method === "GET")  return content.getContent(req, isbn, url);
           if (sub === 'history'              && method === "GET")  return content.getHistory(req, isbn);
+          if (sub === 'history-style'        && method === "POST") return content.saveStyleSnapshot(req, isbn);
           if (sub === 'cover'                && method === "GET")  return epub.getCover(isbn);
           if (sub === 'cover'                && method === "POST") return epub.saveCover(req, isbn);
           if (sub === 'cover'                && method === "DELETE") return epub.deleteCover(isbn);
@@ -236,6 +237,7 @@ export const server = Bun.serve({
           return epub.getEpubFile(isbn, parts[5]);
         }
 
+        if (parts.length === 6 && parts[4] === 'history-style' && method === "GET") return content.getStyleSnapshot(isbn, parts[5]);
         if (parts.length === 6 && parts[4] === 'history' && method === "PUT") {
           return content.setHistoryLabel(req, isbn, parts[5]);
         }

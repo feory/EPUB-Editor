@@ -107,3 +107,31 @@ export async function setHistoryLabel(req, isbn, filename) {
   const { label } = await req.json();
   return Response.json({ label: setLabel(isbn, filename, label) }, { headers: corsHeaders });
 }
+
+// ---- Versões do CSS ----
+// O histórico do livro guarda o HTML; os estilos (style.css) não tinham. Antes de a IA alterar o CSS, o cliente guarda aqui o
+// CSS anterior (`style_<data>.css`, sempre uma versão nova e com etiqueta própria, por isso protegida da limpeza automática)
+// para se poder repor. Fica na mesma pasta `history/` e acompanha o rename do ISBN.
+const MAX_STYLE_SIZE = 5_000_000;
+
+// POST /api/ebooks/:isbn/history-style  { css, label } → { filename }
+export async function saveStyleSnapshot(req, isbn) {
+  const { css, label } = await req.json();
+  if (typeof css !== 'string') return Response.json({ error: 'Invalid css' }, { status: 400, headers: corsHeaders });
+  if (css.length > MAX_STYLE_SIZE) return Response.json({ error: 'CSS too large' }, { status: 413, headers: corsHeaders });
+  const historyDir = join(DATA_DIR, isbn, 'history');
+  if (!existsSync(historyDir)) mkdirSync(historyDir, { recursive: true });
+  const filename = `style_${new Date().toISOString().replace(/[:.]/g, '-')}.css`;
+  await Bun.write(join(historyDir, filename), css);
+  if (typeof label === 'string' && label.trim()) setLabel(isbn, filename, label);
+  return Response.json({ filename }, { headers: corsHeaders });
+}
+
+// GET /api/ebooks/:isbn/history-style/:filename → { css }
+export async function getStyleSnapshot(isbn, filename) {
+  if (!safeSegment(filename) || !/^style_[\w-]+\.css$/.test(filename))
+    return Response.json({ error: 'Invalid filename' }, { status: 400, headers: corsHeaders });
+  const file = Bun.file(join(DATA_DIR, isbn, 'history', filename));
+  if (!(await file.exists())) return Response.json({ error: 'File not found' }, { status: 404, headers: corsHeaders });
+  return Response.json({ css: await file.text() }, { headers: corsHeaders });
+}

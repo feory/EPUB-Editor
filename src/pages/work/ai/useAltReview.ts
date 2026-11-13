@@ -27,7 +27,7 @@ export function useAltReview({ isbn, language, getParts, applyPlan }: {
     isbn: string | undefined;
     language: string;
     getParts: () => string[];
-    applyPlan: (plan: AiPlanInput, request: string) => Promise<void>;
+    applyPlan: (plan: AiPlanInput, request: string) => Promise<unknown>;
 }) {
     const [phase, setPhase] = useState<Phase>('idle');
     const [items, setItems] = useState<AltItem[]>([]);

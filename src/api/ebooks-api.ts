@@ -250,6 +250,9 @@ export const ebooksApi = {
 
     // History
     setHistoryLabel: (isbn: string, filename: string, label: string) => apiClient.put<{ label: string }>(`/ebooks/${isbn}/history/${filename}`, { label }),
+    // Versões do CSS (antes de a IA o alterar): ver server/routes/content.js
+    saveStyleSnapshot: (isbn: string, css: string, label: string) => apiClient.post<{ filename: string }>(`/ebooks/${isbn}/history-style`, { css, label }),
+    getStyleSnapshot: (isbn: string, filename: string) => apiClient.get<{ css: string }>(`/ebooks/${isbn}/history-style/${filename}`),
     getHistory: (isbn: string) => apiClient.get<{ history: HistoryFile[] }>(`/ebooks/${isbn}/history`),
 
     // Validation

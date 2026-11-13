@@ -131,3 +131,6 @@ export function resolvePlan(parts: string[], css: string, plan: AiPlanInput): { 
     const errors = [...run.errors, ...styled.errors];
     return errors.length ? { html: parts.join(''), css, errors } : { html: run.html, css: styled.css, errors };
 }
+
+/** Os ficheiros do histórico guardados ao aplicar um plano (para o poder repor): o HTML só se mudou, o CSS só se mudou. */
+export interface AiSnapshots { htmlFile?: string; cssFile?: string }

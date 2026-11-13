@@ -10,7 +10,7 @@ export function useAiAssistant({ isbn, getParts, getCss, applyProposal }: {
     isbn: string | undefined;
     getParts: () => string[];
     getCss: () => string;
-    applyProposal: (proposal: NonNullable<AgentResult['proposal']>, request: string) => Promise<void>;
+    applyProposal: (proposal: NonNullable<AgentResult['proposal']>, request: string) => Promise<unknown>;
 }) {
     const [lines, setLines] = useState<AiLine[]>([]);
     const [proposal, setProposal] = useState<AgentResult['proposal']>(null);
