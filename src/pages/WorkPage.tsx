@@ -30,6 +30,8 @@ import { TextSidebar } from './work/components/TextSidebar';
 import { AiSidebar } from './work/components/AiSidebar';
 import { useAiAssistant } from './work/ai/useAiAssistant';
 import { useAltReview } from './work/ai/useAltReview';
+import { useAiChanges } from './work/ai/useAiChanges';
+import { summarizeProposal } from './work/ai/aiAgent';
 import type { BlockInfo } from './work/editor/blockEditing';
 import { useBookCss } from './work/hooks/useBookCss';
 import { useStyleCatalogue } from './work/hooks/useStyleCatalogue';
@@ -422,8 +424,13 @@ export function WorkPage() {
   const { editRule: handleTextStyle, editCss, createStyle, saveStyle, deleteStyle } = useBookCss(isbn);
   const styles = useStyleCatalogue({ createStyle, saveStyle, deleteStyle }, { renameStyle: work.handleRenameStyle, removeStyle: work.handleRemoveStyle });
   const aiCss = { get: getCurrentCss, set: (next: string) => editCss(() => next) };
-  const ai = useAiAssistant({ isbn, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: (p, request) => work.handleApplyAiPlan(p, request, aiCss) });
-  const altReview = useAltReview({ isbn, language: work.language, getParts: work.getBookParts, applyPlan: (plan, request) => work.handleApplyAiPlan(plan, request, aiCss) });
+  const ai = useAiAssistant({ isbn, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: (p, request) => work.handleApplyAiPlan(p, request, aiCss, summarizeProposal(p)) });
+  const altReview = useAltReview({ isbn, language: work.language, getParts: work.getBookParts, applyPlan: (plan, request, summary) => work.handleApplyAiPlan(plan, request, aiCss, summary) });
+  const aiChanges = useAiChanges({ isbn, enabled: sidebars.showAiSidebar, revert: async (change) => {
+    const ok = await work.handleRevertAiChange(change, aiCss);
+    if (ok) ai.noteReverted(change.request);
+    return ok;
+  } });
 
   const anySidebarOpen = panels.anyOpen;
 
@@ -638,7 +645,7 @@ export function WorkPage() {
       )}
 
       {sidebars.showAiSidebar && (
-        <AiSidebar ai={ai} alt={altReview} isbn={isbn ?? ''} readOnly={work.readOnly} onClose={() => sidebars.setShowAiSidebar(false)} width={panelWidth} onResize={handlePanelResize} />
+        <AiSidebar ai={ai} alt={altReview} changes={aiChanges} isbn={isbn ?? ''} readOnly={work.readOnly} onClose={() => sidebars.setShowAiSidebar(false)} width={panelWidth} onResize={handlePanelResize} />
       )}
 
       {sidebars.showTextSidebar && (

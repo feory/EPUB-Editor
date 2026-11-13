@@ -106,3 +106,14 @@ export function renameProposalStyle(p: Proposal, oldCls: string, newName: string
     if (run.errors.length) return { error: run.errors.join('; ') };
     return { proposal: { ...p, styles, rules, ops, reports: run.reports, opResults: run.opResults } };
 }
+
+/** O resumo legível do que uma proposta fez, para o registo das alterações (até 30 linhas de 300 caracteres). */
+export function summarizeProposal(p: Proposal): string[] {
+    const lines = [
+        ...p.reports.flatMap((r, i) => (r.changed > 0 ? [`Regra ${i + 1}: ${r.changed} ${r.changed === 1 ? 'bloco' : 'blocos'} em ${r.chapters.length} ${r.chapters.length === 1 ? 'capítulo' : 'capítulos'}`] : [])),
+        ...p.opResults.filter((o) => o.changed).map((o) => `${o.label}: ${o.summary}`),
+        ...p.styles.map((s) => `Estilo novo .${s.cls} { ${s.body} }`),
+        ...p.edits.map((e) => `Estilo ${e.selector}: ${e.before || '(sem regra)'} → ${e.after || '(vazio)'}`),
+    ];
+    return lines.slice(0, 30).map((l) => l.slice(0, 300));
+}

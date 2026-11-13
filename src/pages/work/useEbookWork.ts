@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'r
 import type { RefObject } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { ebooksApi } from '../../api/ebooks-api';
+import { ebooksApi, type AiChange } from '../../api/ebooks-api';
 import { useNotification } from '../../context/NotificationContext';
 import { useStyles } from '../../context/StyleContext';
 import type { ImageSettings } from '../../components/MarginPreview';
@@ -19,7 +19,7 @@ import type { PageAnchor } from '../../services/page-list/page-list';
 import { createSaver } from './saver';
 import * as bookEdit from './bookEdit';
 import type { Book, BookEdit } from './bookEdit';
-import { resolvePlan, type AiPlanInput, type AiSnapshots } from './ai/aiPlan';
+import { resolvePlan, type AiPlanInput, type AiSnapshots, type AiCssSide } from './ai/aiPlan';
 import type { ChapterActions } from './chapterActions';
 import { contentReducer, initialContentState } from './hooks/contentReducer';
 import { useChapterSync } from './hooks/useChapterSync';
@@ -275,7 +275,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // CSS (style_…, com a mesma etiqueta). Se gravar qualquer uma falhar, nem o HTML nem o CSS são tocados. Devolve os nomes dos
     // ficheiros guardados (para o registo das alterações poder repô-los).
     const getBookParts = useCallback(() => getBook().parts, [getBook]);
-    const handleApplyAiPlan = useCallback(async (plan: AiPlanInput, request: string, css: { get(): string; set(next: string): void }): Promise<AiSnapshots> => {
+    const handleApplyAiPlan = useCallback(async (plan: AiPlanInput, request: string, css: AiCssSide, summary: string[] = []): Promise<AiSnapshots> => {
         if (!isbn || readOnly) return {};
         const book = getBook();
         const current = css.get();
@@ -294,8 +294,38 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         // Daqui para baixo é tudo síncrono: o CSS e o HTML entram juntos.
         if (cssChanged) css.set(result.css);
         if (htmlChanged) applyEdit({ html: result.html, commit: 'keep', notice: { type: 'success', text: 'Alterações da IA aplicadas!' } });
+        // Registo para poder reverter. Já está aplicado: se falhar só se perde o registo (as versões ficam no histórico).
+        ebooksApi.addAiChange(isbn, { request, lines: summary, ...snapshots }).then(() => queryClient.invalidateQueries({ queryKey: ['ai-changes', isbn] }))
+            .catch((e) => console.error('[ai-changes] registo falhou:', e));
         return snapshots;
-    }, [isbn, readOnly, getBook, applyEdit, showNotification]);
+    }, [isbn, readOnly, getBook, applyEdit, showNotification, queryClient]);
+
+    // Reverter uma alteração da IA: repõe o HTML e/ou o CSS de antes dela. Guarda primeiro o estado atual (reverter também se
+    // desfaz) e lê tudo o que vai repor ANTES de tocar em nada. Repõe o LIVRO inteiro: o que se editou depois perde-se (fica no histórico).
+    const handleRevertAiChange = useCallback(async (change: AiChange, css: AiCssSide): Promise<boolean> => {
+        if (!isbn || readOnly) return false;
+        try {
+            const label = `Antes de reverter: ${change.request}`.slice(0, 80);
+            if (change.htmlFile) {
+                const { data } = await ebooksApi.saveContent(isbn, await compressHtmlAsync(getBook().html));
+                if (data?.filename && data.filename !== change.htmlFile) await ebooksApi.setHistoryLabel(isbn, data.filename, label);
+            }
+            if (change.cssFile) await ebooksApi.saveStyleSnapshot(isbn, css.get(), label);
+            const html = change.htmlFile ? decompressHtml((await ebooksApi.getContent(isbn, change.htmlFile)).data.content) : null;
+            const cssText = change.cssFile ? (await ebooksApi.getStyleSnapshot(isbn, change.cssFile)).data.css : null;
+            if (cssText !== null) css.set(cssText);
+            if (html !== null) applyEdit({ html, commit: 'reset', notice: { type: 'success', text: 'Alteração da IA revertida!' } });
+            else showNotification('success', 'Alteração da IA revertida!');
+            await ebooksApi.markAiChangeReverted(isbn, change.id);
+            queryClient.invalidateQueries({ queryKey: ['ai-changes', isbn] });
+            return true;
+        } catch (e) {
+            console.error('[ai-changes] reverter falhou:', e);
+            showNotification('error', 'Não foi possível reverter.');
+            return false;
+        }
+    }, [isbn, readOnly, getBook, applyEdit, showNotification, queryClient]);
+
     const handleFixLinks = useCallback(() => {
         const { edit, report } = bookEdit.fixBookLinks(getBook());
         validation.setLinkValidation(report);
@@ -408,6 +438,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         handleReplaceInWholeBook,
         getBookParts,
         handleApplyAiPlan,
+        handleRevertAiChange,
 
         handleImportPdf: useCallback(
             (file: File, h: number, f: number, settings: ImageSettings, options: ImportOptions) =>

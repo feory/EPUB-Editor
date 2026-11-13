@@ -132,5 +132,8 @@ export function resolvePlan(parts: string[], css: string, plan: AiPlanInput): { 
     return errors.length ? { html: parts.join(''), css, errors } : { html: run.html, css: styled.css, errors };
 }
 
+/** Acesso ao CSS do livro que o plano precisa: ler o atual e gravar o novo. */
+export interface AiCssSide { get(): string; set(next: string): void }
+
 /** Os ficheiros do histórico guardados ao aplicar um plano (para o poder repor): o HTML só se mudou, o CSS só se mudou. */
 export interface AiSnapshots { htmlFile?: string; cssFile?: string }

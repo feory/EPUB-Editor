@@ -27,7 +27,7 @@ export function useAltReview({ isbn, language, getParts, applyPlan }: {
     isbn: string | undefined;
     language: string;
     getParts: () => string[];
-    applyPlan: (plan: AiPlanInput, request: string) => Promise<unknown>;
+    applyPlan: (plan: AiPlanInput, request: string, summary?: string[]) => Promise<unknown>;
 }) {
     const [phase, setPhase] = useState<Phase>('idle');
     const [items, setItems] = useState<AltItem[]>([]);
@@ -91,7 +91,8 @@ export function useAltReview({ isbn, language, getParts, applyPlan }: {
         setPhase('saving'); setMessage('');
         const decisions = dirty.map(({ id, draftAlt, draftDecorative }) => ({ id, alt: draftDecorative ? '' : draftAlt.trim(), decorative: draftDecorative, overwrite: true }));
         try {
-            await applyPlan({ rules: [], ops: [{ type: 'set_image_alts', items: decisions }], styles: [], edits: [] }, 'Texto alternativo das imagens');
+            await applyPlan({ rules: [], ops: [{ type: 'set_image_alts', items: decisions }], styles: [], edits: [] }, 'Texto alternativo das imagens',
+                [`Texto alternativo: ${decisions.length} ${decisions.length === 1 ? 'imagem' : 'imagens'}`]);
             const saved = new Set(decisions.map((d) => d.id));
             setItems((cur) => cur.map((it) => saved.has(it.id) ? { ...it, alt: it.draftDecorative ? '' : it.draftAlt.trim(), decorative: it.draftDecorative, draftAlt: it.draftDecorative ? '' : it.draftAlt.trim(), mixed: false } : it));
             setMessage(`${decisions.length} ${decisions.length === 1 ? 'imagem guardada' : 'imagens guardadas'}.`);

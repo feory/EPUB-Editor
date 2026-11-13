@@ -1,6 +1,19 @@
 import apiClient, { getAccessToken, clientId } from './client';
 import type { GrammarMatch } from '../pages/work/hooks/useEbookGrammar';
 
+/** Uma alteração da IA registada no livro; `htmlFile`/`cssFile` = o estado ANTERIOR guardado no histórico. */
+export interface AiChange {
+    id: string;
+    at: string;
+    by: string;
+    request: string;
+    lines: string[];
+    htmlFile?: string;
+    cssFile?: string;
+    revertedAt?: string;
+    revertedBy?: string;
+}
+
 export interface PresenceStatus {
     holderId: string | null;
     holderEmail: string | null;
@@ -250,6 +263,10 @@ export const ebooksApi = {
 
     // History
     setHistoryLabel: (isbn: string, filename: string, label: string) => apiClient.put<{ label: string }>(`/ebooks/${isbn}/history/${filename}`, { label }),
+    // Registo das alterações da IA (com Reverter): ver server/ai-changes.js
+    listAiChanges: (isbn: string) => apiClient.get<{ changes: AiChange[] }>(`/ebooks/${isbn}/ai-changes`).then((r) => r.data.changes),
+    addAiChange: (isbn: string, body: { request: string; lines: string[]; htmlFile?: string; cssFile?: string }) => apiClient.post<{ change: AiChange }>(`/ebooks/${isbn}/ai-changes`, body),
+    markAiChangeReverted: (isbn: string, id: string) => apiClient.put<{ change: AiChange }>(`/ebooks/${isbn}/ai-changes/${id}`),
     // Versões do CSS (antes de a IA o alterar): ver server/routes/content.js
     saveStyleSnapshot: (isbn: string, css: string, label: string) => apiClient.post<{ filename: string }>(`/ebooks/${isbn}/history-style`, { css, label }),
     getStyleSnapshot: (isbn: string, filename: string) => apiClient.get<{ css: string }>(`/ebooks/${isbn}/history-style/${filename}`),

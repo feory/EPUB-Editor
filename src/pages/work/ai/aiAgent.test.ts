@@ -187,3 +187,17 @@ test('mudar o nome de um estilo novo: troca a classe no estilo, nas regras e nas
     expect('error' in renameProposalStyle(p, 'c-nao-esta', 'x', bookIn)).toBe(true);
     expect(renameProposalStyle(p, 'c-destaque-forte', 'destaque forte', bookIn)).toEqual({ proposal: p }); // mesmo nome = nada a fazer
 });
+
+test('resumo para o registo: regras com efeito, operações, estilos novos e estilos alterados (antes → depois)', async () => {
+    const { summarizeProposal } = await import('./aiAgent');
+    const css = '/* === ESTILOS DE PARÁGRAFO === */\n    .p-quote { font-size: 0.85em !important; }\n';
+    const noop: BookRule = { select: { tag: ['p'], hasClass: ['nao-existe'] }, action: { type: 'addClass', value: 'p-small' } };
+    const s = script(tool('1', 'preview_rules', { rules: [rule, noop], operations: [{ type: 'drop_caps' }], styles: [{ name: 'Nota', props: { 'font-size': '0.9em' } }], style_edits: [{ cls: 'p-quote', props: { 'font-size': '0.7em' } }] }), text('ok'));
+    const r = await runAgent({ messages: user, send: s.send, book: { ...book, css } });
+    const lines = summarizeProposal(r.proposal!);
+    expect(lines).toContain('Regra 1: 1 bloco em 1 capítulo');
+    expect(lines.some((l) => l.startsWith('Regra 2'))).toBe(false); // sem efeito não entra
+    expect(lines.some((l) => l.startsWith('Capitulares:'))).toBe(true);
+    expect(lines).toContain('Estilo novo .nota { font-size: 0.9em; }');
+    expect(lines).toContain('Estilo .p-quote: font-size: 0.85em !important; → font-size: 0.7em !important;');
+});

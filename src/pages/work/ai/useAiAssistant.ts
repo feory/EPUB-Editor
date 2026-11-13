@@ -59,11 +59,16 @@ export function useAiAssistant({ isbn, getParts, getCss, applyProposal }: {
         return null;
     }, [proposal, getParts, getCss]);
 
+    /** Depois de o utilizador reverter uma alteração no registo, o modelo tem de saber (senão julga que ainda está aplicada). */
+    const noteReverted = useCallback((reverted: string) => {
+        history.current = [...history.current, { role: 'user', content: `[Sistema: o utilizador REVERTEU a alteração "${reverted}". O livro e os estilos voltaram ao estado anterior a ela.]` }];
+    }, []);
+
     const discard = useCallback(() => {
         if (proposal) history.current = [...history.current, discardedNote()];
         setProposal(null);
     }, [proposal]);
     const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setError(''); }, []);
 
-    return { lines, proposal, busy, error, send, apply, discard, renameStyle, reset };
+    return { lines, proposal, busy, error, send, apply, discard, renameStyle, noteReverted, reset };
 }

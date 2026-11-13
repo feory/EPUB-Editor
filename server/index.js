@@ -21,6 +21,7 @@ import * as validation from './routes/validation.js';
 import * as logs from './routes/logs.js';
 import * as ai from './routes/ai.js';
 import * as aiAdmin from './routes/ai-admin.js';
+import * as aiChanges from './routes/ai-changes.js';
 import * as presence from './presence.js';
 import { startBackupScheduler, stopBackupScheduler } from './backup.js';
 import { startScheduledCleanup, stopScheduledCleanup } from './scheduled-cleanup.js';
@@ -223,6 +224,8 @@ export const server = Bun.serve({
           if (sub === 'validate'             && method === "POST") return validation.validate(req);
           if (sub === 'ai'                   && method === "POST") return ai.chat(req, user);
           if (sub === 'ai-alt'               && method === "POST") return ai.altText(req, isbn, user);
+          if (sub === 'ai-changes'           && method === "GET")  return aiChanges.list(isbn);
+          if (sub === 'ai-changes'           && method === "POST") return aiChanges.add(req, isbn, user);
           if (sub === 'validate-accessibility' && method === "POST") return validation.validateAccessibility(req, isbn);
           if (sub === 'epub'                 && method === "POST") return epub.saveEpub(req, isbn);
           if (sub === 'epub'                 && method === "GET")  return epub.getEpub(isbn);
@@ -237,6 +240,7 @@ export const server = Bun.serve({
           return epub.getEpubFile(isbn, parts[5]);
         }
 
+        if (parts.length === 6 && parts[4] === 'ai-changes' && method === "PUT") return aiChanges.revert(isbn, parts[5], user);
         if (parts.length === 6 && parts[4] === 'history-style' && method === "GET") return content.getStyleSnapshot(isbn, parts[5]);
         if (parts.length === 6 && parts[4] === 'history' && method === "PUT") {
           return content.setHistoryLabel(req, isbn, parts[5]);
