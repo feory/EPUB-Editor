@@ -4,6 +4,8 @@ import { Loader2 } from 'lucide-react';
 import { aiAdminApi, type UsageRow } from '../../api/ai-admin-api';
 
 const RANGES = [7, 30, 90] as const;
+const GROUPS = [['user', 'Utilizador'], ['kind', 'Tipo'], ['model', 'Modelo']] as const;
+type Group = typeof GROUPS[number][0];
 const KIND_LABEL: Record<string, string> = { chat: 'Conversa', alt: 'Texto alternativo' };
 const nf = new Intl.NumberFormat('pt-PT');
 const compact = (n: number) => (n >= 1e6 ? `${(n / 1e6).toLocaleString('pt-PT', { maximumFractionDigits: 2 })} M` : n >= 1e4 ? `${(n / 1e3).toLocaleString('pt-PT', { maximumFractionDigits: 1 })} k` : nf.format(n));
@@ -17,15 +19,14 @@ const Tile = ({ label, value, hint }: { label: string; value: string; hint?: str
     </div>
 );
 
-function Table({ title, rows }: { title: string; rows: (UsageRow & { name: string })[] }) {
+function Table({ label, rows }: { label: string; rows: (UsageRow & { name: string })[] }) {
     if (rows.length === 0) return null;
     return (
         <div>
-            <h3 className="text-sm font-semibold text-slate-700 mb-2">{title}</h3>
             <div className="overflow-x-auto rounded-xl border border-border">
                 <table className="w-full text-xs">
                     <thead className="bg-slate-50 text-text-muted"><tr>
-                        <th className="text-left font-medium px-3 py-2"></th><th className="text-right font-medium px-3 py-2">Chamadas</th>
+                        <th className="text-left font-medium px-3 py-2">{label}</th><th className="text-right font-medium px-3 py-2">Chamadas</th>
                         <th className="text-right font-medium px-3 py-2">Entrada</th><th className="text-right font-medium px-3 py-2">Saída</th><th className="text-right font-medium px-3 py-2">Custo</th>
                     </tr></thead>
                     <tbody className="divide-y divide-border">
@@ -48,6 +49,7 @@ function Table({ title, rows }: { title: string; rows: (UsageRow & { name: strin
 /** Painel → IA: o consumo REAL (tokens e custo que o fornecedor devolveu em cada chamada), por dia, utilizador, tipo e modelo. */
 export function AiUsage() {
     const [days, setDays] = useState<number>(30);
+    const [group, setGroup] = useState<Group>('user');
     const { data, isLoading, isError } = useQuery({ queryKey: ['ai-usage', days], queryFn: () => aiAdminApi.getUsage(days), staleTime: 30_000 });
     const max = Math.max(1, ...(data?.byDay.map((d) => d.input + d.output) ?? [0]));
     const t = data?.totals;
@@ -56,8 +58,7 @@ export function AiUsage() {
         <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h2 className="text-base font-semibold text-slate-700">Consumo</h2>
-                    <p className="text-xs text-text-muted mt-1">Tokens e custo devolvidos pelo fornecedor em cada chamada. Não se guarda texto nenhum.</p>
+                    <h2 className="text-base font-semibold text-slate-700">Consumo IA</h2>
                 </div>
                 <div className="flex rounded-lg border border-border p-0.5 bg-slate-50" role="tablist" aria-label="Período">
                     {RANGES.map((r) => (
@@ -90,9 +91,18 @@ export function AiUsage() {
                             <div className="flex justify-between text-[11px] text-text-muted mt-1"><span>{data.byDay[0]?.day}</span><span>{data.byDay.at(-1)?.day}</span></div>
                         </div>
 
-                        <Table title="Por utilizador" rows={data.byUser.map((r) => ({ ...r, name: r.user }))} />
-                        <Table title="Por tipo" rows={data.byKind.map((r) => ({ ...r, name: KIND_LABEL[r.kind] ?? r.kind }))} />
-                        <Table title="Por modelo" rows={data.byModel.map((r) => ({ ...r, name: r.model }))} />
+                        <div className="flex flex-col gap-3">
+                            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                Ver por
+                                <select value={group} onChange={(e) => setGroup(e.target.value as Group)}
+                                    className="h-9 rounded-lg border border-border bg-slate-50 px-3 text-sm font-normal text-text-main outline-none focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20">
+                                    {GROUPS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                                </select>
+                            </label>
+                            <Table label={GROUPS.find(([k]) => k === group)![1]} rows={group === 'user' ? data.byUser.map((r) => ({ ...r, name: r.user }))
+                                : group === 'kind' ? data.byKind.map((r) => ({ ...r, name: KIND_LABEL[r.kind] ?? r.kind }))
+                                    : data.byModel.map((r) => ({ ...r, name: r.model }))} />
+                        </div>
                     </>
                 ))}
             </div>

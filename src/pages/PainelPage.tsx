@@ -16,6 +16,8 @@ import { ModalCloseButton } from '../components/ModalCloseButton';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { formatFileSize } from '../utils/format';
 import { AiTab } from './painel/AiTab';
+import { AiUsage } from './painel/AiUsage';
+import { aiAdminApi } from '../api/ai-admin-api';
 
 const PAGE_SIZE = 12; // par — enche as 2 colunas do BookTable sem sobrar 1 sozinho
 
@@ -343,6 +345,9 @@ function StatsTab() {
         queryKey: ['disk-usage'],
         queryFn: () => ebooksApi.getDiskUsage().then(r => r.data),
     });
+    // O consumo da IA só faz sentido com uma chave configurada (separador IA).
+    const { data: ai } = useQuery({ queryKey: ['ai-settings'], queryFn: aiAdminApi.getSettings });
+    const [section, setSection] = useState<'livros' | 'consumo'>('livros');
 
     if (isLoading || !data) {
         return (
@@ -352,13 +357,31 @@ function StatsTab() {
         );
     }
 
+    const sections = [
+        { key: 'livros' as const, label: 'Livros' },
+        ...(ai?.keyConfigured ? [{ key: 'consumo' as const, label: 'Consumo IA' }] : []),
+    ];
+    const current = sections.some((x) => x.key === section) ? section : 'livros'; // sem chave o Consumo desaparece: volta aos Livros
+
     return (
-        <div className="flex justify-center">
-            <div className="w-full max-w-xl bg-card-bg border border-border rounded-2xl overflow-hidden">
-                <div className="px-6 py-4 border-b border-border">
-                    <h2 className="text-base font-semibold text-slate-700">Divisão por categoria ({data.active.count} Livros)</h2>
-                </div>
-                <CategoryDonut totals={data.active.categoryTotals ?? {}} />
+        <div className="flex flex-col sm:flex-row gap-6">
+            {/* Separador vertical: cada secção mostra-se de forma independente */}
+            <nav className="sm:w-40 shrink-0 flex sm:flex-col gap-1 border-b sm:border-b-0 sm:border-r border-border pb-2 sm:pb-0 sm:pr-3" aria-label="Estatísticas" role="tablist" aria-orientation="vertical">
+                {sections.map((x) => (
+                    <button key={x.key} role="tab" aria-selected={current === x.key} onClick={() => setSection(x.key)}
+                        className={`text-left px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${current === x.key ? 'bg-slate-100 text-slate-800' : 'text-text-muted hover:bg-slate-50 hover:text-text-main'}`}>{x.label}</button>
+                ))}
+            </nav>
+            <div className="flex-1 min-w-0">
+                {current === 'livros' && (
+                    <div className="w-full max-w-xl bg-card-bg border border-border rounded-2xl overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border">
+                            <h2 className="text-base font-semibold text-slate-700">Divisão por categoria ({data.active.count} Livros)</h2>
+                        </div>
+                        <CategoryDonut totals={data.active.categoryTotals ?? {}} />
+                    </div>
+                )}
+                {current === 'consumo' && <div className="max-w-3xl"><AiUsage /></div>}
             </div>
         </div>
     );

@@ -4,7 +4,6 @@ import type { AxiosError } from 'axios';
 import { Loader2, Search, Eye, CheckCircle2, XCircle } from 'lucide-react';
 import { aiAdminApi, type AiModel } from '../../api/ai-admin-api';
 import { PasswordInput } from '../../components/PasswordInput';
-import { AiUsage } from './AiUsage';
 import { useNotification } from '../../context/NotificationContext';
 
 const price = (n: number) => (n === 0 ? 'grátis' : `$${n < 1 ? n.toFixed(2) : n.toFixed(1)}`);
@@ -78,7 +77,6 @@ export function AiTab() {
             <div className="bg-card-bg border border-border rounded-2xl overflow-hidden">
                 <div className="px-6 py-4 border-b border-border">
                     <h2 className="text-base font-semibold text-slate-700">Modelo</h2>
-                    <p className="text-xs text-text-muted mt-1">Só aparecem modelos que suportam ferramentas, que o assistente exige. O texto alternativo das imagens precisa de um modelo com visão (<Eye size={11} className="inline -mt-0.5" />).</p>
                 </div>
                 <div className="px-6 py-5 flex flex-col gap-3">
                     <p className="text-sm">Em uso: {settings?.model ? <><b>{currentModel?.name ?? settings.model}</b> <span className="font-mono text-xs text-text-muted">{settings.model}</span></> : <span className="text-amber-700 font-semibold">nenhum</span>}</p>
@@ -110,25 +108,18 @@ export function AiTab() {
                     )}
                     {models && models.length > shown.length && !query && <p className="text-[11px] text-text-muted">A mostrar {shown.length} de {models.length}; pesquisa para ver os outros.</p>}
                     <div className="flex flex-wrap gap-2 items-center">
-                        <button onClick={() => { if (picked) save.mutate({ model: picked }, { onSuccess: () => setPicked(null) }); }} disabled={!picked || picked === settings?.model || save.isPending}
+                        <button onClick={() => { if (picked) save.mutate({ model: picked }, { onSuccess: () => { setPicked(null); testMutation.mutate(); } }); }} disabled={!picked || picked === settings?.model || save.isPending}
                             className="px-4 h-9 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold disabled:opacity-50">Guardar modelo</button>
                         {picked && currentModel && !currentModel.vision && <span className="text-xs text-amber-700">Este modelo não aceita imagens.</span>}
                     </div>
+                    {/* Ao guardar o modelo testa-se logo a ligação (chave aceite e modelo existente; não gasta tokens) e diz-se o resultado. */}
+                    {testMutation.isPending && <p className="text-sm text-text-muted flex items-center gap-2"><Loader2 size={14} className="animate-spin" />A testar a ligação…</p>}
+                    {!testMutation.isPending && test && <p className={`text-sm inline-flex items-center gap-1.5 ${test.ok ? 'text-emerald-700' : 'text-rose-600'}`}>{test.ok ? <CheckCircle2 size={15} /> : <XCircle size={15} />}{test.message}</p>}
                 </div>
             </div>
 
-            <div className="bg-card-bg border border-border rounded-2xl px-6 py-4 flex flex-wrap items-center gap-3">
-                <button onClick={() => testMutation.mutate()} disabled={testMutation.isPending || !settings?.keyConfigured}
-                    className="px-4 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold disabled:opacity-50 inline-flex items-center gap-2">
-                    {testMutation.isPending && <Loader2 size={14} className="animate-spin" />}Testar ligação
-                </button>
-                {test && <span className={`text-sm inline-flex items-center gap-1.5 ${test.ok ? 'text-emerald-700' : 'text-rose-600'}`}>{test.ok ? <CheckCircle2 size={15} /> : <XCircle size={15} />}{test.message}</span>}
-                <span className="text-[11px] text-text-muted basis-full">O teste confirma que a chave é aceite e que o modelo existe; não gasta tokens. Usa a chave e o modelo guardados.</span>
-            </div>
                 </>
             )}
-
-            <AiUsage />
         </div>
     );
 }
