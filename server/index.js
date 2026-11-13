@@ -20,6 +20,7 @@ import * as maintenance from './routes/maintenance.js';
 import * as validation from './routes/validation.js';
 import * as logs from './routes/logs.js';
 import * as ai from './routes/ai.js';
+import * as aiAdmin from './routes/ai-admin.js';
 import * as presence from './presence.js';
 import { startBackupScheduler, stopBackupScheduler } from './backup.js';
 import { startScheduledCleanup, stopScheduledCleanup } from './scheduled-cleanup.js';
@@ -136,6 +137,14 @@ export const server = Bun.serve({
         if (parts.length === 5 && parts[4] === 'restore' && method === "POST") return trash.restoreEbook(isbn);
         if (parts.length === 4 && method === "DELETE") return trash.hardDeleteEbook(req, isbn, user);
       }
+
+      // IA (Painel → separador IA): chave e modelo da OpenRouter — admin
+      if (path === "/api/ai/settings") {
+        if (method === "GET") return aiAdmin.getSettings(user);
+        if (method === "PUT") return aiAdmin.putSettings(req, user);
+      }
+      if (path === "/api/ai/settings/test" && method === "POST") return aiAdmin.testConnection(user);
+      if (path === "/api/ai/models"        && method === "GET")  return aiAdmin.listModels(user);
 
       // Maintenance
       if (path === "/api/maintenance/cleanup-history" && method === "POST") return maintenance.cleanupHistory(user);

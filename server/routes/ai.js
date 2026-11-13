@@ -5,7 +5,8 @@
 // utilizador confirma na UI.
 import Anthropic from '@anthropic-ai/sdk';
 import { corsHeaders, safeSegment } from '../response.js';
-import { ANTHROPIC_API_KEY, AI_MODEL, OPENROUTER_API_KEY, OPENROUTER_MODEL, AI_PROVIDER } from '../config.js';
+import { ANTHROPIC_API_KEY, AI_MODEL } from '../config.js';
+import { effectiveOpenRouter } from '../ai-settings.js';
 import { openrouterBackend } from '../ai-openrouter.js';
 import { loadImageForModel } from '../ai-images.js';
 
@@ -26,6 +27,12 @@ Como trabalhar:
 2. Traduz o pedido em regras e chama preview_rules. O resultado diz quantos blocos mudariam, em que capítulos e dá exemplos antes/depois. Corrige e repete se houver erros.
 3. Quando a pré-visualização estiver certa, termina com um resumo curto do que a proposta faz (contagens reais). NUNCA digas que já aplicaste nada: o utilizador confirma e aplica na interface.
 
+Converter estilo inline em estilo de caracteres: o survey_book traz "inlineSpans" (os <span style> mais comuns, com contagem e blocos). Para "converte este span em estilo e aplica nos h1": no MESMO preview_rules, cria o estilo em "styles" ({ name, kind: "char", props: as mesmas declarações do span }) e usa a operação inline_style_to_class com cls igual à classe devolvida (c- + nome) e scope. As declarações do style da operação têm de ser as do span original, sem alterar valores.
+
+Aplicar e reverter:
+- Quando o utilizador carrega em Aplicar na interface, recebes uma mensagem "[Sistema: o utilizador APLICOU a proposta anterior…]" com o resumo do que foi gravado (regras, operações, estilos novos e os valores antes/depois dos estilos alterados). A partir daí o livro JÁ tem essas alterações. Nunca digas que "nada foi aplicado" se recebeste essa mensagem; se a proposta foi DESCARTADA, recebes outra mensagem a dizê-lo.
+- Não podes desfazer nada sozinho. Se o utilizador pede para reverter e a alteração é invertível, propõe a regra/estilo inverso (com preview_rules), usando o resumo (ex. os valores "antes" dos estilos). Se não for possível, diz que pode restaurar a versão "Antes de IA" no histórico do livro.
+
 Regras de ouro:
 - addClass só aceita classes de allowedClasses (resumo). Se o pedido precisa de um aspeto que nenhuma classe dá, propõe um estilo novo em "styles" do preview_rules (nome + propriedades) e usa a sua classe nas regras. Nunca inventes classes sem as declarar em "styles". Para mudar um estilo existente usa "style_edits" (vê o valor atual em styleRules). Para capitulares, Índice, links, substituir texto ou mexer em capítulos usa "operations".
 - Se o pedido é ambíguo (ex. "títulos", "citações", "legendas"), pergunta ao utilizador com exemplos reais do resumo antes de propor.
@@ -38,9 +45,9 @@ afterHeading?: ("h1"|"h2"|"h3")[] (o bloco de conteúdo imediatamente anterior �
 chapters?: number[] , exceptChapters?: number[] (índices do survey), deep?: boolean (por omissão só filhos diretos do corpo) }.
 action: { type: "addClass"|"removeClass", value: string } | { type: "removeStyle", props: string[] } (tira essas propriedades do atributo style inline; o resto do style fica) | { type: "retag", to: "p"|"h3"|"h4"|"h5"|"h6" } | { type: "delete" }.
 Acrescentar p-indent tira p-non-indent e vice-versa. Os blocos do survey_book trazem "inlineStyles" (os style inline mais comuns). Se o aspeto que o utilizador quer mudar vem de um style inline (ex. margin-left, text-indent), REMOVE-o com removeStyle (select com hasStyle) em vez de o sobrepor com uma classe: o inline vence as classes e o resultado ficaria igual.
-styles (opcional): [{ name: string, props: { [propriedade]: valor } }] cria estilos de parágrafo NOVOS (a classe é o nome em minúsculas com hífenes) que as regras já podem usar. Só tipografia, espaçamento e cor (font-*, line-height, letter-spacing, text-align/indent/transform, color, background-color, margin*, padding*, border-top/bottom/left/right); outra propriedade é recusada e o erro lista as permitidas. Valores simples (ex. "0.9em", "1.5em", "center", "#555"), sem funções nem url(). Falha se o estilo já existir.
+styles (opcional): [{ name: string, kind?: "paragraph"|"char", props: { [propriedade]: valor } }] cria estilos NOVOS: kind "paragraph" (por omissão) = classe do nome em minúsculas com hífenes; kind "char" = estilo de caracteres, classe "c-nome" (aplica-se a <span class>) que as regras já podem usar. Só tipografia, espaçamento e cor (font-*, line-height, letter-spacing, text-align/indent/transform, color, background, background-color, border-radius, margin*, padding*, border-top/bottom/left/right); outra propriedade é recusada e o erro lista as permitidas. Valores simples (ex. "0.9em", "1.5em", "center", "#555"), sem funções nem url(). Falha se o estilo já existir.
 style_edits (opcional): [{ cls: string, props: { [propriedade]: valor } }] ALTERA estilos que já existem: os do editor (como p-quote) e os do utilizador (cls sem o ponto, ver allowedClasses) e também os títulos "h1", "h2" e "h3" (cls = "h1"…). Sem regra no livro, os títulos têm por omissão font-size 2em (h1), 1.5em (h2) e 1.17em (h3). Valor "" remove a propriedade. O valor atual de cada estilo está em styleRules do survey_book: usa-o para pedidos relativos (ex. "10% mais pequeno"). Não se desfaz pelo histórico: só propõe edições pedidas pelo utilizador.
-operations (opcional): operações do editor, executadas por ordem DEPOIS das regras: [{ type: "drop_caps" } (capitular no 1.º parágrafo de cada capítulo), { type: "link_index" } (liga as entradas do Índice aos capítulos), { type: "fix_links" } (corrige o espaçamento dos links), { type: "replace_text", find, replace } (substitui texto em TODO o livro; find 2–200 caracteres, sem < > " & =; replace sem < >), { type: "rename_chapter", index, title }, { type: "set_chapter_level", index, level: "h1"|"h2"|"h3" }, { type: "hide_chapter", index, hidden: true|false } (esconde/mostra o capítulo no Índice do EPUB)]. index = índice do capítulo no survey_book. Não há operações para mover, eliminar ou criar capítulos: diz ao utilizador que o faça no editor de capítulos. O resultado traz "operations" com o que cada uma faria (changed=false: já estava feito).`;
+operations (opcional): operações do editor, executadas por ordem DEPOIS das regras: [{ type: "drop_caps" } (capitular no 1.º parágrafo de cada capítulo), { type: "link_index" } (liga as entradas do Índice aos capítulos), { type: "fix_links" } (corrige o espaçamento dos links), { type: "replace_text", find, replace } (substitui texto em TODO o livro; find 2–200 caracteres, sem < > " & =; replace sem < >), { type: "rename_chapter", index, title }, { type: "set_chapter_level", index, level: "h1"|"h2"|"h3" }, { type: "hide_chapter", index, hidden: true|false } (esconde/mostra o capítulo no Índice do EPUB), { type: "inline_style_to_class", style: { propriedade: valor }, cls: "c-nome", scope?: ["h1"] } (troca os <span style="…"> cujo style é EXATAMENTE esse — ordem/maiúsculas não contam — por <span class="cls">; scope limita a spans dentro dessas tags)]. index = índice do capítulo no survey_book. Não há operações para mover, eliminar ou criar capítulos: diz ao utilizador que o faça no editor de capítulos. O resultado traz "operations" com o que cada uma faria (changed=false: já estava feito).`;
 
 const TOOLS = [
   {
@@ -109,9 +116,11 @@ export const anthropicBackend = (client) => ({
   }),
 });
 
-/** `backend` injetável (testes): { create({ system, tools, messages }) → resposta no formato da Anthropic }; null = IA não configurada. */
-export function makeChat(backend) {
+/** `backend` injetável (testes): { create({ system, tools, messages }) → resposta no formato da Anthropic }, ou uma função que o devolve
+ *  (o Painel muda a chave/modelo sem reiniciar); null = IA não configurada. */
+export function makeChat(backendOrResolver) {
   return async function chat(req, user) {
+    const backend = typeof backendOrResolver === 'function' ? backendOrResolver() : backendOrResolver;
     if (!backend) return fail('IA não configurada', 503);
     const wait = overLimit(user.sub);
     if (wait) return fail('Demasiados pedidos à IA. Tenta mais tarde.', 429, { 'Retry-After': String(wait) });
@@ -159,8 +168,9 @@ function parseAlt(text) {
 }
 
 /** `loadImage` injetável (testes). Pedido: { language, images: [{ id, chapter, before, after }] }. */
-export function makeAlt(backend, loadImage = loadImageForModel) {
+export function makeAlt(backendOrResolver, loadImage = loadImageForModel) {
   return async function altText(req, isbn, user) {
+    const backend = typeof backendOrResolver === 'function' ? backendOrResolver() : backendOrResolver;
     if (!backend) return fail('IA não configurada', 503);
     const wait = overLimit(user.sub);
     if (wait) return fail('Demasiados pedidos à IA. Tenta mais tarde.', 429, { 'Retry-After': String(wait) });
@@ -199,15 +209,22 @@ export function makeAlt(backend, loadImage = loadImageForModel) {
   };
 }
 
-function defaultBackend() {
-  const provider = AI_PROVIDER ?? (ANTHROPIC_API_KEY ? 'anthropic' : 'openrouter');
-  if (provider === 'anthropic' && ANTHROPIC_API_KEY) return anthropicBackend(new Anthropic({ apiKey: ANTHROPIC_API_KEY }));
-  if (provider === 'openrouter' && OPENROUTER_API_KEY && OPENROUTER_MODEL) {
-    return openrouterBackend({ apiKey: OPENROUTER_API_KEY, model: OPENROUTER_MODEL, maxTokens: MAX_TOKENS });
+let anthropicClient = null;
+let openrouterCache = { sig: '', backend: null };
+
+/**
+ * O fornecedor em vigor, decidido a CADA pedido: a OpenRouter configurada no Painel (chave + modelo) manda; sem ela, a Anthropic
+ * se houver ANTHROPIC_API_KEY no ambiente; senão nenhum (503). Para voltar à Anthropic, remove-se a chave no Painel.
+ */
+export function resolveBackend() {
+  const { apiKey, model } = effectiveOpenRouter();
+  if (apiKey && model) {
+    const sig = `${apiKey}|${model}`;
+    if (openrouterCache.sig !== sig) openrouterCache = { sig, backend: openrouterBackend({ apiKey, model, maxTokens: MAX_TOKENS }) };
+    return openrouterCache.backend;
   }
-  return null;
+  return ANTHROPIC_API_KEY ? anthropicBackend(anthropicClient ??= new Anthropic({ apiKey: ANTHROPIC_API_KEY })) : null;
 }
 
-const backend = defaultBackend();
-export const chat = makeChat(backend);
-export const altText = makeAlt(backend);
+export const chat = makeChat(resolveBackend);
+export const altText = makeAlt(resolveBackend);

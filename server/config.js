@@ -24,8 +24,4 @@ export const B2_BUCKET_NAME     = Bun.env.B2_BUCKET_NAME;
 // IA do editor — opcional: sem chave, POST /api/ebooks/:isbn/ai responde 503 e o resto da app não é afetado.
 export const ANTHROPIC_API_KEY = Bun.env.ANTHROPIC_API_KEY;
 export const AI_MODEL          = Bun.env.AI_MODEL ?? 'claude-opus-5-5';
-// Alternativa: OpenRouter (precisa de chave E modelo, ex. OPENROUTER_MODEL=<slug do modelo>). AI_PROVIDER = 'anthropic' | 'openrouter';
-// sem ele usa a Anthropic se houver chave, senão a OpenRouter.
-export const OPENROUTER_API_KEY = Bun.env.OPENROUTER_API_KEY;
-export const OPENROUTER_MODEL   = Bun.env.OPENROUTER_MODEL;
-export const AI_PROVIDER        = Bun.env.AI_PROVIDER;
+// A OpenRouter (chave e modelo) define-se SÓ no Painel → IA (ai-settings.js); não há variáveis de ambiente para isso.

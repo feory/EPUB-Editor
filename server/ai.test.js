@@ -189,3 +189,12 @@ test('openrouter: imagem do utilizador vira image_url (data URI) e sem ferrament
   expect(calls[0]).not.toHaveProperty('tools');
   expect(calls[0].messages[1].content).toEqual([{ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,QUJD' } }, { type: 'text', text: 'ctx' }]);
 });
+
+test('o prompt de sistema explica a nota de Aplicar e como reverter', async () => {
+  const c = fakeClient(ok);
+  await makeChat(c)(post({ messages: msgs }), user());
+  const sys = c.calls[0].system[0].text;
+  expect(sys).toContain('APLICOU');
+  expect(sys).toContain('Nunca digas que "nada foi aplicado"');
+  expect(sys).toContain('Antes de IA');
+});

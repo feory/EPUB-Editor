@@ -15,6 +15,7 @@ import { Pagination } from '../components/Pagination';
 import { ModalCloseButton } from '../components/ModalCloseButton';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { formatFileSize } from '../utils/format';
+import { AiTab } from './painel/AiTab';
 
 const PAGE_SIZE = 12; // par — enche as 2 colunas do BookTable sem sobrar 1 sozinho
 
@@ -192,6 +193,7 @@ const TABS = [
     { key: 'users', label: 'Utilizadores' },
     { key: 'system', label: 'Sistema' },
     { key: 'backup', label: 'Backup' },
+    { key: 'ia', label: 'IA' },
     { key: 'logs', label: 'Logs' },
 ] as const;
 type TabKey = typeof TABS[number]['key'];
@@ -1206,6 +1208,7 @@ export function PainelPage() {
                 {tab === 'users' && <UsersTab />}
                 {tab === 'system' && <SystemTab />}
                 {tab === 'backup' && <BackupTab />}
+                {tab === 'ia' && <AiTab />}
                 {tab === 'logs' && <LogsTab />}
             </div>
         </div>
