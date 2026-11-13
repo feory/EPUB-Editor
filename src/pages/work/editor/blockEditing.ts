@@ -68,11 +68,12 @@ export function inspectBlock(ed: EditorLike): BlockInfo {
     const grid = containerTarget(ed, node, '.grid');
     const el = ed.closest(node, TEXT_BLOCK_SELECTOR);
     const isText = !!el && !/(^|\s)chapter-break/.test(el.className);
+    const isImage = node.nodeName === 'IMG'; // uma imagem selecionada conta como seleção não recolhida, mas não é texto selecionado
     return {
         box: box ? readBoxProps(box) : null,
         grid: grid ? readGridProps(grid) : null,
-        image: node.nodeName === 'IMG' ? readImageProps(node as HTMLElement) : null,
-        selection: isText && ed.selectedText ? ((sel) => (sel ? { ...readSelectionProps(sel.read), formats: sel.formats() } : null))(ed.selectedText()) : null,
+        image: isImage ? readImageProps(node as HTMLElement) : null,
+        selection: isText && !isImage && ed.selectedText ? ((sel) => (sel ? { ...readSelectionProps(sel.read), formats: sel.formats() } : null))(ed.selectedText()) : null,
         text: isText ? {
             tag: el.nodeName.toLowerCase(),
             classes: Array.from(el.classList).filter((c) => !/^(mce-|diff-)/.test(c)),

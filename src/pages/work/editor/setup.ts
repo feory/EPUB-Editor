@@ -212,17 +212,8 @@ export function createEditorSetup(deps: SetupDeps) {
             icon: 'edit-block',
             onAction: () => openPanel('box'),
         });
-        // Imagem selecionada: abre o painel (alinhamento, largura, margens, alt).
-        editor.ui.registry.addMenuItem('imageedit-item', {
-            text: 'Editar imagem',
-            icon: 'edit-image',
-            onAction: () => openPanel('box'),
-        });
-        editor.ui.registry.addContextMenu('imageedit', {
-            update: (element) => element.nodeName === 'IMG' ? ['imageedit-item'] : [],
-        });
         editor.ui.registry.addContextMenu('blockedit', {
-            update: (element) => editor.dom.getParent(element, TEXT_BLOCK_SELECTOR) && !editor.dom.getParent(element, '.box') ? ['blockedit-item'] : [],
+            update: (element) => element.nodeName !== 'IMG' && editor.dom.getParent(element, TEXT_BLOCK_SELECTOR) && !editor.dom.getParent(element, '.box') ? ['blockedit-item'] : [], // numa imagem não aparece
         });
         editor.ui.registry.addContextMenu('boxedit', {
             update: (element) => editor.dom.getParent(element, '.box') ? ['boxedit-item', 'boxvariant-item'] : [],

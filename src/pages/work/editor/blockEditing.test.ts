@@ -114,3 +114,11 @@ test('seleção: sem texto selecionado selection é null; com texto lê só os s
     applyBlockEdit(ed, { target: 'inlineFormat', format: 'italic' });
     expect(toggled).toEqual(['italic']);
 });
+
+test('imagem selecionada: não há "texto selecionado" (senão o painel saltava para os estilos de caracteres)', () => {
+    const base = fakeEditor('<p>olá <img src="x" alt="a"> fim</p>', (r) => r.querySelector('img')!);
+    const ed: EditorLike = { ...base, selectedText: () => ({ read: () => '', formats: () => [] }) }; // o TinyMCE dá seleção não recolhida numa imagem
+    const info = inspectBlock(ed);
+    expect(info.image).not.toBeNull();
+    expect(info.selection).toBeNull();
+});

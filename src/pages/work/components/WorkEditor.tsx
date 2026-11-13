@@ -1063,7 +1063,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                         toolbar_sticky_offset: 57, // altura da navbar da app (WorkToolbar), sem folga
                         // "imagecrop" à frente do default do TinyMCE (link linkchecker image editimage
                         // table spellchecker configurepermanentpen) — só acrescenta, não troca nada.
-                        contextmenu: 'imagecrop imageedit boxedit blockedit link linkchecker image editimage table spellchecker configurepermanentpen',
+                        contextmenu: 'imagecrop boxedit blockedit link linkchecker image editimage table spellchecker configurepermanentpen',
                         setup: createEditorSetup({
                             onGrammarClick, onSave, onExport,
                             startHtmlEdit: overlays.startHtmlEdit,
