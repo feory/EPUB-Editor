@@ -338,6 +338,7 @@ const TextFields: React.FC<{
 }> = ({ value, defaults, onChange, classes = [], onToggleClass }) => (
     <>
         <Row label="Cor do texto"><Color value={value.color} fallback="#000000" onChange={color => onChange({ color })} /></Row>
+        <Row label="Cor de fundo"><Color value={value.background} fallback="#ffffff" onChange={background => onChange({ background })} /></Row>
         <Row label="Alinhamento"><Select value={value.align} options={ALIGNS} onChange={align => onChange({ align })} /></Row>
         <FormatCombo value={value} classes={classes} onChange={onChange} onToggleClass={onToggleClass} />
         <Row label="Recuo da 1.ª linha"><LenInput value={value.indent} placeholder={defaults?.indent} minEm={-10} maxEm={20} stepEm={0.1} onChange={indent => onChange({ indent: indent })} /></Row>

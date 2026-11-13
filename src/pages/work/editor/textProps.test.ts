@@ -47,3 +47,10 @@ test('negrito, itálico, versaletes e maiúsculas: patch ↔ declarações', () 
     const get = (n: string) => ({ 'font-style': 'italic', 'text-transform': 'uppercase' } as Record<string, string>)[n] ?? '';
     expect(textPropsFrom(get)).toMatchObject({ fontStyle: 'italic', textTransform: 'uppercase', fontWeight: '' });
 });
+
+test('cor de fundo: lê-se da regra e escreve-se como background-color (vazio remove)', () => {
+    expect(textPropsFrom(readRule('.p-quote { background-color: #fef3c7; }', '.p-quote')).background).toBe('#fef3c7');
+    const out = applyRule(CSS, '.p-quote', textPatchToDecls({ background: '#fef3c7' }));
+    expect(out).toContain('background-color: #fef3c7;');
+    expect(applyRule(out, '.p-quote', textPatchToDecls({ background: '' }))).not.toContain('background-color');
+});

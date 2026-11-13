@@ -19,19 +19,20 @@ export interface TextProps {
     marginTop: Len | null;
     marginBottom: Len | null;
     color: string;
+    background: string;       // cor de fundo do bloco
     fontWeight: string;       // '' | bold | normal
     fontStyle: string;        // '' | italic | normal
     fontVariant: string;      // '' | small-caps | normal
     textTransform: string;    // '' | uppercase | lowercase | capitalize | none
 }
 
-export const EMPTY_TEXT: TextProps = { align: '', indent: null, marginLeft: null, fontSize: null, lineHeight: null, marginTop: null, marginBottom: null, color: '', fontWeight: '', fontStyle: '', fontVariant: '', textTransform: '' };
+export const EMPTY_TEXT: TextProps = { align: '', indent: null, marginLeft: null, fontSize: null, lineHeight: null, marginTop: null, marginBottom: null, color: '', background: '', fontWeight: '', fontStyle: '', fontVariant: '', textTransform: '' };
 
 // chave → propriedade CSS
 const FIELDS: { [K in keyof TextProps]: string } = {
     align: 'text-align', indent: 'text-indent', marginLeft: 'margin-left',
     fontSize: 'font-size', lineHeight: 'line-height',
-    marginTop: 'margin-top', marginBottom: 'margin-bottom', color: 'color',
+    marginTop: 'margin-top', marginBottom: 'margin-bottom', color: 'color', background: 'background-color',
     fontWeight: 'font-weight', fontStyle: 'font-style', fontVariant: 'font-variant', textTransform: 'text-transform',
 };
 const KEYS = Object.keys(FIELDS) as (keyof TextProps)[];
