@@ -113,3 +113,21 @@ test('resolvePlan: só estilos (sem regras) deixa o HTML igual', () => {
     expect(r.html).toBe(parts.join(''));
     expect(r.css).not.toBe(CSS);
 });
+
+test('set_image_alts: aplica num só passo, sem sobrepor alts escritos; items inválidos → erro', () => {
+    const withImgs = [ch('Um', '<p><img data-image-id="a" src="/api/ebooks/1/images/a" alt="Imagem importada"></p><p><img data-image-id="b" src="/api/ebooks/1/images/b" alt="Já escrito"></p>')];
+    const r = plan([{ type: 'set_image_alts', items: [{ id: 'a', alt: 'Um mapa' }, { id: 'b', alt: 'Outro' }] }], [], withImgs);
+    expect(r.opResults[0]).toMatchObject({ label: 'Texto alternativo', changed: true, summary: '1 imagem' });
+    expect(r.html).toContain('alt="Um mapa"');
+    expect(r.html).toContain('alt="Já escrito"');
+    const bad = [{ type: 'set_image_alts', items: [{ id: 'a', alt: '<b>x</b>' }] }, { type: 'set_image_alts', items: 'x' }] as unknown as BookOp[];
+    expect(validateOps(bad)).toHaveLength(2);
+});
+
+test('set_image_alts com overwrite: edição posterior substitui um alt já escrito', () => {
+    const written = [ch('Um', '<p><img data-image-id="a" src="/api/ebooks/1/images/a" alt="Texto antigo"></p>')];
+    const r = plan([{ type: 'set_image_alts', items: [{ id: 'a', alt: 'Texto novo', overwrite: true }] }], [], written);
+    expect(r.html).toContain('alt="Texto novo"');
+    expect(plan([{ type: 'set_image_alts', items: [{ id: 'a', alt: 'Texto novo' }] }], [], written).opResults[0].changed).toBe(false);
+    expect(validateOps([{ type: 'set_image_alts', items: [{ id: 'a', alt: 'x', overwrite: 'sim' as unknown as boolean }] }])).toHaveLength(1);
+});

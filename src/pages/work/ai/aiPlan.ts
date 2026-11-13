@@ -4,6 +4,7 @@
 // capítulos (mudam os índices a meio do plano) e a page-list (precisa de um PDF).
 import { runRules, type BookRule, type RuleReport } from '../../../utils/book-rules';
 import { splitChapters, classifyChapterPart } from '../../../utils/chapters';
+import { setImageAlts, type AltDecision } from '../../../utils/image-alt-scan';
 import { applyStylePlan, type PlannedStyle, type PlannedEdit } from '../../../utils/book-styles';
 import * as bookEdit from '../bookEdit';
 import type { Book, BookEdit } from '../bookEdit';
@@ -15,14 +16,15 @@ export type BookOp =
     | { type: 'replace_text'; find: string; replace: string }
     | { type: 'rename_chapter'; index: number; title: string }
     | { type: 'set_chapter_level'; index: number; level: 'h1' | 'h2' | 'h3' }
-    | { type: 'hide_chapter'; index: number; hidden: boolean };
+    | { type: 'hide_chapter'; index: number; hidden: boolean }
+    | { type: 'set_image_alts'; items: AltDecision[] };
 
 export interface OpResult { label: string; changed: boolean; summary: string }
 export interface PlanResult { html: string; reports: RuleReport[]; opResults: OpResult[]; errors: string[] }
 
 const LABELS: Record<BookOp['type'], string> = {
     drop_caps: 'Capitulares', link_index: 'Ligar Índice', fix_links: 'Corrigir links', replace_text: 'Substituir texto',
-    rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice',
+    rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice', set_image_alts: 'Texto alternativo',
 };
 const LEVELS = ['h1', 'h2', 'h3'];
 // `find` casa no HTML cru (replaceInBook): sem marcação nem aspas/atributos, para não tocar em tags; o texto novo também sem tags.
@@ -40,6 +42,7 @@ export function validateOps(ops: BookOp[]): string[] {
             if (typeof op.find !== 'string' || op.find.length < 2 || op.find.length > 200 || BAD_FIND.test(op.find)) errors.push(`${at}: "find" tem de ter 2–200 caracteres, sem < > " & =`);
             if (typeof op.replace !== 'string' || op.replace.length > 500 || BAD_TEXT.test(op.replace)) errors.push(`${at}: "replace" inválido (sem < >)`);
         }
+        if (op.type === 'set_image_alts' && (!Array.isArray(op.items) || op.items.length > 1000 || !op.items.every((d) => typeof d?.id === 'string' && d.id && typeof d.alt === 'string' && d.alt.length <= 300 && !BAD_TEXT.test(d.alt) && (d.overwrite === undefined || typeof d.overwrite === 'boolean')))) errors.push(`${at}: "items" tem de ser uma lista (até 1000) de { id, alt } com alt até 300 caracteres e sem < >`);
         if ('index' in op && !Number.isInteger(op.index)) errors.push(`${at}: "index" tem de ser um inteiro`);
         if (op.type === 'rename_chapter' && (typeof op.title !== 'string' || !op.title.trim() || op.title.length > 200 || BAD_TEXT.test(op.title))) errors.push(`${at}: título inválido`);
         if (op.type === 'set_chapter_level' && !LEVELS.includes(op.level)) errors.push(`${at}: nível tem de ser h1, h2 ou h3`);
@@ -72,6 +75,10 @@ function runOp(book: Book, op: BookOp): Step {
         case 'set_chapter_level': {
             const step = fromEdit(bookEdit.changeLevel(book, op.index, op.level));
             return step.html === undefined ? { summary: 'Já tem esse nível' } : { ...step, summary: `${at!.title}: ${op.level}` };
+        }
+        case 'set_image_alts': {
+            const { parts, changed } = setImageAlts(book.parts, op.items);
+            return changed === 0 ? { summary: 'Sem imagens por escrever' } : { html: parts.join(''), summary: `${changed} ${changed === 1 ? 'imagem' : 'imagens'}` };
         }
         case 'hide_chapter': {
             if ((at!.level === 'break') === op.hidden) return { summary: op.hidden ? 'Já está escondido' : 'Já está visível' };

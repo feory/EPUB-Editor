@@ -29,6 +29,7 @@ import { BlockSidebar } from './work/components/BlockSidebar';
 import { TextSidebar } from './work/components/TextSidebar';
 import { AiSidebar } from './work/components/AiSidebar';
 import { useAiAssistant } from './work/ai/useAiAssistant';
+import { useAltReview } from './work/ai/useAltReview';
 import type { BlockInfo } from './work/editor/blockEditing';
 import { useBookCss } from './work/hooks/useBookCss';
 import { useStyleCatalogue } from './work/hooks/useStyleCatalogue';
@@ -420,8 +421,9 @@ export function WorkPage() {
   // CSS do livro editado a partir do editor (modo "Estilo" do painel, "Criar estilo…"): aplica já, grava com debounce.
   const { editRule: handleTextStyle, editCss, createStyle, saveStyle, deleteStyle } = useBookCss(isbn);
   const styles = useStyleCatalogue({ createStyle, saveStyle, deleteStyle }, { renameStyle: work.handleRenameStyle, removeStyle: work.handleRemoveStyle });
-  const ai = useAiAssistant({ isbn, getParts: work.getBookParts, getCss: getCurrentCss,
-    applyProposal: (p, request) => work.handleApplyAiPlan(p, request, { get: getCurrentCss, set: (next) => editCss(() => next) }) });
+  const aiCss = { get: getCurrentCss, set: (next: string) => editCss(() => next) };
+  const ai = useAiAssistant({ isbn, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: (p, request) => work.handleApplyAiPlan(p, request, aiCss) });
+  const altReview = useAltReview({ isbn, language: work.language, getParts: work.getBookParts, applyPlan: (plan, request) => work.handleApplyAiPlan(plan, request, aiCss) });
 
   const anySidebarOpen = panels.anyOpen;
 
@@ -636,7 +638,7 @@ export function WorkPage() {
       )}
 
       {sidebars.showAiSidebar && (
-        <AiSidebar ai={ai} readOnly={work.readOnly} onClose={() => sidebars.setShowAiSidebar(false)} width={panelWidth} onResize={handlePanelResize} />
+        <AiSidebar ai={ai} alt={altReview} isbn={isbn ?? ''} readOnly={work.readOnly} onClose={() => sidebars.setShowAiSidebar(false)} width={panelWidth} onResize={handlePanelResize} />
       )}
 
       {sidebars.showTextSidebar && (

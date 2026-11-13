@@ -97,7 +97,7 @@ function sanitizeName(name) {
 }
 
 // One readdir instead of up to 9 existsSync probes (non-blocking + fewer syscalls).
-async function findImagePath(dir, imageId) {
+export async function findImagePath(dir, imageId) {
   let entries;
   try { entries = await readdir(dir); } catch { return null; }
   // Prefer `${imageId}.${ext}` for a known extension, then a raw `imageId` file.

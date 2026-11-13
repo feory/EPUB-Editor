@@ -40,3 +40,11 @@ test('addImagesToArchive: ids do manifest não colidem com os fixos do OPF nem e
     expect(new Set(ids).size).toBe(ids.length);
     for (const reserved of ['cover', 'style', 'section1']) expect(ids).not.toContain(reserved);
 });
+
+test('replaceImageUrlsInContent: imagem decorativa sai com alt vazio e role="presentation" (não vira "Imagem {id}")', () => {
+    const images = new Map([['a', new Blob(['x'], { type: 'image/jpeg' })]]);
+    const out = replaceImageUrlsInContent('<img src="x" alt="" data-decorative="true" data-image-id="a">', images);
+    expect(out).toContain('alt="" role="presentation"');
+    expect(out).not.toContain('Imagem a');
+    expect(out).not.toContain('data-decorative');
+});

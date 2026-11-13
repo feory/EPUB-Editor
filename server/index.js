@@ -212,6 +212,7 @@ export const server = Bun.serve({
           if (sub === 'comments'             && method === "POST") return comments.addComment(req, isbn, user);
           if (sub === 'validate'             && method === "POST") return validation.validate(req);
           if (sub === 'ai'                   && method === "POST") return ai.chat(req, user);
+          if (sub === 'ai-alt'               && method === "POST") return ai.altText(req, isbn, user);
           if (sub === 'validate-accessibility' && method === "POST") return validation.validateAccessibility(req, isbn);
           if (sub === 'epub'                 && method === "POST") return epub.saveEpub(req, isbn);
           if (sub === 'epub'                 && method === "GET")  return epub.getEpub(isbn);

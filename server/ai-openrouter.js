@@ -14,6 +14,12 @@ export function toOpenAiMessages(system, messages) {
   const out = [{ role: 'system', content: system }];
   for (const m of messages) {
     if (typeof m.content === 'string') { out.push({ role: m.role, content: m.content }); continue; }
+    if (m.role === 'user' && m.content.some((b) => b.type === 'image')) {
+      // texto + imagens (data URI) num só turno do utilizador; tool_result não vem junto de imagens
+      out.push({ role: 'user', content: m.content.flatMap((b) => b.type === 'text' ? [{ type: 'text', text: b.text }]
+        : b.type === 'image' ? [{ type: 'image_url', image_url: { url: `data:${b.source.media_type};base64,${b.source.data}` } }] : []) });
+      continue;
+    }
     if (m.role === 'assistant') {
       const calls = m.content.filter((b) => b.type === 'tool_use')
         .map((b) => ({ id: b.id, type: 'function', function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) } }));
@@ -57,7 +63,7 @@ export function openrouterBackend({ apiKey, model, maxTokens, fetchImpl = fetch 
       const res = await fetchImpl(URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, max_tokens: maxTokens, messages: toOpenAiMessages(system, messages), tools: toOpenAiTools(tools) }),
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages: toOpenAiMessages(system, messages), ...(tools.length ? { tools: toOpenAiTools(tools) } : {}) }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       if (!res.ok) throw Object.assign(new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 300)}`), { status: res.status });

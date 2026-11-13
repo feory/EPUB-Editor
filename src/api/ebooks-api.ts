@@ -210,6 +210,11 @@ export const ebooksApi = {
     aiChat: (isbn: string, messages: unknown[]) =>
         apiClient.post<{ content: { type: string; [key: string]: unknown }[]; stop_reason: string | null }>(`/ebooks/${isbn}/ai`, { messages }, { timeout: 180_000 }),
 
+    // Texto alternativo das imagens: o servidor lê as imagens do disco e pede a descrição ao modelo de visão (lotes de até 10)
+    aiAlt: (isbn: string, images: { id: string; chapter: string; before: string; after: string }[], language: string) =>
+        apiClient.post<{ results: ({ id: string; alt: string; decorative: boolean } | { id: string; error: string })[]; usage: { input_tokens: number; output_tokens: number } }>(
+            `/ebooks/${isbn}/ai-alt`, { images, language }, { timeout: 180_000 }),
+
     // Print PDF (viewer lado a lado no editor)
     getPrintPdf: (isbn: string) =>
         apiClient.get(`/ebooks/${isbn}/print-pdf`, { responseType: 'arraybuffer', validateStatus: s => s === 200 || s === 404 }),

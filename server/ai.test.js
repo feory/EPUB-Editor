@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import Anthropic from '@anthropic-ai/sdk';
 
 process.env.JWT_SECRET ??= 'test-secret'; // config.js exige-o ao ser importado
-const { makeChat: makeChatWith, anthropicBackend } = await import('./routes/ai.js');
+const { makeChat: makeChatWith, makeAlt, anthropicBackend } = await import('./routes/ai.js');
 const makeChat = (client) => makeChatWith(client && anthropicBackend(client));
 const { uid, post } = await import('./test-helpers.js');
 
@@ -135,4 +135,57 @@ test('openrouter: erro HTTP → 502 sem detalhes (429 mantém-se); falha de rede
   expect((await failing(429)(post({ messages: msgs }), user())).status).toBe(429);
   const down = makeChatWith(openrouterBackend({ apiKey: 'k', model: 'm', maxTokens: 1, fetchImpl: async () => { throw new TypeError('fetch failed'); } }));
   expect((await down(post({ messages: msgs }), user())).status).toBe(502);
+});
+
+// ---- Texto alternativo ----
+const img = { data: 'QUJD', mediaType: 'image/jpeg' };
+const altBackend = (impl) => { const calls = []; return { calls, create: async (p) => { calls.push(p); return impl(p, calls.length); } }; };
+const reply = (text) => ({ content: [{ type: 'text', text }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } });
+const altReq = (images, language = 'pt') => post({ images, language });
+
+test('alt: pedido de visão com a imagem, o contexto e a língua; devolve os textos por ordem', async () => {
+  const b = altBackend((_p, n) => reply(n === 1 ? '{"alt":"Mapa da região norte","decorative":false}' : '```json\n{"alt":"","decorative":true}\n```'));
+  const run = makeAlt(b, async () => img);
+  const res = await run(altReq([{ id: 'mapa', chapter: 'Um', before: 'O mapa.', after: 'Figura 1' }, { id: 'orn' }], 'pt-PT'), 'isbn', user());
+  const body = await res.json();
+  expect(body.results).toEqual([{ id: 'mapa', alt: 'Mapa da região norte', decorative: false }, { id: 'orn', alt: '', decorative: true }]);
+  expect(body.usage).toEqual({ input_tokens: 20, output_tokens: 10 });
+  const p = b.calls[0];
+  expect(p.tools).toEqual([]);
+  expect(p.system).toContain('pt-PT');
+  expect(p.messages[0].content[0]).toEqual({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'QUJD' } });
+  expect(p.messages[0].content[1].text).toContain('O mapa.');
+});
+
+test('alt: imagem em falta, resposta inválida e erro do fornecedor ficam por imagem, sem deitar o lote abaixo', async () => {
+  const b = altBackend((_p, n) => { if (n === 1) return reply('não sei'); throw Object.assign(new Error('segredo interno'), { status: 500 }); });
+  const run = makeAlt(b, async (_isbn, id) => (id === 'falta' ? null : img));
+  const res = await run(altReq([{ id: 'falta' }, { id: 'a' }, { id: 'b' }]), 'isbn', user());
+  const { results } = await res.json();
+  expect(results.map((r) => r.error)).toEqual(['Imagem não encontrada', 'Resposta inválida do modelo', 'Erro da IA']);
+  expect(JSON.stringify(results)).not.toContain('segredo');
+});
+
+test('alt: texto do modelo é limpo (sem tags nem < >, até 300) e texto vazio não conta como alt', async () => {
+  const run = makeAlt(altBackend(() => reply('{"alt":"<b>Barco</b> no rio","decorative":false}')), async () => img);
+  expect((await (await run(altReq([{ id: 'a' }]), 'i', user())).json()).results[0].alt).toBe('Barco no rio');
+  const empty = makeAlt(altBackend(() => reply('{"alt":"  ","decorative":false}')), async () => img);
+  expect((await (await empty(altReq([{ id: 'a' }]), 'i', user())).json()).results[0].error).toBe('Resposta inválida do modelo');
+});
+
+test('alt: validação do pedido (ids, tamanho do lote) e sem IA configurada', async () => {
+  const run = makeAlt(altBackend(() => reply('{}')), async () => img);
+  for (const images of [[], [{ id: '../x' }], [{ id: 5 }], Array.from({ length: 11 }, (_, i) => ({ id: `i${i}` }))]) {
+    expect((await run(altReq(images), 'i', user())).status).toBe(400);
+  }
+  expect((await makeAlt(null)(altReq([{ id: 'a' }]), 'i', user())).status).toBe(503);
+});
+
+test('openrouter: imagem do utilizador vira image_url (data URI) e sem ferramentas não envia "tools"', async () => {
+  const calls = [];
+  const fetchImpl = async (_u, init) => { calls.push(JSON.parse(init.body)); return Response.json({ choices: [{ finish_reason: 'stop', message: { content: '{"alt":"x"}' } }], usage: {} }); };
+  const backend = openrouterBackend({ apiKey: 'k', model: 'm', maxTokens: 10, fetchImpl });
+  await backend.create({ system: 'S', tools: [], messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'QUJD' } }, { type: 'text', text: 'ctx' }] }] });
+  expect(calls[0]).not.toHaveProperty('tools');
+  expect(calls[0].messages[1].content).toEqual([{ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,QUJD' } }, { type: 'text', text: 'ctx' }]);
 });

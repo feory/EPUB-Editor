@@ -1,10 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Trash2, Check } from 'lucide-react';
+import { X, Send, Trash2, Check, ImageIcon, MessageSquare } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { useEditorFrame } from '../hooks/useEditorFrame';
 import type { useAiAssistant } from '../ai/useAiAssistant';
+import type { useAltReview } from '../ai/useAltReview';
+import { AltReview } from './AltReview';
 
 type Ai = ReturnType<typeof useAiAssistant>;
+type Alt = ReturnType<typeof useAltReview>;
 
 // O modelo escreve **negrito** e `código`; o painel não é markdown, por isso só estas duas marcas se desenham.
 const inline = (text: string): React.ReactNode[] =>
@@ -15,9 +18,10 @@ const inline = (text: string): React.ReactNode[] =>
 
 const ICON = 'p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-all';
 
-export const AiSidebar: React.FC<{ ai: Ai; readOnly: boolean; onClose: () => void; width: number; onResize: (w: number) => void }> = ({ ai, readOnly, onClose, width, onResize }) => {
+export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; isbn: string; readOnly: boolean; onClose: () => void; width: number; onResize: (w: number) => void }> = ({ ai, alt, isbn, readOnly, onClose, width, onResize }) => {
     const frame = useEditorFrame();
     const [text, setText] = useState('');
+    const [view, setView] = useState<'chat' | 'alt'>('chat');
     const listRef = useRef<HTMLDivElement>(null);
     // Ao chegar uma resposta (ou a proposta, ou um erro) a lista desce até ao fim.
     useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [ai.lines, ai.proposal, ai.busy, ai.error]);
@@ -28,13 +32,21 @@ export const AiSidebar: React.FC<{ ai: Ai; readOnly: boolean; onClose: () => voi
         <aside style={{ width, ...frame }} className="fixed right-4 top-[var(--wp-header-h,57px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">
             <PanelResizeHandle width={width} onResize={onResize} />
             <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-                <span className="text-sm font-bold text-slate-700">Assistente</span>
+                <span className="text-sm font-bold text-slate-700">{view === 'alt' ? 'Texto alternativo' : 'Assistente'}</span>
                 <div className="flex gap-1">
+                    {/* Um só botão para trocar de vista: na conversa mostra a galeria (texto alternativo das imagens); no texto alternativo, o chat. */}
+                    <button onClick={() => { if (view === 'chat') alt.load(); setView(view === 'alt' ? 'chat' : 'alt'); }}
+                        title={view === 'alt' ? 'Voltar à conversa' : 'Texto alternativo das imagens'} aria-label={view === 'alt' ? 'Voltar à conversa' : 'Texto alternativo das imagens'}
+                        className={`${ICON} hover:text-text-main`}>{view === 'alt' ? <MessageSquare size={16} /> : <ImageIcon size={16} />}</button>
                     <button onClick={ai.reset} title="Nova conversa" aria-label="Nova conversa" className={`${ICON} hover:text-text-main`}><Trash2 size={16} /></button>
                     <button onClick={onClose} aria-label="Fechar" className={`${ICON} hover:text-rose-500`}><X size={16} /></button>
                 </div>
             </div>
 
+            {view === 'alt' ? (
+                <div className="flex-1 min-h-0 overflow-y-auto p-5"><AltReview isbn={isbn} alt={alt} readOnly={readOnly} /></div>
+            ) : (
+                <>
             <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto p-5 flex flex-col gap-3 text-sm">
                 {ai.lines.length === 0 && (
                     <p className="text-text-muted">O que posso ajudar?</p>
@@ -80,6 +92,8 @@ export const AiSidebar: React.FC<{ ai: Ai; readOnly: boolean; onClose: () => voi
                     className="flex-1 resize-none rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-slate-400" />
                 <button onClick={submit} disabled={ai.busy || !text.trim()} aria-label="Enviar" className="self-end h-9 w-9 flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-800 text-white disabled:opacity-50"><Send size={15} /></button>
             </div>
+                </>
+            )}
         </aside>
     );
 };

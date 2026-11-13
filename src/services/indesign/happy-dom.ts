@@ -3,4 +3,5 @@
 import { Window } from 'happy-dom';
 
 const win = new Window();
-Object.assign(globalThis, { DOMParser: win.DOMParser, XMLSerializer: win.XMLSerializer });
+// Node: html-cleaner compara `nodeType === Node.TEXT_NODE`; sem ele os testes só passavam se outro ficheiro o registasse antes.
+Object.assign(globalThis, { DOMParser: win.DOMParser, XMLSerializer: win.XMLSerializer, Node: win.Node });
