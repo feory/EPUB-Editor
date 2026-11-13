@@ -52,18 +52,25 @@ export function fromOpenAiResponse(data) {
   return {
     content,
     stop_reason: hasTools ? 'tool_use' : (FINISH[choice?.finish_reason] ?? 'end_turn'),
-    usage: { input_tokens: data?.usage?.prompt_tokens ?? 0, output_tokens: data?.usage?.completion_tokens ?? 0 },
+    usage: {
+      input_tokens: data?.usage?.prompt_tokens ?? 0,
+      output_tokens: data?.usage?.completion_tokens ?? 0,
+      cache_read_input_tokens: data?.usage?.prompt_tokens_details?.cached_tokens ?? 0,
+      // custo real em USD, que a OpenRouter devolve quando se pede `usage.include`
+      ...(typeof data?.usage?.cost === 'number' ? { cost_usd: data.usage.cost } : {}),
+    },
   };
 }
 
 /** `fetchImpl` injetável (testes). */
 export function openrouterBackend({ apiKey, model, maxTokens, fetchImpl = fetch }) {
   return {
+    meta: { provider: 'openrouter', model },
     async create({ system, tools, messages }) {
       const res = await fetchImpl(URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, max_tokens: maxTokens, messages: toOpenAiMessages(system, messages), ...(tools.length ? { tools: toOpenAiTools(tools) } : {}) }),
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages: toOpenAiMessages(system, messages), usage: { include: true }, ...(tools.length ? { tools: toOpenAiTools(tools) } : {}) }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       if (!res.ok) throw Object.assign(new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 300)}`), { status: res.status });

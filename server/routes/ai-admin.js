@@ -3,6 +3,7 @@
 import { requireAdmin } from '../middleware/auth.js';
 import { corsHeaders } from '../response.js';
 import { saveAiSettings, publicAiSettings, effectiveOpenRouter } from '../ai-settings.js';
+import { usageReport } from '../ai-usage.js';
 
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const KEY_URL = 'https://openrouter.ai/api/v1/key';
@@ -54,6 +55,12 @@ export async function putSettings(req, user) {
   if (model !== undefined && model !== '' && (typeof model !== 'string' || !MODEL_RE.test(model))) return json({ error: 'Modelo inválido.' }, 400);
   saveAiSettings({ apiKey: apiKey?.trim(), clearKey: clearKey === true, model });
   return json(publicAiSettings());
+}
+
+/** GET /api/ai/usage?days=30 — o consumo real registado (ver ai-usage.js). */
+export function getUsage(url, user) {
+  const err = requireAdmin(user);
+  return err ?? json(usageReport(url.searchParams.get('days')));
 }
 
 export async function listModels(user, fetchImpl = fetch) {

@@ -105,7 +105,7 @@ test('openrouter: resposta com tool_calls → blocos tool_use e stop_reason tool
     { type: 'tool_use', id: 'a', name: 'preview_rules', input: { rules: [] } },
     { type: 'tool_use', id: 'b', name: 'survey_book', input: {} },
   ]);
-  expect(r.usage).toEqual({ input_tokens: 7, output_tokens: 3 });
+  expect(r.usage).toEqual({ input_tokens: 7, output_tokens: 3, cache_read_input_tokens: 0 });
 });
 
 test('openrouter: finish_reason mapeado (stop, length, content_filter)', () => {

@@ -4,6 +4,7 @@ import type { AxiosError } from 'axios';
 import { Loader2, Search, Eye, CheckCircle2, XCircle } from 'lucide-react';
 import { aiAdminApi, type AiModel } from '../../api/ai-admin-api';
 import { PasswordInput } from '../../components/PasswordInput';
+import { AiUsage } from './AiUsage';
 import { useNotification } from '../../context/NotificationContext';
 
 const price = (n: number) => (n === 0 ? 'grátis' : `$${n < 1 ? n.toFixed(2) : n.toFixed(1)}`);
@@ -126,6 +127,8 @@ export function AiTab() {
             </div>
                 </>
             )}
+
+            <AiUsage />
         </div>
     );
 }

@@ -9,6 +9,7 @@ import { ANTHROPIC_API_KEY, AI_MODEL } from '../config.js';
 import { effectiveOpenRouter } from '../ai-settings.js';
 import { openrouterBackend } from '../ai-openrouter.js';
 import { loadImageForModel } from '../ai-images.js';
+import { recordAiUsage } from '../ai-usage.js';
 
 const MAX_MESSAGES = 60;
 const MAX_BODY_CHARS = 500_000;
@@ -104,6 +105,7 @@ function invalidMessages(messages) {
 
 /** Backend da Anthropic: as opções específicas (esforço, cache, fallback de recusas) ficam aqui. */
 export const anthropicBackend = (client) => ({
+  meta: { provider: 'anthropic', model: AI_MODEL },
   create: ({ system, tools, messages }) => client.beta.messages.create({
     model: AI_MODEL,
     max_tokens: MAX_TOKENS,
@@ -119,7 +121,7 @@ export const anthropicBackend = (client) => ({
 /** `backend` injetável (testes): { create({ system, tools, messages }) → resposta no formato da Anthropic }, ou uma função que o devolve
  *  (o Painel muda a chave/modelo sem reiniciar); null = IA não configurada. */
 export function makeChat(backendOrResolver) {
-  return async function chat(req, user) {
+  return async function chat(req, user, isbn) {
     const backend = typeof backendOrResolver === 'function' ? backendOrResolver() : backendOrResolver;
     if (!backend) return fail('IA não configurada', 503);
     const wait = overLimit(user.sub);
@@ -132,6 +134,7 @@ export function makeChat(backendOrResolver) {
 
     try {
       const response = await backend.create({ system: SYSTEM, tools: TOOLS, messages: body.messages });
+      recordAiUsage({ userId: user.sub, isbn, kind: 'chat', backend, usage: response.usage });
       return Response.json(
         { content: response.content, stop_reason: response.stop_reason, stop_details: response.stop_details ?? null, usage: response.usage },
         { headers: corsHeaders },
@@ -183,7 +186,8 @@ export function makeAlt(backendOrResolver, loadImage = loadImageForModel) {
     const language = /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(body.language ?? '') ? body.language : 'pt';
 
     const results = new Array(images.length);
-    const usage = { input_tokens: 0, output_tokens: 0 };
+    const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cost_usd: 0 };
+    let costKnown = false;
     const one = async (i) => {
       const { id, chapter, before, after } = images[i];
       try {
@@ -196,6 +200,8 @@ export function makeAlt(backendOrResolver, loadImage = loadImageForModel) {
         });
         usage.input_tokens += res.usage?.input_tokens ?? 0;
         usage.output_tokens += res.usage?.output_tokens ?? 0;
+        usage.cache_read_input_tokens += res.usage?.cache_read_input_tokens ?? 0;
+        if (typeof res.usage?.cost_usd === 'number') { usage.cost_usd += res.usage.cost_usd; costKnown = true; }
         const parsed = parseAlt(res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n'));
         results[i] = parsed ? { id, ...parsed } : { id, error: 'Resposta inválida do modelo' };
       } catch (err) {
@@ -205,7 +211,8 @@ export function makeAlt(backendOrResolver, loadImage = loadImageForModel) {
     };
     let next = 0;
     await Promise.all(Array.from({ length: Math.min(ALT_CONCURRENCY, images.length) }, async () => { while (next < images.length) await one(next++); }));
-    return Response.json({ results, usage }, { headers: corsHeaders });
+    recordAiUsage({ userId: user.sub, isbn, kind: 'alt', backend, usage: { ...usage, cost_usd: costKnown ? usage.cost_usd : undefined }, calls: images.length });
+    return Response.json({ results, usage: { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens } }, { headers: corsHeaders });
   };
 }
 

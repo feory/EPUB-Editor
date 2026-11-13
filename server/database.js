@@ -106,6 +106,25 @@ db.run(`CREATE TABLE IF NOT EXISTS activity_log (
 
 db.run("CREATE INDEX IF NOT EXISTS idx_activity_log_created_at ON activity_log(created_at)");
 
+// Consumo REAL da IA (separador IA do Painel): uma linha por chamada ao modelo (no chat) ou por pedido de texto alternativo
+// (soma das chamadas), com os tokens que o fornecedor devolveu. Não guarda texto nenhum — só contagens. `cost_usd` só existe
+// quando o fornecedor o devolve (a OpenRouter devolve; a Anthropic não). Sem purga: as linhas são pequenas.
+db.run(`CREATE TABLE IF NOT EXISTS ai_usage (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  user_id       INTEGER,
+  ebook_isbn    TEXT,
+  kind          TEXT NOT NULL,
+  provider      TEXT,
+  model         TEXT,
+  calls         INTEGER NOT NULL DEFAULT 1,
+  input_tokens  INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cached_tokens INTEGER NOT NULL DEFAULT 0,
+  cost_usd      REAL
+)`);
+db.run("CREATE INDEX IF NOT EXISTS idx_ai_usage_created_at ON ai_usage(created_at)");
+
 // Comentários do editor, ancorados a um <span class="comment-anchor" data-comment-id="…">
 // inserido no HTML (mesmo padrão do pagebreak) — anchor_id é esse uuid, não posição/offset.
 // Removidos do HTML no export EPUB (ver html-cleaner.ts), nunca chegam ao ficheiro final.

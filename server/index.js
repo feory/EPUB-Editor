@@ -146,6 +146,7 @@ export const server = Bun.serve({
       }
       if (path === "/api/ai/settings/test" && method === "POST") return aiAdmin.testConnection(user);
       if (path === "/api/ai/models"        && method === "GET")  return aiAdmin.listModels(user);
+      if (path === "/api/ai/usage"         && method === "GET")  return aiAdmin.getUsage(url, user);
 
       // Maintenance
       if (path === "/api/maintenance/cleanup-history" && method === "POST") return maintenance.cleanupHistory(user);
@@ -222,7 +223,7 @@ export const server = Bun.serve({
           if (sub === 'comments'             && method === "GET")  return comments.getComments(isbn);
           if (sub === 'comments'             && method === "POST") return comments.addComment(req, isbn, user);
           if (sub === 'validate'             && method === "POST") return validation.validate(req);
-          if (sub === 'ai'                   && method === "POST") return ai.chat(req, user);
+          if (sub === 'ai'                   && method === "POST") return ai.chat(req, user, isbn);
           if (sub === 'ai-alt'               && method === "POST") return ai.altText(req, isbn, user);
           if (sub === 'ai-changes'           && method === "GET")  return aiChanges.list(isbn);
           if (sub === 'ai-changes'           && method === "POST") return aiChanges.add(req, isbn, user);
