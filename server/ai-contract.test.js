@@ -16,6 +16,8 @@ const text = `${SYSTEM}\n${preview.description}`;
 
 // O editor executa estas operações, mas NÃO se oferecem ao modelo do chat: quem as aplica é a vista do texto alternativo (com revisão).
 const NOT_FOR_THE_MODEL = ['set_image_alts'];
+// Chaves do select que só o editor preenche (o bloco selecionado): o modelo não as escolhe.
+const SELECT_SET_BY_EDITOR = ['block'];
 
 test('cada operação que o editor executa está descrita ao modelo (menos as internas)', () => {
   expect(OP_TYPES.filter((t) => !NOT_FOR_THE_MODEL.includes(t) && !text.includes(`"${t}"`))).toEqual([]);
@@ -28,7 +30,8 @@ test('as operações internas não são expostas ao modelo', () => {
 
 test('cada ação e cada chave do select que o motor de regras entende está descrita ao modelo', () => {
   expect(RULE_ACTION_TYPES.filter((t) => !text.includes(`"${t}"`))).toEqual([]);
-  expect(RULE_SELECT_KEYS.filter((k) => !text.includes(k))).toEqual([]);
+  expect(RULE_SELECT_KEYS.filter((k) => !SELECT_SET_BY_EDITOR.includes(k) && !text.includes(k))).toEqual([]);
+  for (const k of SELECT_SET_BY_EDITOR) expect(text).not.toContain(`${k}:`);
 });
 
 test('a lista de propriedades de estilo do prompt é EXATAMENTE a que o editor aceita', () => {

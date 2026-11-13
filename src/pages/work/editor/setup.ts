@@ -17,9 +17,13 @@ import { HEADING_STRIPPED_CLASSES } from '../../../utils/editor-classes';
 import { blockCssInfo } from './cssInfo';
 import { registerImageTools } from './imageTools';
 import { MARK, registerEphemeralMarks } from './ephemeral';
+import { selectedTopBlocks } from './selectedBlock';
+import type { SelectedBlocks } from '../ai/aiSelection';
 
 export interface SetupLive {
     onBlockChange?: (info: BlockInfo) => void;      // caixa e bloco de texto sob o cursor (painel lateral)
+    aiScope?: boolean;                              // painel da IA aberto e limitado aos blocos selecionados → destacá-los no editor
+    onSelectedBlock?: (blocks: SelectedBlocks | null) => void; // blocos de topo de texto onde está o cursor/a seleção (assistente de IA: "só estes blocos")
     ebookLabel: string;                             // título do ebook no canto direito da barra de estado
     onToggleFocusMode?: () => void;
     onTogglePrintPdf?: () => void;
@@ -207,6 +211,29 @@ export function createEditorSetup(deps: SetupDeps) {
         // Painel lateral: acompanha o que está sob o cursor (só emite quando muda).
         const watcher = createBlockWatcher(blocks, (info) => live.current.onBlockChange?.(info));
         editor.on('NodeChange', watcher.update);
+        let lastSelected = '';
+        let selected: SelectedBlocks | null = null;
+        // Destaca os blocos do âmbito da IA (marca efémera: não vai para o conteúdo gravado) e tira-a dos outros.
+        const markAiScope = () => {
+            const wanted = new Set<Element>();
+            if (live.current.aiScope && selected) {
+                const kids = editor.getBody().children;
+                for (let i = 0; i < selected.texts.length; i++) if (kids[selected.index + i]) wanted.add(kids[selected.index + i]);
+            }
+            const marked = editor.dom.select(`[${MARK.aiScope}]`) as Element[];
+            if (marked.length === wanted.size && marked.every((el) => wanted.has(el))) return;
+            marked.forEach((el) => { if (!wanted.has(el)) editor.dom.setAttrib(el, MARK.aiScope, null); });
+            wanted.forEach((el) => editor.dom.setAttrib(el, MARK.aiScope, '1'));
+        };
+        editor.on('aiscopechange', markAiScope); // despachado pelo WorkEditor quando a prop muda
+        editor.on('NodeChange', () => { // o cursor continua nos blocos quando o foco passa para o painel da IA: só um NodeChange o muda
+            selected = selectedTopBlocks(editor.getBody(), editor.selection.getRng());
+            markAiScope();
+            const json = JSON.stringify(selected);
+            if (json === lastSelected) return;
+            lastSelected = json;
+            live.current.onSelectedBlock?.(selected);
+        });
         // Parágrafos/títulos/itens: abre o painel de edição do bloco.
         editor.ui.registry.addMenuItem('blockedit-item', {
             text: 'Editar bloco',

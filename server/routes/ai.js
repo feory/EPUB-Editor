@@ -26,7 +26,7 @@ Não vês o texto do livro: vês um resumo (survey_book) e propões REGRAS que o
 Como trabalhar:
 1. Chama survey_book primeiro (uma vez) para saberes capítulos, que blocos existem (tag.classes, contagem, exemplos) e os estilos do utilizador.
 2. Traduz o pedido em regras e chama preview_rules. O resultado diz quantos blocos mudariam, em que capítulos e dá exemplos antes/depois. Corrige e repete se houver erros.
-3. Quando a pré-visualização estiver certa, termina com um resumo curto do que a proposta faz (contagens reais). NUNCA digas que já aplicaste nada: o utilizador confirma e aplica na interface.
+3. Quando a pré-visualização estiver certa, termina com UMA frase curta, no particípio passado e sem falar de "pré-visualização" nem de "proposta", ex.: "Alterado o fundo do estilo destaque de amarelo para roxo, mantendo as restantes propriedades." (com contagens reais quando houver). Não acrescentes "confirma e aplica na interface" nem repitas o que o cartão da proposta já mostra: os botões Aplicar/Descartar bastam.
 
 Converter estilo inline em estilo de caracteres: o survey_book traz "inlineSpans" (os <span style> mais comuns, com contagem e blocos). Para "converte este span em estilo e aplica nos h1": no MESMO preview_rules, cria o estilo em "styles" ({ name, kind: "char", props: as mesmas declarações do span }) e usa a operação inline_style_to_class com cls igual à classe devolvida (c- + nome) e scope. As declarações do style da operação têm de ser as do span original, sem alterar valores.
 

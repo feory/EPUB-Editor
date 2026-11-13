@@ -1,4 +1,5 @@
 import React, { useRef, forwardRef, useImperativeHandle, useEffect, useCallback } from 'react';
+import type { SelectedBlocks } from '../ai/aiSelection';
 import { Editor } from '@tinymce/tinymce-react';
 import type { RawEditorOptions } from 'tinymce';
 import { useStyles } from '../../../context/StyleContext';
@@ -94,6 +95,8 @@ interface WorkEditorProps {
     onOpenPanel?: (panel: 'box' | 'text') => void; // abre o painel de edição do bloco ('box') ou do texto selecionado ('text')
     textPanelOpen?: boolean;
     onBlockChange?: (info: BlockInfo) => void;
+    onSelectedBlock?: (block: SelectedBlocks | null) => void;
+    aiScope?: boolean;
     readOnly?: boolean;
     editorFont?: string;
     editorFontSize?: string;
@@ -180,7 +183,7 @@ function refreshImageInEditor(editor: TinyMCEEditor | null, imageId: string) {
 
 const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     { htmlContent, setHtmlContent, isDragOver, onDragOver, onDragLeave, onDrop, isbn, title,
-        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onToggleAi, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onOpenPanel, textPanelOpen, onBlockChange, readOnly, editorFont = 'default', editorFontSize = 'default' },
+        activeChapterIndex, chapters, onCountInWholeBook, onReplaceInWholeBook, onGrammarCheck, onGrammarClick, onSave, onExport, grammarCache, onImageUploaded, onToggleFocusMode, isFocusMode, onTogglePrintPdf, onToggleAi, showPrintPdfPanel, onVisiblePageChange, onLinkIndiceEntry, getIndiceSubtitles, onAddComment, onOpenPanel, textPanelOpen, onBlockChange, onSelectedBlock, aiScope, readOnly, editorFont = 'default', editorFontSize = 'default' },
     ref
 ) => {
     const editorRef = useRef<TinyMCEEditor | null>(null);
@@ -190,7 +193,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     const live = useLive({
         htmlContent, setHtmlContent, grammarCache, onGrammarCheck, onImageUploaded, onVisiblePageChange,
         onToggleFocusMode, onTogglePrintPdf, onToggleAi, showPrintPdfPanel, ebookLabel, chapters, activeChapterIndex,
-        onOpenPanel, textPanelOpen, onBlockChange, readOnly,
+        onOpenPanel, textPanelOpen, onBlockChange, onSelectedBlock, aiScope, readOnly,
     });
     const indiceLinkPanel = useIndiceLinkPanel(editorRef, { chapters, activeChapterIndex, getSubtitles: getIndiceSubtitles, onLink: onLinkIndiceEntry });
     const syncEditorHeightRef = useRef<() => void>(() => {});
@@ -208,6 +211,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     // (desfazer não pode trazer outro capítulo). Eco de um report (estado → prop) não recarrega.
     useEffect(() => { channelRef.current?.load(htmlContent, { undo: 'reset' }); }, [htmlContent]);
     useEffect(() => { editorRef.current?.nodeChanged(); }, [textPanelOpen]); // a barra da seleção relê live.textPanelOpen
+    useEffect(() => { editorRef.current?.dispatch('aiscopechange'); }, [aiScope]); // destaca/limpa os blocos do âmbito da IA
     useEffect(() => { editorRef.current?.dispatch('pdfpanelchange'); }, [showPrintPdfPanel]); // o botão "Ver PDF" relê live.showPrintPdfPanel
     useEffect(() => {
         const el = editorRef.current?.getContainer()?.querySelector('[data-ps-ebook-label]') as HTMLElement | null;

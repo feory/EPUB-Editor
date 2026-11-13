@@ -31,6 +31,8 @@ ${gripCss()}
 [${MARK.empty}]::before { content: 'Escreve algo…'; color: #94a3b8; pointer-events: none; }
 [${MARK.htmlEdit}] { visibility: hidden !important; }
 [${MARK.pulse}] { animation: ps-pulse 2s; }
+/* Blocos a que o assistente de IA fica limitado: fundo âmbar suave e barra à esquerda (sem mexer na geometria). */
+[${MARK.aiScope}] { background: linear-gradient(#f59e0b, #f59e0b) left / 3px 100% no-repeat, rgba(251, 191, 36, 0.16) !important; border-radius: 2px; }
 @keyframes ps-pulse { 0% { background-color: rgba(226, 232, 240, 0); } 20% { background-color: rgba(226, 232, 240, 1); } 100% { background-color: rgba(226, 232, 240, 0); } } /* cinzento claro do tema (#e2e8f0) */
 /* Botão "+" (inserir bloco): só CSS, ::after do bloco de topo, centrado na borda inferior.
    Sem position:relative no bloco (passaria a ser o contentor de span.pagebreak e deslocava o

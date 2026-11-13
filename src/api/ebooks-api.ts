@@ -12,6 +12,9 @@ export interface AiChange {
     cssFile?: string;
     revertedAt?: string;
     revertedBy?: string;
+    /** Estado de antes de reverter (para repor). */
+    restoreHtmlFile?: string;
+    restoreCssFile?: string;
 }
 
 export interface PresenceStatus {
@@ -266,7 +269,8 @@ export const ebooksApi = {
     // Registo das alterações da IA (com Reverter): ver server/ai-changes.js
     listAiChanges: (isbn: string) => apiClient.get<{ changes: AiChange[] }>(`/ebooks/${isbn}/ai-changes`).then((r) => r.data.changes),
     addAiChange: (isbn: string, body: { request: string; lines: string[]; htmlFile?: string; cssFile?: string }) => apiClient.post<{ change: AiChange }>(`/ebooks/${isbn}/ai-changes`, body),
-    markAiChangeReverted: (isbn: string, id: string) => apiClient.put<{ change: AiChange }>(`/ebooks/${isbn}/ai-changes/${id}`),
+    markAiChangeReverted: (isbn: string, id: string, restore: { htmlFile?: string; cssFile?: string } = {}) => apiClient.put<{ change: AiChange }>(`/ebooks/${isbn}/ai-changes/${id}`, restore),
+    markAiChangeRestored: (isbn: string, id: string) => apiClient.delete<{ change: AiChange }>(`/ebooks/${isbn}/ai-changes/${id}`),
     // Versões do CSS (antes de a IA o alterar): ver server/routes/content.js
     saveStyleSnapshot: (isbn: string, css: string, label: string) => apiClient.post<{ filename: string }>(`/ebooks/${isbn}/history-style`, { css, label }),
     getStyleSnapshot: (isbn: string, filename: string) => apiClient.get<{ css: string }>(`/ebooks/${isbn}/history-style/${filename}`),

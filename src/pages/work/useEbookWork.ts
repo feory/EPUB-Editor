@@ -306,6 +306,21 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         }
     }, [aiTransactions, readOnly, showNotification, queryClient, isbn]);
 
+    const handleRestoreAiChange = useCallback(async (change: AiChange, css: AiCssSide): Promise<boolean> => {
+        const tx = aiTransactions();
+        if (!tx || readOnly) return false;
+        try {
+            await tx.restore(change, css);
+            showNotification('success', 'Alteração da IA reposta!');
+            queryClient.invalidateQueries({ queryKey: ['ai-changes', isbn] });
+            return true;
+        } catch (e) {
+            console.error('[ai-changes] repor falhou:', e);
+            showNotification('error', 'Não foi possível repor.');
+            return false;
+        }
+    }, [aiTransactions, readOnly, showNotification, queryClient, isbn]);
+
     const handleFixLinks = useCallback(() => {
         const { edit, report } = bookEdit.fixBookLinks(getBook());
         validation.setLinkValidation(report);
@@ -419,6 +434,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         getBookParts,
         handleApplyAiPlan,
         handleRevertAiChange,
+        handleRestoreAiChange,
 
         handleImportPdf: useCallback(
             (file: File, h: number, f: number, settings: ImageSettings, options: ImportOptions) =>

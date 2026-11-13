@@ -10,5 +10,6 @@ export const ebooksAiHistory = (isbn: string): AiHistoryPort => ({
     readHtml: async (filename) => decompressHtml((await ebooksApi.getContent(isbn, filename)).data.content),
     readCss: async (filename) => (await ebooksApi.getStyleSnapshot(isbn, filename)).data.css,
     record: async (entry) => { await ebooksApi.addAiChange(isbn, entry); },
-    markReverted: async (id) => { await ebooksApi.markAiChangeReverted(isbn, id); },
+    markReverted: async (id, restore) => { await ebooksApi.markAiChangeReverted(isbn, id, restore); },
+    markRestored: async (id) => { await ebooksApi.markAiChangeRestored(isbn, id); },
 });

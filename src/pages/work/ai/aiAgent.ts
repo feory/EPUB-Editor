@@ -3,6 +3,7 @@
 // O modelo só PROPÕE: `proposal` é a última simulação válida, e aplicá-la é um passo separado, do utilizador.
 import { surveyBook } from '../../../utils/book-survey';
 import type { BookRule, RuleReport } from '../../../utils/book-rules';
+import { scopeRules, type RuleBlock } from './aiSelection';
 import { runPlan, type BookOp, type OpResult } from './aiPlan';
 import { charStyles, paragraphStyles } from '../../../utils/user-styles';
 import { EDITOR_CLASSES } from '../../../utils/editor-classes';
@@ -27,6 +28,8 @@ export async function runAgent(opts: {
     messages: AgentMessage[];
     send: (messages: AgentMessage[]) => Promise<ChatResponse>;
     book: { parts: string[]; css: string };
+    /** Só este bloco: as regras ficam limitadas a ele e as operações (que mexem no livro todo) recusam-se. */
+    scope?: RuleBlock | null;
 }): Promise<AgentResult> {
     let messages = opts.messages;
     let proposal: AgentResult['proposal'] = null;
@@ -40,14 +43,16 @@ export async function runAgent(opts: {
             if (input.style_edits !== undefined && !Array.isArray(input.style_edits)) return { content: 'style_edits tem de ser uma lista', is_error: true };
             if (input.operations !== undefined && !Array.isArray(input.operations)) return { content: 'operations tem de ser uma lista', is_error: true };
             const ops = (input.operations ?? []) as BookOp[];
+            if (opts.scope && ops.length) return { content: 'Há um bloco selecionado: só podes usar regras e estilos, sem "operations" (mexem no livro todo).', is_error: true };
+            const rules = (opts.scope ? scopeRules(input.rules as BookRule[], opts.scope) : input.rules) as BookRule[];
             const plan = planStyles((input.styles ?? []) as NewStyle[], opts.book.css);
             const editPlan = planStyleEdits((input.style_edits ?? []) as StyleEdit[], opts.book.css);
             // as regras podem usar os estilos que esta proposta cria
             const known = classesForRules(opts.book.css, plan.planned.map((s) => s.cls));
-            const run = runPlan(opts.book.parts, input.rules as BookRule[], ops, known);
+            const run = runPlan(opts.book.parts, rules, ops, known);
             const errors = [...plan.errors, ...editPlan.errors, ...run.errors];
             const changes = run.reports.some((r) => r.changed > 0) || plan.planned.length > 0 || editPlan.planned.length > 0 || run.opResults.some((o) => o.changed);
-            proposal = !errors.length && changes ? { styles: plan.planned, edits: editPlan.planned, rules: input.rules as BookRule[], ops, opResults: run.opResults, reports: run.reports } : null;
+            proposal = !errors.length && changes ? { styles: plan.planned, edits: editPlan.planned, rules, ops, opResults: run.opResults, reports: run.reports } : null;
             return { content: JSON.stringify({ errors, styles: plan.planned, style_edits: editPlan.planned, operations: run.opResults, reports: run.reports }) };
         }
         return { content: `ferramenta desconhecida: ${String(tool.name)}`, is_error: true };

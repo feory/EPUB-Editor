@@ -30,6 +30,7 @@ import { TextSidebar } from './work/components/TextSidebar';
 import { AiSidebar } from './work/components/AiSidebar';
 import { useAiAssistant } from './work/ai/useAiAssistant';
 import { useAltReview } from './work/ai/useAltReview';
+import { locateBlocks, type SelectedBlocks } from './work/ai/aiSelection';
 import { useAiChanges } from './work/ai/useAiChanges';
 import { summarizeProposal } from './work/ai/aiAgent';
 import type { BlockInfo } from './work/editor/blockEditing';
@@ -81,6 +82,7 @@ export function WorkPage() {
   const { showNotification } = useNotification();
   const { setCustomCss, getCurrentCss } = useStyles();
   const editorRef = useRef<WorkEditorRef>(null);
+  const [selectedBlock, setSelectedBlock] = useState<SelectedBlocks | null>(null); // para o assistente de IA ("só estes blocos")
   const [blockInfo, setBlockInfo] = useState<BlockInfo>({ box: null, text: null, image: null, grid: null, selection: null });
   const work = useEbookWork(isbn, editorRef);
   const { user } = useAuth();
@@ -424,13 +426,14 @@ export function WorkPage() {
   const { editRule: handleTextStyle, editCss, createStyle, saveStyle, deleteStyle } = useBookCss(isbn);
   const styles = useStyleCatalogue({ createStyle, saveStyle, deleteStyle }, { renameStyle: work.handleRenameStyle, removeStyle: work.handleRemoveStyle });
   const aiCss = { get: getCurrentCss, set: (next: string) => editCss(() => next) };
-  const ai = useAiAssistant({ isbn, userId: user?.id, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: (p, request) => work.handleApplyAiPlan(p, request, aiCss, summarizeProposal(p)) });
+  const ai = useAiAssistant({ isbn, userId: user?.id, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: (p, request) => work.handleApplyAiPlan(p, request, aiCss, summarizeProposal(p)),
+    selected: selectedBlock, locate: (sel) => locateBlocks(work.getBookParts(), sel, work.activeChapterIndex) });
   const altReview = useAltReview({ isbn, language: work.language, getParts: work.getBookParts, applyPlan: (plan, request, summary) => work.handleApplyAiPlan(plan, request, aiCss, summary) });
   const aiChanges = useAiChanges({ isbn, enabled: sidebars.showAiSidebar, revert: async (change) => {
     const ok = await work.handleRevertAiChange(change, aiCss);
     if (ok) ai.noteReverted(change.request);
     return ok;
-  } });
+  }, restore: (change) => work.handleRestoreAiChange(change, aiCss) });
 
   const anySidebarOpen = panels.anyOpen;
 
@@ -569,6 +572,8 @@ export function WorkPage() {
                 onOpenPanel={(panel) => panels.open(panel)}
                 textPanelOpen={sidebars.showTextSidebar}
                 onBlockChange={setBlockInfo}
+                onSelectedBlock={setSelectedBlock}
+                aiScope={sidebars.showAiSidebar && !!ai.scoped}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
                 activeChapterIndex={work.activeChapterIndex}

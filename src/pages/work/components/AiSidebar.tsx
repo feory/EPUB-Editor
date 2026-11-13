@@ -121,8 +121,14 @@ export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; changes: Changes; isbn: str
                 )}
             </div>
 
+            {ai.scoped && (
+                <div className="mx-3 mt-2 flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-xs text-amber-900">
+                    <span className="min-w-0 flex-1 truncate"><b>{ai.scoped.texts.length === 1 ? 'Só o bloco destacado' : `Só os ${ai.scoped.texts.length} blocos destacados`}</b> no editor</span>
+                    <button onClick={ai.clearScope} aria-label="Pedir para o livro todo" title="Pedir para o livro todo" className="shrink-0 p-0.5 rounded hover:bg-amber-100"><X size={12} /></button>
+                </div>
+            )}
             <div className="p-3 border-t border-border flex gap-2">
-                <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="O que queres alterar no livro?"
+                <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={ai.scoped ? (ai.scoped.texts.length === 1 ? 'O que queres alterar neste bloco?' : 'O que queres alterar nestes blocos?') : 'O que queres alterar no livro?'}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
                     className="flex-1 resize-none rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-slate-400" />
                 <button onClick={submit} disabled={ai.busy || !text.trim()} aria-label="Enviar" className="self-end h-9 w-9 flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-800 text-white disabled:opacity-50"><Send size={15} /></button>

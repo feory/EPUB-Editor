@@ -19,6 +19,7 @@ const both: AiPlanInput = { ...htmlPlan, styles: newStyle };
 function setup(opts: { html?: string; css?: string; fail?: string[]; saveHtmlReturns?: string | undefined } = {}) {
     const log: string[] = [];
     const state = { html: opts.html ?? BOOK, css: opts.css ?? CSS };
+    const marks: Record<string, { htmlFile?: string; cssFile?: string }> = {}; // o que o servidor guardaria em cada registo revertido
     const store: Record<string, string> = { 'content_antes.html.gz': BOOK, 'style_antes.css': CSS };
     let n = 0; // cada versão guardada tem nome novo, como no servidor
     const maybeFail = (name: string) => { if (opts.fail?.includes(name)) throw new Error(`${name} falhou`); };
@@ -29,7 +30,8 @@ function setup(opts: { html?: string; css?: string; fail?: string[]; saveHtmlRet
         readHtml: async (f) => { log.push(`readHtml:${f}`); maybeFail('readHtml'); return store[f]; },
         readCss: async (f) => { log.push(`readCss:${f}`); maybeFail('readCss'); return store[f]; },
         record: async (e) => { log.push(`record:${JSON.stringify(e)}`); maybeFail('record'); },
-        markReverted: async (id) => { log.push(`markReverted:${id}`); maybeFail('markReverted'); },
+        markReverted: async (id, restore) => { log.push(`markReverted:${id}`); maybeFail('markReverted'); marks[id] = restore; },
+        markRestored: async (id) => { log.push(`markRestored:${id}`); maybeFail('markRestored'); delete marks[id]; },
     };
     const book: AiBookPort = {
         parts: () => state.html.split(/(?=<p class="chapter-break)/),
@@ -37,7 +39,7 @@ function setup(opts: { html?: string; css?: string; fail?: string[]; saveHtmlRet
         commit: (html, mode) => { log.push(`commit:${mode}`); state.html = html; },
     };
     const css = { get: () => state.css, set: (next: string) => { log.push('css.set'); state.css = next; } };
-    return { tx: createAiTransactions({ history, book }), css, log, state };
+    return { tx: createAiTransactions({ history, book }), css, log, state, marks };
 }
 
 // ---- aplicar ----
@@ -171,4 +173,44 @@ test('aplicar e reverter são inversos: depois de reverter o livro e o CSS volta
     await tx.revert({ id: 'c', request: 'x', ...r.snapshots }, css);
     expect(state.html).toBe(BOOK);
     expect(state.css).toBe(CSS);
+});
+
+// ---- repor (desfazer o Reverter) ----
+
+test('repor: depois de reverter, repõe o livro e o CSS como estavam e tira a marca', async () => {
+    const { tx, css, state, marks, log } = setup();
+    const r = await tx.apply(both, 'x', css);
+    if (r.status !== 'applied') throw new Error('devia aplicar');
+    const applied = { html: state.html, css: state.css };
+    const c = { id: 'c', request: 'x', ...r.snapshots };
+    await tx.revert(c, css);
+    expect(state.html).toBe(BOOK);
+    await tx.restore({ ...c, restoreHtmlFile: marks.c.htmlFile, restoreCssFile: marks.c.cssFile }, css);
+    expect(state.html).toBe(applied.html);
+    expect(state.css).toBe(applied.css);
+    expect(marks.c).toBeUndefined();
+    expect(log.at(-1)).toBe('markRestored:c');
+});
+
+test('repor depois de reverter OUTRO registo: cada registo repõe o seu próprio estado', async () => {
+    const { tx, css, state, marks } = setup();
+    const a = await tx.apply(htmlPlan, 'a', css);
+    const afterA = state.html;
+    const b = await tx.apply({ ...htmlPlan, rules: [{ select: { tag: ['p'] }, action: { type: 'addClass', value: 'p-center' } }] }, 'b', css);
+    if (a.status !== 'applied' || b.status !== 'applied') throw new Error('devia aplicar');
+    const afterB = state.html;
+    const ca = { id: 'a', request: 'a', ...a.snapshots };
+    const cb = { id: 'b', request: 'b', ...b.snapshots };
+    await tx.revert(ca, css); // livro antes de A
+    await tx.revert(cb, css); // livro antes de B (= depois de A)
+    expect(state.html).toBe(afterA);
+    await tx.restore({ ...ca, restoreHtmlFile: marks.a.htmlFile, restoreCssFile: marks.a.cssFile }, css);
+    expect(state.html).toBe(afterB); // o livro como estava quando A foi revertida (com A e B aplicadas)
+});
+
+test('repor: se ler o que repor falha, nada muda; sem ficheiros de reposição não faz nada ao livro', async () => {
+    const { tx, css, log, state } = setup({ fail: ['readHtml'] });
+    await expect(tx.restore({ id: 'c', request: 'x', restoreHtmlFile: 'content_antes.html.gz' }, css)).rejects.toThrow();
+    expect(state.html).toBe(BOOK);
+    expect(log).not.toContain('commit:reset');
 });

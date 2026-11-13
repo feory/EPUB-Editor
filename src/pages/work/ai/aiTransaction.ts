@@ -14,7 +14,9 @@ export interface AiHistoryPort {
     readHtml(filename: string): Promise<string>;
     readCss(filename: string): Promise<string>;
     record(entry: { request: string; lines: string[]; htmlFile?: string; cssFile?: string }): Promise<void>;
-    markReverted(id: string): Promise<void>;
+    /** `restore`: os ficheiros do estado de antes de reverter, para depois se poder repor. */
+    markReverted(id: string, restore: { htmlFile?: string; cssFile?: string }): Promise<void>;
+    markRestored(id: string): Promise<void>;
 }
 
 /** O livro no editor. `commit` troca o conteúdo; 'keep' mantém o capítulo ativo, 'reset' recarrega sem capítulo ativo. */
@@ -30,7 +32,7 @@ export type ApplyResult =
     | { status: 'applied'; snapshots: AiSnapshots };
 
 /** O mínimo de uma alteração registada que o Reverter precisa. */
-export interface RevertTarget { id: string; request: string; htmlFile?: string; cssFile?: string }
+export interface RevertTarget { id: string; request: string; htmlFile?: string; cssFile?: string; restoreHtmlFile?: string; restoreCssFile?: string }
 
 const labelOf = (prefix: string, request: string) => `${prefix}: ${request}`.slice(0, 80);
 
@@ -66,25 +68,38 @@ export function createAiTransactions(ports: { history: AiHistoryPort; book: AiBo
     }
 
     /**
-     * Repõe o HTML e/ou o CSS de antes de uma alteração. Guarda primeiro o estado atual (reverter também se desfaz) e lê tudo o
-     * que vai repor ANTES de tocar em nada. Repõe o LIVRO inteiro: o que se editou depois perde-se (fica no histórico).
-     * Rejeita se falhar antes de repor; se só falhar marcá-la como revertida, já está revertida e só se perde a marca.
+     * Repõe o livro para os ficheiros dados. Guarda primeiro o estado atual (também se desfaz) e lê tudo o que vai repor ANTES
+     * de tocar em nada. Repõe o LIVRO inteiro: o que se editou depois perde-se (fica no histórico). Rejeita se falhar antes de
+     * repor. Devolve os ficheiros do estado que acabou de guardar (o que se perdeu), para o poder repor.
      */
-    async function revert(change: RevertTarget, css: AiCssSide): Promise<void> {
-        const label = labelOf('Antes de reverter', change.request);
-        if (change.htmlFile) {
+    async function rewind(files: { htmlFile?: string; cssFile?: string }, label: string, css: AiCssSide): Promise<{ htmlFile?: string; cssFile?: string }> {
+        const saved: { htmlFile?: string; cssFile?: string } = {};
+        if (files.htmlFile) {
             const file = await history.saveHtml(book.html());
-            if (file && file !== change.htmlFile) await history.labelHtml(file, label); // não trocar a etiqueta do ficheiro que se vai repor
+            if (file && file !== files.htmlFile) await history.labelHtml(file, label); // não trocar a etiqueta do ficheiro que se vai repor
+            saved.htmlFile = file;
         }
-        if (change.cssFile) await history.saveCss(css.get(), label);
+        if (files.cssFile) saved.cssFile = await history.saveCss(css.get(), label);
 
-        const html = change.htmlFile ? await history.readHtml(change.htmlFile) : null;
-        const cssText = change.cssFile ? await history.readCss(change.cssFile) : null;
+        const html = files.htmlFile ? await history.readHtml(files.htmlFile) : null;
+        const cssText = files.cssFile ? await history.readCss(files.cssFile) : null;
 
         if (cssText !== null) css.set(cssText);
         if (html !== null) book.commit(html, 'reset');
-        try { await history.markReverted(change.id); } catch (e) { console.error('[ai-changes] marcar como revertida falhou:', e); }
+        return saved;
     }
 
-    return { apply, revert };
+    /** Repõe o HTML e/ou o CSS de antes de uma alteração. Se só falhar marcá-la como revertida, já está revertida e só se perde a marca. */
+    async function revert(change: RevertTarget, css: AiCssSide): Promise<void> {
+        const saved = await rewind(change, labelOf('Antes de reverter', change.request), css);
+        try { await history.markReverted(change.id, saved); } catch (e) { console.error('[ai-changes] marcar como revertida falhou:', e); }
+    }
+
+    /** Desfaz o Reverter: repõe o estado que o livro tinha quando foi revertido (a alteração volta a estar aplicada). */
+    async function restore(change: RevertTarget, css: AiCssSide): Promise<void> {
+        await rewind({ htmlFile: change.restoreHtmlFile, cssFile: change.restoreCssFile }, labelOf('Antes de repor', change.request), css);
+        try { await history.markRestored(change.id); } catch (e) { console.error('[ai-changes] marcar como reposta falhou:', e); }
+    }
+
+    return { apply, revert, restore };
 }

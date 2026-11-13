@@ -10,6 +10,7 @@ export const MARK = {
     empty: 'data-mce-empty',          // placeholder do parágrafo vazio focado
     htmlEdit: 'data-mce-htmledit',    // bloco escondido durante a edição de HTML inline
     pulse: 'data-mce-pulse',          // destaque de 3s ao saltar para um bloco
+    aiScope: 'data-mce-psai',         // blocos a que o pedido ao assistente de IA fica limitado (setup.ts)
 } as const;
 
 // Classes do <body> do iframe (também não entram no conteúdo gravado).

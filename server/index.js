@@ -241,7 +241,8 @@ export const server = Bun.serve({
           return epub.getEpubFile(isbn, parts[5]);
         }
 
-        if (parts.length === 6 && parts[4] === 'ai-changes' && method === "PUT") return aiChanges.revert(isbn, parts[5], user);
+        if (parts.length === 6 && parts[4] === 'ai-changes' && method === "PUT") return aiChanges.revert(isbn, parts[5], user, req);
+        if (parts.length === 6 && parts[4] === 'ai-changes' && method === "DELETE") return aiChanges.restore(isbn, parts[5]);
         if (parts.length === 6 && parts[4] === 'history-style' && method === "GET") return content.getStyleSnapshot(isbn, parts[5]);
         if (parts.length === 6 && parts[4] === 'history' && method === "PUT") {
           return content.setHistoryLabel(req, isbn, parts[5]);

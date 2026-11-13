@@ -30,13 +30,25 @@ export function addChange(isbn, { by, request, lines, htmlFile, cssFile }) {
   return entry;
 }
 
-/** Marca a entrada como revertida (por quem e quando). null se não existe. */
-export function markReverted(isbn, id, by) {
+/** Marca a entrada como revertida (por quem e quando) e guarda o estado de ANTES de reverter, para o poder repor. null se não existe. */
+export function markReverted(isbn, id, by, { htmlFile, cssFile } = {}) {
   const entries = read(isbn);
   const entry = entries.find((e) => e.id === id);
   if (!entry) return null;
   entry.revertedAt = new Date().toISOString();
   entry.revertedBy = by;
+  if (htmlFile) entry.restoreHtmlFile = htmlFile; else delete entry.restoreHtmlFile;
+  if (cssFile) entry.restoreCssFile = cssFile; else delete entry.restoreCssFile;
+  write(isbn, entries);
+  return entry;
+}
+
+/** Tira a marca de revertida (o utilizador repôs a alteração). null se não existe. */
+export function markRestored(isbn, id) {
+  const entries = read(isbn);
+  const entry = entries.find((e) => e.id === id);
+  if (!entry) return null;
+  for (const k of ['revertedAt', 'revertedBy', 'restoreHtmlFile', 'restoreCssFile']) delete entry[k];
   write(isbn, entries);
   return entry;
 }

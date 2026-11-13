@@ -28,12 +28,21 @@ export interface RuleSelect {
     exceptChapters?: number[];
     /** Por omissão só filhos diretos do corpo; `true` entra em caixas, listas, células… */
     deep?: boolean;
+    /**
+     * Só os blocos selecionados: os filhos `index`, `index+1`… do corpo da parte `chapter`, cada um com o texto que começa pelo
+     * `texts[i]` correspondente (ver `blockKey`). Quem o põe é o editor (blocos selecionados), nunca o modelo; se o livro mudou e
+     * algum texto já não bate, a regra não apanha nada.
+     */
+    block?: { chapter: number; index: number; texts: string[] };
 }
+
+/** O início do texto de um bloco, normalizado: identifica-o (junto com a posição) sem guardar o bloco todo. */
+export const blockKey = (text: string | null) => (text ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
 
 /** Todas as ações e chaves do `select`, como valores: `Record` obriga o compilador a avisar se se acrescenta uma e esta lista fica para trás.
  *  Existem para o teste de contrato com o prompt do servidor (server/ai-contract.test.js). */
 export const RULE_ACTION_TYPES = Object.keys({ addClass: 1, removeClass: 1, removeStyle: 1, retag: 1, delete: 1 } satisfies Record<RuleAction['type'], 1>);
-export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, afterHeading: 1, chapters: 1, exceptChapters: 1, deep: 1 } satisfies Record<keyof RuleSelect, 1>);
+export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, afterHeading: 1, chapters: 1, exceptChapters: 1, deep: 1, block: 1 } satisfies Record<keyof RuleSelect, 1>);
 
 export interface BookRule {
     select: RuleSelect;
@@ -59,6 +68,8 @@ const RETAG_TARGETS = ['p', 'h3', 'h4', 'h5', 'h6'];
 // shortcut: retag/delete de h1/h2 recusados — mexem nos capítulos (marcadores, sidebar 1:1), upgrade quando houver regra para isso.
 const STRUCTURAL = ['h1', 'h2'];
 const MAX_SAMPLES = 3;
+/** Quantos blocos seguidos se podem selecionar de uma vez. */
+export const MAX_BLOCKS = 100;
 const SAMPLE_LEN = 160;
 
 const PROP_RE = /^[a-z][a-z-]*$/;
@@ -77,6 +88,7 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
         const at = `regra ${i + 1}`;
         const { select: s, action: a } = rule;
         if (!s.tag?.length || !s.tag.every((t) => TAG_RE.test(t))) errors.push(`${at}: "tag" obrigatória (ex. ["p"])`);
+        if (s.block && !(Number.isInteger(s.block.chapter) && s.block.chapter >= 0 && Number.isInteger(s.block.index) && s.block.index >= 0 && Array.isArray(s.block.texts) && s.block.texts.length > 0 && s.block.texts.length <= MAX_BLOCKS && s.block.texts.every((t) => typeof t === 'string'))) errors.push(`${at}: "block" inválido`);
         if (s.deep && s.afterHeading) errors.push(`${at}: "afterHeading" só vale ao nível do corpo (sem "deep")`);
         if ((a.type === 'retag' || a.type === 'delete') && s.tag?.some((t) => STRUCTURAL.includes(t))) errors.push(`${at}: não se mexe em h1/h2 (capítulos)`);
         if (a.type === 'removeStyle' && (!Array.isArray(a.props) || !a.props.length || !a.props.every((p) => PROP_RE.test(p)))) errors.push(`${at}: "props" tem de ser uma lista de propriedades CSS (ex. ["margin-left"])`);
@@ -92,6 +104,11 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
 
 /** Elementos da regra, apanhados ANTES de alterar nada (retag/delete mudam os irmãos). */
 function select(doc: Document, s: RuleSelect): Element[] {
+    if (s.block) {
+        const els = s.block.texts.map((_, i) => doc.body.children[s.block!.index + i]);
+        if (els.some((el, i) => !el || blockKey(el.textContent) !== s.block!.texts[i])) return [];
+        return select(doc, { ...s, block: undefined, deep: false }).filter((x) => els.includes(x));
+    }
     const els = s.deep ? Array.from(doc.body.querySelectorAll(s.tag.join(','))) : Array.from(doc.body.children).filter((e) => s.tag.includes(e.tagName.toLowerCase()));
     return els.filter((el) => {
         if (isMarker(el)) return false;
@@ -158,7 +175,7 @@ export function runRules(parts: string[], rules: BookRule[], knownClasses?: Read
     const current = [...parts];
     const reports: RuleReport[] = rules.map(() => ({ changed: 0, chapters: [], samples: [] }));
     current.forEach((part, ci) => {
-        const wanted = rules.filter((r) => (!r.select.chapters || r.select.chapters.includes(ci)) && !r.select.exceptChapters?.includes(ci));
+        const wanted = rules.filter((r) => (r.select.block ? r.select.block.chapter === ci : !r.select.chapters || r.select.chapters.includes(ci)) && !r.select.exceptChapters?.includes(ci));
         if (!wanted.length) return;
         const doc = new DOMParser().parseFromString(part, 'text/html');
         let dirty = false;

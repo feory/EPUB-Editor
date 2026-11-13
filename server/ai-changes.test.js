@@ -3,7 +3,7 @@ import { rmSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 process.env.JWT_SECRET ??= 'test-secret'; // config.js exige-o ao ser importado
-const { list, add, revert } = await import('./routes/ai-changes.js');
+const { list, add, revert, restore } = await import('./routes/ai-changes.js');
 const { DATA_DIR } = await import('./config.js');
 const { uid, post } = await import('./test-helpers.js');
 
@@ -48,9 +48,20 @@ test('validação: pedido, resumo, nomes de ficheiro (padrão e existência)', a
 
 test('marcar como revertida: quem e quando; id desconhecido → 404; id inválido → 400', async () => {
   const { id } = (await (await add(body(), isbn, user)).json()).change;
-  const done = (await revert(isbn, id, other).json()).change;
+  const done = (await (await revert(isbn, id, other)).json()).change;
   expect(done).toMatchObject({ id, revertedBy: 'rui@t.pt' });
   expect(done.revertedAt).toBeTruthy();
-  expect(revert(isbn, 'nao-existe', user).status).toBe(404);
-  expect(revert(isbn, '../x', user).status).toBe(400);
+  expect((await revert(isbn, 'nao-existe', user)).status).toBe(404);
+  expect((await revert(isbn, '../x', user)).status).toBe(400);
+});
+
+test('reverter guarda o estado de antes de reverter; repor tira a marca e esse estado', async () => {
+  const { id } = (await (await add(body(), isbn, user)).json()).change;
+  const done = (await (await revert(isbn, id, user, post({ htmlFile: HTML, cssFile: CSS }))).json()).change;
+  expect(done).toMatchObject({ restoreHtmlFile: HTML, restoreCssFile: CSS });
+  const back = (await (await restore(isbn, id)).json()).change;
+  expect(back.revertedAt).toBeUndefined();
+  expect(back.restoreHtmlFile).toBeUndefined();
+  expect((await revert(isbn, id, user, post({ htmlFile: '../x' }))).status).toBe(400);
+  expect(restore(isbn, 'nao-existe').status).toBe(404);
 });

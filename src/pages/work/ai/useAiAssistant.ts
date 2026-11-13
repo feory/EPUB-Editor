@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { isAxiosError } from 'axios';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { runAgent, appliedNote, discardedNote, renameProposalStyle, type AgentMessage, type AgentResult } from './aiAgent';
+import { blockContext, type SelectedBlocks, type RuleBlock } from './aiSelection';
 import { chatKey, compactHistory, loadChat, saveChat } from './chatStore';
 
 export interface AiLine { role: 'user' | 'assistant'; text: string }
@@ -9,12 +10,15 @@ export interface AiLine { role: 'user' | 'assistant'; text: string }
 const LOST_PROPOSAL = 'A proposta que estava por aplicar perdeu-se ao recarregar a página; nada foi alterado. Pede de novo se a quiseres.';
 
 /** Estado do painel de IA: conversa (para mostrar), mensagens da API (para continuar), proposta pendente. A conversa sobrevive a recarregar (chatStore.ts). */
-export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal }: {
+export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal, selected, locate }: {
     isbn: string | undefined;
     userId: string | number | undefined;
     getParts: () => string[];
     getCss: () => string;
     applyProposal: (proposal: NonNullable<AgentResult['proposal']>, request: string) => Promise<unknown>;
+    /** O bloco selecionado no editor (null = nenhum) e onde está nas partes do livro. */
+    selected: SelectedBlocks | null;
+    locate: (sel: SelectedBlocks) => RuleBlock | null;
 }) {
     const key = chatKey(isbn, userId);
     const [stored] = useState(() => loadChat(key)); // lido uma vez, ao abrir o livro
@@ -25,6 +29,11 @@ export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal }
     const [error, setError] = useState('');
     const history = useRef<AgentMessage[]>(stored ? (stored.pending ? [...stored.history, { role: 'user', content: `[Sistema: ${LOST_PROPOSAL}]` }] : stored.history) : []);
     const request = useRef('');
+    // O utilizador tira o âmbito (×) para o bloco atual; um bloco diferente volta a limitá-lo.
+    const selectedKey = selected ? `${selected.index}:${selected.tags.join()}:${selected.texts.join('|')}` : null;
+    const [offFor, setOffFor] = useState<string | null>(null);
+    const scoped = selected && selectedKey !== offFor ? selected : null;
+    const clearScope = useCallback(() => setOffFor(selectedKey), [selectedKey]);
 
     // Guarda a conversa a cada mudança (as mensagens da API mudam sempre juntamente com `lines` ou `proposal`).
     const persist = useCallback(() => saveChat(key, { lines, history: history.current, pending: !!proposal }), [key, lines, proposal]);
@@ -33,11 +42,14 @@ export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal }
     const send = useCallback(async (text: string) => {
         if (!isbn || !text.trim() || busy) return;
         request.current = text.trim();
+        const block = scoped ? locate(scoped) : null;
+        if (scoped && !block) { setError('Não encontrei os blocos selecionados no livro. Seleciona-os de novo no editor ou tira o âmbito (×).'); return; }
         setLines((l) => [...l, { role: 'user', text: request.current }]);
         setProposal(null); setError(''); setBusy(true);
         try {
             const result = await runAgent({
-                messages: [...history.current, { role: 'user', content: request.current }],
+                messages: [...history.current, { role: 'user', content: block ? blockContext(getParts(), block) + request.current : request.current }],
+                scope: block,
                 send: async (messages) => (await ebooksApi.aiChat(isbn, messages)).data,
                 book: { parts: getParts(), css: getCss() },
             });
@@ -47,7 +59,7 @@ export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal }
         } catch (e) {
             setError(isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error ?? 'Erro de rede' : 'Erro inesperado');
         } finally { setBusy(false); }
-    }, [isbn, busy, getParts, getCss]);
+    }, [isbn, busy, getParts, getCss, scoped, locate]);
 
     const apply = useCallback(async () => {
         if (!proposal) return;
@@ -56,7 +68,6 @@ export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal }
             await applyProposal(proposal, request.current);
             history.current = [...history.current, appliedNote(proposal)]; // o modelo tem de saber que foi aplicado
             setProposal(null);
-            setLines((l) => [...l, { role: 'assistant', text: 'Aplicado' }]);
         } catch { setError('Não foi possível aplicar (gravar a versão anterior falhou).'); }
         finally { setBusy(false); }
     }, [proposal, applyProposal]);
@@ -82,5 +93,5 @@ export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal }
     }, [proposal]);
     const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setError(''); }, []); // o efeito apaga o que estava guardado
 
-    return { lines, proposal, busy, error, send, apply, discard, renameStyle, noteReverted, reset };
+    return { lines, proposal, busy, error, scoped, clearScope, send, apply, discard, renameStyle, noteReverted, reset };
 }
