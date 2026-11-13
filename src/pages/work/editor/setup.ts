@@ -14,6 +14,7 @@ import { attachActiveBlock, type ActiveBlock } from './activeBlock';
 import { registerBlockFormats, registeredCharStyles, toggleCharStyle } from './formats';
 import { charStyles } from '../../../utils/user-styles';
 import { HEADING_STRIPPED_CLASSES } from '../../../utils/editor-classes';
+import { blockCssInfo } from './cssInfo';
 import { registerImageTools } from './imageTools';
 import { MARK, registerEphemeralMarks } from './ephemeral';
 
@@ -377,23 +378,17 @@ export function createEditorSetup(deps: SetupDeps) {
         });
 
         // Barra de estado: mostrar o CSS do bloco selecionado (seletor de classes
-        // + style inline) à esquerda do element-path. ponytail: injeta um elemento
+        // + style inline, e o código inline dos elementos em linha sob o cursor — cssInfo.ts) à esquerda do element-path. ponytail: injeta um elemento
         // próprio na .tox-statusbar e atualiza-o no NodeChange (o element-path do
         // tema é re-renderizado e não dá para customizar o label).
         let cssInfoEl: HTMLElement | null = null;
         const updateCssInfo = () => {
             if (!cssInfoEl) return;
-            const block = blockOf(editor.selection.getNode());
-            if (block && /^(P|H[1-6])$/.test(block.nodeName)) {
-                const tag = block.nodeName.toLowerCase();
-                const cls = (block.getAttribute('class') || '').split(/\s+/)
-                    .filter((c) => c && !c.startsWith('mce') && !c.startsWith('data-mce'))
-                    .map((c) => '.' + c).join('');
-                const style = (block.getAttribute('style') || '').trim();
-                cssInfoEl.textContent = tag + cls + (style ? ` { ${style} }` : '');
-            } else {
-                cssInfoEl.textContent = '';
-            }
+            const node = editor.selection.getNode();
+            const block = blockOf(node);
+            const text = block && /^(P|H[1-6])$/.test(block.nodeName) ? blockCssInfo(block, node) : '';
+            cssInfoEl.textContent = text;
+            cssInfoEl.title = text || 'CSS do bloco selecionado'; // a barra corta com reticências: o texto inteiro vê-se ao passar o rato
         };
         editor.on('init', () => {
             const sb = editor.getContainer()?.querySelector('.tox-statusbar');
