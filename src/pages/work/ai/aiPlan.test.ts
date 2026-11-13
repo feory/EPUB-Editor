@@ -131,3 +131,17 @@ test('set_image_alts com overwrite: edição posterior substitui um alt já escr
     expect(plan([{ type: 'set_image_alts', items: [{ id: 'a', alt: 'Texto novo' }] }], [], written).opResults[0].changed).toBe(false);
     expect(validateOps([{ type: 'set_image_alts', items: [{ id: 'a', alt: 'x', overwrite: 'sim' as unknown as boolean }] }])).toHaveLength(1);
 });
+
+test('inline_style_to_class: validação (style, cls, scope) e conversão no plano', () => {
+    const part = [ch('Um', '<p>x</p>').replace('<h1>Um</h1>', '<h1>Um <span style="color: red;">1</span></h1>')];
+    const ok = plan([{ type: 'inline_style_to_class', style: { color: 'red' }, cls: 'c-vermelho', scope: ['h1'] }], [], part);
+    expect(ok.errors).toEqual([]);
+    expect(ok.html).toContain('<span class="c-vermelho">1</span>');
+    const bad = [
+        { type: 'inline_style_to_class', style: {}, cls: 'c-x' },
+        { type: 'inline_style_to_class', style: { color: '<b>' }, cls: 'c-x' },
+        { type: 'inline_style_to_class', style: { color: 'red' }, cls: 'Mau Nome' },
+        { type: 'inline_style_to_class', style: { color: 'red' }, cls: 'c-x', scope: 'h1' },
+    ] as unknown as BookOp[];
+    expect(validateOps(bad)).toHaveLength(4);
+});

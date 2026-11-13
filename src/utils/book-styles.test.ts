@@ -74,3 +74,10 @@ test('applyStylePlan: revalida contra o CSS atual — estilo criado ou apagado e
     expect(gone.errors).toEqual(['o estilo "p-destaque" já não existe']);
     expect(gone.css).toBe(CSS.replace('.p-destaque { color: #555; }', ''));
 });
+
+test('estilo de caracteres: kind "char" dá a classe c-nome; background e border-radius permitidos', () => {
+    const { planned, errors } = planStyles([{ name: 'Número', kind: 'char', props: { background: '#000', color: '#fff', padding: '0.15em 0.6em', 'border-radius': '4px' } }], CSS);
+    expect(errors).toEqual([]);
+    expect(planned).toEqual([{ cls: 'c-numero', body: 'background: #000; color: #fff; padding: 0.15em 0.6em; border-radius: 4px;' }]);
+    expect(planStyles([{ name: 'Fundo', kind: 'char', props: { background: 'url(x)' } }], CSS).errors).toHaveLength(1);
+});

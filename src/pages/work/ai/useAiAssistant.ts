@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { isAxiosError } from 'axios';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { runAgent, type AgentMessage, type AgentResult } from './aiAgent';
+import { runAgent, appliedNote, discardedNote, renameProposalStyle, type AgentMessage, type AgentResult } from './aiAgent';
 
 export interface AiLine { role: 'user' | 'assistant'; text: string }
 
@@ -43,14 +43,27 @@ export function useAiAssistant({ isbn, getParts, getCss, applyProposal }: {
         setBusy(true); setError('');
         try {
             await applyProposal(proposal, request.current);
+            history.current = [...history.current, appliedNote(proposal)]; // o modelo tem de saber que foi aplicado
             setProposal(null);
             setLines((l) => [...l, { role: 'assistant', text: 'Aplicado' }]);
         } catch { setError('Não foi possível aplicar (gravar a versão anterior falhou).'); }
         finally { setBusy(false); }
     }, [proposal, applyProposal]);
 
-    const discard = useCallback(() => setProposal(null), []);
+    /** O utilizador muda o nome de um estilo novo da proposta; o resultado (ou o erro) volta para a interface. */
+    const renameStyle = useCallback((oldCls: string, name: string): string | null => {
+        if (!proposal) return null;
+        const res = renameProposalStyle(proposal, oldCls, name, { parts: getParts(), css: getCss() });
+        if ('error' in res) return res.error;
+        setProposal(res.proposal);
+        return null;
+    }, [proposal, getParts, getCss]);
+
+    const discard = useCallback(() => {
+        if (proposal) history.current = [...history.current, discardedNote()];
+        setProposal(null);
+    }, [proposal]);
     const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setError(''); }, []);
 
-    return { lines, proposal, busy, error, send, apply, discard, reset };
+    return { lines, proposal, busy, error, send, apply, discard, renameStyle, reset };
 }

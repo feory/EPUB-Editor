@@ -5,6 +5,7 @@
 import { runRules, type BookRule, type RuleReport } from '../../../utils/book-rules';
 import { splitChapters, classifyChapterPart } from '../../../utils/chapters';
 import { setImageAlts, type AltDecision } from '../../../utils/image-alt-scan';
+import { convertSpanStyles } from '../../../utils/inline-styles';
 import { applyStylePlan, type PlannedStyle, type PlannedEdit } from '../../../utils/book-styles';
 import * as bookEdit from '../bookEdit';
 import type { Book, BookEdit } from '../bookEdit';
@@ -17,14 +18,15 @@ export type BookOp =
     | { type: 'rename_chapter'; index: number; title: string }
     | { type: 'set_chapter_level'; index: number; level: 'h1' | 'h2' | 'h3' }
     | { type: 'hide_chapter'; index: number; hidden: boolean }
-    | { type: 'set_image_alts'; items: AltDecision[] };
+    | { type: 'set_image_alts'; items: AltDecision[] }
+    | { type: 'inline_style_to_class'; style: Record<string, string>; cls: string; scope?: string[] };
 
 export interface OpResult { label: string; changed: boolean; summary: string }
 export interface PlanResult { html: string; reports: RuleReport[]; opResults: OpResult[]; errors: string[] }
 
 const LABELS: Record<BookOp['type'], string> = {
     drop_caps: 'Capitulares', link_index: 'Ligar Índice', fix_links: 'Corrigir links', replace_text: 'Substituir texto',
-    rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice', set_image_alts: 'Texto alternativo',
+    rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice', set_image_alts: 'Texto alternativo', inline_style_to_class: 'Estilo inline → classe',
 };
 const LEVELS = ['h1', 'h2', 'h3'];
 // `find` casa no HTML cru (replaceInBook): sem marcação nem aspas/atributos, para não tocar em tags; o texto novo também sem tags.
@@ -43,6 +45,12 @@ export function validateOps(ops: BookOp[]): string[] {
             if (typeof op.replace !== 'string' || op.replace.length > 500 || BAD_TEXT.test(op.replace)) errors.push(`${at}: "replace" inválido (sem < >)`);
         }
         if (op.type === 'set_image_alts' && (!Array.isArray(op.items) || op.items.length > 1000 || !op.items.every((d) => typeof d?.id === 'string' && d.id && typeof d.alt === 'string' && d.alt.length <= 300 && !BAD_TEXT.test(d.alt) && (d.overwrite === undefined || typeof d.overwrite === 'boolean')))) errors.push(`${at}: "items" tem de ser uma lista (até 1000) de { id, alt } com alt até 300 caracteres e sem < >`);
+        if (op.type === 'inline_style_to_class') {
+            const entries = op.style && typeof op.style === 'object' ? Object.entries(op.style) : [];
+            if (!entries.length || entries.length > 12 || !entries.every(([k, v]) => /^[a-z][a-z-]*$/.test(k) && typeof v === 'string' && v.length <= 60 && !BAD_TEXT.test(v))) errors.push(`${at}: "style" tem de ser { propriedade: valor } (até 12, sem < >)`);
+            if (typeof op.cls !== 'string' || !/^[a-z][a-z0-9-]*$/.test(op.cls) || op.cls.startsWith('chapter-')) errors.push(`${at}: "cls" inválida`);
+            if (op.scope !== undefined && (!Array.isArray(op.scope) || !op.scope.every((t) => /^[a-z][a-z0-9]*$/.test(t)))) errors.push(`${at}: "scope" tem de ser uma lista de tags (ex. ["h1"])`);
+        }
         if ('index' in op && !Number.isInteger(op.index)) errors.push(`${at}: "index" tem de ser um inteiro`);
         if (op.type === 'rename_chapter' && (typeof op.title !== 'string' || !op.title.trim() || op.title.length > 200 || BAD_TEXT.test(op.title))) errors.push(`${at}: título inválido`);
         if (op.type === 'set_chapter_level' && !LEVELS.includes(op.level)) errors.push(`${at}: nível tem de ser h1, h2 ou h3`);
@@ -57,7 +65,7 @@ const fromEdit = (edit: BookEdit | null): Step => {
     return edit?.html === undefined ? { summary: edit?.notice?.text ?? 'Sem alterações' } : { html: edit.html, summary: edit.notice?.text ?? 'Feito' };
 };
 
-function runOp(book: Book, op: BookOp): Step {
+function runOp(book: Book, op: BookOp, known?: ReadonlySet<string>): Step {
     const at = 'index' in op ? book.chapters[op.index] : null;
     if ('index' in op && !at) return { summary: '', error: `não há capítulo ${op.index} (0–${book.chapters.length - 1})` };
     switch (op.type) {
@@ -75,6 +83,11 @@ function runOp(book: Book, op: BookOp): Step {
         case 'set_chapter_level': {
             const step = fromEdit(bookEdit.changeLevel(book, op.index, op.level));
             return step.html === undefined ? { summary: 'Já tem esse nível' } : { ...step, summary: `${at!.title}: ${op.level}` };
+        }
+        case 'inline_style_to_class': {
+            if (known && !known.has(op.cls)) return { summary: '', error: `a classe "${op.cls}" não existe: cria o estilo em "styles" (kind "char") na mesma proposta` };
+            const { parts, changed } = convertSpanStyles(book.parts, { style: op.style, cls: op.cls, scope: op.scope });
+            return changed === 0 ? { summary: 'Nenhum span com esse estilo' } : { html: parts.join(''), summary: `${changed} ${changed === 1 ? 'span passa' : 'spans passam'} a .${op.cls}${op.scope ? ` (em ${op.scope.join(', ')})` : ''}` };
         }
         case 'set_image_alts': {
             const { parts, changed } = setImageAlts(book.parts, op.items);
@@ -98,7 +111,7 @@ export function runPlan(parts: string[], rules: BookRule[], ops: BookOp[], known
     let book = bookOf(run.parts);
     const opResults: OpResult[] = [];
     ops.forEach((op, i) => {
-        const step = runOp(book, op);
+        const step = runOp(book, op, known);
         if (step.error) { errors.push(`operação ${i + 1}: ${step.error}`); return; }
         opResults.push({ label: LABELS[op.type], changed: step.html !== undefined && step.html !== html, summary: step.summary });
         if (step.html !== undefined && step.html !== html) { html = step.html; book = bookOf(splitChapters(html)); }

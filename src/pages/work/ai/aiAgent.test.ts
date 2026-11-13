@@ -123,3 +123,67 @@ test('operações: simuladas na proposta (sem alterar o livro) e erros voltam ao
     await runAgent({ messages: user, send: notList.send, book });
     expect(notList.seen[1].at(-1)!.content).toBeDefined();
 });
+
+test('notas depois de Aplicar/Descartar: o modelo fica a saber, com o resumo para poder reverter', async () => {
+    const { appliedNote, discardedNote } = await import('./aiAgent');
+    const styles = [{ name: 'Nota', props: { 'font-size': '0.9em' } }];
+    const css = '/* === ESTILOS DE PARÁGRAFO === */\n    .p-quote { font-size: 0.85em !important; }\n';
+    const s = script(tool('1', 'preview_rules', { rules: [rule], styles, style_edits: [{ cls: 'p-quote', props: { 'font-size': '0.7em' } }] }), text('ok'));
+    const r = await runAgent({ messages: user, send: s.send, book: { ...book, css } });
+    const note = appliedNote(r.proposal!);
+    expect(note.role).toBe('user');
+    expect(note.content).toContain('APLICOU');
+    expect(note.content).toContain('"antes":"font-size: 0.85em !important;"');
+    expect(note.content).toContain('p-non-indent');
+    expect(note.content).toContain('"blocos_alterados":1');
+    expect(discardedNote().content).toContain('DESCARTOU');
+});
+
+test('converter o span inline em estilo de caracteres e aplicar nos h1 (estilo novo + operação, numa proposta)', async () => {
+    const BADGE = 'background: #000; color: #fff; padding: 0.15em 0.6em;';
+    const ch1 = (t: string) => `<p class="chapter-break-h1" data-title="${t}"></p><h1>Capítulo <span style="${BADGE}">1</span></h1><p>corpo <span style="${BADGE}">igual</span></p>`;
+    const props = { background: '#000', color: '#fff', padding: '0.15em 0.6em' };
+    const s = script(
+        tool('1', 'survey_book'),
+        tool('2', 'preview_rules', { rules: [], styles: [{ name: 'Número', kind: 'char', props }], operations: [{ type: 'inline_style_to_class', style: props, cls: 'c-numero', scope: ['h1'] }] }),
+        text('ok'),
+    );
+    const r = await runAgent({ messages: user, send: s.send, book: { parts: [ch1('Um'), ch1('Dois')], css: '' } });
+    const survey = JSON.parse(results(s.seen[1])[0].content);
+    expect(survey.inlineSpans[0]).toMatchObject({ count: 4, inBlocks: { h1: 2, p: 2 } });
+    expect(r.proposal?.styles).toEqual([{ cls: 'c-numero', body: 'background: #000; color: #fff; padding: 0.15em 0.6em;' }]);
+    expect(r.proposal?.opResults[0]).toMatchObject({ label: 'Estilo inline → classe', changed: true, summary: '2 spans passam a .c-numero (em h1)' });
+});
+
+test('converter para uma classe que não existe (sem o estilo na proposta) → erro, sem proposta', async () => {
+    const part = `<p class="chapter-break-h1" data-title="Um"></p><h1><span style="color: red;">1</span></h1>`;
+    const s = script(tool('1', 'preview_rules', { rules: [], operations: [{ type: 'inline_style_to_class', style: { color: 'red' }, cls: 'c-vermelho' }] }), text('x'));
+    const r = await runAgent({ messages: user, send: s.send, book: { parts: [part], css: '' } });
+    expect(r.proposal).toBeNull();
+    expect(results(s.seen[1])[0].content).toContain('não existe');
+});
+
+test('mudar o nome de um estilo novo: troca a classe no estilo, nas regras e nas operações, e refaz a simulação', async () => {
+    const { renameProposalStyle } = await import('./aiAgent');
+    const part = `<p class="chapter-break-h1" data-title="Um"></p><h1>Um <span style="color: red;">1</span></h1><p>corpo</p>`;
+    const props = { color: 'red' };
+    const use: BookRule = { select: { tag: ['p'] }, action: { type: 'addClass', value: 'c-vermelho' } };
+    const s = script(tool('1', 'preview_rules', { rules: [use], styles: [{ name: 'Vermelho', kind: 'char', props }], operations: [{ type: 'inline_style_to_class', style: props, cls: 'c-vermelho', scope: ['h1'] }] }), text('ok'));
+    const bookIn = { parts: [part], css: '' };
+    const r = await runAgent({ messages: user, send: s.send, book: bookIn });
+    const res = renameProposalStyle(r.proposal!, 'c-vermelho', 'Destaque forte', bookIn);
+    if ('error' in res) throw new Error(res.error);
+    const p = res.proposal;
+    expect(p.styles).toEqual([{ cls: 'c-destaque-forte', body: 'color: red;' }]);
+    expect((p.rules[0].action as { value: string }).value).toBe('c-destaque-forte');
+    expect(p.ops[0]).toMatchObject({ type: 'inline_style_to_class', cls: 'c-destaque-forte' });
+    expect(p.opResults[0].summary).toContain('.c-destaque-forte');
+    expect(p.reports[0].samples[0].after).toContain('c-destaque-forte');
+    // erros: nome vazio, classe já existente (do editor ou do livro) e estilo que já não consta
+    expect('error' in renameProposalStyle(p, 'c-destaque-forte', '  !! ', bookIn)).toBe(true);
+    expect('error' in renameProposalStyle(p, 'c-destaque-forte', 'p-quote', { ...bookIn, css: '/* === ESTILOS PERSONALIZADOS === */\n    .p-quote2 { color: red; }\n' })).toBe(false); // c-p-quote é livre
+    const withExisting = { ...bookIn, css: '/* === ESTILOS PERSONALIZADOS === */\n    .c-existente { color: blue; }\n' };
+    expect(renameProposalStyle(p, 'c-destaque-forte', 'existente', withExisting)).toEqual({ error: 'Já existe um estilo ".c-existente".' });
+    expect('error' in renameProposalStyle(p, 'c-nao-esta', 'x', bookIn)).toBe(true);
+    expect(renameProposalStyle(p, 'c-destaque-forte', 'destaque forte', bookIn)).toEqual({ proposal: p }); // mesmo nome = nada a fazer
+});

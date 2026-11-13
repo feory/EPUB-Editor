@@ -4,6 +4,8 @@
 import { surveyBook } from '../../../utils/book-survey';
 import type { BookRule, RuleReport } from '../../../utils/book-rules';
 import { runPlan, type BookOp, type OpResult } from './aiPlan';
+import { charStyles, paragraphStyles } from '../../../utils/user-styles';
+import { EDITOR_CLASSES } from '../../../utils/editor-classes';
 import { planStyles, planStyleEdits, classesForRules, type NewStyle, type PlannedStyle, type StyleEdit, type PlannedEdit } from '../../../utils/book-styles';
 
 type Block = { type: string; [key: string]: unknown };
@@ -61,4 +63,46 @@ export async function runAgent(opts: {
         messages = [...messages, { role: 'user', content: results }];
     }
     return { messages, text: 'O assistente excedeu o limite de passos. Reformula o pedido.', proposal };
+}
+
+/**
+ * O que o modelo tem de saber DEPOIS de o utilizador carregar em Aplicar: o botão é da interface, não passa pela conversa, e sem
+ * esta nota o modelo achava que "nada foi aplicado". Leva o suficiente (regras, operações, valores antigos dos estilos) para
+ * conseguir propor o inverso se o utilizador pedir para reverter.
+ */
+export function appliedNote(p: NonNullable<AgentResult['proposal']>): AgentMessage {
+    const summary = {
+        rules: p.rules,
+        operations: p.ops.filter((o) => o.type !== 'set_image_alts'),
+        new_styles: p.styles,
+        style_edits: p.edits.map((e) => ({ selector: e.selector, antes: e.before, depois: e.after })),
+        blocos_alterados: p.reports.reduce((n, r) => n + r.changed, 0),
+    };
+    return { role: 'user', content: `[Sistema: o utilizador APLICOU a proposta anterior. As alterações já estão gravadas no livro e a versão anterior ficou no histórico como "Antes de IA".]\n${JSON.stringify(summary)}` };
+}
+
+export const discardedNote = (): AgentMessage => ({ role: 'user', content: '[Sistema: o utilizador DESCARTOU a proposta anterior. Nada foi alterado no livro.]' });
+
+type Proposal = NonNullable<AgentResult['proposal']>;
+
+/**
+ * O utilizador muda o nome de um estilo NOVO da proposta antes de aplicar. A classe nova (c-nome para caracteres) troca-se em
+ * todo o lado onde a proposta a usa — o estilo, as regras que a acrescentam e as operações que a aplicam — e a simulação
+ * refaz-se, para os exemplos e contagens mostrarem o nome certo. Devolve o erro se o nome não serve ou já existe.
+ */
+export function renameProposalStyle(p: Proposal, oldCls: string, newName: string, book: { parts: string[]; css: string }): { proposal: Proposal } | { error: string } {
+    if (!p.styles.some((s) => s.cls === oldCls)) return { error: 'Esse estilo já não está na proposta.' };
+    const kind = charStyles.isStyle(oldCls) ? charStyles : paragraphStyles;
+    const cls = kind.classOf(newName);
+    if (!cls) return { error: 'Escolhe um nome com letras ou números.' };
+    if (cls === oldCls) return { proposal: p };
+    const taken = new Set([...EDITOR_CLASSES, ...classesForRules(book.css), ...p.styles.filter((s) => s.cls !== oldCls).map((s) => s.cls)]);
+    if (taken.has(cls)) return { error: `Já existe um estilo ".${cls}".` };
+
+    const styles = p.styles.map((s) => (s.cls === oldCls ? { ...s, cls } : s));
+    const rules = p.rules.map((r) => ((r.action.type === 'addClass' || r.action.type === 'removeClass') && r.action.value === oldCls ? { ...r, action: { ...r.action, value: cls } } : r));
+    const ops = p.ops.map((o) => (o.type === 'inline_style_to_class' && o.cls === oldCls ? { ...o, cls } : o));
+    const run = runPlan(book.parts, rules, ops, classesForRules(book.css, styles.map((s) => s.cls)));
+    if (run.errors.length) return { error: run.errors.join('; ') };
+    return { proposal: { ...p, styles, rules, ops, reports: run.reports, opResults: run.opResults } };
 }

@@ -5,6 +5,7 @@ import { useEditorFrame } from '../hooks/useEditorFrame';
 import type { useAiAssistant } from '../ai/useAiAssistant';
 import type { useAltReview } from '../ai/useAltReview';
 import { AltReview } from './AltReview';
+import { charStyles, paragraphStyles } from '../../../utils/user-styles';
 
 type Ai = ReturnType<typeof useAiAssistant>;
 type Alt = ReturnType<typeof useAltReview>;
@@ -15,6 +16,32 @@ const inline = (text: string): React.ReactNode[] =>
         part.startsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong>
             : part.startsWith('`') && part.length > 2 ? <code key={i}>{part.slice(1, -1)}</code>
                 : part);
+
+/** Estilo novo da proposta, com o nome editável (a classe troca-se em todo o lado onde a proposta a usa). */
+const NewStyleRow: React.FC<{ cls: string; body: string; onRename: (name: string) => string | null; disabled: boolean }> = ({ cls, body, onRename, disabled }) => {
+    const kind = charStyles.isStyle(cls) ? charStyles : paragraphStyles;
+    const [draft, setDraft] = useState<string | null>(null);
+    const [error, setError] = useState('');
+    const commit = () => {
+        if (draft === null) return;
+        const err = onRename(draft);
+        setError(err ?? '');
+        if (!err) setDraft(null);
+    };
+    return (
+        <div className="text-xs text-slate-600 flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-semibold">Estilo novo</span>
+                {kind === charStyles && <span className="text-text-muted">c-</span>}
+                <input aria-label="Nome do estilo" value={draft ?? kind.label(cls)} disabled={disabled} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { setDraft(null); setError(''); } }}
+                    className="h-6 w-36 rounded border border-border bg-white px-1.5 font-mono outline-none focus:border-slate-400" />
+                <span className="text-text-muted">{'{ '}{body}{' }'}</span>
+            </div>
+            {error && <span className="text-rose-600">{error}</span>}
+        </div>
+    );
+};
 
 const ICON = 'p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-all';
 
@@ -61,7 +88,7 @@ export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; isbn: string; readOnly: boo
                     <div className="rounded-xl border border-border p-3 flex flex-col gap-2">
                         <p className="font-bold text-slate-700">Proposta: {total} {total === 1 ? 'bloco' : 'blocos'}{ai.proposal.styles.length > 0 && ` + ${ai.proposal.styles.length} ${ai.proposal.styles.length === 1 ? 'estilo novo' : 'estilos novos'}`}{ai.proposal.opResults.some((o) => o.changed) && ` + ${ai.proposal.opResults.filter((o) => o.changed).length} ${ai.proposal.opResults.filter((o) => o.changed).length === 1 ? 'operação' : 'operações'}`}{ai.proposal.edits.length > 0 && ` + ${ai.proposal.edits.length} ${ai.proposal.edits.length === 1 ? 'estilo alterado' : 'estilos alterados'}`}</p>
                         {ai.proposal.styles.map((s) => (
-                            <p key={s.cls} className="text-xs text-slate-600"><span className="font-semibold">Estilo novo</span> <code>.{s.cls}</code> {'{ '}{s.body}{' }'}</p>
+                            <NewStyleRow key={s.cls} cls={s.cls} body={s.body} disabled={ai.busy} onRename={(name) => ai.renameStyle(s.cls, name)} />
                         ))}
                         {ai.proposal.opResults.filter((o) => o.changed).map((o, i) => (
                             <p key={i} className="text-xs text-slate-600"><span className="font-semibold">{o.label}</span>: {o.summary}</p>

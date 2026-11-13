@@ -1,20 +1,21 @@
-// Estilos de parágrafo propostos pela IA: valida o pedido ({ name, props }) e devolve o que se vai criar ({ cls, body }).
+// Estilos novos propostos pela IA (de parágrafo ou de caracteres c-nome): valida o pedido ({ name, props, kind? }) e devolve o que se vai criar ({ cls, body }).
 // Só uma lista fechada de propriedades e valores simples — nada de url(), @import, funções ou posicionamento.
 import { createCustomStyle, applyBookRule, customStyleClasses } from './book-css';
 import { readRuleBody } from './css-rule';
-import { paragraphStyles } from './user-styles';
+import { paragraphStyles, charStyles } from './user-styles';
 import { EDITOR_CLASSES, STRUCTURAL_CLASSES } from './editor-classes';
 
 /** Classes que uma regra da IA pode acrescentar: as do editor (menos as estruturais), os estilos do utilizador e `extra` (estilos a criar). */
 export const classesForRules = (css: string, extra: string[] = []): Set<string> =>
     new Set([...[...EDITOR_CLASSES].filter((c) => !STRUCTURAL_CLASSES.includes(c)), ...customStyleClasses(css), ...extra]);
 
-export interface NewStyle { name: string; props: Record<string, string> }
+/** `kind` 'char' = estilo de caracteres (`.c-nome`, aplica-se a <span class>); por omissão, de parágrafo. */
+export interface NewStyle { name: string; props: Record<string, string>; kind?: 'paragraph' | 'char' }
 export interface PlannedStyle { cls: string; body: string }
 
 export const STYLE_PROPS = [
     'font-size', 'font-weight', 'font-style', 'font-variant', 'line-height', 'letter-spacing',
-    'text-align', 'text-indent', 'text-transform', 'color', 'background-color',
+    'text-align', 'text-indent', 'text-transform', 'color', 'background-color', 'background', 'border-radius',
     'margin', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right',
     'padding', 'padding-top', 'padding-bottom', 'padding-left', 'padding-right',
     'border-top', 'border-bottom', 'border-left', 'border-right',
@@ -27,7 +28,7 @@ export function planStyles(styles: NewStyle[], css: string): { planned: PlannedS
     let current = css;
     styles.forEach((s, i) => {
         const at = `estilo ${i + 1}`;
-        const cls = paragraphStyles.classOf(String(s?.name ?? ''));
+        const cls = (s?.kind === 'char' ? charStyles : paragraphStyles).classOf(String(s?.name ?? ''));
         const entries = Object.entries(s?.props ?? {});
         if (!cls) return errors.push(`${at}: nome inválido`);
         if (EDITOR_CLASSES.has(cls)) return errors.push(`${at}: ".${cls}" já é uma classe do editor`);
