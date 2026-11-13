@@ -41,7 +41,7 @@ test('pedido válido: modelo, sistema e ferramentas do servidor; sem tool_choice
   expect(await res.json()).toMatchObject({ content: [{ type: 'text', text: 'olá' }], stop_reason: 'end_turn' });
   const p = c.calls[0];
   expect(p.model).toBe('claude-opus-5-5');
-  expect(p.tools.map((t) => t.name)).toEqual(['survey_book', 'preview_rules', 'run_validation']);
+  expect(p.tools.map((t) => t.name)).toEqual(['survey_book', 'preview_rules', 'check_publication', 'run_validation']);
   expect(p.system[0].text).toContain('survey_book');
   expect(p.messages).toEqual(msgs);
   for (const k of ['tool_choice', 'temperature', 'top_p', 'top_k']) expect(p).not.toHaveProperty(k);
@@ -123,7 +123,7 @@ test('openrouter: pedido ao endpoint com chave, modelo e ferramentas; resposta p
   expect(calls[0].init.headers.Authorization).toBe('Bearer sk-or-x');
   const sent = JSON.parse(calls[0].init.body);
   expect(sent.model).toBe('prov/modelo');
-  expect(sent.tools.map((t) => t.function.name)).toEqual(['survey_book', 'preview_rules', 'run_validation']);
+  expect(sent.tools.map((t) => t.function.name)).toEqual(['survey_book', 'preview_rules', 'check_publication', 'run_validation']);
   expect(sent.messages[0].role).toBe('system');
 });
 

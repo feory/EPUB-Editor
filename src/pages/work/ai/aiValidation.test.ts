@@ -52,3 +52,22 @@ test('operação typography: resumo com contagens e exemplo; fixes inválidos re
     expect(runPlan(['<p>a</p>'], [], [{ type: 'typography', fixes: ['nada' as never] }]).errors).toHaveLength(1);
     expect(runPlan(['<p>limpo</p>'], [], [{ type: 'typography' }]).opResults[0]).toMatchObject({ changed: false, summary: 'Nada a corrigir' });
 });
+
+test('check_publication: junta os factos do livro com as quatro validações por ordem', async () => {
+    const order: ValidationKind[] = [];
+    let toolResult = '';
+    let turn = 0;
+    const send = async (messages: { content: unknown }[]): Promise<ChatResponse> => {
+        if (++turn === 1) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't', name: 'check_publication', input: {} }] };
+        toolResult = ((messages[messages.length - 1].content as { content: string }[])[0]).content;
+        return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }] };
+    };
+    const facts = { metadata: { title: 'T', author: '', language: 'pt', ebook_isbn: '1' }, hasCover: false, images: { total: 0, withoutAlt: 0 }, indice: { exists: false, linked: 0, linkable: 0 }, pageMarkers: 0 };
+    await runAgent({ messages: [], send: send as never, book: { parts: [], css: '' }, publicationFacts: async () => facts, validate: async (k) => { order.push(k); return digest(k, k === 'links' ? 2 : 0); } });
+    expect(order).toEqual(['footnotes', 'links', 'epub', 'accessibility']);
+    const items = JSON.parse(toolResult).itens as { item: string; estado: string }[];
+    expect(items.find((i) => i.item === 'Metadados')?.estado).toBe('falta'); // autor em branco
+    expect(items.find((i) => i.item === 'Capa')?.estado).toBe('falta');
+    expect(items.find((i) => i.item === 'Links')?.estado).toBe('aviso');
+    expect(items.find((i) => i.item === 'EPUBCheck')?.estado).toBe('ok');
+});

@@ -3,6 +3,7 @@
 // O modelo só PROPÕE: `proposal` é a última simulação válida, e aplicá-la é um passo separado, do utilizador.
 import { surveyBook } from '../../../utils/book-survey';
 import type { BookRule, RuleReport } from '../../../utils/book-rules';
+import { buildChecklist, type PublicationFacts } from './publicationChecklist';
 import { VALIDATION_ORDER, type ValidationKind, type ValidationDigest } from '../../../utils/validation-digest';
 import { scopeRules, type RuleBlock } from './aiSelection';
 import { runPlan, type BookOp, type OpResult } from './aiPlan';
@@ -33,6 +34,8 @@ export async function runAgent(opts: {
     scope?: RuleBlock | null;
     /** Corre uma validação sobre o livro como está agora e devolve o resumo; null se não foi possível. */
     validate?: (kind: ValidationKind) => Promise<ValidationDigest | null>;
+    /** Os factos do livro para a lista de verificação (metadados, capa, imagens, Índice, páginas); null se não foi possível. */
+    publicationFacts?: () => Promise<PublicationFacts | null>;
 }): Promise<AgentResult> {
     let messages = opts.messages;
     let proposal: AgentResult['proposal'] = null;
@@ -40,6 +43,13 @@ export async function runAgent(opts: {
     const execute = async (tool: Block): Promise<{ content: string; is_error?: true }> => {
         const input = (tool.input ?? {}) as { rules?: unknown; styles?: unknown; style_edits?: unknown; operations?: unknown };
         if (tool.name === 'survey_book') return { content: JSON.stringify(surveyBook(opts.book.parts, opts.book.css)) };
+        if (tool.name === 'check_publication') {
+            const facts = await opts.publicationFacts?.();
+            if (!facts) return { content: 'Não foi possível ler os dados do livro.', is_error: true };
+            const validations: { kind: ValidationKind; digest: ValidationDigest | null }[] = [];
+            for (const kind of VALIDATION_ORDER) validations.push({ kind, digest: (await opts.validate?.(kind)) ?? null });
+            return { content: JSON.stringify({ itens: buildChecklist(facts, validations), validacoesSemDetalhe: 'para o detalhe de uma validação com problemas chama run_validation com o seu type' }) };
+        }
         if (tool.name === 'run_validation') {
             const type = (tool.input as { type?: unknown } | undefined)?.type;
             const kinds: readonly ValidationKind[] = type === 'all' ? VALIDATION_ORDER : (VALIDATION_ORDER as readonly unknown[]).includes(type) ? [type as ValidationKind] : ['accessibility'];

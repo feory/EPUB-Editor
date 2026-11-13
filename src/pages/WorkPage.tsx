@@ -30,6 +30,8 @@ import { TextSidebar } from './work/components/TextSidebar';
 import { AiSidebar } from './work/components/AiSidebar';
 import { useAiAssistant } from './work/ai/useAiAssistant';
 import { useAltReview } from './work/ai/useAltReview';
+import { collectFacts } from './work/ai/publicationChecklist';
+import { isIndiceChapterTitle } from '../utils/indice-links';
 import { locateBlocks, type SelectedBlocks } from './work/ai/aiSelection';
 import { useAiChanges } from './work/ai/useAiChanges';
 import { summarizeProposal } from './work/ai/aiAgent';
@@ -428,6 +430,12 @@ export function WorkPage() {
   const aiCss = { get: getCurrentCss, set: (next: string) => editCss(() => next) };
   const ai = useAiAssistant({ isbn, userId: user?.id, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: (p, request) => work.handleApplyAiPlan(p, request, aiCss, summarizeProposal(p)),
     runValidation: (kind) => (work.readOnly ? Promise.resolve(null) : work.runValidation(kind)),
+    publicationFacts: async () => {
+      if (!isbn) return null;
+      const hasCover = await ebooksApi.getCover(isbn).then(() => true, () => false);
+      const parts = work.getBookParts();
+      return collectFacts({ ebook: work.ebook, hasCover, parts, indiceTitles: work.chapters.filter((c) => isIndiceChapterTitle(c.title)).map((c) => c.title) });
+    },
     selected: selectedBlock, locate: (sel) => locateBlocks(work.getBookParts(), sel, work.activeChapterIndex) });
   const altReview = useAltReview({ isbn, language: work.language, getParts: work.getBookParts, applyPlan: (plan, request, summary) => work.handleApplyAiPlan(plan, request, aiCss, summary) });
   const aiChanges = useAiChanges({ isbn, enabled: sidebars.showAiSidebar, revert: async (change) => {

@@ -340,6 +340,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
 
     // --- Return public API (identical shape to original) ---
     return {
+        ebook,
         status: ebook?.status,
         htmlContent: chapterSync.localEditorContent,
         setHtmlContent: chapterSync.handleEditorChange,

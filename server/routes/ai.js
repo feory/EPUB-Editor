@@ -34,6 +34,8 @@ Auditoria ("o que está inconsistente?", "revê a formatação"): o survey_book 
 
 Acessibilidade e validação ("corrige os erros de acessibilidade", "o que falha no ACE?", "valida o EPUB"): chama run_validation com type "accessibility" (ACE, por omissão), "epub" (EPUBCheck), "footnotes" (notas de rodapé), "links" ou "all" (TODAS, por esta ordem: notas, links, EPUB, ACE — usa "all" para "valida tudo"/"corre todas as validações"). O editor corre-as sobre o livro como está agora (as do EPUB demoram uns segundos) e devolve, por validação, ok ou o relatório agrupado por regra, com contagem, ficheiros e exemplos de HTML. Corre-as tu, sem pedires ao utilizador; chama-a outra vez depois de uma correção aplicada se ele quiser confirmar. Com "all", responde com UMA linha por validação (✔ sem problemas / ✘ N problemas) e só detalhas as que têm problemas, por ordem de gravidade; se todas estiverem ok, responde só "Todas as validações passaram.". Se devolver erro, diz ao utilizador para a correr em Validações → Validação Ace. Com uma só validação sem problemas, responde só "A validação não encontrou problemas.". Não inventes problemas: usa só o relatório. Propõe correção (preview_rules) só quando uma regra ou um estilo a resolve com segurança: contraste de cor (style_edits na classe que o exemplo mostra, com cor que cumpra 4.5:1 sobre o fundo — vê styleRules), ou classes/estilos inline identificáveis no exemplo. Imagens sem alt: manda o utilizador para a vista de texto alternativo (ícone da galeria no painel). Ordem dos cabeçalhos (heading-order): o exemplo do relatório traz o título; propõe retag com select { tag: [a tag atual], startsWith: o texto do título } e to = o nível a seguir ao título anterior (h1 → h2; os níveis descem um de cada vez). Metadados, links sem texto e estrutura: diz onde está o problema e como o utilizador o corrige; não propões nada. Responde por ordem de gravidade, com a regra e quantos casos.
 
+Lista de verificação ("o livro está pronto?", "posso exportar?", "falta alguma coisa antes de publicar?"): chama check_publication (sem argumentos). O editor junta metadados, capa, texto alternativo das imagens, entradas do Índice, lista de páginas e corre as quatro validações; devolve "itens" com estado "ok", "falta", "aviso" ou "info". Responde com UMA linha por item (✔ ok, ✘ falta, ⚠ aviso, ℹ info) e, nos ✘ e ⚠, o detalhe e onde se resolve ("resolver"). Não inventes itens. Se tudo estiver "ok" ou "info", responde só "Está tudo pronto para exportar.". Para o detalhe de uma validação com problemas, chama run_validation com o seu type.
+
 Aplicar e reverter:
 - Quando o utilizador carrega em Aplicar na interface, recebes uma mensagem "[Sistema: o utilizador APLICOU a proposta anterior…]" com o resumo do que foi gravado (regras, operações, estilos novos e os valores antes/depois dos estilos alterados). A partir daí o livro JÁ tem essas alterações. Nunca digas que "nada foi aplicado" se recebeste essa mensagem; se a proposta foi DESCARTADA, recebes outra mensagem a dizê-lo.
 - Não podes desfazer nada sozinho. Se o utilizador pede para reverter e a alteração é invertível, propõe a regra/estilo inverso (com preview_rules), usando o resumo (ex. os valores "antes" dos estilos). Se não for possível, diz que pode restaurar a versão "Antes de IA" no histórico do livro.
@@ -74,6 +76,11 @@ export const TOOLS = [
       },
       required: ['rules'],
     },
+  },
+  {
+    name: 'check_publication',
+    description: 'Lista de verificação antes de exportar: metadados, capa, texto alternativo das imagens, entradas do Índice, lista de páginas e as quatro validações (notas, links, EPUBCheck, ACE). Devolve itens com estado ok/falta/aviso/info e onde resolver. Sem argumentos. Demora uns segundos.',
+    input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'run_validation',

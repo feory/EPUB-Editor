@@ -57,6 +57,6 @@ test('os campos do survey_book que o prompt menciona existem mesmo no resumo', (
   expect(Object.keys(survey.audit).sort()).toEqual(['headingJumps', 'inlineStyleOutliers', 'omitted', 'styleUsage']);
 });
 
-test('as ferramentas do servidor são as que o cliente executa (survey_book, preview_rules e run_validation)', () => {
-  expect(TOOLS.map((t) => t.name).sort()).toEqual(['preview_rules', 'run_validation', 'survey_book']);
+test('as ferramentas do servidor são as que o cliente executa (survey_book, preview_rules, run_validation e check_publication)', () => {
+  expect(TOOLS.map((t) => t.name).sort()).toEqual(['check_publication', 'preview_rules', 'run_validation', 'survey_book']);
 });
