@@ -6,6 +6,13 @@ import type { useAiAssistant } from '../ai/useAiAssistant';
 
 type Ai = ReturnType<typeof useAiAssistant>;
 
+// O modelo escreve **negrito** e `código`; o painel não é markdown, por isso só estas duas marcas se desenham.
+const inline = (text: string): React.ReactNode[] =>
+    text.split(/(\*\*[^*]+\*\*|`[^`]+`)/).map((part, i) =>
+        part.startsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong>
+            : part.startsWith('`') && part.length > 2 ? <code key={i}>{part.slice(1, -1)}</code>
+                : part);
+
 const ICON = 'p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-all';
 
 export const AiSidebar: React.FC<{ ai: Ai; readOnly: boolean; onClose: () => void; width: number; onResize: (w: number) => void }> = ({ ai, readOnly, onClose, width, onResize }) => {
@@ -33,7 +40,7 @@ export const AiSidebar: React.FC<{ ai: Ai; readOnly: boolean; onClose: () => voi
                     <p className="text-text-muted">O que posso ajudar?</p>
                 )}
                 {ai.lines.map((l, i) => (
-                    <div key={i} className={l.role === 'user' ? 'self-end max-w-[85%] rounded-xl bg-slate-700 text-white px-3 py-2' : 'self-start max-w-[90%] rounded-xl bg-slate-100 text-slate-800 px-3 py-2 whitespace-pre-wrap'}>{l.text}</div>
+                    <div key={i} className={l.role === 'user' ? 'self-end max-w-[85%] rounded-xl bg-slate-700 text-white px-3 py-2' : 'self-start max-w-[90%] rounded-xl bg-slate-100 text-slate-800 px-3 py-2 whitespace-pre-wrap'}>{l.role === 'user' ? l.text : inline(l.text)}</div>
                 ))}
                 {ai.busy && <p className="text-text-muted">A trabalhar…</p>}
                 {ai.error && <p className="text-rose-600">{ai.error}</p>}
@@ -50,7 +57,7 @@ export const AiSidebar: React.FC<{ ai: Ai; readOnly: boolean; onClose: () => voi
                         {ai.proposal.edits.map((e) => (
                             <p key={e.cls} className="text-xs text-slate-600"><span className="font-semibold">Alterar estilo</span> <code>{e.selector}</code>: <span className="text-rose-600">{e.before || '(sem regra)'}</span> → <span className="text-emerald-700">{e.after || '(vazio)'}</span></p>
                         ))}
-                        {ai.proposal.reports.map((r, i) => (
+                        {ai.proposal.reports.map((r, i) => r.changed > 0 && (
                             <div key={i} className="text-xs text-slate-600">
                                 <p className="font-semibold">Regra {i + 1}: {r.changed} em {r.chapters.length} {r.chapters.length === 1 ? 'capítulo' : 'capítulos'}</p>
                                 {r.samples.map((s, j) => (
