@@ -30,6 +30,11 @@ export interface RuleSelect {
     deep?: boolean;
 }
 
+/** Todas as ações e chaves do `select`, como valores: `Record` obriga o compilador a avisar se se acrescenta uma e esta lista fica para trás.
+ *  Existem para o teste de contrato com o prompt do servidor (server/ai-contract.test.js). */
+export const RULE_ACTION_TYPES = Object.keys({ addClass: 1, removeClass: 1, removeStyle: 1, retag: 1, delete: 1 } satisfies Record<RuleAction['type'], 1>);
+export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, afterHeading: 1, chapters: 1, exceptChapters: 1, deep: 1 } satisfies Record<keyof RuleSelect, 1>);
+
 export interface BookRule {
     select: RuleSelect;
     action: RuleAction;

@@ -19,6 +19,8 @@ export interface AgentResult {
 }
 
 const MAX_TURNS = 8;
+/** Os parâmetros do preview_rules que `execute` lê. Ver server/ai-contract.test.js, que os compara com o schema do servidor. */
+export const PREVIEW_INPUT_KEYS = ['rules', 'styles', 'style_edits', 'operations'] as const;
 const textOf = (content: Block[]) => content.filter((b) => b.type === 'text').map((b) => String(b.text ?? '')).join('\n').trim();
 
 export async function runAgent(opts: {

@@ -28,6 +28,8 @@ const LABELS: Record<BookOp['type'], string> = {
     drop_caps: 'Capitulares', link_index: 'Ligar Índice', fix_links: 'Corrigir links', replace_text: 'Substituir texto',
     rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice', set_image_alts: 'Texto alternativo', inline_style_to_class: 'Estilo inline → classe',
 };
+/** Os tipos de operação (completo por construção: LABELS é um Record). Ver server/ai-contract.test.js. */
+export const OP_TYPES = Object.keys(LABELS);
 const LEVELS = ['h1', 'h2', 'h3'];
 // `find` casa no HTML cru (replaceInBook): sem marcação nem aspas/atributos, para não tocar em tags; o texto novo também sem tags.
 const BAD_FIND = /[<>"&=]/;
