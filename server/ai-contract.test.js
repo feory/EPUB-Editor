@@ -48,12 +48,13 @@ test('os parâmetros do preview_rules são os que o ciclo do cliente lê', async
 
 test('os campos do survey_book que o prompt menciona existem mesmo no resumo', () => {
   const survey = surveyBook([], '');
-  for (const field of ['inlineSpans', 'styleRules', 'allowedClasses', 'inlineStyles']) {
+  for (const field of ['inlineSpans', 'styleRules', 'allowedClasses', 'inlineStyles', 'audit', 'headingJumps', 'inlineStyleOutliers', 'styleUsage']) {
     expect(text).toContain(field);
   }
-  for (const field of ['chapters', 'blocks', 'customStyles', 'inlineSpans', 'allowedClasses', 'styleRules']) {
+  for (const field of ['chapters', 'blocks', 'customStyles', 'inlineSpans', 'allowedClasses', 'styleRules', 'audit']) {
     expect(Object.keys(survey)).toContain(field);
   }
+  expect(Object.keys(survey.audit).sort()).toEqual(['headingJumps', 'inlineStyleOutliers', 'omitted', 'styleUsage']);
 });
 
 test('as ferramentas do servidor são as que o cliente executa (survey_book e preview_rules)', () => {

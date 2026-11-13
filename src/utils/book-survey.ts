@@ -5,6 +5,7 @@ import { classifyChapterPart, type ChapterLevel } from './chapters';
 import { customStyleClasses } from './book-css';
 import { readRuleBody } from './css-rule';
 import { scanSpanStyles, type SpanStyleInfo } from './inline-styles';
+import { auditBook, type BookAudit } from './book-audit';
 import { HEADING_SELECTORS, selectorOf, classesForRules } from './book-styles';
 
 export interface BookSurvey {
@@ -21,6 +22,8 @@ export interface BookSurvey {
     allowedClasses: string[];
     /** Corpo da regra no CSS do livro, por classe ou título h1–h3 (só os que têm regra): o valor atual para quem edita estilos. */
     styleRules: Record<string, string>;
+    /** Anomalias de formatação (títulos que saltam de nível, estilos inline isolados, estilos do utilizador sem uso): ver book-audit.ts. */
+    audit: BookAudit;
 }
 
 const MAX_SAMPLES = 2;
@@ -52,5 +55,5 @@ export function surveyBook(parts: string[], customCss = '', maxBlocks = 60): Boo
 
     const allowedClasses = [...classesForRules(customCss)].sort();
     const all = [...seen].map(([key, v]) => ({ key, count: v.count, inChapters: v.chapters.size, samples: v.samples, ...(v.styles.size ? { inlineStyles: [...v.styles].sort((a, b) => b[1] - a[1]).slice(0, MAX_STYLES).map(([style, count]) => ({ style, count })) } : {}) })).sort((a, b) => b.count - a.count);
-    return { chapters, blocks: all.slice(0, maxBlocks), omittedBlocks: Math.max(0, all.length - maxBlocks), customStyles: customStyleClasses(customCss), inlineSpans: scanSpanStyles(parts), allowedClasses, styleRules: Object.fromEntries([...allowedClasses, ...HEADING_SELECTORS].map((c) => [c, readRuleBody(customCss, selectorOf(c))]).filter(([, body]) => body)) };
+    return { chapters, blocks: all.slice(0, maxBlocks), omittedBlocks: Math.max(0, all.length - maxBlocks), customStyles: customStyleClasses(customCss), inlineSpans: scanSpanStyles(parts), allowedClasses, audit: auditBook(parts, customCss), styleRules: Object.fromEntries([...allowedClasses, ...HEADING_SELECTORS].map((c) => [c, readRuleBody(customCss, selectorOf(c))]).filter(([, body]) => body)) };
 }

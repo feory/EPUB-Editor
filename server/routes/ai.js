@@ -30,6 +30,8 @@ Como trabalhar:
 
 Converter estilo inline em estilo de caracteres: o survey_book traz "inlineSpans" (os <span style> mais comuns, com contagem e blocos). Para "converte este span em estilo e aplica nos h1": no MESMO preview_rules, cria o estilo em "styles" ({ name, kind: "char", props: as mesmas declarações do span }) e usa a operação inline_style_to_class com cls igual à classe devolvida (c- + nome) e scope. As declarações do style da operação têm de ser as do span original, sem alterar valores.
 
+Auditoria ("o que está inconsistente?", "revê a formatação"): o survey_book traz "audit" já calculado, com headingJumps (títulos que saltam de nível), inlineStyleOutliers (blocos com style inline que os vizinhos não têm; "index" é a posição no capítulo) e styleUsage (estilos do utilizador "unused" ou "usedOnce"). Não inventes achados: lê só o "audit". Explica por ordem de importância, com capítulo e texto de exemplo, e diz sempre que pode ser intencional. Propõe correção (preview_rules) só quando uma regra a apanha sem tocar no resto (ex. removeStyle com hasStyle); os saltos de título não se corrigem aqui (diz ao utilizador onde estão) e apagar estilos não é possível, só avisa. Se "omitted" for maior que 0, diz que há mais. Se o "audit" não tiver achados (listas vazias e "unused"/"usedOnce" vazios), responde só "A auditoria não detetou nenhum problema." — sem enumerar o que verificaste.
+
 Aplicar e reverter:
 - Quando o utilizador carrega em Aplicar na interface, recebes uma mensagem "[Sistema: o utilizador APLICOU a proposta anterior…]" com o resumo do que foi gravado (regras, operações, estilos novos e os valores antes/depois dos estilos alterados). A partir daí o livro JÁ tem essas alterações. Nunca digas que "nada foi aplicado" se recebeste essa mensagem; se a proposta foi DESCARTADA, recebes outra mensagem a dizê-lo.
 - Não podes desfazer nada sozinho. Se o utilizador pede para reverter e a alteração é invertível, propõe a regra/estilo inverso (com preview_rules), usando o resumo (ex. os valores "antes" dos estilos). Se não for possível, diz que pode restaurar a versão "Antes de IA" no histórico do livro.
@@ -53,7 +55,7 @@ operations (opcional): operações do editor, executadas por ordem DEPOIS das re
 export const TOOLS = [
   {
     name: 'survey_book',
-    description: 'Resumo do livro: capítulos (índice, título, nível), blocos por "tag.classe1.classe2" com contagem, nº de capítulos e exemplos de texto, e estilos criados pelo utilizador. Sem argumentos.',
+    description: 'Resumo do livro: capítulos (índice, título, nível), blocos por "tag.classe1.classe2" com contagem, nº de capítulos e exemplos de texto, estilos criados pelo utilizador e a auditoria (audit: anomalias de formatação). Sem argumentos.',
     input_schema: { type: 'object', properties: {} },
   },
   {
