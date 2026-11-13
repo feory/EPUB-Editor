@@ -13,7 +13,7 @@ export const QUICKBARS_SELECTION_TOOLBAR = 'bold italic underline superscript ca
 export const EDITOR_TOOLBAR =
     'undo redo | styles removeformat | ' +
     'align outdent indent bullist numlist | ' +
-    'box noBreak | link image charmap code | pintoolbar pdfview focusmode';
+    'box noBreak | link image charmap code | aiassistant pintoolbar pdfview focusmode';
 
 const toolbarItems = (group: BlockStyle['group']) => BLOCK_STYLES.filter((s) => s.group === group).map((s) => ({ title: s.toolbar ?? s.label, format: s.format }));
 // "Unido" fica fora de propósito: o menu Styles aplica via editor.formatter nativo, que funde vários <p> selecionados num só

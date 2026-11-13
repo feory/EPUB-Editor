@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import type { ExtractedDocument } from './document-importer';
 import { toNCName } from '../export/epub/image-utils';
 import { chapterTitleOf } from '../../utils/chapter-title';
+import { EDITOR_CLASSES } from '../../utils/editor-classes';
 import { CHAPTER_ANCHOR_CLASS, IDX_LINK_CLASS, epubTargetId } from '../../utils/indice-marker';
 
 export interface EpubMetadata {
@@ -193,13 +194,8 @@ async function reverseImages(
 // === Adaptação de EPUBs de plataformas ANTIGAS (classes/estrutura diferentes) =================
 // Discriminador: o export desta app usa OEBPS/sectionN.XHTML; os antigos usam SectionNN.html.
 
-// Classes que a nova plataforma entende (passam intactas).
-const NEW_CLASSES = new Set([
-    'p-indent', 'p-non-indent', 'p-top', 'p-space', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase',
-    'p-center', 'p-quote', 'p-legendas', 'footnote', 'footnote-ref', 'drop-cap', 'alinea',
-    'chapter-break', 'small-caps', 'pagebreak', 'p-border-top', 'p-border-bottom', 'p-border-sides',
-    'img-left', 'img-center', 'img-right', 'underline',
-]);
+// Classes que a nova plataforma entende (passam intactas): utils/editor-classes.ts.
+const NEW_CLASSES = EDITOR_CLASSES;
 // Classe antiga → classe(s) nova(s). Vazio/ausente = dropar (ruído estrutural).
 const LEGACY_CLASS_MAP: Record<string, string> = {
     'indent-nonspace': 'p-indent', 'nonindent-nonspace': 'p-non-indent', 'noindent': 'p-non-indent',

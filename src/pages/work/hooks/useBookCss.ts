@@ -62,7 +62,10 @@ export function useBookCss(isbn: string | undefined, debounceMs = 600) {
         return null;
     }, [commit, getCurrentCss]);
 
+    /** Várias alterações ao CSS numa só gravação (o CSS em estado só muda no render seguinte, por isso não se encadeiam commits). */
+    const editCss = useCallback((transform: (css: string) => string) => commit(transform(getCurrentCss())), [commit, getCurrentCss]);
+
     const deleteStyle = useCallback((cls: string) => commit(deleteCustomStyle(getCurrentCss(), cls)), [commit, getCurrentCss]);
 
-    return { editRule, createStyle, saveStyle, deleteStyle };
+    return { editRule, editCss, createStyle, saveStyle, deleteStyle };
 }

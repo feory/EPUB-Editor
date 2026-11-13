@@ -19,6 +19,7 @@ import * as trash from './routes/trash.js';
 import * as maintenance from './routes/maintenance.js';
 import * as validation from './routes/validation.js';
 import * as logs from './routes/logs.js';
+import * as ai from './routes/ai.js';
 import * as presence from './presence.js';
 import { startBackupScheduler, stopBackupScheduler } from './backup.js';
 import { startScheduledCleanup, stopScheduledCleanup } from './scheduled-cleanup.js';
@@ -210,6 +211,7 @@ export const server = Bun.serve({
           if (sub === 'comments'             && method === "GET")  return comments.getComments(isbn);
           if (sub === 'comments'             && method === "POST") return comments.addComment(req, isbn, user);
           if (sub === 'validate'             && method === "POST") return validation.validate(req);
+          if (sub === 'ai'                   && method === "POST") return ai.chat(req, user);
           if (sub === 'validate-accessibility' && method === "POST") return validation.validateAccessibility(req, isbn);
           if (sub === 'epub'                 && method === "POST") return epub.saveEpub(req, isbn);
           if (sub === 'epub'                 && method === "GET")  return epub.getEpub(isbn);

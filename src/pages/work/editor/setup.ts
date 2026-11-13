@@ -21,6 +21,7 @@ export interface SetupLive {
     ebookLabel: string;                             // título do ebook no canto direito da barra de estado
     onToggleFocusMode?: () => void;
     onTogglePrintPdf?: () => void;
+    onToggleAi?: () => void;
     showPrintPdfPanel?: boolean;                    // painel de PDF aberto → botão "Ver PDF" ativo
     textPanelOpen?: boolean;                        // painel "Editor de Texto" aberto → a barra da seleção esconde-se
     chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
@@ -616,6 +617,10 @@ export function createEditorSetup(deps: SetupDeps) {
             }))),
         });
 
+        editor.ui.registry.addButton('aiassistant', {
+            text: 'IA', tooltip: 'Assistente de IA',
+            onAction: () => live.current.onToggleAi?.(),
+        });
         editor.ui.registry.addToggleButton('pdfview', {
             icon: 'document-properties', tooltip: 'Ver PDF',
             onAction: () => live.current.onTogglePrintPdf?.(),

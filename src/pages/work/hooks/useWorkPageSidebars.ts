@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-export type Panel = 'grammar' | 'validation' | 'imageGallery' | 'printPdf' | 'comments' | 'box' | 'text';
+export type Panel = 'grammar' | 'validation' | 'imageGallery' | 'printPdf' | 'comments' | 'box' | 'text' | 'ai';
 
 // Um único painel lateral aberto de cada vez — activePanel substitui 5 booleans paralelos
 // que tinham de ser mantidos mutuamente exclusivos à mão em openPanel/closeAllPanels/togglePanel.
@@ -34,8 +34,10 @@ export function useWorkPageSidebars() {
         setShowCommentsSidebar: setPanelOpen('comments'),
         showBoxSidebar: activePanel === 'box',
         setShowBoxSidebar: setPanelOpen('box'),
+        showAiSidebar: activePanel === 'ai',
         showTextSidebar: activePanel === 'text',
         setShowTextSidebar: setPanelOpen('text'),
+        setShowAiSidebar: setPanelOpen('ai'),
         openPanel, closeAllPanels, togglePanel,
     };
 }

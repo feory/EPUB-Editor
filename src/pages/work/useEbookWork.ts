@@ -19,6 +19,8 @@ import type { PageAnchor } from '../../services/page-list/page-list';
 import { createSaver } from './saver';
 import * as bookEdit from './bookEdit';
 import type { Book, BookEdit } from './bookEdit';
+import type { BookRule } from '../../utils/book-rules';
+import { runPlan, type BookOp } from './ai/aiPlan';
 import type { ChapterActions } from './chapterActions';
 import { contentReducer, initialContentState } from './hooks/contentReducer';
 import { useChapterSync } from './hooks/useChapterSync';
@@ -269,6 +271,19 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         () => listSubtitles(chapterSync.splitHtmlIntoParts(chapterSync.getLatestHtmlContent())),
         [chapterSync],
     );
+    // Plano da IA (regras + operações): antes de aplicar, versão marcada no histórico — o undo do editor só cobre o capítulo aberto,
+    // e isto mexe no livro todo. Calcula primeiro: sem alterações ao HTML não há nada a guardar.
+    const getBookParts = useCallback(() => getBook().parts, [getBook]);
+    const handleApplyAiPlan = useCallback(async (plan: { rules: BookRule[]; ops: BookOp[] }, request: string) => {
+        if (!isbn || readOnly) return;
+        const book = getBook();
+        const { html, errors } = runPlan(book.parts, plan.rules, plan.ops);
+        if (errors.length) { showNotification('error', errors.join('; ')); return; }
+        if (html === book.html) return;
+        const { data } = await ebooksApi.saveContent(isbn, await compressHtmlAsync(book.html));
+        if (data?.filename) await ebooksApi.setHistoryLabel(isbn, data.filename, `Antes de IA: ${request}`.slice(0, 80));
+        applyEdit({ html, commit: 'keep', notice: { type: 'success', text: 'Alterações da IA aplicadas!' } });
+    }, [isbn, readOnly, getBook, applyEdit, showNotification]);
     const handleFixLinks = useCallback(() => {
         const { edit, report } = bookEdit.fixBookLinks(getBook());
         validation.setLinkValidation(report);
@@ -379,6 +394,8 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         handleGeneratePageList,
         countInWholeBook,
         handleReplaceInWholeBook,
+        getBookParts,
+        handleApplyAiPlan,
 
         handleImportPdf: useCallback(
             (file: File, h: number, f: number, settings: ImageSettings, options: ImportOptions) =>

@@ -19,6 +19,7 @@
     "dev:lt": "concurrently -n lt,api,front -c magenta,yellow,cyan \"bun run languagetool\" \"bun run server:lt\" \"bun run dev\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@codemirror/lang-css": "^6.3.1",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.103.1",

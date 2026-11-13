@@ -27,6 +27,9 @@ import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { CommentSidebar } from './work/components/CommentSidebar';
 import { BlockSidebar } from './work/components/BlockSidebar';
 import { TextSidebar } from './work/components/TextSidebar';
+import { AiSidebar } from './work/components/AiSidebar';
+import { useAiAssistant } from './work/ai/useAiAssistant';
+import { applyStylePlan } from '../utils/book-styles';
 import type { BlockInfo } from './work/editor/blockEditing';
 import { useBookCss } from './work/hooks/useBookCss';
 import { useStyleCatalogue } from './work/hooks/useStyleCatalogue';
@@ -416,8 +419,13 @@ export function WorkPage() {
   };
 
   // CSS do livro editado a partir do editor (modo "Estilo" do painel, "Criar estilo…"): aplica já, grava com debounce.
-  const { editRule: handleTextStyle, createStyle, saveStyle, deleteStyle } = useBookCss(isbn);
+  const { editRule: handleTextStyle, editCss, createStyle, saveStyle, deleteStyle } = useBookCss(isbn);
   const styles = useStyleCatalogue({ createStyle, saveStyle, deleteStyle }, { renameStyle: work.handleRenameStyle, removeStyle: work.handleRemoveStyle });
+  const ai = useAiAssistant({ isbn, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: async (p, request) => {
+    // Regras e operações (com versão "Antes de IA") primeiro: se gravar a versão falhar, nada se alterou, nem o CSS.
+    await work.handleApplyAiPlan({ rules: p.rules, ops: p.ops }, request);
+    if (p.styles.length || p.edits.length) editCss((css) => applyStylePlan(css, p.styles, p.edits));
+  } });
 
   const anySidebarOpen = panels.anyOpen;
 
@@ -547,6 +555,7 @@ export function WorkPage() {
                 onToggleFocusMode={handleToggleFocusMode}
                 isFocusMode={isFocusMode}
                 onTogglePrintPdf={() => panels.toggle('printPdf')}
+                onToggleAi={() => panels.toggle('ai')}
                 showPrintPdfPanel={sidebars.showPrintPdfSidebar}
                 onVisiblePageChange={setEditorVisiblePage}
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
@@ -628,6 +637,10 @@ export function WorkPage() {
           width={panelWidth}
           onResize={handlePanelResize}
         />
+      )}
+
+      {sidebars.showAiSidebar && (
+        <AiSidebar ai={ai} readOnly={work.readOnly} onClose={() => sidebars.setShowAiSidebar(false)} width={panelWidth} onResize={handlePanelResize} />
       )}
 
       {sidebars.showTextSidebar && (

@@ -206,6 +206,10 @@ export const ebooksApi = {
     saveContent: (isbn: string, content: string) =>
         apiClient.post(`/ebooks/${isbn}/content`, { content }),
 
+    // IA do editor: uma resposta do modelo por chamada (as ferramentas correm no cliente — pages/work/ai/aiAgent.ts)
+    aiChat: (isbn: string, messages: unknown[]) =>
+        apiClient.post<{ content: { type: string; [key: string]: unknown }[]; stop_reason: string | null }>(`/ebooks/${isbn}/ai`, { messages }, { timeout: 180_000 }),
+
     // Print PDF (viewer lado a lado no editor)
     getPrintPdf: (isbn: string) =>
         apiClient.get(`/ebooks/${isbn}/print-pdf`, { responseType: 'arraybuffer', validateStatus: s => s === 200 || s === 404 }),
