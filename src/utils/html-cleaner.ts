@@ -5,6 +5,7 @@
 
 import { insertChapterMarkers, refreshChapterMarkers, chapterMarkerHtml } from './chapters';
 import { isColumnPlaceholder } from './containers';
+import { INDENT_CONTROLLED_CLASSES, SPECIAL_INDENT_CLASSES, TITLE_LIKE_CLASSES, ALINEA_PROTECTED_CLASSES } from './editor-classes';
 
 // Ocorrências de uma substring literal (split/join, não RegExp — sem escaping de caracteres
 // especiais). Partilhado pelas várias contagens/substituições do find/replace do editor
@@ -245,13 +246,7 @@ export interface ImportOptions {
   detectParagraphSpacing?: boolean; // IDML: SpaceBefore/SpaceAfter → p-top/p-bottom
 }
 
-// Classes that already control indentation — skip these when applying p-indent
-const INDENT_CONTROLLED_CLASSES = ['footnote', 'alinea', 'drop-cap', 'p-non-indent', 'p-indent', 'p-center', 'p-bold', 'p-bold-italic', 'p-border-top', 'p-border-bottom', 'p-border-sides'];
-// Classes com semântica de indentação PRÓPRIA — não forçar non-indent nelas (ao contrário
-// de p-indent/p-non-indent, que o "sem indentação após negrito" pode sobrepor).
-const SPECIAL_INDENT_CLASSES = ['footnote', 'alinea', 'drop-cap', 'p-center', 'p-border-top', 'p-border-bottom', 'p-border-sides'];
-// Classes de "título/rótulo" — ver options.topAfterBoldTop (espaço herdado pelo parágrafo seguinte).
-const TITLE_LIKE_CLASSES = ['p-bold', 'p-uppercase', 'p-italic'];
+// INDENT_CONTROLLED / SPECIAL_INDENT / TITLE_LIKE / ALINEA_PROTECTED: traços em editor-classes.ts.
 
 // True when every non-whitespace text node sits inside one of `tags` (ex. STRONG/B).
 function isFullyWrapped(p: HTMLParagraphElement, tags: string[]): boolean {
@@ -626,7 +621,6 @@ export function cleanEditorDOM(body: HTMLElement): void {
   // Add alinea class to list-like paragraphs
   // Estilos de parágrafo explícitos (vindos do mapeamento de estilos no import) ganham
   // prioridade: se o <p> já tem um destes, NÃO se auto-deteta alínea (a escolha do utilizador vence).
-  const STYLED_CLASSES = ['p-indent', 'p-center', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-quote', 'p-legendas', 'drop-cap', 'footnote'];
   const allParagraphs = body.querySelectorAll('p');
   allParagraphs.forEach((p: HTMLParagraphElement) => {
     const text = (p.textContent || '').trim();
@@ -634,7 +628,7 @@ export function cleanEditorDOM(body: HTMLElement): void {
     const alineaPattern = /^([a-z]|[0-9]+|[ivxlcdm]+)\)/i;
     const firstItemPattern = /^(a|1|i)\)/i;
 
-    if (STYLED_CLASSES.some(c => p.classList.contains(c))) return; // estilo mapeado vence
+    if (ALINEA_PROTECTED_CLASSES.some(c => p.classList.contains(c))) return; // estilo mapeado vence
     if (alineaPattern.test(text) && !p.classList.contains('alinea')) {
       p.classList.add('alinea');
       p.classList.add('p-non-indent');

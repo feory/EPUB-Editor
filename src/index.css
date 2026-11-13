@@ -46,24 +46,6 @@ body {
   box-sizing: border-box;
 }
 
-/* Custom Editor Styles for exported HTML/EPUB */
-.p-non-indent {
-  text-indent: 0 !important;
-}
-
-.p-indent {
-  text-indent: 30px !important;
-}
-
-.p-top {
-  text-indent: 0 !important;
-  margin-top: 30px !important;
-}
-
-.p-space {
-  margin-top: 100px !important;
-}
-
 .mini-cover {
     width: 40px;
     height: 56px;

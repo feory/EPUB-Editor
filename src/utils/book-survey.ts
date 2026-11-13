@@ -3,9 +3,8 @@
 // Só conta os filhos diretos do corpo — o mesmo âmbito por omissão das regras.
 import { classifyChapterPart, type ChapterLevel } from './chapters';
 import { customStyleClasses } from './book-css';
-import { classesForRules } from './editor-classes';
 import { readRuleBody } from './css-rule';
-import { HEADING_SELECTORS, selectorOf } from './book-styles';
+import { HEADING_SELECTORS, selectorOf, classesForRules } from './book-styles';
 
 export interface BookSurvey {
     chapters: { index: number; title: string; level: ChapterLevel }[];

@@ -4,8 +4,7 @@
 import { surveyBook } from '../../../utils/book-survey';
 import type { BookRule, RuleReport } from '../../../utils/book-rules';
 import { runPlan, type BookOp, type OpResult } from './aiPlan';
-import { planStyles, planStyleEdits, type NewStyle, type PlannedStyle, type StyleEdit, type PlannedEdit } from '../../../utils/book-styles';
-import { classesForRules } from '../../../utils/editor-classes';
+import { planStyles, planStyleEdits, classesForRules, type NewStyle, type PlannedStyle, type StyleEdit, type PlannedEdit } from '../../../utils/book-styles';
 
 type Block = { type: string; [key: string]: unknown };
 export interface AgentMessage { role: 'user' | 'assistant'; content: string | Block[] }

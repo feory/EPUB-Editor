@@ -3,6 +3,8 @@
 // Idempotente (2.ª corrida não muda nada) e sem reserializar partes que não mudam. Os marcadores `chapter-break*` /
 // `chapter-anchor` nunca são tocados.
 
+import { exclusiveOf } from './editor-classes';
+
 export type RuleAction =
     | { type: 'addClass'; value: string }
     | { type: 'removeClass'; value: string }
@@ -51,8 +53,6 @@ const TAG_RE = /^[a-z][a-z0-9]*$/;
 const RETAG_TARGETS = ['p', 'h3', 'h4', 'h5', 'h6'];
 // shortcut: retag/delete de h1/h2 recusados — mexem nos capítulos (marcadores, sidebar 1:1), upgrade quando houver regra para isso.
 const STRUCTURAL = ['h1', 'h2'];
-// Classes que se excluem: acrescentar uma tira a outra.
-const EXCLUSIVE: [string, string][] = [['p-indent', 'p-non-indent']];
 const MAX_SAMPLES = 3;
 const SAMPLE_LEN = 160;
 
@@ -106,7 +106,7 @@ function select(doc: Document, s: RuleSelect): Element[] {
 function apply(doc: Document, el: Element, a: RuleAction): Element | null | undefined {
     switch (a.type) {
         case 'addClass': {
-            const partner = EXCLUSIVE.flatMap(([x, y]) => (a.value === x ? [y] : a.value === y ? [x] : []))[0];
+            const partner = exclusiveOf(a.value);
             const hadPartner = !!partner && el.classList.contains(partner);
             if (el.classList.contains(a.value) && !hadPartner) return undefined;
             if (hadPartner) el.classList.remove(partner);

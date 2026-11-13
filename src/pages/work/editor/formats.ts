@@ -19,7 +19,7 @@ export function registerBlockFormats(editor: Editor) {
         editor.formatter.register('small-caps', { inline: 'span', classes: 'small-caps' });
         // Reusa a classe do formato de parágrafo p-uppercase (CSS já existe, sem seletor de
         // tag — ver StyleContext.tsx) num <span> inline, para poder aplicar-se a uma SELEÇÃO
-        // dentro de um título (p-uppercase de bloco é removido de headings — ver PARA_STYLE_CLASSES).
+        // dentro de um título (p-uppercase de bloco é removido de headings — ver HEADING_STRIPPED_CLASSES em utils/editor-classes.ts).
         editor.formatter.register('uppercase', { inline: 'span', classes: 'p-uppercase' });
         editor.formatter.register('box', { block: 'div', classes: 'box', wrapper: true });
         // Personalização da seleção/estilo de caracteres: os formatos vêm da tabela em selectionProps.ts (cor, fundo, tamanho e família usam os nativos).

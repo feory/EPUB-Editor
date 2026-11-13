@@ -13,6 +13,7 @@ import { tinymceEditorLike } from './blockEditingTinymce';
 import { attachActiveBlock, type ActiveBlock } from './activeBlock';
 import { registerBlockFormats, registeredCharStyles, toggleCharStyle } from './formats';
 import { charStyles } from '../../../utils/user-styles';
+import { HEADING_STRIPPED_CLASSES } from '../../../utils/editor-classes';
 import { registerImageTools } from './imageTools';
 import { MARK, registerEphemeralMarks } from './ephemeral';
 
@@ -284,16 +285,11 @@ export function createEditorSetup(deps: SetupDeps) {
         // p-center (alinhamento) e p-space (espaçamento) mantêm-se — válidas num título.
         // ponytail: NodeChange é o choke point comum a todas as vias de conversão
         // (botões, menu "...", atalhos, markdown); estas classes nunca são legítimas num heading.
-        const PARA_STYLE_CLASSES = [
-            'p-indent', 'p-top', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-quote', 'p-legendas',
-            'p-non-indent', 'footnote', 'drop-cap', 'alinea',
-            'p-border-top', 'p-border-bottom', 'p-border-sides',
-        ];
         editor.on('NodeChange', () => {
             if (!editor.hasFocus()) return;
             const block = blockOf(editor.selection.getNode());
             if (block && /^H[1-6]$/.test(block.nodeName)) {
-                PARA_STYLE_CLASSES.forEach((c) => block.classList.remove(c));
+                HEADING_STRIPPED_CLASSES.forEach((c) => block.classList.remove(c));
             }
         });
 

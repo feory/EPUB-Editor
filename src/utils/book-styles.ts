@@ -1,9 +1,13 @@
 // Estilos de parágrafo propostos pela IA: valida o pedido ({ name, props }) e devolve o que se vai criar ({ cls, body }).
 // Só uma lista fechada de propriedades e valores simples — nada de url(), @import, funções ou posicionamento.
-import { createCustomStyle, applyBookRule } from './book-css';
+import { createCustomStyle, applyBookRule, customStyleClasses } from './book-css';
 import { readRuleBody } from './css-rule';
 import { paragraphStyles } from './user-styles';
-import { EDITOR_CLASSES, classesForRules } from './editor-classes';
+import { EDITOR_CLASSES, STRUCTURAL_CLASSES } from './editor-classes';
+
+/** Classes que uma regra da IA pode acrescentar: as do editor (menos as estruturais), os estilos do utilizador e `extra` (estilos a criar). */
+export const classesForRules = (css: string, extra: string[] = []): Set<string> =>
+    new Set([...[...EDITOR_CLASSES].filter((c) => !STRUCTURAL_CLASSES.includes(c)), ...customStyleClasses(css), ...extra]);
 
 export interface NewStyle { name: string; props: Record<string, string> }
 export interface PlannedStyle { cls: string; body: string }
