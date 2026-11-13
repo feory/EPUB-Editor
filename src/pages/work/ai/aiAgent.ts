@@ -1,16 +1,14 @@
 // Ciclo do assistente de IA, sem React nem rede: o servidor (server/routes/ai.js) dá UMA resposta por chamada; aqui
 // executam-se as ferramentas que ela pede (têm de correr onde está o livro) e volta-se a chamar até haver texto final.
 // O modelo só PROPÕE: `proposal` é a última simulação válida, e aplicá-la é um passo separado, do utilizador.
-import { surveyBook } from '../../../utils/book-survey';
-import type { BookRule, RuleReport } from '../../../utils/book-rules';
-import { buildChecklist } from './publicationChecklist';
 import type { AiWorkspace } from './aiWorkspace';
-import { VALIDATION_ORDER, type ValidationKind, type ValidationDigest } from '../../../utils/validation-digest';
-import { scopeRules, type RuleBlock } from './aiSelection';
-import { runPlan, type BookOp, type OpResult } from './aiPlan';
+import type { RuleBlock } from './aiSelection';
+import { runPlan } from './aiPlan';
+import { AI_TOOLS } from './tools';
+import type { Proposal, ToolContext, ToolResult } from './tools/aiTool';
 import { charStyles, paragraphStyles } from '../../../utils/user-styles';
 import { EDITOR_CLASSES } from '../../../utils/editor-classes';
-import { planStyles, planStyleEdits, classesForRules, type NewStyle, type PlannedStyle, type StyleEdit, type PlannedEdit } from '../../../utils/book-styles';
+import { classesForRules } from '../../../utils/book-styles';
 
 type Block = { type: string; [key: string]: unknown };
 export interface AgentMessage { role: 'user' | 'assistant'; content: string | Block[] }
@@ -19,12 +17,10 @@ export interface ChatResponse { content: Block[]; stop_reason: string | null }
 export interface AgentResult {
     messages: AgentMessage[];
     text: string;
-    proposal: { styles: PlannedStyle[]; edits: PlannedEdit[]; rules: BookRule[]; ops: BookOp[]; opResults: OpResult[]; reports: RuleReport[] } | null;
+    proposal: Proposal | null;
 }
 
 const MAX_TURNS = 8;
-/** Os parâmetros do preview_rules que `execute` lê. Ver server/ai-contract.test.js, que os compara com o schema do servidor. */
-export const PREVIEW_INPUT_KEYS = ['rules', 'styles', 'style_edits', 'operations'] as const;
 const textOf = (content: Block[]) => content.filter((b) => b.type === 'text').map((b) => String(b.text ?? '')).join('\n').trim();
 
 export async function runAgent(opts: {
@@ -37,49 +33,11 @@ export async function runAgent(opts: {
 }): Promise<AgentResult> {
     let messages = opts.messages;
     let proposal: AgentResult['proposal'] = null;
+    const ctx: ToolContext = { workspace: opts.workspace, scope: opts.scope ?? null, propose: (p) => { proposal = p; } };
 
-    const execute = async (tool: Block): Promise<{ content: string; is_error?: true }> => {
-        const input = (tool.input ?? {}) as { rules?: unknown; styles?: unknown; style_edits?: unknown; operations?: unknown };
-        if (tool.name === 'survey_book') return { content: JSON.stringify(surveyBook(opts.workspace.parts(), opts.workspace.css())) };
-        if (tool.name === 'check_publication') {
-            const facts = await opts.workspace.publicationFacts();
-            if (!facts) return { content: 'Não foi possível ler os dados do livro.', is_error: true };
-            const validations: { kind: ValidationKind; digest: ValidationDigest | null }[] = [];
-            for (const kind of VALIDATION_ORDER) validations.push({ kind, digest: await opts.workspace.validate(kind) });
-            return { content: JSON.stringify({ itens: buildChecklist(facts, validations), validacoesSemDetalhe: 'para o detalhe de uma validação com problemas chama run_validation com o seu type' }) };
-        }
-        if (tool.name === 'run_validation') {
-            const type = (tool.input as { type?: unknown } | undefined)?.type;
-            const kinds: readonly ValidationKind[] = type === 'all' ? VALIDATION_ORDER : (VALIDATION_ORDER as readonly unknown[]).includes(type) ? [type as ValidationKind] : ['accessibility'];
-            const done: { validacao: ValidationKind; ok: boolean; problemas: number; detalhe?: ValidationDigest; erro?: string }[] = [];
-            for (const kind of kinds) { // por ordem; uma que falhe não impede as outras
-                const digest = await opts.workspace.validate(kind);
-                if (!digest) { done.push({ validacao: kind, ok: false, problemas: 0, erro: 'não foi possível correr (modo leitura ou falhou)' }); continue; }
-                const problems = digest.groups.reduce((n, g) => n + g.count, 0);
-                done.push(problems ? { validacao: kind, ok: false, problemas: problems, detalhe: digest } : { validacao: kind, ok: true, problemas: 0 });
-            }
-            if (done.every((d) => d.erro)) return { content: 'Não foi possível correr a validação (modo leitura ou falhou). Diz ao utilizador para a correr no menu Validações.', is_error: true };
-            return { content: JSON.stringify({ validacoes: done }) };
-        }
-        if (tool.name === 'preview_rules') {
-            if (!Array.isArray(input.rules)) return { content: 'rules tem de ser uma lista', is_error: true };
-            if (input.styles !== undefined && !Array.isArray(input.styles)) return { content: 'styles tem de ser uma lista', is_error: true };
-            if (input.style_edits !== undefined && !Array.isArray(input.style_edits)) return { content: 'style_edits tem de ser uma lista', is_error: true };
-            if (input.operations !== undefined && !Array.isArray(input.operations)) return { content: 'operations tem de ser uma lista', is_error: true };
-            const ops = (input.operations ?? []) as BookOp[];
-            if (opts.scope && ops.length) return { content: 'Há um bloco selecionado: só podes usar regras e estilos, sem "operations" (mexem no livro todo).', is_error: true };
-            const rules = (opts.scope ? scopeRules(input.rules as BookRule[], opts.scope) : input.rules) as BookRule[];
-            const plan = planStyles((input.styles ?? []) as NewStyle[], opts.workspace.css());
-            const editPlan = planStyleEdits((input.style_edits ?? []) as StyleEdit[], opts.workspace.css());
-            // as regras podem usar os estilos que esta proposta cria
-            const known = classesForRules(opts.workspace.css(), plan.planned.map((s) => s.cls));
-            const run = runPlan(opts.workspace.parts(), rules, ops, known);
-            const errors = [...plan.errors, ...editPlan.errors, ...run.errors];
-            const changes = run.reports.some((r) => r.changed > 0) || plan.planned.length > 0 || editPlan.planned.length > 0 || run.opResults.some((o) => o.changed);
-            proposal = !errors.length && changes ? { styles: plan.planned, edits: editPlan.planned, rules, ops, opResults: run.opResults, reports: run.reports } : null;
-            return { content: JSON.stringify({ errors, styles: plan.planned, style_edits: editPlan.planned, operations: run.opResults, reports: run.reports }) };
-        }
-        return { content: `ferramenta desconhecida: ${String(tool.name)}`, is_error: true };
+    const execute = async (call: Block): Promise<ToolResult> => {
+        const tool = AI_TOOLS.find((t) => t.name === call.name);
+        return tool ? tool.run((call.input ?? {}) as Record<string, unknown>, ctx) : { content: `ferramenta desconhecida: ${String(call.name)}`, is_error: true };
     };
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
@@ -115,7 +73,6 @@ export function appliedNote(p: NonNullable<AgentResult['proposal']>): AgentMessa
 
 export const discardedNote = (): AgentMessage => ({ role: 'user', content: '[Sistema: o utilizador DESCARTOU a proposta anterior. Nada foi alterado no livro.]' });
 
-type Proposal = NonNullable<AgentResult['proposal']>;
 
 /**
  * O utilizador muda o nome de um estilo NOVO da proposta antes de aplicar. A classe nova (c-nome para caracteres) troca-se em

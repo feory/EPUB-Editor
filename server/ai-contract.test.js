@@ -41,7 +41,7 @@ test('a lista de propriedades de estilo do prompt é EXATAMENTE a que o editor a
 });
 
 test('os parâmetros do preview_rules são os que o ciclo do cliente lê', async () => {
-  const { PREVIEW_INPUT_KEYS } = await import('../src/pages/work/ai/aiAgent.ts');
+  const { PREVIEW_INPUT_KEYS } = await import('../src/pages/work/ai/tools/previewRules.ts');
   expect(Object.keys(preview.input_schema.properties).sort()).toEqual([...PREVIEW_INPUT_KEYS].sort());
   expect(preview.input_schema.required).toEqual(['rules']);
 });
@@ -57,6 +57,7 @@ test('os campos do survey_book que o prompt menciona existem mesmo no resumo', (
   expect(Object.keys(survey.audit).sort()).toEqual(['headingJumps', 'inlineStyleOutliers', 'omitted', 'styleUsage']);
 });
 
-test('as ferramentas do servidor são as que o cliente executa (survey_book, preview_rules, run_validation e check_publication)', () => {
-  expect(TOOLS.map((t) => t.name).sort()).toEqual(['check_publication', 'preview_rules', 'run_validation', 'survey_book']);
+test('as ferramentas do servidor são EXATAMENTE as do registo do cliente (um schema por ferramenta executável)', async () => {
+  const { AI_TOOLS } = await import('../src/pages/work/ai/tools/index.ts');
+  expect(TOOLS.map((t) => t.name).sort()).toEqual(AI_TOOLS.map((t) => t.name).sort());
 });

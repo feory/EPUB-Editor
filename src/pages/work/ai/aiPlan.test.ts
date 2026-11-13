@@ -145,3 +145,14 @@ test('inline_style_to_class: validação (style, cls, scope) e conversão no pla
     ] as unknown as BookOp[];
     expect(validateOps(bad)).toHaveLength(4);
 });
+
+test('operação typography: resumo com contagens e exemplo; fixes inválidos recusados', async () => {
+    const ok = runPlan(['<p>Disse "olá"...</p>'], [], [{ type: 'typography' }]);
+    expect(ok.errors).toEqual([]);
+    expect(ok.opResults[0]).toMatchObject({ label: 'Tipografia', changed: true });
+    expect(ok.opResults[0].summary).toContain('aspas 2');
+    expect(ok.opResults[0].summary).toContain('reticências 1');
+    expect(ok.html).toBe('<p>Disse «olá»…</p>');
+    expect(runPlan(['<p>a</p>'], [], [{ type: 'typography', fixes: ['nada' as never] }]).errors).toHaveLength(1);
+    expect(runPlan(['<p>limpo</p>'], [], [{ type: 'typography' }]).opResults[0]).toMatchObject({ changed: false, summary: 'Nada a corrigir' });
+});
