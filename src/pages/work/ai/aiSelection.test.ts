@@ -4,6 +4,7 @@ import { runRules, blockKey, type BookRule } from '../../../utils/book-rules';
 import { locateBlocks, scopeRules, blockContext } from './aiSelection';
 import { selectedTopBlocks, type RangeLike } from '../editor/selectedBlock';
 import { runAgent } from './aiAgent';
+import { memoryWorkspace } from './testWorkspace';
 
 const parts = [
     '<p class="chapter-break-h1" data-title="Um"></p><h1>Um</h1><p>igual</p><p>outro</p>',
@@ -106,7 +107,7 @@ test('runAgent com scope: as regras ficam limitadas aos blocos e as operações 
         if (turn === 2) { calls.push('depois-ops'); return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't2', name: 'preview_rules', input: { rules: [rule] } }] }; }
         return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }] };
     };
-    const r = await runAgent({ messages: [], send, book: { parts, css: '' }, scope: block });
+    const r = await runAgent({ messages: [], send, workspace: memoryWorkspace({ parts }), scope: block });
     expect(calls).toEqual(['depois-ops']);
     expect(r.proposal?.reports[0].changed).toBe(2);
     expect(r.proposal?.reports[0].chapters).toEqual([1]);

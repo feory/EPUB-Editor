@@ -3,7 +3,8 @@
 // O modelo só PROPÕE: `proposal` é a última simulação válida, e aplicá-la é um passo separado, do utilizador.
 import { surveyBook } from '../../../utils/book-survey';
 import type { BookRule, RuleReport } from '../../../utils/book-rules';
-import { buildChecklist, type PublicationFacts } from './publicationChecklist';
+import { buildChecklist } from './publicationChecklist';
+import type { AiWorkspace } from './aiWorkspace';
 import { VALIDATION_ORDER, type ValidationKind, type ValidationDigest } from '../../../utils/validation-digest';
 import { scopeRules, type RuleBlock } from './aiSelection';
 import { runPlan, type BookOp, type OpResult } from './aiPlan';
@@ -29,25 +30,22 @@ const textOf = (content: Block[]) => content.filter((b) => b.type === 'text').ma
 export async function runAgent(opts: {
     messages: AgentMessage[];
     send: (messages: AgentMessage[]) => Promise<ChatResponse>;
-    book: { parts: string[]; css: string };
+    /** O livro aberto: as ferramentas leem-no na hora de cada chamada (ver aiWorkspace.ts). */
+    workspace: AiWorkspace;
     /** Só este bloco: as regras ficam limitadas a ele e as operações (que mexem no livro todo) recusam-se. */
     scope?: RuleBlock | null;
-    /** Corre uma validação sobre o livro como está agora e devolve o resumo; null se não foi possível. */
-    validate?: (kind: ValidationKind) => Promise<ValidationDigest | null>;
-    /** Os factos do livro para a lista de verificação (metadados, capa, imagens, Índice, páginas); null se não foi possível. */
-    publicationFacts?: () => Promise<PublicationFacts | null>;
 }): Promise<AgentResult> {
     let messages = opts.messages;
     let proposal: AgentResult['proposal'] = null;
 
     const execute = async (tool: Block): Promise<{ content: string; is_error?: true }> => {
         const input = (tool.input ?? {}) as { rules?: unknown; styles?: unknown; style_edits?: unknown; operations?: unknown };
-        if (tool.name === 'survey_book') return { content: JSON.stringify(surveyBook(opts.book.parts, opts.book.css)) };
+        if (tool.name === 'survey_book') return { content: JSON.stringify(surveyBook(opts.workspace.parts(), opts.workspace.css())) };
         if (tool.name === 'check_publication') {
-            const facts = await opts.publicationFacts?.();
+            const facts = await opts.workspace.publicationFacts();
             if (!facts) return { content: 'Não foi possível ler os dados do livro.', is_error: true };
             const validations: { kind: ValidationKind; digest: ValidationDigest | null }[] = [];
-            for (const kind of VALIDATION_ORDER) validations.push({ kind, digest: (await opts.validate?.(kind)) ?? null });
+            for (const kind of VALIDATION_ORDER) validations.push({ kind, digest: await opts.workspace.validate(kind) });
             return { content: JSON.stringify({ itens: buildChecklist(facts, validations), validacoesSemDetalhe: 'para o detalhe de uma validação com problemas chama run_validation com o seu type' }) };
         }
         if (tool.name === 'run_validation') {
@@ -55,7 +53,7 @@ export async function runAgent(opts: {
             const kinds: readonly ValidationKind[] = type === 'all' ? VALIDATION_ORDER : (VALIDATION_ORDER as readonly unknown[]).includes(type) ? [type as ValidationKind] : ['accessibility'];
             const done: { validacao: ValidationKind; ok: boolean; problemas: number; detalhe?: ValidationDigest; erro?: string }[] = [];
             for (const kind of kinds) { // por ordem; uma que falhe não impede as outras
-                const digest = await opts.validate?.(kind);
+                const digest = await opts.workspace.validate(kind);
                 if (!digest) { done.push({ validacao: kind, ok: false, problemas: 0, erro: 'não foi possível correr (modo leitura ou falhou)' }); continue; }
                 const problems = digest.groups.reduce((n, g) => n + g.count, 0);
                 done.push(problems ? { validacao: kind, ok: false, problemas: problems, detalhe: digest } : { validacao: kind, ok: true, problemas: 0 });
@@ -71,11 +69,11 @@ export async function runAgent(opts: {
             const ops = (input.operations ?? []) as BookOp[];
             if (opts.scope && ops.length) return { content: 'Há um bloco selecionado: só podes usar regras e estilos, sem "operations" (mexem no livro todo).', is_error: true };
             const rules = (opts.scope ? scopeRules(input.rules as BookRule[], opts.scope) : input.rules) as BookRule[];
-            const plan = planStyles((input.styles ?? []) as NewStyle[], opts.book.css);
-            const editPlan = planStyleEdits((input.style_edits ?? []) as StyleEdit[], opts.book.css);
+            const plan = planStyles((input.styles ?? []) as NewStyle[], opts.workspace.css());
+            const editPlan = planStyleEdits((input.style_edits ?? []) as StyleEdit[], opts.workspace.css());
             // as regras podem usar os estilos que esta proposta cria
-            const known = classesForRules(opts.book.css, plan.planned.map((s) => s.cls));
-            const run = runPlan(opts.book.parts, rules, ops, known);
+            const known = classesForRules(opts.workspace.css(), plan.planned.map((s) => s.cls));
+            const run = runPlan(opts.workspace.parts(), rules, ops, known);
             const errors = [...plan.errors, ...editPlan.errors, ...run.errors];
             const changes = run.reports.some((r) => r.changed > 0) || plan.planned.length > 0 || editPlan.planned.length > 0 || run.opResults.some((o) => o.changed);
             proposal = !errors.length && changes ? { styles: plan.planned, edits: editPlan.planned, rules, ops, opResults: run.opResults, reports: run.reports } : null;

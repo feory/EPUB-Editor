@@ -1,10 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { isAxiosError } from 'axios';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { runAgent, appliedNote, discardedNote, renameProposalStyle, type AgentMessage, type AgentResult } from './aiAgent';
-import { blockContext, type SelectedBlocks, type RuleBlock } from './aiSelection';
-import type { PublicationFacts } from './publicationChecklist';
-import type { ValidationKind, ValidationDigest } from '../../../utils/validation-digest';
+import { runAgent, appliedNote, discardedNote, renameProposalStyle, summarizeProposal, type AgentMessage, type AgentResult } from './aiAgent';
+import { blockContext, type SelectedBlocks } from './aiSelection';
+import type { AiWorkspace } from './aiWorkspace';
 import { chatKey, compactHistory, loadChat, saveChat } from './chatStore';
 
 export interface AiLine { role: 'user' | 'assistant'; text: string }
@@ -12,19 +11,12 @@ export interface AiLine { role: 'user' | 'assistant'; text: string }
 const LOST_PROPOSAL = 'A proposta que estava por aplicar perdeu-se ao recarregar a página; nada foi alterado. Pede de novo se a quiseres.';
 
 /** Estado do painel de IA: conversa (para mostrar), mensagens da API (para continuar), proposta pendente. A conversa sobrevive a recarregar (chatStore.ts). */
-export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal, selected, locate, runValidation, publicationFacts }: {
+export function useAiAssistant({ isbn, userId, workspace, selected }: {
     isbn: string | undefined;
     userId: string | number | undefined;
-    getParts: () => string[];
-    getCss: () => string;
-    applyProposal: (proposal: NonNullable<AgentResult['proposal']>, request: string) => Promise<unknown>;
-    /** O bloco selecionado no editor (null = nenhum) e onde está nas partes do livro. */
+    workspace: AiWorkspace;
+    /** O bloco selecionado no editor (null = nenhum): estado reativo, por isso vem à parte do workspace. */
     selected: SelectedBlocks | null;
-    locate: (sel: SelectedBlocks) => RuleBlock | null;
-    /** Corre uma validação e devolve o resumo; null se não foi possível (falhou ou modo leitura). */
-    runValidation: (kind: ValidationKind) => Promise<ValidationDigest | null>;
-    /** Os factos do livro para a lista de verificação antes de exportar. */
-    publicationFacts: () => Promise<PublicationFacts | null>;
 }) {
     const key = chatKey(isbn, userId);
     const [stored] = useState(() => loadChat(key)); // lido uma vez, ao abrir o livro
@@ -48,18 +40,16 @@ export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal, 
     const send = useCallback(async (text: string) => {
         if (!isbn || !text.trim() || busy) return;
         request.current = text.trim();
-        const block = scoped ? locate(scoped) : null;
+        const block = scoped ? workspace.locate(scoped) : null;
         if (scoped && !block) { setError('Não encontrei os blocos selecionados no livro. Seleciona-os de novo no editor ou tira o âmbito (×).'); return; }
         setLines((l) => [...l, { role: 'user', text: request.current }]);
         setProposal(null); setError(''); setBusy(true);
         try {
             const result = await runAgent({
-                messages: [...history.current, { role: 'user', content: block ? blockContext(getParts(), block) + request.current : request.current }],
+                messages: [...history.current, { role: 'user', content: block ? blockContext(workspace.parts(), block) + request.current : request.current }],
                 scope: block,
-                validate: runValidation,
-                publicationFacts,
                 send: async (messages) => (await ebooksApi.aiChat(isbn, messages)).data,
-                book: { parts: getParts(), css: getCss() },
+                workspace,
             });
             history.current = compactHistory(result.messages); // só o texto: as ferramentas não se reenviam nos pedidos seguintes (poupa tokens)
             setLines((l) => [...l, { role: 'assistant', text: result.text || '(sem resposta)' }]);
@@ -67,27 +57,27 @@ export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal, 
         } catch (e) {
             setError(isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error ?? 'Erro de rede' : 'Erro inesperado');
         } finally { setBusy(false); }
-    }, [isbn, busy, getParts, getCss, scoped, locate, runValidation, publicationFacts]);
+    }, [isbn, busy, workspace, scoped]);
 
     const apply = useCallback(async () => {
         if (!proposal) return;
         setBusy(true); setError('');
         try {
-            await applyProposal(proposal, request.current);
+            await workspace.apply(proposal, request.current, summarizeProposal(proposal));
             history.current = [...history.current, appliedNote(proposal)]; // o modelo tem de saber que foi aplicado
             setProposal(null);
         } catch { setError('Não foi possível aplicar (gravar a versão anterior falhou).'); }
         finally { setBusy(false); }
-    }, [proposal, applyProposal]);
+    }, [proposal, workspace]);
 
     /** O utilizador muda o nome de um estilo novo da proposta; o resultado (ou o erro) volta para a interface. */
     const renameStyle = useCallback((oldCls: string, name: string): string | null => {
         if (!proposal) return null;
-        const res = renameProposalStyle(proposal, oldCls, name, { parts: getParts(), css: getCss() });
+        const res = renameProposalStyle(proposal, oldCls, name, { parts: workspace.parts(), css: workspace.css() });
         if ('error' in res) return res.error;
         setProposal(res.proposal);
         return null;
-    }, [proposal, getParts, getCss]);
+    }, [proposal, workspace]);
 
     /** Depois de o utilizador reverter uma alteração no registo, o modelo tem de saber (senão julga que ainda está aplicada). */
     const noteReverted = useCallback((reverted: string) => {

@@ -71,6 +71,10 @@ _Avoid_: link, hiperligação
 Aquilo a que uma Ligação do Índice aponta: `p.chapter-anchor` (capítulo/subtítulo) ou `span.manual-anchor[data-label]` (ponto livre, inserido no cursor pelo menu "/"). Persiste no EPUB como `id`; não confundir com **Anchor** (de Comment), que só existe no editor.
 _Avoid_: âncora (já é o Anchor do Comment), marcador
 
+**Livro aberto (para a IA)** (`AiWorkspace`):
+A interface única pela qual o assistente de IA, a revisão de texto alternativo e o registo de alterações veem e alteram o livro que está no editor: partes, CSS, língua, aplicar/reverter/repor, validar, dados da publicação e localizar blocos selecionados. Lê o livro na hora de cada chamada (nunca uma cópia) e no modo leitura não valida nem altera. Em produção é o editor (`useAiWorkspace`); nos testes, um adapter em memória.
+_Avoid_: contexto do livro, sessão
+
 **Gravação**:
 O module (`pages/work/saver.ts`, sem React) dono do ciclo de vida do save de um ebook: "por gravar" (texto atual ≠ o que o servidor já tem, na forma que o save envia), autosave, retry quando a rede volta, saída do editor/separador e **Rascunho local**. O transporte (axios, keepalive), os rascunhos e o getter do texto entram como adapters; `useEbookWork` só liga isto ao React e à cache.
 _Avoid_: autosave (é só um dos caminhos), persistência

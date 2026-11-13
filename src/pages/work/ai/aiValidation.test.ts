@@ -2,6 +2,7 @@ import { test, expect } from 'bun:test';
 import '../../../services/indesign/happy-dom'; // DOMParser no bun
 import { runAgent, type ChatResponse } from './aiAgent';
 import type { ValidationDigest, ValidationKind } from '../../../utils/validation-digest';
+import { memoryWorkspace } from './testWorkspace';
 
 const digest = (kind: ValidationKind, count: number): ValidationDigest => ({ source: kind, valid: count === 0, groups: count ? [{ rule: 'r', severity: 'aviso', count, description: 'd', files: [], examples: [] }] : [], omittedGroups: 0 });
 
@@ -15,7 +16,7 @@ async function call(input: object, validate: (k: ValidationKind) => Promise<Vali
         toolResult = last[0].content;
         return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }] };
     };
-    await runAgent({ messages: [], send: send as never, book: { parts: [], css: '' }, validate });
+    await runAgent({ messages: [], send: send as never, workspace: memoryWorkspace({}, { validate }) });
     return toolResult;
 }
 
@@ -63,7 +64,7 @@ test('check_publication: junta os factos do livro com as quatro validações por
         return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }] };
     };
     const facts = { metadata: { title: 'T', author: '', language: 'pt', ebook_isbn: '1' }, hasCover: false, images: { total: 0, withoutAlt: 0 }, indice: { exists: false, linked: 0, linkable: 0 }, pageMarkers: 0 };
-    await runAgent({ messages: [], send: send as never, book: { parts: [], css: '' }, publicationFacts: async () => facts, validate: async (k) => { order.push(k); return digest(k, k === 'links' ? 2 : 0); } });
+    await runAgent({ messages: [], send: send as never, workspace: memoryWorkspace({}, { publicationFacts: async () => facts, validate: async (k) => { order.push(k); return digest(k, k === 'links' ? 2 : 0); } }) });
     expect(order).toEqual(['footnotes', 'links', 'epub', 'accessibility']);
     const items = JSON.parse(toolResult).itens as { item: string; estado: string }[];
     expect(items.find((i) => i.item === 'Metadados')?.estado).toBe('falta'); // autor em branco

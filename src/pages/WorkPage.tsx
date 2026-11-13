@@ -30,11 +30,9 @@ import { TextSidebar } from './work/components/TextSidebar';
 import { AiSidebar } from './work/components/AiSidebar';
 import { useAiAssistant } from './work/ai/useAiAssistant';
 import { useAltReview } from './work/ai/useAltReview';
-import { collectFacts } from './work/ai/publicationChecklist';
-import { isIndiceChapterTitle } from '../utils/indice-links';
-import { locateBlocks, type SelectedBlocks } from './work/ai/aiSelection';
+import { useAiWorkspace } from './work/ai/useAiWorkspace';
+import type { SelectedBlocks } from './work/ai/aiSelection';
 import { useAiChanges } from './work/ai/useAiChanges';
-import { summarizeProposal } from './work/ai/aiAgent';
 import type { BlockInfo } from './work/editor/blockEditing';
 import { useBookCss } from './work/hooks/useBookCss';
 import { useStyleCatalogue } from './work/hooks/useStyleCatalogue';
@@ -428,21 +426,14 @@ export function WorkPage() {
   const { editRule: handleTextStyle, editCss, createStyle, saveStyle, deleteStyle } = useBookCss(isbn);
   const styles = useStyleCatalogue({ createStyle, saveStyle, deleteStyle }, { renameStyle: work.handleRenameStyle, removeStyle: work.handleRemoveStyle });
   const aiCss = { get: getCurrentCss, set: (next: string) => editCss(() => next) };
-  const ai = useAiAssistant({ isbn, userId: user?.id, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: (p, request) => work.handleApplyAiPlan(p, request, aiCss, summarizeProposal(p)),
-    runValidation: (kind) => (work.readOnly ? Promise.resolve(null) : work.runValidation(kind)),
-    publicationFacts: async () => {
-      if (!isbn) return null;
-      const hasCover = await ebooksApi.getCover(isbn).then(() => true, () => false);
-      const parts = work.getBookParts();
-      return collectFacts({ ebook: work.ebook, hasCover, parts, indiceTitles: work.chapters.filter((c) => isIndiceChapterTitle(c.title)).map((c) => c.title) });
-    },
-    selected: selectedBlock, locate: (sel) => locateBlocks(work.getBookParts(), sel, work.activeChapterIndex) });
-  const altReview = useAltReview({ isbn, language: work.language, getParts: work.getBookParts, applyPlan: (plan, request, summary) => work.handleApplyAiPlan(plan, request, aiCss, summary) });
+  const workspace = useAiWorkspace({ isbn, work, css: aiCss });
+  const ai = useAiAssistant({ isbn, userId: user?.id, workspace, selected: selectedBlock });
+  const altReview = useAltReview({ isbn, workspace });
   const aiChanges = useAiChanges({ isbn, enabled: sidebars.showAiSidebar, revert: async (change) => {
-    const ok = await work.handleRevertAiChange(change, aiCss);
-    if (ok) ai.noteReverted(change.request);
+    const ok = await workspace.revert(change);
+    if (ok) ai.noteReverted(change.request); // o modelo tem de saber que a alteração foi revertida
     return ok;
-  }, restore: (change) => work.handleRestoreAiChange(change, aiCss) });
+  }, restore: workspace.restore });
 
   const anySidebarOpen = panels.anyOpen;
 

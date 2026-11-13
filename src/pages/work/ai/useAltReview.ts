@@ -3,7 +3,7 @@ import { isAxiosError } from 'axios';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { scanImages, type BookImage } from '../../../utils/image-alt-scan';
 import { needsAlt } from '../../../utils/image-alt';
-import type { AiPlanInput } from './aiPlan';
+import type { AiWorkspace } from './aiWorkspace';
 
 /** Uma imagem do livro com o que está gravado (`alt`, `decorative`) e o rascunho do utilizador (`draft*`). */
 export interface AltItem extends BookImage { draftAlt: string; draftDecorative: boolean; error?: string }
@@ -23,12 +23,7 @@ const fromBook = (im: BookImage): AltItem => ({ ...im, draftAlt: im.alt, draftDe
  * Texto alternativo das imagens do livro: lista TODAS as imagens com o alt atual, editável a qualquer altura. A IA só
  * preenche o rascunho das que estão por escrever (depois de confirmar o envio); nada se grava sem "Guardar".
  */
-export function useAltReview({ isbn, language, getParts, applyPlan }: {
-    isbn: string | undefined;
-    language: string;
-    getParts: () => string[];
-    applyPlan: (plan: AiPlanInput, request: string, summary?: string[]) => Promise<unknown>;
-}) {
+export function useAltReview({ isbn, workspace }: { isbn: string | undefined; workspace: AiWorkspace }) {
     const [phase, setPhase] = useState<Phase>('idle');
     const [items, setItems] = useState<AltItem[]>([]);
     const [done, setDone] = useState(0);
@@ -37,7 +32,7 @@ export function useAltReview({ isbn, language, getParts, applyPlan }: {
     const cancelled = useRef(false);
 
     /** Lê o livro agora (alts podem ter mudado no editor). Descarta rascunhos: chamar ao abrir a vista. */
-    const load = useCallback(() => { setItems(scanImages(getParts()).map(fromBook)); setMessage(''); setPhase('idle'); }, [getParts]);
+    const load = useCallback(() => { setItems(scanImages(workspace.parts()).map(fromBook)); setMessage(''); setPhase('idle'); }, [workspace]);
 
     const toGenerate = items.filter((it) => isPending(it) && !it.draftAlt.trim() && !it.draftDecorative);
     const askGenerate = useCallback(() => setPhase('confirm'), []);
@@ -50,7 +45,7 @@ export function useAltReview({ isbn, language, getParts, applyPlan }: {
         for (let i = 0; i < queue.length && !cancelled.current; i += BATCH) {
             const batch = queue.slice(i, i + BATCH);
             try {
-                const { data } = await ebooksApi.aiAlt(isbn, batch.map(({ id, chapter, before, after }) => ({ id, chapter, before, after })), language);
+                const { data } = await ebooksApi.aiAlt(isbn, batch.map(({ id, chapter, before, after }) => ({ id, chapter, before, after })), workspace.language());
                 setItems((cur) => cur.map((it) => {
                     const r = data.results.find((x) => x.id === it.id);
                     if (!r) return it;
@@ -63,7 +58,7 @@ export function useAltReview({ isbn, language, getParts, applyPlan }: {
             setDone(Math.min(i + BATCH, queue.length));
         }
         setPhase('idle');
-    }, [isbn, language, toGenerate]);
+    }, [isbn, workspace, toGenerate]);
 
     /** Gera (ou volta a gerar) o texto de UMA imagem, p.ex. uma acabada de acrescentar. Só mexe no rascunho. */
     const generateOne = useCallback(async (id: string) => {
@@ -71,7 +66,7 @@ export function useAltReview({ isbn, language, getParts, applyPlan }: {
         if (!isbn || !it || busyIds.includes(id)) return;
         setBusyIds((cur) => [...cur, id]);
         try {
-            const { data } = await ebooksApi.aiAlt(isbn, [{ id, chapter: it.chapter, before: it.before, after: it.after }], language);
+            const { data } = await ebooksApi.aiAlt(isbn, [{ id, chapter: it.chapter, before: it.before, after: it.after }], workspace.language());
             const r = data.results[0];
             setItems((cur) => cur.map((x) => x.id !== id ? x : 'error' in r ? { ...x, error: r.error } : { ...x, error: undefined, draftAlt: r.alt, draftDecorative: r.decorative }));
         } catch (e) {
@@ -79,7 +74,7 @@ export function useAltReview({ isbn, language, getParts, applyPlan }: {
             setItems((cur) => cur.map((x) => (x.id === id ? { ...x, error: msg } : x)));
         }
         setBusyIds((cur) => cur.filter((x) => x !== id));
-    }, [isbn, language, items, busyIds]);
+    }, [isbn, workspace, items, busyIds]);
 
     const cancel = useCallback(() => { cancelled.current = true; }, []);
     const patch = useCallback((id: string, p: Partial<Pick<AltItem, 'draftAlt' | 'draftDecorative'>>) =>
@@ -91,14 +86,14 @@ export function useAltReview({ isbn, language, getParts, applyPlan }: {
         setPhase('saving'); setMessage('');
         const decisions = dirty.map(({ id, draftAlt, draftDecorative }) => ({ id, alt: draftDecorative ? '' : draftAlt.trim(), decorative: draftDecorative, overwrite: true }));
         try {
-            await applyPlan({ rules: [], ops: [{ type: 'set_image_alts', items: decisions }], styles: [], edits: [] }, 'Texto alternativo das imagens',
+            await workspace.apply({ rules: [], ops: [{ type: 'set_image_alts', items: decisions }], styles: [], edits: [] }, 'Texto alternativo das imagens',
                 [`Texto alternativo: ${decisions.length} ${decisions.length === 1 ? 'imagem' : 'imagens'}`]);
             const saved = new Set(decisions.map((d) => d.id));
             setItems((cur) => cur.map((it) => saved.has(it.id) ? { ...it, alt: it.draftDecorative ? '' : it.draftAlt.trim(), decorative: it.draftDecorative, draftAlt: it.draftDecorative ? '' : it.draftAlt.trim(), mixed: false } : it));
             setMessage(`${decisions.length} ${decisions.length === 1 ? 'imagem guardada' : 'imagens guardadas'}.`);
         } catch { setMessage('Não foi possível guardar (gravar a versão anterior falhou).'); }
         setPhase('idle');
-    }, [dirty, applyPlan]);
+    }, [dirty, workspace]);
 
     return { phase, items, busyIds, done, message, dirtyCount: dirty.length, pendingCount: items.filter(isPending).length, generateCount: toGenerate.length, load, askGenerate, cancelConfirm, generate, generateOne, cancel, patch, discard, save };
 }
