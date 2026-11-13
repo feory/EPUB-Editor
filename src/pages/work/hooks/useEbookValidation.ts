@@ -6,6 +6,7 @@ import { generateEpubBlob } from '../../../services/export/epub-service';
 import { validateFootnotes, type ValidationReport } from '../../../services/validation/footnote-validator';
 import { validateLinks, type LinkReport } from '../../../services/validation/link-validator';
 import type { BookMetadata } from '../../../services/export/epub-service';
+import { digestValidation, digestFootnotes, digestLinks, type ValidationDigest, type ValidationKind } from '../../../utils/validation-digest';
 import type { NotificationType } from '../../../context/NotificationContext';
 
 type ValidationConfig = {
@@ -16,6 +17,8 @@ type ValidationConfig = {
     errorMessage: string;
     warningMessage: (count: number) => string;
     validMessage: (count: number) => string;
+    /** Só devolve o resultado: não o põe no painel de validação nem avisa (quem pede, como o assistente de IA, mostra-o à sua maneira). */
+    silent?: boolean;
 };
 
 interface UseEbookValidationOptions {
@@ -39,14 +42,16 @@ export function useEbookValidation({
     const [footnoteValidation, setFootnoteValidation] = useState<ValidationReport | null>(null);
     const [linkValidation, setLinkValidation] = useState<LinkReport | null>(null);
 
-    const performValidation = useCallback(async (config: ValidationConfig) => {
+    const performValidation = useCallback(async (config: ValidationConfig): Promise<ValidationResult | null> => {
         try {
             const html = getLatestHtmlContent();
             // As três validações são mutuamente exclusivas no painel — limpar todas
             // e preencher só a do tipo atual.
-            setValidationResults(null);
-            setFootnoteValidation(null);
-            setLinkValidation(null);
+            if (!config.silent) {
+                setValidationResults(null);
+                setFootnoteValidation(null);
+                setLinkValidation(null);
+            }
 
             if (config.needsEpub) {
                 // Notificação persistente (duration 0) durante a geração + validação
@@ -70,6 +75,7 @@ export function useEbookValidation({
                     hideNotification(pendingId);
                 }
 
+                if (config.silent) return validationData;
                 const totalIssues = validationData.errors.length + validationData.warnings.length;
 
                 if (totalIssues === 0) {
@@ -82,6 +88,7 @@ export function useEbookValidation({
                         showNotification('error', config.warningMessage(validationData.errors.length));
                     }
                 }
+                return validationData;
             } else if (config.type === 'links') {
                 const linkResults = validateLinks(html);
                 if (linkResults.issues.length === 0) showNotification('success', config.successMessage);
@@ -95,6 +102,7 @@ export function useEbookValidation({
             console.error(error);
             showNotification('error', config.errorMessage);
         }
+        return null;
     }, [getLatestHtmlContent, prepareEpubAssets, customCss, isbn, showNotification, hideNotification]);
 
     const validateMutation = useMutation({
@@ -112,7 +120,7 @@ export function useEbookValidation({
     });
 
     const handleValidateEpub = useCallback(async () => {
-        await performValidation({
+        return performValidation({
             type: 'epub',
             needsEpub: true,
             startMessage: 'A validar conformidade EPUB 3.3...',
@@ -136,7 +144,7 @@ export function useEbookValidation({
     }, [performValidation]);
 
     const handleValidateAccessibility = useCallback(async () => {
-        await performValidation({
+        return performValidation({
             type: 'accessibility',
             needsEpub: true,
             startMessage: 'A validar acessibilidade WCAG...',
@@ -147,7 +155,25 @@ export function useEbookValidation({
         });
     }, [performValidation]);
 
+    /** Corre uma validação sem mexer no painel de validação e devolve o resumo (null se falhou). Para o assistente de IA. */
+    const runValidation = useCallback(async (kind: ValidationKind): Promise<ValidationDigest | null> => {
+        if (kind === 'footnotes') return digestFootnotes(validateFootnotes(getLatestHtmlContent()));
+        if (kind === 'links') return digestLinks(validateLinks(getLatestHtmlContent()));
+        const result = await performValidation({
+            type: kind,
+            needsEpub: true,
+            silent: true,
+            startMessage: kind === 'epub' ? 'A validar conformidade EPUB 3.3...' : 'A validar acessibilidade WCAG...',
+            successMessage: '',
+            errorMessage: kind === 'epub' ? 'Falha ao validar EPUB.' : 'Falha ao validar acessibilidade.',
+            warningMessage: () => '',
+            validMessage: () => '',
+        });
+        return result ? digestValidation(result, kind) : null;
+    }, [performValidation, getLatestHtmlContent]);
+
     return {
+        runValidation,
         validationResults,
         setValidationResults,
         footnoteValidation,

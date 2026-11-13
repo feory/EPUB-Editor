@@ -3,6 +3,7 @@
 // O modelo só PROPÕE: `proposal` é a última simulação válida, e aplicá-la é um passo separado, do utilizador.
 import { surveyBook } from '../../../utils/book-survey';
 import type { BookRule, RuleReport } from '../../../utils/book-rules';
+import { VALIDATION_ORDER, type ValidationKind, type ValidationDigest } from '../../../utils/validation-digest';
 import { scopeRules, type RuleBlock } from './aiSelection';
 import { runPlan, type BookOp, type OpResult } from './aiPlan';
 import { charStyles, paragraphStyles } from '../../../utils/user-styles';
@@ -30,13 +31,28 @@ export async function runAgent(opts: {
     book: { parts: string[]; css: string };
     /** Só este bloco: as regras ficam limitadas a ele e as operações (que mexem no livro todo) recusam-se. */
     scope?: RuleBlock | null;
+    /** Corre uma validação sobre o livro como está agora e devolve o resumo; null se não foi possível. */
+    validate?: (kind: ValidationKind) => Promise<ValidationDigest | null>;
 }): Promise<AgentResult> {
     let messages = opts.messages;
     let proposal: AgentResult['proposal'] = null;
 
-    const execute = (tool: Block): { content: string; is_error?: true } => {
+    const execute = async (tool: Block): Promise<{ content: string; is_error?: true }> => {
         const input = (tool.input ?? {}) as { rules?: unknown; styles?: unknown; style_edits?: unknown; operations?: unknown };
         if (tool.name === 'survey_book') return { content: JSON.stringify(surveyBook(opts.book.parts, opts.book.css)) };
+        if (tool.name === 'run_validation') {
+            const type = (tool.input as { type?: unknown } | undefined)?.type;
+            const kinds: readonly ValidationKind[] = type === 'all' ? VALIDATION_ORDER : (VALIDATION_ORDER as readonly unknown[]).includes(type) ? [type as ValidationKind] : ['accessibility'];
+            const done: { validacao: ValidationKind; ok: boolean; problemas: number; detalhe?: ValidationDigest; erro?: string }[] = [];
+            for (const kind of kinds) { // por ordem; uma que falhe não impede as outras
+                const digest = await opts.validate?.(kind);
+                if (!digest) { done.push({ validacao: kind, ok: false, problemas: 0, erro: 'não foi possível correr (modo leitura ou falhou)' }); continue; }
+                const problems = digest.groups.reduce((n, g) => n + g.count, 0);
+                done.push(problems ? { validacao: kind, ok: false, problemas: problems, detalhe: digest } : { validacao: kind, ok: true, problemas: 0 });
+            }
+            if (done.every((d) => d.erro)) return { content: 'Não foi possível correr a validação (modo leitura ou falhou). Diz ao utilizador para a correr no menu Validações.', is_error: true };
+            return { content: JSON.stringify({ validacoes: done }) };
+        }
         if (tool.name === 'preview_rules') {
             if (!Array.isArray(input.rules)) return { content: 'rules tem de ser uma lista', is_error: true };
             if (input.styles !== undefined && !Array.isArray(input.styles)) return { content: 'styles tem de ser uma lista', is_error: true };
@@ -66,7 +82,8 @@ export async function runAgent(opts: {
             const note = res.stop_reason === 'refusal' ? 'O assistente recusou este pedido.' : res.stop_reason === 'max_tokens' ? 'A resposta foi cortada.' : '';
             return { messages, text: text || note, proposal };
         }
-        const results = res.content.filter((b) => b.type === 'tool_use').map((b) => ({ type: 'tool_result', tool_use_id: b.id, ...execute(b) }));
+        const results: Block[] = [];
+        for (const b of res.content.filter((x) => x.type === 'tool_use')) results.push({ type: 'tool_result', tool_use_id: b.id, ...(await execute(b)) });
         messages = [...messages, { role: 'user', content: results }];
     }
     return { messages, text: 'O assistente excedeu o limite de passos. Reformula o pedido.', proposal };

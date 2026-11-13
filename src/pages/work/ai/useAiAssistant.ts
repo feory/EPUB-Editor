@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { runAgent, appliedNote, discardedNote, renameProposalStyle, type AgentMessage, type AgentResult } from './aiAgent';
 import { blockContext, type SelectedBlocks, type RuleBlock } from './aiSelection';
+import type { ValidationKind, ValidationDigest } from '../../../utils/validation-digest';
 import { chatKey, compactHistory, loadChat, saveChat } from './chatStore';
 
 export interface AiLine { role: 'user' | 'assistant'; text: string }
@@ -10,7 +11,7 @@ export interface AiLine { role: 'user' | 'assistant'; text: string }
 const LOST_PROPOSAL = 'A proposta que estava por aplicar perdeu-se ao recarregar a página; nada foi alterado. Pede de novo se a quiseres.';
 
 /** Estado do painel de IA: conversa (para mostrar), mensagens da API (para continuar), proposta pendente. A conversa sobrevive a recarregar (chatStore.ts). */
-export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal, selected, locate }: {
+export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal, selected, locate, runValidation }: {
     isbn: string | undefined;
     userId: string | number | undefined;
     getParts: () => string[];
@@ -19,6 +20,8 @@ export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal, 
     /** O bloco selecionado no editor (null = nenhum) e onde está nas partes do livro. */
     selected: SelectedBlocks | null;
     locate: (sel: SelectedBlocks) => RuleBlock | null;
+    /** Corre uma validação e devolve o resumo; null se não foi possível (falhou ou modo leitura). */
+    runValidation: (kind: ValidationKind) => Promise<ValidationDigest | null>;
 }) {
     const key = chatKey(isbn, userId);
     const [stored] = useState(() => loadChat(key)); // lido uma vez, ao abrir o livro
@@ -50,6 +53,7 @@ export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal, 
             const result = await runAgent({
                 messages: [...history.current, { role: 'user', content: block ? blockContext(getParts(), block) + request.current : request.current }],
                 scope: block,
+                validate: runValidation,
                 send: async (messages) => (await ebooksApi.aiChat(isbn, messages)).data,
                 book: { parts: getParts(), css: getCss() },
             });
@@ -59,7 +63,7 @@ export function useAiAssistant({ isbn, userId, getParts, getCss, applyProposal, 
         } catch (e) {
             setError(isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error ?? 'Erro de rede' : 'Erro inesperado');
         } finally { setBusy(false); }
-    }, [isbn, busy, getParts, getCss, scoped, locate]);
+    }, [isbn, busy, getParts, getCss, scoped, locate, runValidation]);
 
     const apply = useCallback(async () => {
         if (!proposal) return;

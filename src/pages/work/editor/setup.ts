@@ -22,6 +22,7 @@ import type { SelectedBlocks } from '../ai/aiSelection';
 
 export interface SetupLive {
     onBlockChange?: (info: BlockInfo) => void;      // caixa e bloco de texto sob o cursor (painel lateral)
+    aiOpen?: boolean;                               // painel da IA aberto: ao abrir, nenhum bloco fica ativo nem selecionado
     aiScope?: boolean;                              // painel da IA aberto e limitado aos blocos selecionados → destacá-los no editor
     onSelectedBlock?: (blocks: SelectedBlocks | null) => void; // blocos de topo de texto onde está o cursor/a seleção (assistente de IA: "só estes blocos")
     ebookLabel: string;                             // título do ebook no canto direito da barra de estado
@@ -226,7 +227,19 @@ export function createEditorSetup(deps: SetupDeps) {
             wanted.forEach((el) => editor.dom.setAttrib(el, MARK.aiScope, '1'));
         };
         editor.on('aiscopechange', markAiScope); // despachado pelo WorkEditor quando a prop muda
+        // Ao abrir o painel da IA, nenhum bloco fica ativo (anel, mini-menu) nem selecionado (âmbito): tira o cursor do editor.
+        editor.on('aiopenchange', () => {
+            if (!live.current.aiOpen) return;
+            (editor.getDoc().activeElement as HTMLElement | null)?.blur();
+            editor.selection.getSel()?.removeAllRanges();
+            selected = null;
+            lastSelected = JSON.stringify(null);
+            live.current.onSelectedBlock?.(null);
+            markAiScope();
+            editor.nodeChanged(); // o bloco ativo (activeBlock.ts) reavalia-se sem cursor e limpa o anel
+        });
         editor.on('NodeChange', () => { // o cursor continua nos blocos quando o foco passa para o painel da IA: só um NodeChange o muda
+            if (!editor.hasFocus() && live.current.aiOpen) return; // sem foco com o painel aberto, a seleção (limpa ou herdada) não conta
             selected = selectedTopBlocks(editor.getBody(), editor.selection.getRng());
             markAiScope();
             const json = JSON.stringify(selected);

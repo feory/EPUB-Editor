@@ -113,7 +113,7 @@ test('validação: devolve erros e não altera nada', () => {
     const parts = ['<p>a</p>'];
     const bad: BookRule[] = [
         { select: { tag: ['h2'] }, action: { type: 'delete' } },
-        { select: { tag: ['p'] }, action: { type: 'retag', to: 'h2' } },
+        { select: { tag: ['p'] }, action: { type: 'retag', to: 'h2' } }, // h2 só a partir de h3–h6
         { select: { tag: ['p'] }, action: { type: 'addClass', value: 'chapter-break-h1' } },
         { select: { tag: ['p'], deep: true, afterHeading: ['h1'] }, action: { type: 'addClass', value: 'p-small' } },
         { select: { tag: [] }, action: { type: 'addClass', value: 'p-small' } },
@@ -153,4 +153,26 @@ test('removeStyle: propriedades inválidas → erro', () => {
         { select: { tag: ['p'], hasStyle: ['Margin Left'] }, action: { type: 'delete' } },
     ] as unknown as BookRule[];
     expect(validateRules(bad).length).toBeGreaterThanOrEqual(3);
+});
+
+test('startsWith aponta para UM título; maiúsculas e espaços repetidos não contam', () => {
+    const rule: BookRule = { select: { tag: ['h3'], startsWith: 'teste  SALTO' }, action: { type: 'retag', to: 'h2' } };
+    const { parts, reports } = runRules(['<h3>Outro</h3><h3>TESTE salto de nivel</h3>'], [rule]);
+    expect(parts[0]).toBe('<h3>Outro</h3><p class="chapter-break-h2" data-title="TESTE salto de nivel"></p><h2>TESTE salto de nivel</h2>');
+    expect(reports[0].changed).toBe(1);
+});
+
+test('retag para h2: só a partir de h3–h6; startsWith curto demais é erro', () => {
+    const fromP: BookRule = { select: { tag: ['p'] }, action: { type: 'retag', to: 'h2' } };
+    expect(runRules(['<p>a</p>'], [fromP]).errors).toEqual(['regra 1: retag para h2 só a partir de h3–h6']);
+    expect(runRules(['<h3>a</h3>'], [{ select: { tag: ['h3', 'h4'] }, action: { type: 'retag', to: 'h2' } }]).errors).toEqual([]);
+    expect(validateRules([{ select: { tag: ['h3'], startsWith: 'a' }, action: { type: 'retag', to: 'h2' } }])).toHaveLength(1);
+});
+
+test('retag para h2 cria o marcador de capítulo antes do título (a fronteira tracejada)', () => {
+    const rule: BookRule = { select: { tag: ['h3'], startsWith: 'Novo' }, action: { type: 'retag', to: 'h2' } };
+    const { parts, reports } = runRules(['<h3>Outro</h3><h3>Novo "capítulo"</h3><p>texto</p>'], [rule]);
+    expect(parts[0]).toBe('<h3>Outro</h3><p class="chapter-break-h2" data-title="Novo &quot;capítulo&quot;"></p><h2>Novo "capítulo"</h2><p>texto</p>');
+    expect(reports[0].changed).toBe(1);
+    expect(runRules(parts, [rule]).reports[0].changed).toBe(0); // idempotente: já não há h3 com esse texto
 });

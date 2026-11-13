@@ -37,7 +37,7 @@ export function locateBlocks(parts: string[], sel: SelectedBlocks, activeChapter
 
 /** Fixa as regras aos blocos: o que o modelo pôs em capítulos/profundidade/posição deixa de valer. */
 export const scopeRules = (rules: BookRule[], block: RuleBlock): BookRule[] =>
-    rules.map((r) => ({ ...r, select: { tag: r.select.tag, hasClass: r.select.hasClass, noClass: r.select.noClass, hasStyle: r.select.hasStyle, block } }));
+    rules.map((r) => ({ ...r, select: { tag: r.select.tag, hasClass: r.select.hasClass, noClass: r.select.noClass, hasStyle: r.select.hasStyle, startsWith: r.select.startsWith, block } }));
 
 /** O que se diz ao modelo (junto ao pedido) sobre os blocos: o HTML deles, para escolher as tags e as classes certas. */
 export function blockContext(parts: string[], block: RuleBlock): string {

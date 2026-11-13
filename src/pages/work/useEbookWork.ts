@@ -401,6 +401,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         versionDiff,
 
         validationResults: validation.validationResults,
+        runValidation: validation.runValidation,
         setValidationResults: validation.setValidationResults,
         footnoteValidation: validation.footnoteValidation,
         setFootnoteValidation: validation.setFootnoteValidation,

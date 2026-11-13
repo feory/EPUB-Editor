@@ -19,6 +19,8 @@ export interface RuleSelect {
     hasClass?: string[];
     /** Não tem NENHUMA destas classes. */
     noClass?: string[];
+    /** O texto do bloco começa por isto (sem contar espaços repetidos nem maiúsculas): aponta para um título ou parágrafo concreto. */
+    startsWith?: string;
     /** Tem, no atributo style (inline), TODAS estas propriedades (ex. ["margin-left"]). */
     hasStyle?: string[];
     /** O bloco de conteúdo imediatamente anterior é um destes títulos (salta marcadores, âncoras, `hr` e vazios). */
@@ -42,7 +44,7 @@ export const blockKey = (text: string | null) => (text ?? '').replace(/\s+/g, ' 
 /** Todas as ações e chaves do `select`, como valores: `Record` obriga o compilador a avisar se se acrescenta uma e esta lista fica para trás.
  *  Existem para o teste de contrato com o prompt do servidor (server/ai-contract.test.js). */
 export const RULE_ACTION_TYPES = Object.keys({ addClass: 1, removeClass: 1, removeStyle: 1, retag: 1, delete: 1 } satisfies Record<RuleAction['type'], 1>);
-export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, afterHeading: 1, chapters: 1, exceptChapters: 1, deep: 1, block: 1 } satisfies Record<keyof RuleSelect, 1>);
+export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, startsWith: 1, afterHeading: 1, chapters: 1, exceptChapters: 1, deep: 1, block: 1 } satisfies Record<keyof RuleSelect, 1>);
 
 export interface BookRule {
     select: RuleSelect;
@@ -64,7 +66,7 @@ export interface RunResult {
 
 const CLASS_RE = /^[a-z][a-z0-9-]*$/;
 const TAG_RE = /^[a-z][a-z0-9]*$/;
-const RETAG_TARGETS = ['p', 'h3', 'h4', 'h5', 'h6'];
+const RETAG_TARGETS = ['p', 'h2', 'h3', 'h4', 'h5', 'h6'];
 // shortcut: retag/delete de h1/h2 recusados — mexem nos capítulos (marcadores, sidebar 1:1), upgrade quando houver regra para isso.
 const STRUCTURAL = ['h1', 'h2'];
 const MAX_SAMPLES = 3;
@@ -94,6 +96,9 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
         if (a.type === 'removeStyle' && (!Array.isArray(a.props) || !a.props.length || !a.props.every((p) => PROP_RE.test(p)))) errors.push(`${at}: "props" tem de ser uma lista de propriedades CSS (ex. ["margin-left"])`);
         if (s.hasStyle && (!Array.isArray(s.hasStyle) || !s.hasStyle.every((p) => PROP_RE.test(p)))) errors.push(`${at}: "hasStyle" inválido`);
         if (a.type === 'retag' && !RETAG_TARGETS.includes(a.to)) errors.push(`${at}: retag só para ${RETAG_TARGETS.join('/')}`);
+        // h2 sem marcador de capítulo é só um título (ex. corrigir h1 → h3): só a partir de outros títulos, nunca de parágrafos.
+        if (a.type === 'retag' && a.to === 'h2' && s.tag?.some((t) => !/^h[3-6]$/.test(t))) errors.push(`${at}: retag para h2 só a partir de h3–h6`);
+        if (s.startsWith !== undefined && (typeof s.startsWith !== 'string' || blockKey(s.startsWith).length < 2 || s.startsWith.length > 120)) errors.push(`${at}: "startsWith" tem de ter 2–120 caracteres`);
         if (a.type === 'addClass' || a.type === 'removeClass') {
             if (!CLASS_RE.test(a.value) || a.value.startsWith('chapter-')) errors.push(`${at}: classe inválida "${a.value}"`);
             else if (a.type === 'addClass' && knownClasses && !knownClasses.has(a.value)) errors.push(`${at}: classe desconhecida "${a.value}"`);
@@ -115,6 +120,7 @@ function select(doc: Document, s: RuleSelect): Element[] {
         if (s.hasClass && !s.hasClass.every((c) => el.classList.contains(c))) return false;
         if (s.noClass && s.noClass.some((c) => el.classList.contains(c))) return false;
         if (s.hasStyle && !s.hasStyle.every((p) => styleDecls(el).some((d) => d.name === p))) return false;
+        if (s.startsWith !== undefined && !blockKey(el.textContent).toLowerCase().startsWith(blockKey(s.startsWith).toLowerCase())) return false;
         if (s.afterHeading) {
             let prev = el.previousElementSibling;
             while (prev && isFiller(prev)) prev = prev.previousElementSibling;
@@ -154,6 +160,12 @@ function apply(doc: Document, el: Element, a: RuleAction): Element | null | unde
             for (const attr of Array.from(el.attributes)) next.setAttribute(attr.name, attr.value);
             while (el.firstChild) next.append(el.firstChild);
             el.replaceWith(next);
+            if (a.to === 'h2') { // um h2 é fronteira de capítulo: leva o marcador (a linha tracejada no editor), como quando se faz h2 no editor
+                const marker = doc.createElement('p');
+                marker.className = 'chapter-break-h2';
+                marker.setAttribute('data-title', (next.textContent || '').replace(/\s+/g, ' ').trim());
+                next.before(marker);
+            }
             return next;
         }
         case 'delete':

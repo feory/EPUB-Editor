@@ -427,6 +427,7 @@ export function WorkPage() {
   const styles = useStyleCatalogue({ createStyle, saveStyle, deleteStyle }, { renameStyle: work.handleRenameStyle, removeStyle: work.handleRemoveStyle });
   const aiCss = { get: getCurrentCss, set: (next: string) => editCss(() => next) };
   const ai = useAiAssistant({ isbn, userId: user?.id, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: (p, request) => work.handleApplyAiPlan(p, request, aiCss, summarizeProposal(p)),
+    runValidation: (kind) => (work.readOnly ? Promise.resolve(null) : work.runValidation(kind)),
     selected: selectedBlock, locate: (sel) => locateBlocks(work.getBookParts(), sel, work.activeChapterIndex) });
   const altReview = useAltReview({ isbn, language: work.language, getParts: work.getBookParts, applyPlan: (plan, request, summary) => work.handleApplyAiPlan(plan, request, aiCss, summary) });
   const aiChanges = useAiChanges({ isbn, enabled: sidebars.showAiSidebar, revert: async (change) => {
@@ -574,6 +575,7 @@ export function WorkPage() {
                 onBlockChange={setBlockInfo}
                 onSelectedBlock={setSelectedBlock}
                 aiScope={sidebars.showAiSidebar && !!ai.scoped}
+                aiOpen={sidebars.showAiSidebar}
                 htmlContent={work.htmlContent}
                 setHtmlContent={work.setHtmlContent}
                 activeChapterIndex={work.activeChapterIndex}

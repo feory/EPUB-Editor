@@ -6,6 +6,7 @@ import { runRules, type BookRule, type RuleReport } from '../../../utils/book-ru
 import { splitChapters, classifyChapterPart } from '../../../utils/chapters';
 import { setImageAlts, type AltDecision } from '../../../utils/image-alt-scan';
 import { convertSpanStyles } from '../../../utils/inline-styles';
+import { fixTypography, TYPOGRAPHY_FIXES, type TypographyFix } from '../../../utils/typography';
 import { applyStylePlan, type PlannedStyle, type PlannedEdit } from '../../../utils/book-styles';
 import * as bookEdit from '../bookEdit';
 import type { Book, BookEdit } from '../bookEdit';
@@ -19,14 +20,15 @@ export type BookOp =
     | { type: 'set_chapter_level'; index: number; level: 'h1' | 'h2' | 'h3' }
     | { type: 'hide_chapter'; index: number; hidden: boolean }
     | { type: 'set_image_alts'; items: AltDecision[] }
-    | { type: 'inline_style_to_class'; style: Record<string, string>; cls: string; scope?: string[] };
+    | { type: 'inline_style_to_class'; style: Record<string, string>; cls: string; scope?: string[] }
+    | { type: 'typography'; fixes?: TypographyFix[] };
 
 export interface OpResult { label: string; changed: boolean; summary: string }
 export interface PlanResult { html: string; reports: RuleReport[]; opResults: OpResult[]; errors: string[] }
 
 const LABELS: Record<BookOp['type'], string> = {
     drop_caps: 'Capitulares', link_index: 'Ligar Índice', fix_links: 'Corrigir links', replace_text: 'Substituir texto',
-    rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice', set_image_alts: 'Texto alternativo', inline_style_to_class: 'Estilo inline → classe',
+    rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice', set_image_alts: 'Texto alternativo', inline_style_to_class: 'Estilo inline → classe', typography: 'Tipografia',
 };
 /** Os tipos de operação (completo por construção: LABELS é um Record). Ver server/ai-contract.test.js. */
 export const OP_TYPES = Object.keys(LABELS);
@@ -53,6 +55,7 @@ export function validateOps(ops: BookOp[]): string[] {
             if (typeof op.cls !== 'string' || !/^[a-z][a-z0-9-]*$/.test(op.cls) || op.cls.startsWith('chapter-')) errors.push(`${at}: "cls" inválida`);
             if (op.scope !== undefined && (!Array.isArray(op.scope) || !op.scope.every((t) => /^[a-z][a-z0-9]*$/.test(t)))) errors.push(`${at}: "scope" tem de ser uma lista de tags (ex. ["h1"])`);
         }
+        if (op.type === 'typography' && op.fixes !== undefined && (!Array.isArray(op.fixes) || !op.fixes.length || !op.fixes.every((f) => (TYPOGRAPHY_FIXES as readonly string[]).includes(f)))) errors.push(`${at}: "fixes" tem de ser uma lista de ${TYPOGRAPHY_FIXES.join('/')}`);
         if ('index' in op && !Number.isInteger(op.index)) errors.push(`${at}: "index" tem de ser um inteiro`);
         if (op.type === 'rename_chapter' && (typeof op.title !== 'string' || !op.title.trim() || op.title.length > 200 || BAD_TEXT.test(op.title))) errors.push(`${at}: título inválido`);
         if (op.type === 'set_chapter_level' && !LEVELS.includes(op.level)) errors.push(`${at}: nível tem de ser h1, h2 ou h3`);
@@ -91,6 +94,15 @@ function runOp(book: Book, op: BookOp, known?: ReadonlySet<string>): Step {
             const { parts, changed } = convertSpanStyles(book.parts, { style: op.style, cls: op.cls, scope: op.scope });
             return changed === 0 ? { summary: 'Nenhum span com esse estilo' } : { html: parts.join(''), summary: `${changed} ${changed === 1 ? 'span passa' : 'spans passam'} a .${op.cls}${op.scope ? ` (em ${op.scope.join(', ')})` : ''}` };
         }
+        case 'typography': {
+            const { parts, counts, skippedQuotes, sample } = fixTypography(book.parts, op.fixes);
+            const NAMES: Record<TypographyFix, string> = { quotes: 'aspas', dashes: 'travessões', ellipsis: 'reticências', spaces: 'espaços' };
+            const total = Object.values(counts).reduce((n, c) => n + (c ?? 0), 0);
+            if (total === 0) return { summary: skippedQuotes ? `Nada a corrigir (${skippedQuotes} blocos com aspas desemparelhadas ficaram como estavam)` : 'Nada a corrigir' };
+            const what = TYPOGRAPHY_FIXES.filter((k) => counts[k]).map((k) => `${NAMES[k]} ${counts[k]}`).join(', ');
+            const note = skippedQuotes ? `; ${skippedQuotes} blocos com aspas desemparelhadas ficaram como estavam` : '';
+            return { html: parts.join(''), summary: `${total} alterações (${what})${note}${sample ? `. Ex.: ${sample.before} → ${sample.after}` : ''}` };
+        }
         case 'set_image_alts': {
             const { parts, changed } = setImageAlts(book.parts, op.items);
             return changed === 0 ? { summary: 'Sem imagens por escrever' } : { html: parts.join(''), summary: `${changed} ${changed === 1 ? 'imagem' : 'imagens'}` };
@@ -110,7 +122,7 @@ export function runPlan(parts: string[], rules: BookRule[], ops: BookOp[], known
     if (errors.length) return { html: parts.join(''), reports: run.reports, opResults: [], errors };
 
     let html = run.parts.join('');
-    let book = bookOf(run.parts);
+    let book = bookOf(splitChapters(html)); // as regras podem ter criado marcadores (h3 → h2): volta a partir em capítulos
     const opResults: OpResult[] = [];
     ops.forEach((op, i) => {
         const step = runOp(book, op, known);
