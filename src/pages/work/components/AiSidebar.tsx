@@ -71,7 +71,7 @@ export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; changes: Changes; isbn: str
                     {view !== 'chat' && <button onClick={() => go('chat')} title="Voltar à conversa" aria-label="Voltar à conversa" className={`${ICON} hover:text-text-main`}><MessageSquare size={16} /></button>}
                     {view !== 'alt' && <button onClick={() => go('alt')} title="Texto alternativo das imagens" aria-label="Texto alternativo das imagens" className={`${ICON} hover:text-text-main`}><ImageIcon size={16} /></button>}
                     {view !== 'changes' && <button onClick={() => go('changes')} title="Alterações da IA (reverter)" aria-label="Alterações da IA" className={`${ICON} hover:text-text-main`}><History size={16} /></button>}
-                    <button onClick={ai.reset} title="Nova conversa" aria-label="Nova conversa" className={`${ICON} hover:text-text-main`}><Trash2 size={16} /></button>
+                    {view === 'chat' && <button onClick={ai.reset} title="Nova conversa" aria-label="Nova conversa" className={`${ICON} hover:text-text-main`}><Trash2 size={16} /></button>}
                     <button onClick={onClose} aria-label="Fechar" className={`${ICON} hover:text-rose-500`}><X size={16} /></button>
                 </div>
             </div>
