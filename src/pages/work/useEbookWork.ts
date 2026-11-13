@@ -19,7 +19,9 @@ import type { PageAnchor } from '../../services/page-list/page-list';
 import { createSaver } from './saver';
 import * as bookEdit from './bookEdit';
 import type { Book, BookEdit } from './bookEdit';
-import { resolvePlan, type AiPlanInput, type AiSnapshots, type AiCssSide } from './ai/aiPlan';
+import type { AiPlanInput, AiSnapshots, AiCssSide } from './ai/aiPlan';
+import { createAiTransactions } from './ai/aiTransaction';
+import { ebooksAiHistory } from './ai/aiHistoryPort';
 import type { ChapterActions } from './chapterActions';
 import { contentReducer, initialContentState } from './hooks/contentReducer';
 import { useChapterSync } from './hooks/useChapterSync';
@@ -270,53 +272,31 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         () => listSubtitles(chapterSync.splitHtmlIntoParts(chapterSync.getLatestHtmlContent())),
         [chapterSync],
     );
-    // Plano da IA (regras, operações, estilos): tudo se calcula ANTES de gravar nada (resolvePlan); com qualquer erro nada muda.
-    // Antes de alterar, guardam-se as versões anteriores no histórico, cada uma só se for alterada: o HTML ("Antes de IA: …") e o
-    // CSS (style_…, com a mesma etiqueta). Se gravar qualquer uma falhar, nem o HTML nem o CSS são tocados. Devolve os nomes dos
-    // ficheiros guardados (para o registo das alterações poder repô-los).
+    // Plano da IA: a transação (aplicar / reverter, tudo-ou-nada) vive em ai/aiTransaction.ts; aqui só se ligam as portas ao React.
     const getBookParts = useCallback(() => getBook().parts, [getBook]);
-    const handleApplyAiPlan = useCallback(async (plan: AiPlanInput, request: string, css: AiCssSide, summary: string[] = []): Promise<AiSnapshots> => {
-        if (!isbn || readOnly) return {};
-        const book = getBook();
-        const current = css.get();
-        const result = resolvePlan(book.parts, current, plan);
-        if (result.errors.length) { showNotification('error', result.errors.join('; ')); return {}; }
-        const htmlChanged = result.html !== book.html;
-        const cssChanged = result.css !== current;
-        if (!htmlChanged && !cssChanged) return {};
-        const label = `Antes de IA: ${request}`.slice(0, 80);
-        const snapshots: AiSnapshots = {};
-        if (htmlChanged) {
-            const { data } = await ebooksApi.saveContent(isbn, await compressHtmlAsync(book.html));
-            if (data?.filename) { await ebooksApi.setHistoryLabel(isbn, data.filename, label); snapshots.htmlFile = data.filename; }
-        }
-        if (cssChanged) snapshots.cssFile = (await ebooksApi.saveStyleSnapshot(isbn, current, label)).data.filename;
-        // Daqui para baixo é tudo síncrono: o CSS e o HTML entram juntos.
-        if (cssChanged) css.set(result.css);
-        if (htmlChanged) applyEdit({ html: result.html, commit: 'keep', notice: { type: 'success', text: 'Alterações da IA aplicadas!' } });
-        // Registo para poder reverter. Já está aplicado: se falhar só se perde o registo (as versões ficam no histórico).
-        ebooksApi.addAiChange(isbn, { request, lines: summary, ...snapshots }).then(() => queryClient.invalidateQueries({ queryKey: ['ai-changes', isbn] }))
-            .catch((e) => console.error('[ai-changes] registo falhou:', e));
-        return snapshots;
-    }, [isbn, readOnly, getBook, applyEdit, showNotification, queryClient]);
+    // Criada no momento de uso (nunca durante o render): as portas leem o livro mais recente por funções, não por valores.
+    const aiTransactions = useCallback(() => (isbn ? createAiTransactions({
+        history: ebooksAiHistory(isbn),
+        book: { parts: () => getBook().parts, html: () => getBook().html, commit: (html, mode) => applyEdit({ html, commit: mode }) },
+    }) : null), [isbn, getBook, applyEdit]);
 
-    // Reverter uma alteração da IA: repõe o HTML e/ou o CSS de antes dela. Guarda primeiro o estado atual (reverter também se
-    // desfaz) e lê tudo o que vai repor ANTES de tocar em nada. Repõe o LIVRO inteiro: o que se editou depois perde-se (fica no histórico).
+    const handleApplyAiPlan = useCallback(async (plan: AiPlanInput, request: string, css: AiCssSide, summary: string[] = []): Promise<AiSnapshots> => {
+        const tx = aiTransactions();
+        if (!tx || readOnly) return {};
+        const result = await tx.apply(plan, request, css, summary);
+        if (result.status === 'invalid') showNotification('error', result.errors.join('; '));
+        if (result.status !== 'applied') return {};
+        showNotification('success', 'Alterações da IA aplicadas!');
+        queryClient.invalidateQueries({ queryKey: ['ai-changes', isbn] });
+        return result.snapshots;
+    }, [aiTransactions, readOnly, showNotification, queryClient, isbn]);
+
     const handleRevertAiChange = useCallback(async (change: AiChange, css: AiCssSide): Promise<boolean> => {
-        if (!isbn || readOnly) return false;
+        const tx = aiTransactions();
+        if (!tx || readOnly) return false;
         try {
-            const label = `Antes de reverter: ${change.request}`.slice(0, 80);
-            if (change.htmlFile) {
-                const { data } = await ebooksApi.saveContent(isbn, await compressHtmlAsync(getBook().html));
-                if (data?.filename && data.filename !== change.htmlFile) await ebooksApi.setHistoryLabel(isbn, data.filename, label);
-            }
-            if (change.cssFile) await ebooksApi.saveStyleSnapshot(isbn, css.get(), label);
-            const html = change.htmlFile ? decompressHtml((await ebooksApi.getContent(isbn, change.htmlFile)).data.content) : null;
-            const cssText = change.cssFile ? (await ebooksApi.getStyleSnapshot(isbn, change.cssFile)).data.css : null;
-            if (cssText !== null) css.set(cssText);
-            if (html !== null) applyEdit({ html, commit: 'reset', notice: { type: 'success', text: 'Alteração da IA revertida!' } });
-            else showNotification('success', 'Alteração da IA revertida!');
-            await ebooksApi.markAiChangeReverted(isbn, change.id);
+            await tx.revert(change, css);
+            showNotification('success', 'Alteração da IA revertida!');
             queryClient.invalidateQueries({ queryKey: ['ai-changes', isbn] });
             return true;
         } catch (e) {
@@ -324,7 +304,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
             showNotification('error', 'Não foi possível reverter.');
             return false;
         }
-    }, [isbn, readOnly, getBook, applyEdit, showNotification, queryClient]);
+    }, [aiTransactions, readOnly, showNotification, queryClient, isbn]);
 
     const handleFixLinks = useCallback(() => {
         const { edit, report } = bookEdit.fixBookLinks(getBook());
