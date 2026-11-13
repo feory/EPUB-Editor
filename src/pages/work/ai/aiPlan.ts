@@ -4,6 +4,7 @@
 // capítulos (mudam os índices a meio do plano) e a page-list (precisa de um PDF).
 import { runRules, type BookRule, type RuleReport } from '../../../utils/book-rules';
 import { splitChapters, classifyChapterPart } from '../../../utils/chapters';
+import { applyStylePlan, type PlannedStyle, type PlannedEdit } from '../../../utils/book-styles';
 import * as bookEdit from '../bookEdit';
 import type { Book, BookEdit } from '../bookEdit';
 
@@ -96,4 +97,17 @@ export function runPlan(parts: string[], rules: BookRule[], ops: BookOp[], known
         if (step.html !== undefined && step.html !== html) { html = step.html; book = bookOf(splitChapters(html)); }
     });
     return { html, reports: run.reports, opResults, errors };
+}
+
+export interface AiPlanInput { rules: BookRule[]; ops: BookOp[]; styles: PlannedStyle[]; edits: PlannedEdit[] }
+
+/**
+ * O resultado COMPLETO de um plano (HTML e CSS), calculado sem tocar em nada: quem aplica só grava depois de ver `errors`
+ * vazio, por isso nunca fica o HTML alterado e o CSS não (ou ao contrário).
+ */
+export function resolvePlan(parts: string[], css: string, plan: AiPlanInput): { html: string; css: string; errors: string[] } {
+    const run = runPlan(parts, plan.rules, plan.ops);
+    const styled = applyStylePlan(css, plan.styles, plan.edits);
+    const errors = [...run.errors, ...styled.errors];
+    return errors.length ? { html: parts.join(''), css, errors } : { html: run.html, css: styled.css, errors };
 }

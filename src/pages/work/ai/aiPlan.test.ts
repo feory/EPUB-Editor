@@ -1,6 +1,7 @@
 import { test, expect } from 'bun:test';
 import '../../../services/indesign/happy-dom'; // DOMParser no bun
-import { runPlan, validateOps, type BookOp } from './aiPlan';
+import { runPlan, resolvePlan, validateOps, type BookOp } from './aiPlan';
+import { planStyles } from '../../../utils/book-styles';
 import type { BookRule } from '../../../utils/book-rules';
 
 const ch = (title: string, body = '<p>Texto do capítulo.</p>', tag = 'h1') =>
@@ -80,4 +81,35 @@ test('regra inválida: erros das regras e nenhuma operação corre', () => {
     const r = plan([{ type: 'drop_caps' }], [bad]);
     expect(r.errors[0]).toContain('h1/h2');
     expect(r.opResults).toEqual([]);
+});
+
+const CSS = '/* === ESTILOS PERSONALIZADOS === */\n    .p-destaque { color: #555; }\n';
+const newStyle = planStyles([{ name: 'Nota', props: { 'font-size': '0.9em' } }], CSS).planned;
+const useNota: BookRule = { select: { tag: ['p'], afterHeading: ['h1'] }, action: { type: 'addClass', value: 'nota' } };
+
+test('resolvePlan: HTML e CSS do mesmo plano saem juntos (a regra usa o estilo criado)', () => {
+    const r = resolvePlan(parts, CSS, { rules: [useNota], ops: [], styles: newStyle, edits: [] });
+    expect(r.errors).toEqual([]);
+    expect(r.html).toContain('<p class="nota">');
+    expect(r.css).toContain('.nota { font-size: 0.9em; }');
+});
+
+test('resolvePlan: erro no CSS (estilo já criado entretanto) → nada muda, nem o HTML', () => {
+    const stale = `${CSS}    .nota { color: red; }\n`;
+    const r = resolvePlan(parts, stale, { rules: [useNota], ops: [], styles: newStyle, edits: [] });
+    expect(r.errors[0]).toContain('Já existe');
+    expect(r.html).toBe(parts.join(''));
+    expect(r.css).toBe(stale);
+});
+
+test('resolvePlan: erro no HTML (capítulo que já não existe) → o CSS também não muda', () => {
+    const r = resolvePlan(parts, CSS, { rules: [], ops: [{ type: 'rename_chapter', index: 9, title: 'x' }], styles: newStyle, edits: [] });
+    expect(r.errors[0]).toContain('não há capítulo 9');
+    expect(r.css).toBe(CSS);
+});
+
+test('resolvePlan: só estilos (sem regras) deixa o HTML igual', () => {
+    const r = resolvePlan(parts, CSS, { rules: [], ops: [], styles: newStyle, edits: [] });
+    expect(r.html).toBe(parts.join(''));
+    expect(r.css).not.toBe(CSS);
 });

@@ -19,8 +19,7 @@ import type { PageAnchor } from '../../services/page-list/page-list';
 import { createSaver } from './saver';
 import * as bookEdit from './bookEdit';
 import type { Book, BookEdit } from './bookEdit';
-import type { BookRule } from '../../utils/book-rules';
-import { runPlan, type BookOp } from './ai/aiPlan';
+import { resolvePlan, type AiPlanInput } from './ai/aiPlan';
 import type { ChapterActions } from './chapterActions';
 import { contentReducer, initialContentState } from './hooks/contentReducer';
 import { useChapterSync } from './hooks/useChapterSync';
@@ -271,18 +270,25 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         () => listSubtitles(chapterSync.splitHtmlIntoParts(chapterSync.getLatestHtmlContent())),
         [chapterSync],
     );
-    // Plano da IA (regras + operações): antes de aplicar, versão marcada no histórico — o undo do editor só cobre o capítulo aberto,
-    // e isto mexe no livro todo. Calcula primeiro: sem alterações ao HTML não há nada a guardar.
+    // Plano da IA (regras, operações, estilos): tudo se calcula ANTES de gravar nada (resolvePlan); com qualquer erro nada muda.
+    // A versão "Antes de IA" guarda o HTML (o undo do editor só cobre o capítulo aberto) e só se grava se o HTML mudar; se gravá-la
+    // falhar, nem o HTML nem o CSS são tocados. O CSS não entra no histórico.
     const getBookParts = useCallback(() => getBook().parts, [getBook]);
-    const handleApplyAiPlan = useCallback(async (plan: { rules: BookRule[]; ops: BookOp[] }, request: string) => {
+    const handleApplyAiPlan = useCallback(async (plan: AiPlanInput, request: string, css: { get(): string; set(next: string): void }) => {
         if (!isbn || readOnly) return;
         const book = getBook();
-        const { html, errors } = runPlan(book.parts, plan.rules, plan.ops);
-        if (errors.length) { showNotification('error', errors.join('; ')); return; }
-        if (html === book.html) return;
-        const { data } = await ebooksApi.saveContent(isbn, await compressHtmlAsync(book.html));
-        if (data?.filename) await ebooksApi.setHistoryLabel(isbn, data.filename, `Antes de IA: ${request}`.slice(0, 80));
-        applyEdit({ html, commit: 'keep', notice: { type: 'success', text: 'Alterações da IA aplicadas!' } });
+        const current = css.get();
+        const result = resolvePlan(book.parts, current, plan);
+        if (result.errors.length) { showNotification('error', result.errors.join('; ')); return; }
+        const htmlChanged = result.html !== book.html;
+        if (!htmlChanged && result.css === current) return;
+        if (htmlChanged) {
+            const { data } = await ebooksApi.saveContent(isbn, await compressHtmlAsync(book.html));
+            if (data?.filename) await ebooksApi.setHistoryLabel(isbn, data.filename, `Antes de IA: ${request}`.slice(0, 80));
+        }
+        // Daqui para baixo é tudo síncrono: o CSS e o HTML entram juntos.
+        if (result.css !== current) css.set(result.css);
+        if (htmlChanged) applyEdit({ html: result.html, commit: 'keep', notice: { type: 'success', text: 'Alterações da IA aplicadas!' } });
     }, [isbn, readOnly, getBook, applyEdit, showNotification]);
     const handleFixLinks = useCallback(() => {
         const { edit, report } = bookEdit.fixBookLinks(getBook());

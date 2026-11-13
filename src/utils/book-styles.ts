@@ -78,10 +78,22 @@ export function planStyleEdits(edits: StyleEdit[], css: string): { planned: Plan
     return { planned, errors };
 }
 
-/** Aplica ao CSS do livro os estilos novos e as edições já validadas (numa só passagem: o CSS em estado só muda no render seguinte). */
-export function applyStylePlan(css: string, styles: PlannedStyle[], edits: PlannedEdit[]): string {
+/**
+ * Aplica ao CSS do livro os estilos novos e as edições já validadas (numa só passagem: o CSS em estado só muda no render
+ * seguinte). Revalida contra o CSS ATUAL: entre a simulação e o Aplicar o livro pode ter mudado (estilo criado entretanto,
+ * estilo apagado). Com erros devolve o CSS inalterado.
+ */
+export function applyStylePlan(css: string, styles: PlannedStyle[], edits: PlannedEdit[]): { css: string; errors: string[] } {
+    const errors: string[] = [];
+    const allowed = new Set([...classesForRules(css), ...HEADING_SELECTORS]);
     let out = css;
-    for (const s of styles) { const r = createCustomStyle(out, s.cls, s.body); if ('css' in r) out = r.css; }
-    for (const e of edits) out = applyBookRule(out, e.selector, e.decls);
-    return out;
+    for (const s of styles) {
+        const r = createCustomStyle(out, s.cls, s.body);
+        if ('error' in r) errors.push(r.error); else out = r.css;
+    }
+    for (const e of edits) {
+        if (!allowed.has(e.cls)) { errors.push(`o estilo "${e.cls}" já não existe`); continue; }
+        out = applyBookRule(out, e.selector, e.decls);
+    }
+    return errors.length ? { css, errors } : { css: out, errors };
 }
