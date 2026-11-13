@@ -424,7 +424,7 @@ export function WorkPage() {
   const { editRule: handleTextStyle, editCss, createStyle, saveStyle, deleteStyle } = useBookCss(isbn);
   const styles = useStyleCatalogue({ createStyle, saveStyle, deleteStyle }, { renameStyle: work.handleRenameStyle, removeStyle: work.handleRemoveStyle });
   const aiCss = { get: getCurrentCss, set: (next: string) => editCss(() => next) };
-  const ai = useAiAssistant({ isbn, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: (p, request) => work.handleApplyAiPlan(p, request, aiCss, summarizeProposal(p)) });
+  const ai = useAiAssistant({ isbn, userId: user?.id, getParts: work.getBookParts, getCss: getCurrentCss, applyProposal: (p, request) => work.handleApplyAiPlan(p, request, aiCss, summarizeProposal(p)) });
   const altReview = useAltReview({ isbn, language: work.language, getParts: work.getBookParts, applyPlan: (plan, request, summary) => work.handleApplyAiPlan(plan, request, aiCss, summary) });
   const aiChanges = useAiChanges({ isbn, enabled: sidebars.showAiSidebar, revert: async (change) => {
     const ok = await work.handleRevertAiChange(change, aiCss);
