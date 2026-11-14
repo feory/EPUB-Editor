@@ -412,6 +412,7 @@ export function HomePage() {
                                 onViewModeChange={setViewMode}
                                 onLogout={handleLogout}
                                 onOpenAccount={() => setShowAccount(true)}
+                                onNavigateDocs={() => navigate('/documentacao')}
                                 onNavigatePanel={() => navigate('/painel')}
                                 onImportEpub={() => epubInputRef.current?.click()}
                                 onImportIndesign={() => indesignInputRef.current?.click()}

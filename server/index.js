@@ -21,6 +21,7 @@ import * as validation from './routes/validation.js';
 import * as logs from './routes/logs.js';
 import * as ai from './routes/ai.js';
 import * as aiAdmin from './routes/ai-admin.js';
+import * as docs from './routes/docs.js';
 import * as aiChanges from './routes/ai-changes.js';
 import * as presence from './presence.js';
 import { startBackupScheduler, stopBackupScheduler } from './backup.js';
@@ -147,6 +148,14 @@ export const server = Bun.serve({
       if (path === "/api/ai/settings/test" && method === "POST") return aiAdmin.testConnection(user);
       if (path === "/api/ai/models"        && method === "GET")  return aiAdmin.listModels(user);
       if (path === "/api/ai/usage"         && method === "GET")  return aiAdmin.getUsage(url, user);
+
+      // Documentação: GET qualquer utilizador; editar/repor só admin
+      if (path === "/api/docs" && method === "GET") return docs.listDocs();
+      if (path.startsWith("/api/docs/")) {
+        const docId = path.slice("/api/docs/".length);
+        if (method === "PUT")    return docs.putDoc(req, docId, user);
+        if (method === "DELETE") return docs.resetDoc(docId, user);
+      }
 
       // Maintenance
       if (path === "/api/maintenance/cleanup-history" && method === "POST") return maintenance.cleanupHistory(user);

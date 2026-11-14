@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { UserRound, LogOut, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2, Wand2 } from 'lucide-react';
+import { UserRound, LogOut, Table2, LayoutGrid, LayoutDashboard, Upload, Loader2, Wand2, BookOpen } from 'lucide-react';
 import type { AuthUser } from '../../api/auth-api';
 import { initialsOf } from '../../utils/person';
 
@@ -11,6 +11,7 @@ interface UserMenuProps {
     onViewModeChange: (mode: ViewMode) => void;
     onLogout: () => void;
     onOpenAccount: () => void;
+    onNavigateDocs: () => void;
     onNavigatePanel: () => void;
     onImportEpub: () => void;
     onImportIndesign: () => void;
@@ -23,7 +24,7 @@ const VIEW_MODES: { mode: ViewMode; icon: React.ReactNode; label: string }[] = [
 ];
 
 export const UserMenu: React.FC<UserMenuProps> = ({
-    user, viewMode, onViewModeChange, onLogout, onOpenAccount, onNavigatePanel, onImportEpub, onImportIndesign, importPending,
+    user, viewMode, onViewModeChange, onLogout, onOpenAccount, onNavigateDocs, onNavigatePanel, onImportEpub, onImportIndesign, importPending,
 }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -82,6 +83,16 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                                 </button>
                             ))}
                         </div>
+                    </div>
+
+                    <div className="border-b border-border">
+                        <button
+                            onClick={() => { setOpen(false); onNavigateDocs(); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:bg-slate-50 hover:text-text-main transition-colors"
+                        >
+                            <BookOpen size={15} />
+                            <span>Documentação</span>
+                        </button>
                     </div>
 
                     {/* Admin section */}
