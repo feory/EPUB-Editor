@@ -1,6 +1,6 @@
 // Estilos novos propostos pela IA (de parágrafo ou de caracteres c-nome): valida o pedido ({ name, props, kind? }) e devolve o que se vai criar ({ cls, body }).
 // Só uma lista fechada de propriedades e valores simples — nada de url(), @import, funções ou posicionamento.
-import { createCustomStyle, applyBookRule, customStyleClasses } from './book-css';
+import { createCustomStyle, applyBookRule, customStyleClasses, deleteCustomStyle } from './book-css';
 import { readRuleBody } from './css-rule';
 import { paragraphStyles, charStyles } from './user-styles';
 import { EDITOR_CLASSES, STRUCTURAL_CLASSES } from './editor-classes';
@@ -79,12 +79,36 @@ export function planStyleEdits(edits: StyleEdit[], css: string): { planned: Plan
     return { planned, errors };
 }
 
+/** Quantas vezes cada classe aparece nos atributos class do HTML (blocos e spans). */
+export function classUsage(html: string): Map<string, number> {
+    const uses = new Map<string, number>();
+    for (const m of html.matchAll(/\bclass="([^"]*)"/g)) for (const c of m[1].split(/\s+/)) if (c) uses.set(c, (uses.get(c) ?? 0) + 1);
+    return uses;
+}
+
 /**
- * Aplica ao CSS do livro os estilos novos e as edições já validadas (numa só passagem: o CSS em estado só muda no render
+ * Estilos do UTILIZADOR a apagar: só os que existem e que nenhum bloco nem span usa (`html` = o livro depois das regras do mesmo
+ * plano, por isso "tira a classe X e apaga o estilo X" cabe num só pedido). Um estilo em uso é erro: apagá-lo deixava classes soltas.
+ */
+export function planStyleRemovals(classes: string[], css: string, html: string): { planned: string[]; errors: string[] } {
+    const custom = new Set(customStyleClasses(css));
+    const uses = classUsage(html);
+    const errors: string[] = [];
+    const planned: string[] = [];
+    for (const cls of new Set(classes)) {
+        if (typeof cls !== 'string' || !custom.has(cls)) errors.push(`"${String(cls)}" não é um estilo do utilizador`);
+        else if (uses.get(cls)) errors.push(`o estilo "${cls}" está em uso (${uses.get(cls)} ${uses.get(cls) === 1 ? 'vez' : 'vezes'}): não se apaga`);
+        else planned.push(cls);
+    }
+    return { planned, errors };
+}
+
+/**
+ * Aplica ao CSS do livro os estilos novos, as edições e os estilos a apagar já validados (numa só passagem: o CSS em estado só muda no render
  * seguinte). Revalida contra o CSS ATUAL: entre a simulação e o Aplicar o livro pode ter mudado (estilo criado entretanto,
  * estilo apagado). Com erros devolve o CSS inalterado.
  */
-export function applyStylePlan(css: string, styles: PlannedStyle[], edits: PlannedEdit[]): { css: string; errors: string[] } {
+export function applyStylePlan(css: string, styles: PlannedStyle[], edits: PlannedEdit[], removals: string[] = []): { css: string; errors: string[] } {
     const errors: string[] = [];
     const allowed = new Set([...classesForRules(css), ...HEADING_SELECTORS]);
     let out = css;
@@ -96,5 +120,6 @@ export function applyStylePlan(css: string, styles: PlannedStyle[], edits: Plann
         if (!allowed.has(e.cls)) { errors.push(`o estilo "${e.cls}" já não existe`); continue; }
         out = applyBookRule(out, e.selector, e.decls);
     }
+    for (const cls of removals) out = deleteCustomStyle(out, cls);
     return errors.length ? { css, errors } : { css: out, errors };
 }

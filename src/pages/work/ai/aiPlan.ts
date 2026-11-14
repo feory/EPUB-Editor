@@ -7,7 +7,7 @@ import { splitChapters, classifyChapterPart } from '../../../utils/chapters';
 import { setImageAlts, type AltDecision } from '../../../utils/image-alt-scan';
 import { convertSpanStyles } from '../../../utils/inline-styles';
 import { fixTypography, TYPOGRAPHY_FIXES, type TypographyFix } from '../../../utils/typography';
-import { applyStylePlan, type PlannedStyle, type PlannedEdit } from '../../../utils/book-styles';
+import { applyStylePlan, planStyleRemovals, type PlannedStyle, type PlannedEdit } from '../../../utils/book-styles';
 import * as bookEdit from '../bookEdit';
 import type { Book, BookEdit } from '../bookEdit';
 
@@ -133,7 +133,7 @@ export function runPlan(parts: string[], rules: BookRule[], ops: BookOp[], known
     return { html, reports: run.reports, opResults, errors };
 }
 
-export interface AiPlanInput { rules: BookRule[]; ops: BookOp[]; styles: PlannedStyle[]; edits: PlannedEdit[] }
+export interface AiPlanInput { rules: BookRule[]; ops: BookOp[]; styles: PlannedStyle[]; edits: PlannedEdit[]; /** Estilos do utilizador a apagar (só os que nada usa depois do plano). */ removals?: string[] }
 
 /**
  * O resultado COMPLETO de um plano (HTML e CSS), calculado sem tocar em nada: quem aplica só grava depois de ver `errors`
@@ -141,8 +141,9 @@ export interface AiPlanInput { rules: BookRule[]; ops: BookOp[]; styles: Planned
  */
 export function resolvePlan(parts: string[], css: string, plan: AiPlanInput): { html: string; css: string; errors: string[] } {
     const run = runPlan(parts, plan.rules, plan.ops);
-    const styled = applyStylePlan(css, plan.styles, plan.edits);
-    const errors = [...run.errors, ...styled.errors];
+    const removals = planStyleRemovals(plan.removals ?? [], css, run.html);
+    const styled = applyStylePlan(css, plan.styles, plan.edits, removals.planned);
+    const errors = [...run.errors, ...removals.errors, ...styled.errors];
     return errors.length ? { html: parts.join(''), css, errors } : { html: run.html, css: styled.css, errors };
 }
 

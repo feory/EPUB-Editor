@@ -12,9 +12,9 @@ import type { ValidationDigest, ValidationKind } from '../../../../utils/validat
 
 const chapter = (title: string, body: string) => `<p class="chapter-break-h1" data-title="${title}"></p><h1>${title}</h1>${body}`;
 const digest = (n: number): ValidationDigest => ({ source: 's', valid: !n, groups: n ? [{ rule: 'r', severity: 'aviso', count: n, description: '', files: [], examples: [] }] : [], omittedGroups: 0 });
-const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = null) => {
+const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = null, css = '') => {
     let proposal: Proposal | null = null;
-    const ctx: ToolContext = { workspace: memoryWorkspace({ parts }, over), scope, propose: (p) => { proposal = p; } };
+    const ctx: ToolContext = { workspace: memoryWorkspace({ parts, css }, over), scope, propose: (p) => { proposal = p; } };
     return { ctx, proposal: () => proposal };
 };
 
@@ -77,4 +77,17 @@ test('check_publication: sem dados do livro é erro; com dados junta factos e va
     const items = JSON.parse((await checkPublicationTool.run({}, ctx)).content).itens as { item: string; estado: string }[];
     expect(items.find((i) => i.item === 'Capa')?.estado).toBe('falta');
     expect(items.filter((i) => ['Links', 'EPUBCheck'].includes(i.item)).every((i) => i.estado === 'ok')).toBe(true);
+});
+
+test('preview_rules com style_deletes: propõe apagar o que nada usa; em uso é erro e não há proposta', async () => {
+    const css = '/* === ESTILOS PERSONALIZADOS === */\n    .p-velho { color: red; }\n    .p-usado { color: blue; }\n/* === EDITOR (não exportado para EPUB) === */\n';
+    const { ctx, proposal } = setup([chapter('Um', '<p class="p-usado">a</p>')], {}, null, css);
+    const ok = JSON.parse((await previewRulesTool.run({ rules: [], style_deletes: ['p-velho'] }, ctx)).content);
+    expect(ok.errors).toEqual([]);
+    expect(ok.style_deletes).toEqual(['p-velho']);
+    expect(proposal()?.removals).toEqual(['p-velho']);
+    const bad = JSON.parse((await previewRulesTool.run({ rules: [], style_deletes: ['p-usado'] }, ctx)).content);
+    expect(bad.errors[0]).toContain('está em uso');
+    expect(proposal()).toBeNull();
+    expect((await previewRulesTool.run({ rules: [], style_deletes: 'p-velho' }, ctx)).is_error).toBe(true);
 });

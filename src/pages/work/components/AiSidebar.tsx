@@ -94,12 +94,15 @@ export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; changes: Changes; isbn: str
 
                 {ai.proposal && (
                     <div className="rounded-xl border border-border p-3 flex flex-col gap-2">
-                        <p className="font-bold text-slate-700">Proposta: {total} {total === 1 ? 'bloco' : 'blocos'}{ai.proposal.styles.length > 0 && ` + ${ai.proposal.styles.length} ${ai.proposal.styles.length === 1 ? 'estilo novo' : 'estilos novos'}`}{ai.proposal.opResults.some((o) => o.changed) && ` + ${ai.proposal.opResults.filter((o) => o.changed).length} ${ai.proposal.opResults.filter((o) => o.changed).length === 1 ? 'operação' : 'operações'}`}{ai.proposal.edits.length > 0 && ` + ${ai.proposal.edits.length} ${ai.proposal.edits.length === 1 ? 'estilo alterado' : 'estilos alterados'}`}</p>
+                        <p className="font-bold text-slate-700">Proposta: {total} {total === 1 ? 'bloco' : 'blocos'}{ai.proposal.styles.length > 0 && ` + ${ai.proposal.styles.length} ${ai.proposal.styles.length === 1 ? 'estilo novo' : 'estilos novos'}`}{ai.proposal.opResults.some((o) => o.changed) && ` + ${ai.proposal.opResults.filter((o) => o.changed).length} ${ai.proposal.opResults.filter((o) => o.changed).length === 1 ? 'operação' : 'operações'}`}{ai.proposal.edits.length > 0 && ` + ${ai.proposal.edits.length} ${ai.proposal.edits.length === 1 ? 'estilo alterado' : 'estilos alterados'}`}{ai.proposal.removals.length > 0 && ` + ${ai.proposal.removals.length} ${ai.proposal.removals.length === 1 ? 'estilo apagado' : 'estilos apagados'}`}</p>
                         {ai.proposal.styles.map((s) => (
                             <NewStyleRow key={s.cls} cls={s.cls} body={s.body} disabled={ai.busy} onRename={(name) => ai.renameStyle(s.cls, name)} />
                         ))}
                         {ai.proposal.opResults.filter((o) => o.changed).map((o, i) => (
                             <p key={i} className="text-xs text-slate-600"><span className="font-semibold">{o.label}</span>: {o.summary}</p>
+                        ))}
+                        {ai.proposal.removals.map((cls) => (
+                            <p key={cls} className="text-xs text-slate-600"><span className="font-semibold">Apagar estilo</span> <code>.{cls}</code> <span className="text-text-muted">(ninguém o usa)</span></p>
                         ))}
                         {ai.proposal.edits.map((e) => (
                             <p key={e.cls} className="text-xs text-slate-600"><span className="font-semibold">Alterar estilo</span> <code>{e.selector}</code>: <span className="text-rose-600">{e.before || '(sem regra)'}</span> → <span className="text-emerald-700">{e.after || '(vazio)'}</span></p>

@@ -156,3 +156,20 @@ test('operação typography: resumo com contagens e exemplo; fixes inválidos re
     expect(runPlan(['<p>a</p>'], [], [{ type: 'typography', fixes: ['nada' as never] }]).errors).toHaveLength(1);
     expect(runPlan(['<p>limpo</p>'], [], [{ type: 'typography' }]).opResults[0]).toMatchObject({ changed: false, summary: 'Nada a corrigir' });
 });
+
+test('plano com style_deletes: apaga o estilo sem uso; um em uso (depois das regras do plano) recusa o plano', () => {
+    const css = '/* === ESTILOS PERSONALIZADOS === */\n    .p-velho { color: red; }\n    .p-usado { color: blue; }\n/* === EDITOR (não exportado para EPUB) === */\n';
+    const book = ['<p class="p-usado">a</p>'];
+    const ok = resolvePlan(book, css, { rules: [], ops: [], styles: [], edits: [], removals: ['p-velho'] });
+    expect(ok.errors).toEqual([]);
+    expect(ok.css).not.toContain('.p-velho');
+    expect(ok.html).toBe(book[0]);
+    const inUse = resolvePlan(book, css, { rules: [], ops: [], styles: [], edits: [], removals: ['p-usado'] });
+    expect(inUse.errors[0]).toContain('está em uso');
+    expect(inUse.css).toBe(css); // nada muda
+    // "tira a classe e apaga o estilo" num só plano
+    const both = resolvePlan(book, css, { rules: [{ select: { tag: ['p'] }, action: { type: 'removeClass', value: 'p-usado' } }], ops: [], styles: [], edits: [], removals: ['p-usado'] });
+    expect(both.errors).toEqual([]);
+    expect(both.css).not.toContain('.p-usado');
+    expect(both.html).toBe('<p>a</p>');
+});

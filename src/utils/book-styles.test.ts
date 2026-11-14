@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import '../services/indesign/happy-dom'; // DOMParser no bun
-import { planStyles, planStyleEdits, applyStylePlan, type StyleEdit } from './book-styles';
+import { planStyles, planStyleEdits, planStyleRemovals, classUsage, applyStylePlan, type StyleEdit } from './book-styles';
 import { readRuleBody } from './css-rule';
 
 const CSS = `/* === ESTILOS DE PARÁGRAFO === */
@@ -80,4 +80,33 @@ test('estilo de caracteres: kind "char" dá a classe c-nome; background e border
     expect(errors).toEqual([]);
     expect(planned).toEqual([{ cls: 'c-numero', body: 'background: #000; color: #fff; padding: 0.15em 0.6em; border-radius: 4px;' }]);
     expect(planStyles([{ name: 'Fundo', kind: 'char', props: { background: 'url(x)' } }], CSS).errors).toHaveLength(1);
+});
+
+const CSS2 = `/* === ESTILOS PERSONALIZADOS === */
+    .p-destaque { color: #555; }
+    .c-velho { color: red; }
+    .p-novo { color: blue; }
+/* === EDITOR (não exportado para EPUB) === */
+`;
+
+test('classUsage conta as classes de blocos e spans, sem confundir nomes parecidos', () => {
+    const uses = classUsage('<p class="p-destaque p-bold">a</p><span class="c-velho-2">b</span><p class="p-destaque">c</p>');
+    expect(uses.get('p-destaque')).toBe(2);
+    expect(uses.get('c-velho')).toBeUndefined();
+    expect(uses.get('c-velho-2')).toBe(1);
+});
+
+test('apagar estilos: só do utilizador e só se nada os usa', () => {
+    const html = '<p class="p-destaque">a</p>';
+    const r = planStyleRemovals(['p-destaque', 'c-velho', 'p-quote', 'nao-existe'], CSS2, html);
+    expect(r.planned).toEqual(['c-velho']);
+    expect(r.errors).toEqual(['o estilo "p-destaque" está em uso (1 vez): não se apaga', '"p-quote" não é um estilo do utilizador', '"nao-existe" não é um estilo do utilizador']);
+});
+
+test('applyStylePlan apaga a regra do estilo e deixa as outras', () => {
+    const { css, errors } = applyStylePlan(CSS2, [], [], ['c-velho']);
+    expect(errors).toEqual([]);
+    expect(css).not.toContain('.c-velho');
+    expect(css).toContain('.p-destaque');
+    expect(css).toContain('.p-novo');
 });

@@ -8,7 +8,7 @@ import type { RuleBlock } from '../aiSelection';
 import type { BookOp, OpResult } from '../aiPlan';
 
 /** A proposta do modelo: o que mudaria no livro, simulado; só se aplica quando o utilizador carrega em Aplicar. */
-export interface Proposal { styles: PlannedStyle[]; edits: PlannedEdit[]; rules: BookRule[]; ops: BookOp[]; opResults: OpResult[]; reports: RuleReport[] }
+export interface Proposal { styles: PlannedStyle[]; edits: PlannedEdit[]; /** Estilos do utilizador a apagar. */ removals: string[]; rules: BookRule[]; ops: BookOp[]; opResults: OpResult[]; reports: RuleReport[] }
 
 export interface ToolResult { content: string; is_error?: true }
 

@@ -65,6 +65,7 @@ export function appliedNote(p: NonNullable<AgentResult['proposal']>): AgentMessa
         rules: p.rules,
         operations: p.ops.filter((o) => o.type !== 'set_image_alts'),
         new_styles: p.styles,
+        deleted_styles: p.removals,
         style_edits: p.edits.map((e) => ({ selector: e.selector, antes: e.before, depois: e.after })),
         blocos_alterados: p.reports.reduce((n, r) => n + r.changed, 0),
     };
@@ -102,6 +103,7 @@ export function summarizeProposal(p: Proposal): string[] {
         ...p.reports.flatMap((r, i) => (r.changed > 0 ? [`Regra ${i + 1}: ${r.changed} ${r.changed === 1 ? 'bloco' : 'blocos'} em ${r.chapters.length} ${r.chapters.length === 1 ? 'capítulo' : 'capítulos'}`] : [])),
         ...p.opResults.filter((o) => o.changed).map((o) => `${o.label}: ${o.summary}`),
         ...p.styles.map((s) => `Estilo novo .${s.cls} { ${s.body} }`),
+        ...p.removals.map((cls) => `Estilo apagado .${cls}`),
         ...p.edits.map((e) => `Estilo ${e.selector}: ${e.before || '(sem regra)'} → ${e.after || '(vazio)'}`),
     ];
     return lines.slice(0, 30).map((l) => l.slice(0, 300));
