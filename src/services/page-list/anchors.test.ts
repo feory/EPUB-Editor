@@ -86,8 +86,41 @@ test('fillMissingPageBreaks: um marcador existente fora do sítio não esvazia a
     expect(r.html).toContain('<span class="pagebreak" data-page="9"></span>Texto'); // o mal colocado fica como estava
 });
 
-test('auditPageList: página cujo texto é do Índice → "indice" (o Índice não leva marcadores)', () => {
-    const pages = [page(1, ['Texto da pagina um que esta no livro com marcador']), page(2, ['Elementos chave do marketing no indice'])];
-    const html = '<p>Índice</p><p>Elementos chave do marketing no indice</p><p>Texto da pagina um <span class="pagebreak" data-page="1"></span>que esta no livro com marcador '.padEnd(300, 'x') + '</p>';
+test('auditPageList: página cujo texto é do Índice e sem marcador → "indice"', () => {
+    const pages = [page(1, ['Texto da pagina um que esta no livro com marcador']), page(2, ['Elementos chave do marketing no indice', 'Anexo com os quadros conceptuais do livro'])];
+    const html = '<p>Índice</p><p>Elementos chave do marketing no indice</p><p>Anexo com os quadros conceptuais do livro</p><p>Texto da pagina um <span class="pagebreak" data-page="1"></span>que esta no livro com marcador '.padEnd(300, 'x') + '</p>';
     expect(auditPageList(pages, html).missing).toEqual([{ page: 2, reason: 'indice' }]);
+});
+
+
+const { insertPageBreaks } = await import('./page-list');
+
+// Índice com 2 páginas (9, 10) e o título "PARTE I" no corpo com o mesmo texto da 1.ª entrada do Índice.
+const ENTRADA = 'Parte I A aproximação da mente humana';
+const indiceHtml = `<p>Índice</p><p>${ENTRADA}</p><p>1. O caminho rumo ao marketing 7.0 (entrada)</p><p>Como as redes sociais abrem a mente humana</p><p>2. As ameaças da inteligência artificial geral</p>`;
+const corpoHtml = `<h1>PARTE I ${ENTRADA}</h1><p>${'Texto do corpo do capítulo um. '.repeat(8)}</p>`;
+const pdfPages = [
+    page(9, [ENTRADA, '1. O caminho rumo ao marketing 7.0 (entrada)']),
+    page(10, ['Como as redes sociais abrem a mente humana', '2. As ameaças da inteligência artificial geral']),
+    page(13, [ENTRADA, 'Texto do corpo do capítulo um. Texto do corpo do capítulo um.']),
+];
+
+test('insertPageBreaks: as páginas do Índice têm marcador DENTRO do Índice; o título PARTE I não fica com a página 9', () => {
+    const anchors = anchorsFromPages(pdfPages);
+    const out = insertPageBreaks(indiceHtml + corpoHtml, anchors).html;
+    const iEnd = out.indexOf('<h1>PARTE I');
+    expect(out.slice(0, iEnd)).toContain('data-page="9"');   // no Índice
+    expect(out.slice(0, iEnd)).toContain('data-page="10"');
+    expect(out.slice(iEnd)).not.toContain('data-page="9"');  // não no corpo
+    expect(out.slice(iEnd)).toContain('data-page="13"');     // a abertura do capítulo continua no corpo
+    expect(out.indexOf('data-page="9"')).toBeLessThan(out.indexOf('data-page="10"'));
+});
+
+test('fillMissingPageBreaks: também acrescenta os marcadores das páginas do Índice', () => {
+    const html = indiceHtml + corpoHtml;
+    const lines = pageLinesFromPages(pdfPages, html);
+    const r = fillMissingPageBreaks(html, lines);
+    expect(r.inserted).toContain(9);
+    expect(r.inserted).toContain(10);
+    expect(r.html.slice(r.html.indexOf('<h1>PARTE I'))).not.toContain('data-page="9"');
 });

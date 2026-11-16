@@ -14,7 +14,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 // `page` = folio impresso (nº que aparece na página, usado para casar com o editor);
 // `pdfPageIndex` = posição física no PDF (1-based, pode divergir do folio por causa de
 // front-matter sem numeração) — usado para saltar o viewer para a página certa do ficheiro.
-export interface PageAnchor { page: number; pdfPageIndex: number; anchor: string }
+// `lines` = as primeiras linhas de corpo da página (a 1.ª é a âncora): só servem para reconhecer as páginas do Índice (ver isIndicePage).
+export interface PageAnchor { page: number; pdfPageIndex: number; anchor: string; lines?: string[] }
 
 // Nº de páginas de um PDF — usado para distinguir o PDF de impressão (miolo, ~centenas de
 // páginas) de uma figura em PDF vetorial (1-2 páginas) quando ambos vivem em Links/, sem
@@ -151,12 +152,8 @@ export function anchorsFromPages(pages: PdfPageText[]): PageAnchor[] {
         }
         // âncora = 1ª linha de corpo APÓS o cabeçalho corrente (linha de topo); ordenar topo→baixo
         const ordered = lines.map(l => l.parts.sort((a, b) => a.x - b.x).map(p => p.str).join(''));
-        for (const line of hasPrintedFolio ? ordered.slice(1) : ordered) {
-            const anchor = normalize(line).slice(0, ANCHOR_LEN);
-            if (anchor.length < MIN_ANCHOR) continue;
-            anchors.push({ page: folio, pdfPageIndex: idx + 1, anchor });
-            break;
-        }
+        const usable = (hasPrintedFolio ? ordered.slice(1) : ordered).map(l => normalize(l).slice(0, ANCHOR_LEN)).filter(a => a.length >= MIN_ANCHOR);
+        if (usable.length) anchors.push({ page: folio, pdfPageIndex: idx + 1, anchor: usable[0], lines: usable.slice(0, MAX_PAGE_LINES) });
     }
     return anchors;
 }
@@ -165,6 +162,50 @@ export function anchorsFromPages(pages: PdfPageText[]): PageAnchor[] {
 function bodyLinesOf(page: PdfPageText, hasPrintedFolio: boolean): string[] {
     const lines = pdfLines(page.items);
     return (hasPrintedFolio ? lines.slice(1) : lines).map(l => normalize(l.text)).filter(t => t && !t.includes('indd'));
+}
+
+/**
+ * A página do PDF é do Índice? Quando pelo menos metade das suas linhas (e pelo menos duas) são texto do Índice. Uma abertura de
+ * capítulo também tem linhas no Índice (o subtítulo), mas tem corpo que o Índice não tem; com uma só linha não se decide.
+ */
+function isIndicePage(ti: ReturnType<typeof textIndex>, lines: string[]): boolean {
+    return ti.indice.at >= 0 && lines.length >= 2 && lines.filter(l => ti.indice.flat.includes(l)).length * 2 >= lines.length;
+}
+
+/**
+ * As páginas do Índice de entre `pages`: o Índice é um bloco CONTÍGUO de páginas, por isso contam só as candidatas seguidas a partir
+ * da primeira (a 1.ª que não é do Índice fecha-o) e só as anteriores aos marcadores do corpo que já existam. Sem isto, uma abertura de
+ * capítulo com só título e subtítulo (que também estão no Índice) passava por página do Índice.
+ */
+function indicePagesOf<T extends { page: number }>(ti: ReturnType<typeof textIndex>, pages: T[], linesOf: (p: T) => string[]): T[] {
+    const high = Math.min(Infinity, ...ti.markers.filter(m => m.pos >= ti.indice.at).map(m => m.page));
+    const own: T[] = [];
+    for (const p of [...pages].sort((a, b) => a.page - b.page)) {
+        if (p.page >= high) break;
+        if (isIndicePage(ti, linesOf(p))) own.push(p);
+        else if (own.length) break;
+    }
+    return own;
+}
+
+/** Onde pôr os marcadores das páginas do Índice: dentro do Índice, cada uma na 1.ª das suas linhas que existe depois da anterior. */
+function indicePoints(ti: ReturnType<typeof textIndex>, pages: { page: number; lines: string[] }[]): { node: Text; offset: number; page: number }[] {
+    const { indice } = ti;
+    const have = new Set(indice.markers.map(m => m.page));
+    const points: { node: Text; offset: number; page: number }[] = [];
+    for (const { page, lines } of [...pages].sort((a, b) => a.page - b.page)) {
+        if (have.has(page)) continue;
+        const lo = Math.max(0, ...indice.markers.filter(m => m.page < page).map(m => m.pos));
+        const hi = Math.min(indice.flat.length, ...indice.markers.filter(m => m.page > page).map(m => m.pos));
+        for (const line of lines) {
+            const at = indice.flat.indexOf(line, lo);
+            if (at < 0 || at >= hi) continue;
+            indice.markers.push({ page, pos: at });
+            points.push({ ...indice.map[at], page });
+            break;
+        }
+    }
+    return points;
 }
 
 /** Porque é que uma página do PDF ficou sem marcador na lista de páginas. */
@@ -183,7 +224,7 @@ export interface PageListAudit {
 
 /**
  * "O que falta na lista de páginas?": cruza as páginas do PDF com os marcadores do livro e diz, para cada página sem marcador,
- * porquê — `branca` (só folio e marcas do InDesign), `indice` (página do Índice, que não leva marcadores), `figura` (há texto, mas nenhuma linha dele está no corpo: o texto vive na
+ * porquê — `branca` (só folio e marcas do InDesign), `indice` (página do Índice sem marcador), `figura` (há texto, mas nenhuma linha dele está no corpo: o texto vive na
  * imagem), `abre-com-figura` (a 1.ª linha, a âncora, é texto de figura que o corpo não tem, mas o resto da página ESTÁ no livro) ou
  * `fora-de-ordem` (a âncora está no livro e o alinhamento descartou-a por ficar fora da ordem do PDF).
  * Só lê; não altera nada.
@@ -192,7 +233,8 @@ export function auditPageList(pages: PdfPageText[], html: string): PageListAudit
     const { folios, printed } = detectFolios(pages);
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const markers = new Set([...doc.body.querySelectorAll('span.pagebreak[data-page]')].map(el => parseInt(el.getAttribute('data-page') ?? '', 10)).filter(n => !isNaN(n)));
-    const { flat, indice } = textIndex(doc);
+    const ti = textIndex(doc);
+    const { flat } = ti;
     const audit: PageListAudit = { pagesWithFolio: 0, marked: 0, withoutFolio: 0, missing: [], orphanMarkers: [] };
     const inPdf = new Set<number>();
     pages.forEach((page, idx) => {
@@ -205,7 +247,7 @@ export function auditPageList(pages: PdfPageText[], html: string): PageListAudit
         if (body.length === 0) { audit.missing.push({ page: folio, reason: 'branca' }); return; }
         const usable = body.filter(t => t.length >= MIN_ANCHOR);
         const inBody = (t: string) => flat.includes(t.slice(0, ANCHOR_LEN));
-        const reason: MissingReason = usable.length && indice.includes(usable[0]) ? 'indice' : !usable.some(inBody) ? 'figura' : !inBody(usable[0]) ? 'abre-com-figura' : 'fora-de-ordem';
+        const reason: MissingReason = isIndicePage(ti, usable.map(t => t.slice(0, ANCHOR_LEN))) ? 'indice' : !usable.some(inBody) ? 'figura' : !inBody(usable[0]) ? 'abre-com-figura' : 'fora-de-ordem';
         audit.missing.push({ page: folio, reason });
     });
     audit.orphanMarkers = [...markers].filter(n => !inPdf.has(n)).sort((a, b) => a - b);
@@ -223,13 +265,13 @@ const MAX_PAGE_LINES = 6;
 /** As páginas do PDF sem marcador no `html`, cada uma com as suas linhas que existem no corpo (as que o alinhamento pode usar). */
 export function pageLinesFromPages(pages: PdfPageText[], html: string): PageLines[] {
     const { folios, printed } = detectFolios(pages);
-    const { flat, markers } = textIndex(new DOMParser().parseFromString(html, 'text/html'));
-    const have = new Set(markers.map(m => m.page));
+    const { flat, markers, indice } = textIndex(new DOMParser().parseFromString(html, 'text/html'));
+    const have = new Set([...markers, ...indice.markers].map(m => m.page));
     const out: PageLines[] = [];
     pages.forEach((page, idx) => {
         const folio = folios[idx];
         if (folio === null || have.has(folio)) return;
-        const lines = bodyLinesOf(page, printed[idx] !== null).filter(t => t.length >= MIN_ANCHOR).map(t => t.slice(0, ANCHOR_LEN)).filter(t => flat.includes(t));
+        const lines = bodyLinesOf(page, printed[idx] !== null).filter(t => t.length >= MIN_ANCHOR).map(t => t.slice(0, ANCHOR_LEN)).filter(t => flat.includes(t) || indice.flat.includes(t));
         if (lines.length) out.push({ page: folio, lines: lines.slice(0, MAX_PAGE_LINES) });
     });
     return out;
@@ -247,8 +289,9 @@ export async function pageLinesFromPdf(data: ArrayBuffer, html: string): Promise
  */
 export function fillMissingPageBreaks(html: string, pages: PageLines[]): { html: string; inserted: number[] } {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const { flat, map, markers } = textIndex(doc);
-    const have = new Set(markers.map(m => m.page));
+    const ti = textIndex(doc);
+    const { flat, map, markers, indice } = ti;
+    const have = new Set([...markers, ...indice.markers].map(m => m.page));
     const known = [...markers]; // os que já existem + os que se vão acrescentando: definem as janelas das páginas seguintes
     // Só contam os marcadores em ordem (a maior subsequência crescente de posições): um marcador existente fora do sítio (ex. a p.247
     // dentro do capítulo 2) apertava a janela das páginas do meio até ficar vazia. Os fora de sítio não se tocam, só se ignoram.
@@ -256,9 +299,10 @@ export function fillMissingPageBreaks(html: string, pages: PageLines[]): { html:
         const sorted = [...known].sort((a, b) => a.page - b.page);
         return longestIncreasing(sorted.map((m, i) => m.pos + i * 1e-6)).map(i => sorted[i]); // + i·1e-6: duas páginas na mesma posição não se excluem
     };
-    const points: { node: Text; offset: number; page: number }[] = [];
+    const indicePages = indicePagesOf(ti, pages.filter(p => !have.has(p.page)), p => p.lines);
+    const points: { node: Text; offset: number; page: number }[] = indicePoints(ti, indicePages);
     for (const { page, lines } of [...pages].sort((a, b) => a.page - b.page)) {
-        if (have.has(page)) continue;
+        if (have.has(page) || indicePages.some(p => p.page === page)) continue;
         const trusted = reliable();
         const lo = Math.max(0, ...trusted.filter(m => m.page < page).map(m => m.pos));
         const hi = Math.min(flat.length, ...trusted.filter(m => m.page > page).map(m => m.pos));
@@ -310,9 +354,13 @@ export async function buildPdfLines(data: ArrayBuffer): Promise<{ y: number; tex
 // Chars que a normalização descarta (espaço, pontuação) não entram em nenhum dos dois.
 /** Texto máximo de uma entrada do Índice; um bloco maior já é corpo. */
 const INDICE_ENTRY_MAX = 150;
-function textIndex(doc: Document): { flat: string; map: { node: Text; offset: number }[]; markers: { page: number; pos: number }[]; indice: string } {
+interface IndiceIndex { flat: string; map: { node: Text; offset: number }[]; markers: { page: number; pos: number }[]; /** Onde o Índice começa, em `flat` do corpo (-1 = não há Índice). */ at: number }
+
+function textIndex(doc: Document): { flat: string; map: { node: Text; offset: number }[]; markers: { page: number; pos: number }[]; indice: IndiceIndex } {
     let flat = '';
-    let indice = ''; // o texto do Índice (fora de `flat`): para saber que uma página do PDF é do Índice
+    // O texto do Índice fica fora de `flat` (as suas linhas repetem as do corpo e roubavam-lhe marcadores), mas com índice próprio:
+    // as páginas do Índice têm marcador, dentro do Índice.
+    const indice: IndiceIndex = { flat: '', map: [], markers: [], at: -1 };
     const map: { node: Text; offset: number }[] = [];
     // Marcadores de página já no corpo e a posição (em `flat`) onde estão; os do Índice ficam de fora (não são do corpo).
     const markers: { page: number; pos: number }[] = [];
@@ -325,13 +373,21 @@ function textIndex(doc: Document): { flat: string; map: { node: Text; offset: nu
             if (el.matches(BREAK_SELECTOR)) inIndice = isIndiceChapterTitle(el.getAttribute('data-title') ?? '');
             // Na importação ainda não há marcadores de capítulo: o Índice é só um bloco com o texto "Índice".
             else if (el.matches('p,h1,h2,h3') && isIndiceChapterTitle(el.textContent ?? '')) inIndice = true;
-            else if (!inIndice && el.matches('span.pagebreak[data-page]')) markers.push({ page: parseInt(el.getAttribute('data-page')!, 10), pos: flat.length });
+            else if (el.matches('span.pagebreak[data-page]')) {
+                const page = parseInt(el.getAttribute('data-page')!, 10);
+                if (inIndice) indice.markers.push({ page, pos: indice.flat.length }); else markers.push({ page, pos: flat.length });
+            }
+            if (inIndice && indice.at < 0) indice.at = flat.length;
             continue;
         }
         const node = n as Text;
         // O Índice acaba no 1.º bloco longo (entradas são curtas); nem sempre há outro marcador de capítulo a seguir.
         if (inIndice && (node.parentElement?.closest('p,div,li,h1,h2,h3,h4,h5,h6')?.textContent ?? '').length > INDICE_ENTRY_MAX) inIndice = false;
-        if (inIndice) { for (const ch of node.textContent ?? '') indice += normalize(ch); continue; }
+        if (inIndice) {
+            const text = node.textContent ?? '';
+            for (let k = 0; k < text.length; k++) { const nc = normalize(text[k]); if (nc) { indice.flat += nc; indice.map.push({ node, offset: k }); } }
+            continue;
+        }
         const raw = node.textContent ?? '';
         for (let k = 0; k < raw.length; k++) {
             const nc = normalize(raw[k]);
@@ -697,8 +753,15 @@ export function movePageBreaksToChapterStart(html: string): string {
 }
 
 export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: string; inserted: number; total: number } {
-    const res = insertPageBreaksCore(html, anchors);
-    return { ...res, html: movePageBreaksToChapterStart(res.html) };
+    // As páginas do Índice não entram no alinhamento do corpo (a âncora da p.9, a 1.ª entrada, casava com o título "PARTE I" e o
+    // capítulo ficava com a página do Índice): têm o seu marcador, dentro do Índice.
+    const ti = textIndex(new DOMParser().parseFromString(stripPageBreaks(html), 'text/html'));
+    const own = indicePagesOf(ti, anchors, a => a.lines ?? []);
+    const res = insertPageBreaksCore(html, anchors.filter(a => !own.includes(a)));
+    const doc = new DOMParser().parseFromString(res.html, 'text/html');
+    const points = indicePoints(textIndex(doc), own.map(a => ({ page: a.page, lines: a.lines! })));
+    if (points.length) applyMarkers(doc, points);
+    return { html: movePageBreaksToChapterStart(points.length ? doc.body.innerHTML : res.html), inserted: res.inserted + points.length, total: anchors.length };
 }
 
 /**
