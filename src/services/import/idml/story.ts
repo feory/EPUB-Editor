@@ -456,6 +456,9 @@ export function isHeuristicTitle(psr: Element): boolean {
     return false;
 }
 
+/** Um bloco de HTML da story e o sombreado do parágrafo de onde veio ('' = sem caixa). */
+interface Block { html: string; shade: string }
+
 const INDEX_TITLE_RE = /^índice(\s+remissivo)?$/i;
 
 // Rótulo de capítulo/parte (nº) à espera do título seguinte: junta-se a ele, ou, se o corpo vier primeiro, sai sozinho
@@ -473,9 +476,9 @@ function createPendingLabel() {
             return merged;
         },
         /** Sem título a seguir: emite o rótulo sozinho (nunca fica à espera de um heading de outra secção). */
-        flushInto(out: string[]): void {
+        flushInto(emit: (html: string) => void): void {
             if (!text) return;
-            out.push(`<${tag}${cls ? ` class="${cls}"` : ''}>${text}</${tag}>`);
+            emit(`<${tag}${cls ? ` class="${cls}"` : ''}>${text}</${tag}>`);
             text = ''; cls = '';
         },
     };
@@ -488,7 +491,10 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
     // → devolve o <Story> interno (sem prefixo), que é o que contém os parágrafos.
     const story = doc.getElementsByTagName('Story')[0];
     if (!story) return '';
-    const out: string[] = [];
+    // Cada bloco leva o sombreado do parágrafo que o gerou; as caixas compõem-se no fim (composeBoxes), sem marcas no meio.
+    const out: Block[] = [];
+    let shade = ''; // sombreado do parágrafo que se está a processar ('' = nenhum)
+    const emit = (html: string) => { out.push({ html, shade }); };
     const label = createPendingLabel(); // nº de capítulo/parte à espera do título seguinte
     // Dentro de um capítulo "Índice"/"Índice remissivo": abre por título heurístico (abaixo) OU,
     // aqui, quando o 1º parágrafo não-vazio da story É literalmente "índice"/"índice remissivo" —
@@ -506,18 +512,11 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
     // Linha em branco manual (segmento vazio) antes de um <p> → também conta como espaçamento
     // (muitos livros usam isto em vez de SpaceBefore/SpaceAfter); só com detectSpacing ligado.
     let blankBefore = false;
-    // Parágrafos seguidos com o MESMO sombreado formam uma caixa (div.box com fundo, sem contorno).
-    let shade = '';
     for (const psr of Array.from(story.children)) {
         if (psr.tagName !== 'ParagraphStyleRange') continue; // ignora ranges aninhados (notas)
         const fullPS = psr.getAttribute('AppliedParagraphStyle') || '';
         const sn = styleName(fullPS);
-        const paraShade = paragraphShade(rc, psr, fullPS);
-        if (paraShade !== shade) {
-            if (shade) out.push('</div>');
-            if (paraShade) out.push(`<div class="box" style="background-color:${paraShade};border-width:0">`);
-            shade = paraShade;
-        }
+        shade = paragraphShade(rc, psr, fullPS);
         const rawMap = resolveStyle(sn, mapping);
         const segs = renderPsr(rc, psr, counter);
 
@@ -597,16 +596,16 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
             body = label.mergeInto(body, baseClasses);
             // Heading CONSECUTIVO do mesmo ESTILO do anterior (ver lastHeadingStyle) → funde no
             // <hN> já emitido (linha extra, <br>) em vez de abrir um novo.
-            if (sn && sn === lastHeadingStyle && out.length > 0 && out[out.length - 1].endsWith(`</${tag}>`)) {
-                const last = out[out.length - 1];
-                out[out.length - 1] = last.slice(0, -(`</${tag}>`.length)) + '<br>' + body + `</${tag}>`;
-                for (const seg of segs) for (const def of seg.notes) out.push(def);
+            const last = out[out.length - 1];
+            if (sn && sn === lastHeadingStyle && last && last.shade === shade && last.html.endsWith(`</${tag}>`)) {
+                last.html = last.html.slice(0, -(`</${tag}>`.length)) + '<br>' + body + `</${tag}>`;
+                for (const seg of segs) for (const def of seg.notes) emit(def);
                 blankBefore = false;
                 continue;
             }
             const attr = baseClasses.length ? ` class="${baseClasses.join(' ')}"` : '';
-            out.push(`<${tag}${attr}>${body}</${tag}>`);
-            for (const seg of segs) for (const def of seg.notes) out.push(def);
+            emit(`<${tag}${attr}>${body}</${tag}>`);
+            for (const seg of segs) for (const def of seg.notes) emit(def);
             blankBefore = false; // título consome a linha em branco anterior
             lastHeadingStyle = sn || null;
             continue;
@@ -623,15 +622,15 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
             // espera indefinidamente do PRÓXIMO heading (por vezes muitos parágrafos de corpo
             // depois), fundindo-se com o título de uma secção totalmente não relacionada (ex.
             // interlúdio "Caderno da Autora") e apagando o capítulo numerado do import.
-            label.flushInto(out);
+            label.flushInto(emit);
         }
         for (const seg of segs) {
-            if (seg.raw) { out.push(seg.raw); continue; } // tabela — já é HTML de bloco, não envolver em <tag>
+            if (seg.raw) { emit(seg.raw); continue; } // tabela — já é HTML de bloco, não envolver em <tag>
             if (!seg.text && seg.notes.length === 0) {
                 // Parágrafo vazio com "Regra abaixo" (RuleBelow) do InDesign = divisória visual
                 // (barra fina), não espaço em branco — vira <hr> (pequena; RuleBelowLeftIndent/
                 // RightIndent recolhidos já indicam divisória estreita, não full-width).
-                if (psr.getAttribute('RuleBelow') === 'true') { out.push('<hr>'); blankBefore = false; continue; }
+                if (psr.getAttribute('RuleBelow') === 'true') { emit('<hr>'); blankBefore = false; continue; }
                 blankBefore = true; continue; // linha em branco
             }
             // Linha em branco antes deste parágrafo é um sinal FRACO de espaçamento (ao contrário
@@ -651,15 +650,27 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
             const classes = isAsterisk ? ['p-asterisk'] : baseClasses;
             const attr = (classes.length ? ` class="${classes.join(' ')}"` : '')
                 + (isAsterisk ? '' : styleAttr) + (blankCandidate ? ' data-blank-top="1"' : '');
-            out.push(`<${tag}${attr}>${tag === 'p' ? stripRedundantEmphasis(seg.text, classes) : seg.text}</${tag}>`);
+            emit(`<${tag}${attr}>${tag === 'p' ? stripRedundantEmphasis(seg.text, classes) : seg.text}</${tag}>`);
             // definições de nota logo a seguir ao parágrafo que as referencia (mesmo capítulo)
-            for (const def of seg.notes) out.push(def);
+            for (const def of seg.notes) emit(def);
         }
     }
-    if (shade) out.push('</div>');
-    label.flushInto(out);
-    // Caixa que ficou vazia (parágrafos sombreados que não deram bloco: rótulo de capítulo, linha em branco).
-    return out.join('\n').replace(/<div class="box" style="[^"]*">\s*<\/div>\n?/g, '');
+    shade = ''; // o rótulo pendente que sobra sai fora da caixa
+    label.flushInto(emit);
+    return composeBoxes(out);
+}
+
+/** Blocos seguidos com o MESMO sombreado formam uma caixa (div.box com fundo, sem contorno); os restantes ficam como estão. */
+function composeBoxes(blocks: Block[]): string {
+    const out: string[] = [];
+    for (let i = 0; i < blocks.length;) {
+        const { shade } = blocks[i];
+        if (!shade) { out.push(blocks[i++].html); continue; }
+        out.push(`<div class="box" style="background-color:${shade};border-width:0">`);
+        while (i < blocks.length && blocks[i].shade === shade) out.push(blocks[i++].html);
+        out.push('</div>');
+    }
+    return out.join('\n');
 }
 
 // Parágrafo com p-bold/p-italic/p-bold-italic: o estilo já dá o negrito/itálico, por isso o

@@ -31,3 +31,20 @@ test('override local desliga o sombreado do estilo; sem sombreado não há caixa
 test('caixa que fecha no fim da story', () => {
     expect(render(story(psr('DEST', 'só')), withShading('DEST', '10'))).toBe(`${BOX}\n<p>só</p>\n</div>`);
 });
+
+const empty = (style: string) => `<ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/${style}"><CharacterStyleRange><Content></Content></CharacterStyleRange></ParagraphStyleRange>`;
+
+test('um parágrafo vazio (sem sombreado) entre dois sombreados não parte a caixa: não gerou bloco', () => {
+    const html = render(story(psr('DEST', 'um'), empty('TXT'), psr('DEST', 'dois')), withShading('DEST', '10'));
+    expect(html).toBe(`${BOX}\n<p>um</p>\n<p>dois</p>\n</div>`);
+});
+
+test('títulos seguidos do mesmo estilo fundem-se, mas não de dentro para fora da caixa', () => {
+    const mapping = { TIT: { target: 'h2' } } as never;
+    const styles = withShading('TIT_BOX', '10');
+    const fused = renderStory({ styles: NO_STYLES, detectSpacing: false }, story(psr('TIT', 'A'), psr('TIT', 'B')), { n: 0, star: 0, defs: [] }, mapping);
+    expect(fused).toBe('<h2>A<br>B</h2>');
+    // 2.º título sombreado (mesmo estilo, sombreado local): outro bloco, dentro da caixa
+    const split = renderStory({ styles, detectSpacing: false }, story(psr('TIT', 'A'), psr('TIT', 'B', ' ParagraphShadingOn="true" ParagraphShadingTint="10"')), { n: 0, star: 0, defs: [] }, mapping);
+    expect(split).toBe(`<h2>A</h2>\n${BOX}\n<h2>B</h2>\n</div>`);
+});
