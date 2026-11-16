@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../../../utils/format';
 import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings, verifyBlankSpacing, getPdfPageCount } from '../../page-list/page-list';
-import { buildFigures, insertFigures, placeInlineFigures, placeNumberedFigures, placeFiguresByPosition, toRasterName } from './figures';
+import { buildFigures, placeFigures, toRasterName } from './figures';
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from '../document-importer';
 import { readIdmlStyles } from './styles';
 import { unboxWhite, BOXED_H1_OPEN } from './boxed';
@@ -608,35 +608,10 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     // Figuras: imagem/tabela + legenda no ponto da referência no corpo (todos os IDMLs).
     const figs: Awaited<ReturnType<typeof buildFigures>> = [];
     for (const idmlZip of idmlZips) figs.push(...await buildFigures(idmlZip, detectSpacing));
-    const figRes = insertFigures(html, figs);
+    const figRes = await placeFigures(html, figs, [...images.keys()], pdf);
     html = figRes.html;
 
-    // Livros com legenda INLINE no corpo ("Figura N:") — imagem antes da legenda, por ordem.
-    const inlineRes = placeInlineFigures(html, [...images.keys()]);
-    html = inlineRes.html;
-
-    // Figuras com legenda DENTRO da imagem (EPS) — colocar pela referência "Figura N" no corpo.
-    const usedIds = new Set([...html.matchAll(/data-image-id="([^"]+)"/g)].map(m => m[1]));
-    // Livro com legendas em TEXTO (alguma figura com rótulo): as imagens restantes (anexos, vinhetas, figura sem referência)
-    // não são "Figura N" — o nº do nome do ficheiro ("flast01uf001") colava-as a referências que não são suas.
-    const hasTextCaptions = figs.some(f => f.imageId && f.label);
-    const numberedRes = placeNumberedFigures(html, hasTextCaptions ? [] : [...images.keys()].filter(id => !usedIds.has(id)));
-    html = numberedRes.html;
-
-    // Última tentativa: vinhetas puramente decorativas, sem legenda nem nº (ex. "Scribble3.eps"
-    // em "Cai neve no Diabo") — posição pela maior quebra vertical entre linhas na página impressa
-    // (folio do spread, ver pageHint em buildFigures); requer PDF de impressão.
-    let positionRes: { html: string; placed: number } = { html, placed: 0 };
-    if (pdf) {
-        const usedIds2 = new Set([...html.matchAll(/data-image-id="([^"]+)"/g)].map(m => m[1]));
-        const unplaced = figs.filter(f => f.imageId && !f.label && f.pageHint?.length && !usedIds2.has(f.imageId));
-        if (unplaced.length > 0) {
-            positionRes = await placeFiguresByPosition(html, unplaced, pdf.slice(0));
-            html = positionRes.html;
-        }
-    }
-
-    return { html, images, pageBreaks, figuresPlaced: figRes.placed + inlineRes.placed + numberedRes.placed + positionRes.placed, printPdf: pdf };
+    return { html, images, pageBreaks, figuresPlaced: figRes.placed, printPdf: pdf };
 }
 
 // Sugestão de destino por nome de estilo IDML (espelha o STYLE_MAP); 'auto' = usar o

@@ -517,3 +517,36 @@ export async function placeFiguresByPosition(html: string, figures: Figure[], pd
     }
     return { html: doc.body.innerHTML, placed };
 }
+
+/** Ids das imagens já colocadas no HTML (`data-image-id`). */
+const placedImageIds = (html: string): Set<string> => new Set([...html.matchAll(/data-image-id="([^"]+)"/g)].map(m => m[1]));
+
+/**
+ * Coloca as figuras do livro no corpo: UMA interface sobre as 4 estratégias, na ordem e com as regras de "já colocada" que as ligam.
+ *  1. insertFigures — figuras com legenda (rótulo): ao pé da referência/legenda no corpo;
+ *  2. placeInlineFigures — legenda INLINE no corpo ("Figura N:"), por número;
+ *  3. placeNumberedFigures — legenda desenhada DENTRO da imagem (EPS): pela referência "Figura N" do corpo. Só se NENHUMA figura do
+ *     livro tem legenda em texto: com legendas em texto, as imagens que sobram (anexos, vinhetas, figura sem referência) não são
+ *     "Figura N" — o nº do nome do ficheiro ("flast01uf001") colava-as a referências que não são suas;
+ *  4. placeFiguresByPosition — vinhetas sem legenda nem nº, pela maior quebra vertical da página impressa; só com PDF.
+ * Cada passo só vê as imagens que os anteriores não colocaram. `imageIds` = as imagens da galeria do livro.
+ */
+export async function placeFigures(html: string, figures: Figure[], imageIds: string[], pdf?: ArrayBuffer): Promise<{ html: string; placed: number }> {
+    const byRef = insertFigures(html, figures);
+    const inline = placeInlineFigures(byRef.html, imageIds);
+    const hasTextCaptions = figures.some(f => f.imageId && f.label);
+    const used = placedImageIds(inline.html);
+    const numbered = placeNumberedFigures(inline.html, hasTextCaptions ? [] : imageIds.filter(id => !used.has(id)));
+    let out = numbered.html;
+    let byPosition = 0;
+    if (pdf) {
+        const placedNow = placedImageIds(out);
+        const unplaced = figures.filter(f => f.imageId && !f.label && f.pageHint?.length && !placedNow.has(f.imageId));
+        if (unplaced.length > 0) {
+            const r = await placeFiguresByPosition(out, unplaced, pdf.slice(0));
+            out = r.html;
+            byPosition = r.placed;
+        }
+    }
+    return { html: out, placed: byRef.placed + inline.placed + numbered.placed + byPosition };
+}
