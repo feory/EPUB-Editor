@@ -124,3 +124,17 @@ test('fillMissingPageBreaks: também acrescenta os marcadores das páginas do Í
     expect(r.inserted).toContain(10);
     expect(r.html.slice(r.html.indexOf('<h1>PARTE I'))).not.toContain('data-page="9"');
 });
+
+test('insertPageBreaks: a página que abre com texto de figura (âncora fora do corpo) entra na janela, na própria importação', () => {
+    const marker = (n: number) => `<span class="pagebreak" data-page="${n}"></span>`;
+    const pages = [
+        page(1, ['Texto da pagina um que esta no livro com marcador']),
+        page(2, ['ROTULO DE FIGURA QUE O LIVRO NAO TEM AQUI', 'Texto da pagina dois que esta no livro depois da figura']),
+        page(3, ['Texto da pagina tres que esta no livro com marcador']),
+    ];
+    const html = '<p>Texto da pagina um que esta no livro com marcador</p><p>Texto da pagina dois que esta no livro depois da figura</p><p>Texto da pagina tres que esta no livro com marcador</p>';
+    const r = insertPageBreaks(html, anchorsFromPages(pages));
+    expect(r.html).toContain(`${marker(2)}Texto da pagina dois que esta no livro depois da figura`);
+    expect(r.inserted).toBe(3);
+    expect(insertPageBreaks(r.html, anchorsFromPages(pages)).html).toBe(r.html); // idempotente
+});

@@ -14,7 +14,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 // `page` = folio impresso (nº que aparece na página, usado para casar com o editor);
 // `pdfPageIndex` = posição física no PDF (1-based, pode divergir do folio por causa de
 // front-matter sem numeração) — usado para saltar o viewer para a página certa do ficheiro.
-// `lines` = as primeiras linhas de corpo da página (a 1.ª é a âncora): só servem para reconhecer as páginas do Índice (ver isIndicePage).
+// `lines` = as primeiras linhas de corpo da página (a 1.ª é a âncora): servem para reconhecer as páginas do Índice (isIndicePage) e para
+// colocar as que o alinhamento global deixou de fora (fillMissingPageBreaks).
 export interface PageAnchor { page: number; pdfPageIndex: number; anchor: string; lines?: string[] }
 
 // Nº de páginas de um PDF — usado para distinguir o PDF de impressão (miolo, ~centenas de
@@ -153,7 +154,7 @@ export function anchorsFromPages(pages: PdfPageText[]): PageAnchor[] {
         // âncora = 1ª linha de corpo APÓS o cabeçalho corrente (linha de topo); ordenar topo→baixo
         const ordered = lines.map(l => l.parts.sort((a, b) => a.x - b.x).map(p => p.str).join(''));
         const usable = (hasPrintedFolio ? ordered.slice(1) : ordered).map(l => normalize(l).slice(0, ANCHOR_LEN)).filter(a => a.length >= MIN_ANCHOR);
-        if (usable.length) anchors.push({ page: folio, pdfPageIndex: idx + 1, anchor: usable[0], lines: usable.slice(0, MAX_PAGE_LINES) });
+        if (usable.length) anchors.push({ page: folio, pdfPageIndex: idx + 1, anchor: usable[0], lines: usable.slice(0, MAX_ANCHOR_LINES) });
     }
     return anchors;
 }
@@ -261,6 +262,7 @@ export async function auditPageListFromPdf(data: ArrayBuffer, html: string): Pro
 /** O que o PDF diz de uma página SEM marcador, em pouco espaço: o folio e as primeiras linhas de corpo que o livro também tem (âncoras de ANCHOR_LEN caracteres). Autocontido: dá para guardar num plano. */
 export interface PageLines { page: number; lines: string[] }
 const MAX_PAGE_LINES = 6;
+const MAX_ANCHOR_LINES = 60; // linhas por página guardadas nas âncoras (só em memória)
 
 /** As páginas do PDF sem marcador no `html`, cada uma com as suas linhas que existem no corpo (as que o alinhamento pode usar). */
 export function pageLinesFromPages(pages: PdfPageText[], html: string): PageLines[] {
@@ -761,7 +763,11 @@ export function insertPageBreaks(html: string, anchors: PageAnchor[]): { html: s
     const doc = new DOMParser().parseFromString(res.html, 'text/html');
     const points = indicePoints(textIndex(doc), own.map(a => ({ page: a.page, lines: a.lines! })));
     if (points.length) applyMarkers(doc, points);
-    return { html: movePageBreaksToChapterStart(points.length ? doc.body.innerHTML : res.html), inserted: res.inserted + points.length, total: anchors.length };
+    const placed = movePageBreaksToChapterStart(points.length ? doc.body.innerHTML : res.html);
+    // 2.º passo: as páginas que o alinhamento global deixou de fora (abrem com texto de figura, ou ficaram fora de ordem) entram
+    // na janela entre os marcadores vizinhos (o mesmo que o fix_page_list do assistente), a partir das linhas das âncoras.
+    const filled = fillMissingPageBreaks(placed, anchors.filter(a => a.lines?.length).map(a => ({ page: a.page, lines: a.lines! })));
+    return { html: filled.html, inserted: res.inserted + points.length + filled.inserted.length, total: anchors.length };
 }
 
 /**
