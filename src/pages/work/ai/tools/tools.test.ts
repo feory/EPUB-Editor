@@ -8,6 +8,7 @@ import { runValidationTool } from './runValidation';
 import { checkPublicationTool } from './checkPublication';
 import { checkPageListTool } from './checkPageList';
 import { checkStylesTool } from './checkStyles';
+import { checkFiguresTool } from './checkFigures';
 import type { PdfStyles } from '../../../../services/page-list/pdf-styles';
 import { AI_TOOLS } from './index';
 import type { Proposal, ToolContext } from './aiTool';
@@ -24,7 +25,7 @@ const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = nu
 test('o registo tem uma ferramenta por nome', () => {
     const names = AI_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.sort()).toEqual(['check_page_list', 'check_publication', 'check_styles', 'preview_rules', 'run_validation', 'survey_book']);
+    expect(names.sort()).toEqual(['check_figures', 'check_page_list', 'check_publication', 'check_styles', 'preview_rules', 'run_validation', 'survey_book']);
 });
 
 test('survey_book: devolve o resumo do livro como está agora', () => {
@@ -155,4 +156,26 @@ test('preview_rules + fix_styles: o PDF entra na operação; sem PDF é erro; ki
     const so = JSON.parse((await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_styles', kinds: ['center'] }] }, ctx)).content);
     expect(so.operations[0].changed).toBe(false);
     expect((await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_styles', kinds: ['nada'] }] }, ctx)).content).toContain('kinds');
+});
+
+// 4 páginas com um parágrafo cada e a legenda da figura na 1.ª: no livro a figura está depois do último (3 páginas atrás do PDF).
+const lin = (key: string, y: number) => ({ key, y, x0: 60, x1: 360, size: 11, bold: false, italic: false });
+const pdfFigura: PdfStyles = { body: 11, pages: ['primeiroparagrafodolivro', 'segundoparagrafodolivro', 'terceiroparagrafodolivro', 'quartoparagrafodolivro'].map((k, i) => ({ left: 60, right: 360, gap: 14, lines: i ? [lin(k, 600)] : [lin(k, 600), lin('figura11legendadaprimeirafigura', 300)] })) };
+const livroFigura = chapter('Um', ['Primeiro', 'Segundo', 'Terceiro', 'Quarto'].map((n) => `<p>${n} paragrafo do livro</p>`).join('') + '<img data-image-id="a" src="x" alt=""><p class="p-legendas">Figura 1.1 Legenda da primeira figura</p>');
+
+test('check_figures: sem PDF é erro; com PDF lista a figura fora do sítio', async () => {
+    expect((await checkFiguresTool.run({}, setup().ctx)).is_error).toBe(true);
+    const { ctx } = setup([livroFigura], { pdfStyles: async () => pdfFigura });
+    const out = JSON.parse((await checkFiguresTool.run({}, ctx)).content);
+    expect(out.resumo).toEqual({ figuras: 1, comLegendaEncontradaNoPdf: 1, comDiferencas: 1 });
+    expect(out.diferencas[0]).toMatchObject({ tipo: 'fora do sítio', paginaNoPdf: 1, corrigivel: true });
+});
+
+test('preview_rules + fix_figures: o PDF entra na operação e a figura vai para o sítio do PDF', async () => {
+    const { ctx, proposal } = setup([livroFigura], { pdfStyles: async () => pdfFigura });
+    const out = JSON.parse((await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_figures' }] }, ctx)).content);
+    expect(out.errors).toEqual([]);
+    expect(out.operations[0]).toMatchObject({ label: 'Figuras segundo o PDF', changed: true, summary: '1 figura movida' });
+    expect(proposal()!.ops[0]).toEqual({ type: 'fix_figures', pdf: pdfFigura });
+    expect((await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_figures' }] }, setup([livroFigura]).ctx)).is_error).toBe(true);
 });

@@ -239,7 +239,7 @@ function pickChain(cands: { pos: number; page: number }[][]): { pos: number; pag
 }
 
 // Índices da maior subsequência estritamente crescente de `arr` (LIS, O(n log n)).
-function longestIncreasing(arr: number[]): number[] {
+export function longestIncreasing(arr: number[]): number[] {
     const tails: number[] = [];   // tails[k] = índice do menor fim de uma subseq. de comprimento k+1
     const prev: number[] = new Array(arr.length).fill(-1);
     for (let i = 0; i < arr.length; i++) {

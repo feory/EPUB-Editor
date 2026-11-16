@@ -1,6 +1,6 @@
 // A GEOMETRIA do PDF de impressão, para comparar com o estilo do livro (style-audit.ts): cada linha com a posição, o tamanho e o
 // negrito/itálico, mais as medidas de cada página (margens, entrelinha) e o corpo de letra do livro. Puro (só lê `PdfPageText`).
-import type { PdfPageText } from './pdf-pages';
+import type { PdfImageBox, PdfPageText } from './pdf-pages';
 import { normalize } from './pdf-text';
 
 const SUPER_Y_TOL = 5;   // pt: igual a pdf-text.ts (um sobrescrito tem y ligeiramente diferente do corpo)
@@ -14,7 +14,7 @@ export const fold = (s: string): string => normalize(s.normalize('NFKC'));
 
 export interface StyledLine { key: string; x0: number; x1: number; y: number; size: number; bold: boolean; italic: boolean }
 /** `left`/`right` = as margens do texto desta página; `gap` = a entrelinha normal. */
-export interface StylePage { left: number; right: number; gap: number; lines: StyledLine[] }
+export interface StylePage { left: number; right: number; gap: number; lines: StyledLine[]; images?: PdfImageBox[] }
 /** O que o PDF diz do estilo do livro: o corpo de letra e, por página, as linhas. É isto que vai dentro da operação fix_styles. */
 export interface PdfStyles { body: number; pages: StylePage[] }
 
@@ -97,6 +97,7 @@ export function pdfStyles(pages: PdfPageText[]): PdfStyles {
             right: right ?? out[i - 2]?.right ?? globalRight,
             gap: g.length >= MIN_GAPS ? median(g) : globalGap,
             lines: page,
+            images: pages[i].images?.length ? pages[i].images : undefined,
         });
     });
     return { body, pages: out };

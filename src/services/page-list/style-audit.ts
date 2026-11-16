@@ -20,7 +20,7 @@ const SMALL_OFF = 0.97;      // …e a partir daqui já não é
 const HEADING_SIZE = 1.15;   // tamanho / corpo: acima disto é título, não negrito de parágrafo
 const GAP_ON = 1.4;          // espaço acima / entrelinha: acima disto há p-top (igual a verifyBlankSpacing)
 const GAP_OFF = 1.15;        // …e abaixo disto não há
-const MIN_TEXT = 12;         // chars normalizados: parágrafos mais curtos casam com linhas demais
+export const MIN_TEXT = 12;         // chars normalizados: parágrafos mais curtos casam com linhas demais
 const MIN_KEY = 10;          // …e a linha do PDF tem de ter pelo menos isto (ou ser o parágrafo todo)
 const NEAR = 150;            // linhas à frente do último parágrafo casado onde qualquer linha serve
 const FAR_KEY = 40;          // …e a partir daí só linhas com pelo menos isto (quase inteiras: quase únicas)
@@ -28,7 +28,7 @@ const COVERED = 0.9;         // fração do texto do parágrafo que as linhas ju
 
 const SKIP_CLASS = /^(footnote|chapter-|pagebreak|drop-cap|alinea|p-legendas|p-asterisk|p-border|p-quote)/;
 // Capítulos que não se revêem: o Índice (entradas, não parágrafos) e a ficha técnica (estilos escolhidos de propósito, p-small p-non-indent).
-const SKIP_CHAPTER = /^(índice|sumário|conteúdo|contents|ficha técnica|frontespício|copyright)/i;
+export const SKIP_CHAPTER = /^(índice|sumário|conteúdo|contents|ficha técnica|frontespício|copyright)/i;
 const EMPHASIS = ['p-bold', 'p-italic', 'p-bold-italic'];
 const INLINE_EMPHASIS = 'strong, b, em, i';
 
@@ -36,13 +36,15 @@ interface Match { first: StyledLine; lines: StyledLine[]; page: StylePage; pageI
 
 /** As linhas do PDF onde o parágrafo `text` (normalizado) aparece, a partir de `from` nas `flat`; null se não há uma correspondência segura.
  *  Com capitular a 1.ª letra é uma linha à parte no PDF, por isso se aceita também o texto sem ela (`dropCap`). */
-function findLines(flat: { line: StyledLine; pi: number; li: number }[], from: number, whole: string): { match: { line: StyledLine; pi: number; li: number }[]; full: boolean; end: number; dropCap: boolean; near: boolean } | null {
+export type FlatLine = { line: StyledLine; pi: number; li: number };
+export const flatLines = (pdf: PdfStyles): FlatLine[] => pdf.pages.flatMap((page, pi) => page.lines.map((line, li) => ({ line, pi, li })));
+export function findLines(flat: FlatLine[], from: number, whole: string, minKey = MIN_KEY, near = NEAR): { match: FlatLine[]; full: boolean; end: number; dropCap: boolean; near: boolean } | null {
     for (let j = from; j < flat.length; j++) {
         const key = flat[j].line.key;
-        if (j >= from + NEAR && key.length < FAR_KEY) continue; // longe do último casado só serve uma linha quase inteira (perdemos o fio: Índice, figuras…)
+        if (j >= from + near && key.length < FAR_KEY) continue; // longe do último casado só serve uma linha quase inteira (perdemos o fio: Índice, figuras…)
         for (const dropCap of [false, true]) {
             const text = dropCap ? whole.slice(1) : whole;
-            if (!(text.startsWith(key) && (key.length >= MIN_KEY || key === text))) continue;
+            if (!(text.startsWith(key) && (key.length >= minKey || key === text))) continue;
             const match = [flat[j]];
             let acc = key, end = j;
             while (acc.length < text.length && end + 1 < flat.length) {
@@ -52,7 +54,7 @@ function findLines(flat: { line: StyledLine; pi: number; li: number }[], from: n
                 acc += next;
                 match.push(flat[++end]);
             }
-            return { match, full: acc.length >= text.length * COVERED, end, dropCap, near: j < from + NEAR };
+            return { match, full: acc.length >= text.length * COVERED, end, dropCap, near: j < from + near };
         }
     }
     return null;
@@ -77,7 +79,7 @@ function unwrapInline(el: Element) {
  */
 export function reviewStyles(html: string, pdf: PdfStyles, kinds: readonly StyleKind[] = STYLE_KINDS): { html: string; diffs: StyleDiff[]; /** Parágrafos de topo que o PDF confirmou (os únicos que se reveem) e os que se viram. */ checked: number; seen: number } {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const flat = pdf.pages.flatMap((page, pi) => page.lines.map((line, li) => ({ line, pi, li })));
+    const flat = flatLines(pdf);
     const diffs: StyleDiff[] = [];
     const want = (k: StyleKind) => kinds.includes(k);
     const body = pdf.body;
