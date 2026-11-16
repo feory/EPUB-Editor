@@ -4,7 +4,9 @@ import type JSZip from 'jszip';
 // traduzir negrito/itálico/versaletes (estilos de carácter), recuos e espaçamento (estilos de parágrafo) e
 // cores de preenchimento das células de tabela. Lido por idmlZip — antes eram variáveis globais do módulo.
 export type CharStyle = { fontStyle?: string; cap?: string; position?: string };
-export type ParaStyle = { left: number; first: number; fontStyle?: string; cap?: string; spaceBefore: number; spaceAfter: number; fill?: string };
+// `shading` = sombreado de parágrafo do estilo (caixa de fundo, ex. o destaque cinzento claro): ligado, cor (ref. do swatch) e tom (%).
+export type ParaShading = { on: boolean; color?: string; tint?: string };
+export type ParaStyle = { left: number; first: number; fontStyle?: string; cap?: string; spaceBefore: number; spaceAfter: number; fill?: string; shading?: ParaShading };
 export type FillColor = { space: 'CMYK' | 'RGB'; values: number[] };
 
 export interface IdmlStyles {
@@ -98,7 +100,15 @@ async function scanParaIndents(zip: JSZip): Promise<Map<string, ParaStyle>> {
         const spaceAfter = parseFloat(/\bSpaceAfter="([^"]*)"/.exec(m[1])?.[1] || '0') || 0;
         // Cor de texto do estilo de parágrafo (ex. estilo "numeros" a Color/Paper, numeral sobre caixa preta).
         const fill = /\bFillColor="([^"]*)"/.exec(m[1])?.[1];
-        if (left || first || fontStyle || cap || spaceBefore || spaceAfter || fill) map.set(self, { left, first, fontStyle, cap, spaceBefore, spaceAfter, fill });
+        // Sombreado do parágrafo: a cor pode vir como atributo ou como <ParagraphShadingColor> filho do estilo.
+        const shadingOn = /\bParagraphShadingOn="([^"]*)"/.exec(m[1])?.[1];
+        const block = xml.slice(m.index, xml.indexOf('</ParagraphStyle>', m.index));
+        const shading: ParaShading | undefined = shadingOn === undefined ? undefined : {
+            on: shadingOn === 'true',
+            tint: /\bParagraphShadingTint="([^"]*)"/.exec(m[1])?.[1],
+            color: /\bParagraphShadingColor="([^"]*)"/.exec(m[1])?.[1] ?? /<ParagraphShadingColor[^>]*>([^<]*)</.exec(block)?.[1],
+        };
+        if (left || first || fontStyle || cap || spaceBefore || spaceAfter || fill || shading) map.set(self, { left, first, fontStyle, cap, spaceBefore, spaceAfter, fill, shading });
     }
     return map;
 }

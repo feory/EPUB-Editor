@@ -122,6 +122,20 @@ function indentStyle(rc: RenderContext, psr: Element, fullPS: string): string {
     return ` style="${s}"`;
 }
 
+// Sombreado do parágrafo (caixa de fundo do InDesign, ex. destaque a cinzento claro): a cor já misturada com o tom (rgb), ou ''
+// se não está sombreado. Override do parágrafo vence o estilo; sem cor definida o InDesign usa o preto (tom 10 % = cinzento claro).
+function paragraphShade(rc: RenderContext, psr: Element, fullPS: string): string {
+    const def = rc.styles.paraIndents.get(fullPS)?.shading;
+    const onAttr = psr.getAttribute('ParagraphShadingOn');
+    if (!(onAttr !== null ? onAttr === 'true' : def?.on)) return '';
+    const tint = psr.getAttribute('ParagraphShadingTint') ?? def?.tint ?? '100';
+    const color = psr.getAttribute('ParagraphShadingColor') ?? def?.color ?? 'Color/Black';
+    const resolved = resolveFillColor(rc.styles, color, tint);
+    if (resolved || color !== 'Color/Black') return resolved;
+    const g = Math.round(255 * (1 - (parseFloat(tint) || 0) / 100)); // preto sem definição no Graphic.xml
+    return `rgb(${g},${g},${g})`;
+}
+
 // Traduz SpaceBefore/SpaceAfter (estilo + override do parágrafo, mesmo padrão de indentStyle)
 // em p-top/p-bottom — só quando detectSpacing está ligado (opção de importação).
 function spacingClasses(rc: RenderContext, psr: Element, fullPS: string): string {
@@ -492,10 +506,18 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
     // Linha em branco manual (segmento vazio) antes de um <p> → também conta como espaçamento
     // (muitos livros usam isto em vez de SpaceBefore/SpaceAfter); só com detectSpacing ligado.
     let blankBefore = false;
+    // Parágrafos seguidos com o MESMO sombreado formam uma caixa (div.box com fundo, sem contorno).
+    let shade = '';
     for (const psr of Array.from(story.children)) {
         if (psr.tagName !== 'ParagraphStyleRange') continue; // ignora ranges aninhados (notas)
         const fullPS = psr.getAttribute('AppliedParagraphStyle') || '';
         const sn = styleName(fullPS);
+        const paraShade = paragraphShade(rc, psr, fullPS);
+        if (paraShade !== shade) {
+            if (shade) out.push('</div>');
+            if (paraShade) out.push(`<div class="box" style="background-color:${paraShade};border-width:0">`);
+            shade = paraShade;
+        }
         const rawMap = resolveStyle(sn, mapping);
         const segs = renderPsr(rc, psr, counter);
 
@@ -553,7 +575,8 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
         // fiável independente do estilo nomeado/mapeamento do utilizador.
         const inlineCenter = tag === 'p' && !(cls || '').includes('p-center') && psr.getAttribute('Justification') === 'CenterAlign';
         const baseClasses = [cls, spacing, inlineCenter ? 'p-center' : ''].filter(Boolean);
-        const styleAttr = (!cls && tag === 'p' && !mapped) ? indentStyle(rc, psr, fullPS) : '';
+        // Dentro da caixa sombreada o recuo do IDML é a margem da caixa (já vem do padding): não se repete no parágrafo.
+        const styleAttr = (!cls && tag === 'p' && !mapped && !shade) ? indentStyle(rc, psr, fullPS) : '';
 
         if (/^h[1-6]$/.test(tag)) {
             // TÍTULO: o <Br/> é quebra de LINHA (número + título), não de parágrafo → UM só heading.
@@ -633,8 +656,10 @@ export function renderStory(rc: RenderContext, xml: string, counter: NoteCounter
             for (const def of seg.notes) out.push(def);
         }
     }
+    if (shade) out.push('</div>');
     label.flushInto(out);
-    return out.join('\n');
+    // Caixa que ficou vazia (parágrafos sombreados que não deram bloco: rótulo de capítulo, linha em branco).
+    return out.join('\n').replace(/<div class="box" style="[^"]*">\s*<\/div>\n?/g, '');
 }
 
 // Parágrafo com p-bold/p-italic/p-bold-italic: o estilo já dá o negrito/itálico, por isso o
