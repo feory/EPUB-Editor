@@ -29,20 +29,23 @@ function clearImageVariants(imagesDir, thumbnailsDir, id, keepFilename) {
 
 // Rasteriza um EPS (Illustrator vetorial) para PNG a 300dpi com Ghostscript (cor, nítido).
 // Fallback: o preview raster embutido no DOS-EPS (cinza, baixa-res) via sharp, se o gs faltar.
+// Antialiasing (-dTextAlphaBits/-dGraphicsAlphaBits=4): sem ele o gs desenha texto e traços vetoriais sem suavizar.
 // ponytail: 300dpi fixo — subir -r se precisar de mais nitidez. Requer `ghostscript` no PATH.
+let warnedNoGs = false;
 async function epsToPng(buffer) {
   const base = join(tmpdir(), `eps-${crypto.randomUUID()}`);
   const epsPath = `${base}.eps`, pngPath = `${base}.png`;
   await Bun.write(epsPath, buffer);
   try {
     const proc = Bun.spawn(
-      ['gs', '-q', '-dSAFER', '-dBATCH', '-dNOPAUSE', '-dEPSCrop', '-sDEVICE=png16m', '-r300', `-sOutputFile=${pngPath}`, epsPath],
+      ['gs', '-q', '-dSAFER', '-dBATCH', '-dNOPAUSE', '-dEPSCrop', '-sDEVICE=png16m', '-dTextAlphaBits=4', '-dGraphicsAlphaBits=4', '-r300', `-sOutputFile=${pngPath}`, epsPath],
       { stdout: 'ignore', stderr: 'ignore' });
     await proc.exited;
     if (proc.exitCode === 0 && existsSync(pngPath)) return await Bun.file(pngPath).arrayBuffer();
   } catch { /* gs ausente */ }
   finally { safeUnlink(epsPath); safeUnlink(pngPath); }
-  // Fallback sem gs: preview TIFF embutido (DOS-EPS, magic C5D0D3C6; offset/len em 20/24, LE).
+  // Fallback sem gs: preview TIFF embutido (DOS-EPS, magic C5D0D3C6; offset/len em 20/24, LE). Baixa resolução (~320 px): avisa, para não degradar em silêncio.
+  if (!warnedNoGs) { warnedNoGs = true; console.warn('[images] Ghostscript (gs) não encontrado ou falhou: os EPS saem com o preview embutido, em baixa resolução. Instala o ghostscript (brew install ghostscript / apt install ghostscript).'); }
   const dv = new DataView(buffer);
   if (buffer.byteLength > 28 && dv.getUint32(0) === 0xC5D0D3C6) {
     const off = dv.getUint32(20, true), len = dv.getUint32(24, true);
