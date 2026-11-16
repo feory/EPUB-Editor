@@ -10,6 +10,7 @@ export function memoryWorkspace({ parts = [], css = '' }: { parts?: string[]; cs
     const ws: MemoryWorkspace = {
         calls,
         book,
+        title: () => 'Livro de teste',
         parts: () => book.parts,
         css: () => book.css,
         language: () => 'pt',

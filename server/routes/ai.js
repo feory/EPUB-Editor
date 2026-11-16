@@ -41,6 +41,8 @@ Estilos segundo o PDF ("falta indentação?", "que parágrafos estão sem negrit
 
 Figuras segundo o PDF ("as figuras estão no sítio certo?", "há imagens fora do sítio?", "a legenda está antes ou depois da imagem?"): chama check_figures (sem argumentos). Compara a posição de cada figura COM legenda ("Figura N …") com a ordem de leitura do PDF de impressão e devolve "resumo" (figuras, com legenda achada no PDF, com diferenças) e "diferencas" (tipo "fora do sítio" ou "imagem e legenda trocadas", capítulo, legenda, página do PDF, depois de que parágrafo o PDF a põe, se é corrigível). No impresso as figuras flutuam para o topo/fundo da página, por isso só conta como fora do sítio a 2 ou mais páginas do texto; as sem legenda não se veem: diz-o. Para CORRIGIR ("põe as figuras no sítio", "corrige as figuras pelo PDF"): preview_rules com rules [] e operations [{ "type": "fix_figures" }] (sem mais campos): move imagem + legenda para depois do parágrafo que cita a figura (ou que a antecede no PDF), só dentro do mesmo capítulo, e troca imagem/legenda quando o PDF as tem ao contrário. Se a ferramenta diz que não há PDF, diz ao utilizador que o carregue no painel do PDF.
 
+Relatório ("prepara um relatório com todas as falhas", "quero um .txt com os problemas do livro", "lista tudo o que está mal"): chama build_report (sem argumentos; demora porque corre as validações). Junta publicação, lista de páginas, estilos e figuras (estes contra o PDF) e validações num texto com cada falha, a sua localização (capítulo, página do PDF, ficheiro) e um excerto do texto. O relatório NÃO vem na resposta da ferramenta: a interface mostra por baixo da tua resposta um botão "Descarregar .txt". Responde com uma linha por secção com o nº de falhas, diz o que não se fez (ex. sem PDF) e que o relatório se descarrega no botão; não copies o conteúdo para a conversa.
+
 Aplicar e reverter:
 - Quando o utilizador carrega em Aplicar na interface, recebes uma mensagem "[Sistema: o utilizador APLICOU a proposta anterior…]" com o resumo do que foi gravado (regras, operações, estilos novos e os valores antes/depois dos estilos alterados). A partir daí o livro JÁ tem essas alterações. Nunca digas que "nada foi aplicado" se recebeste essa mensagem; se a proposta foi DESCARTADA, recebes outra mensagem a dizê-lo.
 - Não podes desfazer nada sozinho. Se o utilizador pede para reverter e a alteração é invertível, propõe a regra/estilo inverso (com preview_rules), usando o resumo (ex. os valores "antes" dos estilos). Se não for possível, diz que pode restaurar a versão "Antes de IA" no histórico do livro.
@@ -105,6 +107,11 @@ export const TOOLS = [
   {
     name: 'check_figures',
     description: 'Compara a posição das figuras com legenda do livro com a ordem de leitura do PDF de impressão e devolve as que estão fora do sítio (2+ páginas do texto) ou com imagem e legenda trocadas. Não altera nada. Falha se não há PDF carregado.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'build_report',
+    description: 'Prepara um relatório em texto com todas as falhas detetadas (publicação, lista de páginas, estilos e figuras contra o PDF, validações), cada uma com a localização e um excerto do texto, e entrega-o à interface para descarregar em .txt. Sem argumentos. Demora (corre as validações). Não altera o livro.',
     input_schema: { type: 'object', properties: {} },
   },
   {

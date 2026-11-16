@@ -13,6 +13,8 @@ import type { PageLines } from '../../../services/page-list/alignment';
 import type { PdfStyles } from '../../../services/page-list/pdf-styles';
 
 export interface AiWorkspace {
+    /** O título do livro (para cabeçalhos de relatório). */
+    title(): string;
     /** As partes do livro (1:1 com os capítulos) e o CSS, como estão agora. */
     parts(): string[];
     css(): string;

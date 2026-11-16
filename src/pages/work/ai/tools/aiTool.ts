@@ -19,6 +19,8 @@ export interface ToolContext {
     scope: RuleBlock | null;
     /** A ferramenta que simula alterações diz aqui qual é a proposta atual (null = nenhuma válida). */
     propose(proposal: Proposal | null): void;
+    /** A ferramenta que prepara um relatório entrega aqui o texto: a interface oferece-o para descarregar (.txt). */
+    deliver(report: string): void;
 }
 
 export interface AiTool {

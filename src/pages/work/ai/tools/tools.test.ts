@@ -9,6 +9,7 @@ import { checkPublicationTool } from './checkPublication';
 import { checkPageListTool } from './checkPageList';
 import { checkStylesTool } from './checkStyles';
 import { checkFiguresTool } from './checkFigures';
+import { buildReportTool } from './buildReport';
 import type { PdfStyles } from '../../../../services/page-list/pdf-styles';
 import { AI_TOOLS } from './index';
 import type { Proposal, ToolContext } from './aiTool';
@@ -18,14 +19,15 @@ const chapter = (title: string, body: string) => `<p class="chapter-break-h1" da
 const digest = (n: number): ValidationDigest => ({ source: 's', valid: !n, groups: n ? [{ rule: 'r', severity: 'aviso', count: n, description: '', files: [], examples: [] }] : [], omittedGroups: 0 });
 const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = null, css = '') => {
     let proposal: Proposal | null = null;
-    const ctx: ToolContext = { workspace: memoryWorkspace({ parts, css }, over), scope, propose: (p) => { proposal = p; } };
-    return { ctx, proposal: () => proposal };
+    let report: string | null = null;
+    const ctx: ToolContext = { workspace: memoryWorkspace({ parts, css }, over), scope, propose: (p) => { proposal = p; }, deliver: (r) => { report = r; } };
+    return { ctx, proposal: () => proposal, report: () => report };
 };
 
 test('o registo tem uma ferramenta por nome', () => {
     const names = AI_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.sort()).toEqual(['check_figures', 'check_page_list', 'check_publication', 'check_styles', 'preview_rules', 'run_validation', 'survey_book']);
+    expect(names.sort()).toEqual(['build_report', 'check_figures', 'check_page_list', 'check_publication', 'check_styles', 'preview_rules', 'run_validation', 'survey_book']);
 });
 
 test('survey_book: devolve o resumo do livro como está agora', () => {
@@ -178,4 +180,25 @@ test('preview_rules + fix_figures: o PDF entra na operação e a figura vai para
     expect(out.operations[0]).toMatchObject({ label: 'Figuras segundo o PDF', changed: true, summary: '1 figura movida' });
     expect(proposal()!.ops[0]).toEqual({ type: 'fix_figures', pdf: pdfFigura });
     expect((await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_figures' }] }, setup([livroFigura]).ctx)).is_error).toBe(true);
+});
+
+test('build_report: entrega o texto à interface com cada falha localizada; a resposta ao modelo só traz as contagens', async () => {
+    const livro = chapter('Um', '<p>Primeiro paragrafo do livro</p><p>Segundo paragrafo do livro</p>');
+    const { ctx, report } = setup([livro], {
+        title: () => 'Livro X',
+        pdfStyles: async () => ({ body: 11, pages: [{ left: 60, right: 360, gap: 14, lines: [{ key: 'primeiroparagrafodolivro', x0: 77, x1: 360, y: 600, size: 11, bold: false, italic: false }] }] }),
+        validate: async (k: ValidationKind) => (k === 'links' ? { source: 's', valid: false, omittedGroups: 0, groups: [{ rule: 'link-partido', severity: 'erro' as const, count: 2, description: 'destino em falta', files: ['cap1.xhtml'], examples: ['<a href="#x">y</a>'] }] } : digest(0)),
+    });
+    const out = JSON.parse((await buildReportTool.run({}, ctx)).content);
+    expect(out.pronto).toBe(true);
+    expect(out.falhasPorSecao).toMatchObject({ estilos: 1, figuras: 0, validacoes: 2 });
+    expect(out.naoFeito).toContain('publicação'); // memoryWorkspace não tem dados do livro
+    const text = report()!;
+    expect(text).toContain('RELATÓRIO DE FALHAS — Livro X');
+    expect(text).toContain('[Um · PDF p. 1] "Primeiro paragrafo do livro"'); // capítulo, página e excerto
+    expect(text).toContain('acrescentar .p-indent');
+    expect(text).toContain('link-partido (2)');
+    expect(text).toContain('Ficheiros: cap1.xhtml');
+    expect(text).toContain('Exemplo: <a href="#x">y</a>');
+    expect(text).toContain('LISTA DE PÁGINAS'); // sem PDF de lista de páginas: diz-o
 });

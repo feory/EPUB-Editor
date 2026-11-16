@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Trash2, Check, ImageIcon, MessageSquare, History } from 'lucide-react';
+import { X, Send, Trash2, Check, ImageIcon, MessageSquare, History, Download } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { useEditorFrame } from '../hooks/useEditorFrame';
 import type { useAiAssistant } from '../ai/useAiAssistant';
@@ -48,6 +48,14 @@ const NewStyleRow: React.FC<{ cls: string; body: string; onRename: (name: string
     );
 };
 
+/** Descarrega o relatório como .txt (com BOM, para o Bloco de Notas do Windows ler os acentos). */
+function downloadReport(text: string, isbn: string) {
+    const url = URL.createObjectURL(new Blob(['\uFEFF', text], { type: 'text/plain;charset=utf-8' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: `relatorio-${isbn}-${new Date().toISOString().slice(0, 10)}.txt` });
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 const ICON = 'p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-all';
 
 export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; changes: Changes; isbn: string; readOnly: boolean; onClose: () => void; width: number; onResize: (w: number) => void }> = ({ ai, alt, changes, isbn, readOnly, onClose, width, onResize }) => {
@@ -91,6 +99,13 @@ export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; changes: Changes; isbn: str
                 ))}
                 {ai.busy && <p className="text-text-muted">A trabalhar…</p>}
                 {ai.error && <p className="text-rose-600">{ai.error}</p>}
+
+                {ai.report && (
+                    <div className="rounded-xl border border-border p-3 flex items-center justify-between gap-2">
+                        <p className="text-xs text-slate-600"><span className="font-semibold">Relatório pronto</span> ({ai.report.split('\n').length} linhas)</p>
+                        <button onClick={() => downloadReport(ai.report!, isbn)} className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold"><Download size={14} />Descarregar .txt</button>
+                    </div>
+                )}
 
                 {ai.proposal && (
                     <div className="rounded-xl border border-border p-3 flex flex-col gap-2">

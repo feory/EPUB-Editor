@@ -18,6 +18,8 @@ export interface AgentResult {
     messages: AgentMessage[];
     text: string;
     proposal: Proposal | null;
+    /** O relatório preparado nesta conversa (texto simples), se o modelo o pediu. */
+    report: string | null;
 }
 
 const MAX_TURNS = 8;
@@ -33,7 +35,8 @@ export async function runAgent(opts: {
 }): Promise<AgentResult> {
     let messages = opts.messages;
     let proposal: AgentResult['proposal'] = null;
-    const ctx: ToolContext = { workspace: opts.workspace, scope: opts.scope ?? null, propose: (p) => { proposal = p; } };
+    let report: string | null = null;
+    const ctx: ToolContext = { workspace: opts.workspace, scope: opts.scope ?? null, propose: (p) => { proposal = p; }, deliver: (r) => { report = r; } };
 
     const execute = async (call: Block): Promise<ToolResult> => {
         const tool = AI_TOOLS.find((t) => t.name === call.name);
@@ -46,13 +49,13 @@ export async function runAgent(opts: {
         if (res.stop_reason !== 'tool_use') {
             const text = textOf(res.content);
             const note = res.stop_reason === 'refusal' ? 'O assistente recusou este pedido.' : res.stop_reason === 'max_tokens' ? 'A resposta foi cortada.' : '';
-            return { messages, text: text || note, proposal };
+            return { messages, text: text || note, proposal, report };
         }
         const results: Block[] = [];
         for (const b of res.content.filter((x) => x.type === 'tool_use')) results.push({ type: 'tool_result', tool_use_id: b.id, ...(await execute(b)) });
         messages = [...messages, { role: 'user', content: results }];
     }
-    return { messages, text: 'O assistente excedeu o limite de passos. Reformula o pedido.', proposal };
+    return { messages, text: 'O assistente excedeu o limite de passos. Reformula o pedido.', proposal, report };
 }
 
 /**

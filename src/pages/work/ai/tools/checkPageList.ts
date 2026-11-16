@@ -1,7 +1,7 @@
 import type { AiTool } from './aiTool';
 import type { MissingReason } from '../../../../services/page-list/audit';
 
-const WHY: Record<MissingReason, string> = {
+export const WHY: Record<MissingReason, string> = {
     'branca': 'página em branco (só folio e marcas do InDesign): não precisa de marcador',
     'indice': 'página do Índice: não leva marcadores (de propósito)',
     'figura': 'só figura: o texto da página não está no corpo (está na imagem), por isso não há onde o ancorar',

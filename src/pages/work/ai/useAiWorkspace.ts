@@ -29,6 +29,7 @@ async function withPrintPdf<T>({ isbn, work }: { isbn: string | undefined; work:
 export function useAiWorkspace({ isbn, work, css }: { isbn: string | undefined; work: Work; css: AiCssSide }): AiWorkspace {
     const live = useLive({ isbn, work, css });
     return useMemo<AiWorkspace>(() => ({
+        title: () => live.current.work.ebook?.title ?? '',
         parts: () => live.current.work.getBookParts(),
         css: () => live.current.css.get(),
         language: () => live.current.work.language,

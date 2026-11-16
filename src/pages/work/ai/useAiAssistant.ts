@@ -23,6 +23,8 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
     // Uma proposta por aplicar não se guarda (o livro pode ter mudado): avisa-se o utilizador e o modelo.
     const [lines, setLines] = useState<AiLine[]>(() => (stored?.pending ? [...stored.lines, { role: 'assistant', text: LOST_PROPOSAL }] : stored?.lines ?? []));
     const [proposal, setProposal] = useState<AgentResult['proposal']>(null);
+    // O relatório preparado (texto) fica por descarregar até pedir outro ou limpar a conversa; não se guarda ao recarregar a página.
+    const [report, setReport] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const history = useRef<AgentMessage[]>(stored ? (stored.pending ? [...stored.history, { role: 'user', content: `[Sistema: ${LOST_PROPOSAL}]` }] : stored.history) : []);
@@ -54,6 +56,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
             history.current = compactHistory(result.messages); // só o texto: as ferramentas não se reenviam nos pedidos seguintes (poupa tokens)
             setLines((l) => [...l, { role: 'assistant', text: result.text || '(sem resposta)' }]);
             setProposal(result.proposal);
+            if (result.report) setReport(result.report);
         } catch (e) {
             setError(isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error ?? 'Erro de rede' : 'Erro inesperado');
         } finally { setBusy(false); }
@@ -89,7 +92,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
         if (proposal) history.current = [...history.current, discardedNote()];
         setProposal(null);
     }, [proposal]);
-    const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setError(''); }, []); // o efeito apaga o que estava guardado
+    const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setReport(null); setError(''); }, []); // o efeito apaga o que estava guardado
 
-    return { lines, proposal, busy, error, scoped, clearScope, send, apply, discard, renameStyle, noteReverted, reset };
+    return { lines, proposal, report, busy, error, scoped, clearScope, send, apply, discard, renameStyle, noteReverted, reset };
 }

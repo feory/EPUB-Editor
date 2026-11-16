@@ -8,5 +8,6 @@ import { checkPublicationTool } from './checkPublication';
 import { checkPageListTool } from './checkPageList';
 import { checkStylesTool } from './checkStyles';
 import { checkFiguresTool } from './checkFigures';
+import { buildReportTool } from './buildReport';
 
-export const AI_TOOLS: readonly AiTool[] = [surveyBookTool, previewRulesTool, runValidationTool, checkPublicationTool, checkPageListTool, checkStylesTool, checkFiguresTool];
+export const AI_TOOLS: readonly AiTool[] = [surveyBookTool, previewRulesTool, runValidationTool, checkPublicationTool, checkPageListTool, checkStylesTool, checkFiguresTool, buildReportTool];
