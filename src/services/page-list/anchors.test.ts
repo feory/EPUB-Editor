@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import '../indesign/happy-dom';
 
 (globalThis as { DOMMatrix?: unknown }).DOMMatrix ??= class {};
-(globalThis as { NodeFilter?: unknown }).NodeFilter ??= { SHOW_TEXT: 4 };
+Object.assign(globalThis, { NodeFilter: { SHOW_ELEMENT: 1, SHOW_TEXT: 4 } }); // o walker de textIndex também lê elementos (marcadores)
 const { anchorsFromPages, normalize } = await import('./page-list');
 
 type Item = { str: string; transform: number[] };
@@ -51,4 +51,28 @@ test('auditPageList: marcada, em branco, figura, abre com figura e fora de ordem
     expect(a.missing).toEqual([{ page: 2, reason: 'branca' }, { page: 3, reason: 'figura' }, { page: 4, reason: 'fora-de-ordem' }, { page: 5, reason: 'abre-com-figura' }]);
     expect(a.orphanMarkers).toEqual([99]);
     expect(a.pagesWithFolio).toBe(a.marked + a.missing.length);
+});
+
+const { fillMissingPageBreaks, pageLinesFromPages } = await import('./page-list');
+
+test('fillMissingPageBreaks: só dentro da janela entre os marcadores vizinhos; idempotente; não toca nos existentes', () => {
+    const html = '<p>Texto da pagina um que esta no livro <span class="pagebreak" data-page="1"></span>fim</p>'
+        + '<p>Linha que abre a pagina dois no livro aqui</p><p>Texto da pagina tres <span class="pagebreak" data-page="3"></span>que esta</p>'
+        + '<p>Linha que abre a pagina dois no livro aqui</p>'; // repetida DEPOIS do marcador 3: fora da janela da página 2
+    const pages = [{ page: 2, lines: [normalize('Linha que abre a pagina dois no livro aqui').slice(0, 30)] }];
+    const r = fillMissingPageBreaks(html, pages);
+    expect(r.inserted).toEqual([2]);
+    expect(r.html.match(/data-page="2"/g)).toHaveLength(1);
+    expect(r.html.indexOf('data-page="2"')).toBeLessThan(r.html.indexOf('data-page="3"')); // a 1.ª ocorrência (na janela), não a repetida
+    expect(r.html).toContain('<span class="pagebreak" data-page="2"></span>Linha que abre a pagina dois');
+    expect(fillMissingPageBreaks(r.html, pages)).toEqual({ html: r.html, inserted: [] }); // idempotente
+    expect(fillMissingPageBreaks(html, [{ page: 2, lines: ['nao existe no corpo de todo o livro'] }]).inserted).toEqual([]);
+});
+
+test('pageLinesFromPages: só as páginas sem marcador, só as linhas que o livro tem', () => {
+    const pages = [1, 2, 3].map(n => page(n, [`ROTULO DE FIGURA QUE O LIVRO NAO TEM ${n}`, `Texto da pagina ${n} que esta no livro mesmo`]));
+    const html = '<p>Texto da pagina 1 que esta no livro mesmo <span class="pagebreak" data-page="1"></span></p><p>Texto da pagina 2 que esta no livro mesmo</p>';
+    const r = pageLinesFromPages(pages, html);
+    expect(r.map(p => p.page)).toEqual([2]); // a 1 já tem marcador; a 3 não tem nenhuma linha no livro
+    expect(r[0].lines).toEqual([normalize('Texto da pagina 2 que esta no livro mesmo').slice(0, 30)]);
 });

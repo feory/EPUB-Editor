@@ -20,6 +20,7 @@ export function memoryWorkspace({ parts = [], css = '' }: { parts?: string[]; cs
         validate: async () => null,
         publicationFacts: async () => null,
         pageListAudit: async () => null,
+        pageLines: async () => null,
         locate: () => null,
         ...over,
     };

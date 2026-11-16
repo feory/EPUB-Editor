@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
 import '../../../services/indesign/happy-dom'; // DOMParser no bun
+Object.assign(globalThis, { NodeFilter: { SHOW_ELEMENT: 1, SHOW_TEXT: 4 } }); // page-list (fix_page_list) lê o DOM com TreeWalker
 import { runPlan, resolvePlan, validateOps, type BookOp } from './aiPlan';
 import { planStyles } from '../../../utils/book-styles';
 import type { BookRule } from '../../../utils/book-rules';
@@ -172,4 +173,14 @@ test('plano com style_deletes: apaga o estilo sem uso; um em uso (depois das reg
     expect(both.errors).toEqual([]);
     expect(both.css).not.toContain('.p-usado');
     expect(both.html).toBe('<p>a</p>');
+});
+
+test('fix_page_list: sem os dados do PDF o plano recusa; com eles insere (é o que o aplicar repete)', () => {
+    const parts = ['<p class="chapter-break-h1" data-title="C"></p><h1>C</h1><p>Texto da pagina um <span class="pagebreak" data-page="1"></span>fim</p><p>Linha que abre a pagina dois no livro aqui</p><p>Pagina tres <span class="pagebreak" data-page="3"></span>texto</p>'];
+    expect(runPlan(parts, [], [{ type: 'fix_page_list' }]).errors[0]).toContain('PDF');
+    const pages = [{ page: 2, lines: ['linhaqueabreapaginadoisnolivro'.slice(0, 30)] }];
+    const r = runPlan(parts, [], [{ type: 'fix_page_list', pages }]);
+    expect(r.errors).toEqual([]);
+    expect(r.opResults[0]).toMatchObject({ label: 'Lista de páginas', changed: true });
+    expect(r.html).toContain('<span class="pagebreak" data-page="2"></span>Linha que abre a pagina dois');
 });

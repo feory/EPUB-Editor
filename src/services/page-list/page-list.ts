@@ -161,6 +161,12 @@ export function anchorsFromPages(pages: PdfPageText[]): PageAnchor[] {
     return anchors;
 }
 
+/** As linhas de corpo de uma página (normalizadas, topo→baixo): sem o cabeçalho corrente (se tem folio impresso) nem a marca "….indd" do InDesign. */
+function bodyLinesOf(page: PdfPageText, hasPrintedFolio: boolean): string[] {
+    const lines = pdfLines(page.items);
+    return (hasPrintedFolio ? lines.slice(1) : lines).map(l => normalize(l.text)).filter(t => t && !t.includes('indd'));
+}
+
 /** Porque é que uma página do PDF ficou sem marcador na lista de páginas. */
 export type MissingReason = 'branca' | 'figura' | 'abre-com-figura' | 'fora-de-ordem';
 export interface PageListAudit {
@@ -195,8 +201,7 @@ export function auditPageList(pages: PdfPageText[], html: string): PageListAudit
         audit.pagesWithFolio++;
         inPdf.add(folio);
         if (markers.has(folio)) { audit.marked++; return; }
-        const lines = pdfLines(page.items);
-        const body = (printed[idx] !== null ? lines.slice(1) : lines).map(l => normalize(l.text)).filter(t => t && !t.includes('indd'));
+        const body = bodyLinesOf(page, printed[idx] !== null);
         if (body.length === 0) { audit.missing.push({ page: folio, reason: 'branca' }); return; }
         const usable = body.filter(t => t.length >= MIN_ANCHOR);
         const inBody = (t: string) => flat.includes(t.slice(0, ANCHOR_LEN));
@@ -209,6 +214,58 @@ export function auditPageList(pages: PdfPageText[], html: string): PageListAudit
 
 export async function auditPageListFromPdf(data: ArrayBuffer, html: string): Promise<PageListAudit> {
     return auditPageList(await readPdfPages(data), html);
+}
+
+/** O que o PDF diz de uma página SEM marcador, em pouco espaço: o folio e as primeiras linhas de corpo que o livro também tem (âncoras de ANCHOR_LEN caracteres). Autocontido: dá para guardar num plano. */
+export interface PageLines { page: number; lines: string[] }
+const MAX_PAGE_LINES = 6;
+
+/** As páginas do PDF sem marcador no `html`, cada uma com as suas linhas que existem no corpo (as que o alinhamento pode usar). */
+export function pageLinesFromPages(pages: PdfPageText[], html: string): PageLines[] {
+    const { folios, printed } = detectFolios(pages);
+    const { flat, markers } = textIndex(new DOMParser().parseFromString(html, 'text/html'));
+    const have = new Set(markers.map(m => m.page));
+    const out: PageLines[] = [];
+    pages.forEach((page, idx) => {
+        const folio = folios[idx];
+        if (folio === null || have.has(folio)) return;
+        const lines = bodyLinesOf(page, printed[idx] !== null).filter(t => t.length >= MIN_ANCHOR).map(t => t.slice(0, ANCHOR_LEN)).filter(t => flat.includes(t));
+        if (lines.length) out.push({ page: folio, lines: lines.slice(0, MAX_PAGE_LINES) });
+    });
+    return out;
+}
+
+export async function pageLinesFromPdf(data: ArrayBuffer, html: string): Promise<PageLines[]> {
+    return pageLinesFromPages(await readPdfPages(data), html);
+}
+
+/**
+ * Corrige a lista de páginas: para cada página do PDF SEM marcador, procura no corpo a 1.ª das suas linhas que lá exista, mas só
+ * ENTRE o marcador da página anterior e o da seguinte — a janela é o que o alinhamento global não tinha (descartava-as por ficarem
+ * fora da ordem, ou a âncora era texto de figura que o corpo não tem). Só acrescenta marcadores; nunca mexe nos que já existem.
+ * Páginas sem nenhuma linha no corpo (brancas, só figura) ficam como estavam. Devolve as páginas que inseriu.
+ */
+export function fillMissingPageBreaks(html: string, pages: PageLines[]): { html: string; inserted: number[] } {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const { flat, map, markers } = textIndex(doc);
+    const have = new Set(markers.map(m => m.page));
+    const known = [...markers]; // os que já existem + os que se vão acrescentando: definem as janelas das páginas seguintes
+    const points: { node: Text; offset: number; page: number }[] = [];
+    for (const { page, lines } of [...pages].sort((a, b) => a.page - b.page)) {
+        if (have.has(page)) continue;
+        const lo = Math.max(0, ...known.filter(m => m.page < page).map(m => m.pos));
+        const hi = Math.min(flat.length, ...known.filter(m => m.page > page).map(m => m.pos));
+        for (const line of lines) {
+            const at = flat.indexOf(line, lo);
+            if (at < 0 || at >= hi) continue;
+            known.push({ page, pos: at });
+            points.push({ ...map[at], page });
+            break;
+        }
+    }
+    if (points.length === 0) return { html, inserted: [] };
+    applyMarkers(doc, points);
+    return { html: movePageBreaksToChapterStart(doc.body.innerHTML), inserted: points.map(p => p.page).sort((a, b) => a - b) };
 }
 
 // Mapa folio→página física do PDF (1-based) — mesma deteção de zona (rodapé/cabeçalho) de
@@ -246,9 +303,11 @@ export async function buildPdfLines(data: ArrayBuffer): Promise<{ y: number; tex
 // Chars que a normalização descarta (espaço, pontuação) não entram em nenhum dos dois.
 /** Texto máximo de uma entrada do Índice; um bloco maior já é corpo. */
 const INDICE_ENTRY_MAX = 150;
-function textIndex(doc: Document): { flat: string; map: { node: Text; offset: number }[] } {
+function textIndex(doc: Document): { flat: string; map: { node: Text; offset: number }[]; markers: { page: number; pos: number }[] } {
     let flat = '';
     const map: { node: Text; offset: number }[] = [];
+    // Marcadores de página já no corpo e a posição (em `flat`) onde estão; os do Índice ficam de fora (não são do corpo).
+    const markers: { page: number; pos: number }[] = [];
     const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
     // Capítulo Índice fora do alinhamento: as suas linhas repetem títulos/subtítulos do corpo e roubavam-lhes os marcadores.
     let inIndice = false;
@@ -258,6 +317,7 @@ function textIndex(doc: Document): { flat: string; map: { node: Text; offset: nu
             if (el.matches(BREAK_SELECTOR)) inIndice = isIndiceChapterTitle(el.getAttribute('data-title') ?? '');
             // Na importação ainda não há marcadores de capítulo: o Índice é só um bloco com o texto "Índice".
             else if (el.matches('p,h1,h2,h3') && isIndiceChapterTitle(el.textContent ?? '')) inIndice = true;
+            else if (!inIndice && el.matches('span.pagebreak[data-page]')) markers.push({ page: parseInt(el.getAttribute('data-page')!, 10), pos: flat.length });
             continue;
         }
         const node = n as Text;
@@ -272,7 +332,7 @@ function textIndex(doc: Document): { flat: string; map: { node: Text; offset: nu
             map.push({ node, offset: k });
         }
     }
-    return { flat, map };
+    return { flat, map, markers };
 }
 
 export interface ChapterAnchor { title: string; anchor: string }
@@ -513,8 +573,12 @@ function insertPageBreaksInSegment(html: string, anchors: PageAnchor[]): { html:
     });
     const keep = pickChain(cands);
     const inserted = keep.length;
-    const points: { node: Text; offset: number; page: number }[] = keep.map(h => ({ ...map[h.pos], page: h.page }));
-    // aplicar inserções: por nó, offsets do maior para o menor (não desloca os anteriores)
+    applyMarkers(doc, keep.map(h => ({ ...map[h.pos], page: h.page })));
+    return { html: doc.body.innerHTML, inserted };
+}
+
+/** Escreve os marcadores `<span class="pagebreak" data-page>` nos pontos dados: por nó, offsets do maior para o menor (não desloca os anteriores). */
+function applyMarkers(doc: Document, points: { node: Text; offset: number; page: number }[]): void {
     const byNode = new Map<Text, { offset: number; page: number }[]>();
     for (const p of points) (byNode.get(p.node) ?? byNode.set(p.node, []).get(p.node)!).push(p);
     for (const [node, list] of byNode) {
@@ -527,7 +591,6 @@ function insertPageBreaksInSegment(html: string, anchors: PageAnchor[]): { html:
             after.parentNode!.insertBefore(span, after);
         }
     }
-    return { html: doc.body.innerHTML, inserted };
 }
 
 // data-page="N" já inserido — usado só para saber que páginas cada passo já colocou (não

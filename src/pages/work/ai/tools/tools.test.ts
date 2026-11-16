@@ -108,3 +108,19 @@ test('check_page_list: sem PDF devolve erro a dizer para o carregar', async () =
     expect(out.is_error).toBe(true);
     expect(out.content).toContain('PDF');
 });
+
+test('preview_rules + fix_page_list: o resumo do PDF entra na operação; sem PDF é erro; aplica só os que cabem entre vizinhos', async () => {
+    const body = '<p>Texto da pagina um que esta no livro com marcador <span class="pagebreak" data-page="1"></span></p><p>Texto da pagina dois que esta no livro sem marcador algum</p><p>Texto da pagina tres que esta no livro <span class="pagebreak" data-page="3"></span>com marcador</p>';
+    const pages = [{ page: 2, lines: ['textodapaginadoisqueestano'] }];
+    const semPdf = setup([chapter('Um', body)]);
+    const erro = await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_page_list' }] }, semPdf.ctx);
+    expect(erro.is_error).toBe(true);
+    expect(erro.content).toContain('PDF');
+
+    const { ctx, proposal } = setup([chapter('Um', body)], { pageLines: async () => pages });
+    const out = JSON.parse((await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_page_list' }] }, ctx)).content);
+    expect(out.errors).toEqual([]);
+    expect(out.operations[0]).toMatchObject({ label: 'Lista de páginas', changed: true });
+    expect(out.operations[0].summary).toContain('páginas 2');
+    expect(proposal()!.ops[0]).toEqual({ type: 'fix_page_list', pages }); // a proposta leva os dados: aplicar repete o que se viu
+});

@@ -10,13 +10,20 @@ export const PREVIEW_INPUT_KEYS = ['rules', 'styles', 'style_edits', 'style_dele
 /** Simula regras, estilos e operações sobre o livro SEM alterar nada e guarda a proposta (se válida e com efeito). */
 export const previewRulesTool: AiTool = {
     name: 'preview_rules',
-    run(input, { workspace, scope, propose }) {
+    async run(input, { workspace, scope, propose }) {
         if (!Array.isArray(input.rules)) return { content: 'rules tem de ser uma lista', is_error: true };
         if (input.styles !== undefined && !Array.isArray(input.styles)) return { content: 'styles tem de ser uma lista', is_error: true };
         if (input.style_edits !== undefined && !Array.isArray(input.style_edits)) return { content: 'style_edits tem de ser uma lista', is_error: true };
         if (input.style_deletes !== undefined && !Array.isArray(input.style_deletes)) return { content: 'style_deletes tem de ser uma lista', is_error: true };
         if (input.operations !== undefined && !Array.isArray(input.operations)) return { content: 'operations tem de ser uma lista', is_error: true };
-        const ops = (input.operations ?? []) as BookOp[];
+        let ops = (input.operations ?? []) as BookOp[];
+        // fix_page_list precisa do PDF: o resumo das páginas vai DENTRO da operação (o modelo nunca o vê), por isso aplicar e
+        // reverter repetem exatamente o que se simulou.
+        if (ops.some((o) => o?.type === 'fix_page_list')) {
+            const pages = await workspace.pageLines();
+            if (!pages) return { content: 'fix_page_list precisa do PDF de impressão do livro e não há nenhum carregado (ou não foi possível lê-lo): pede ao utilizador que o carregue no painel do PDF.', is_error: true };
+            ops = ops.map((o) => (o?.type === 'fix_page_list' ? { type: 'fix_page_list' as const, pages } : o));
+        }
         if (scope && ops.length) return { content: 'Há um bloco selecionado: só podes usar regras e estilos, sem "operations" (mexem no livro todo).', is_error: true };
         const rules = (scope ? scopeRules(input.rules as BookRule[], scope) : input.rules) as BookRule[];
         const plan = planStyles((input.styles ?? []) as NewStyle[], workspace.css());

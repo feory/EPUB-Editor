@@ -8,7 +8,7 @@ import type { ValidationDigest, ValidationKind } from '../../../utils/validation
 import type { AiPlanInput } from './aiPlan';
 import type { PublicationFacts } from './publicationChecklist';
 import type { RuleBlock, SelectedBlocks } from './aiSelection';
-import type { PageListAudit } from '../../../services/page-list/page-list';
+import type { PageListAudit, PageLines } from '../../../services/page-list/page-list';
 
 export interface AiWorkspace {
     /** As partes do livro (1:1 com os capítulos) e o CSS, como estão agora. */
@@ -27,6 +27,8 @@ export interface AiWorkspace {
     publicationFacts(): Promise<PublicationFacts | null>;
     /** Cruza o PDF de impressão com os marcadores de página do livro; null se não há PDF carregado ou não foi possível lê-lo. */
     pageListAudit(): Promise<PageListAudit | null>;
+    /** As páginas do PDF sem marcador, com as linhas que o livro também tem (o que fix_page_list precisa); null sem PDF. */
+    pageLines(): Promise<PageLines[] | null>;
     /** Onde estão os blocos selecionados no editor, nas partes do livro; null se já não se encontram. */
     locate(selection: SelectedBlocks): RuleBlock | null;
 }

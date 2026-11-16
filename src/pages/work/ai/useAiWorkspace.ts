@@ -12,6 +12,15 @@ import { collectFacts } from './publicationChecklist';
 
 type Work = ReturnType<typeof useEbookWork>;
 
+/** Corre `fn` sobre o PDF de impressão do livro e o HTML atual; null se não há PDF ou não se consegue lê-lo. O pdfjs só carrega quando se pede. */
+async function withPrintPdf<T>({ isbn, work }: { isbn: string | undefined; work: Work }, fn: (pdf: ArrayBuffer, html: string, pl: typeof import('../../../services/page-list/page-list')) => Promise<T>): Promise<T | null> {
+    if (!isbn) return null;
+    const res = await ebooksApi.getPrintPdf(isbn).catch(() => null);
+    if (!res || res.status !== 200) return null;
+    const pl = await import('../../../services/page-list/page-list');
+    return fn(res.data as ArrayBuffer, work.getBookParts().join(''), pl).catch(() => null);
+}
+
 export function useAiWorkspace({ isbn, work, css }: { isbn: string | undefined; work: Work; css: AiCssSide }): AiWorkspace {
     const live = useLive({ isbn, work, css });
     return useMemo<AiWorkspace>(() => ({
@@ -32,14 +41,8 @@ export function useAiWorkspace({ isbn, work, css }: { isbn: string | undefined; 
                 indiceTitles: work.chapters.filter((c) => isIndiceChapterTitle(c.title)).map((c) => c.title),
             });
         },
-        pageListAudit: async () => {
-            const { isbn, work } = live.current;
-            if (!isbn) return null;
-            const res = await ebooksApi.getPrintPdf(isbn).catch(() => null);
-            if (!res || res.status !== 200) return null;
-            const { auditPageListFromPdf } = await import('../../../services/page-list/page-list'); // o pdfjs só carrega quando se pede
-            return auditPageListFromPdf(res.data as ArrayBuffer, work.getBookParts().join('')).catch(() => null);
-        },
+        pageListAudit: () => withPrintPdf(live.current, (pdf, html, pl) => pl.auditPageListFromPdf(pdf, html)),
+        pageLines: () => withPrintPdf(live.current, (pdf, html, pl) => pl.pageLinesFromPdf(pdf, html)),
         locate: (selection) => locateBlocks(live.current.work.getBookParts(), selection, live.current.work.activeChapterIndex),
     }), [live]);
 }

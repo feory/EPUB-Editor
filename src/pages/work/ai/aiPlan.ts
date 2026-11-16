@@ -1,12 +1,14 @@
 // Plano da IA sobre o livro: regras (book-rules.ts) e depois operações que o editor já sabe fazer (bookEdit.ts), tudo
 // em memória e em sequência. É a MESMA função na simulação (o modelo vê o efeito) e ao aplicar (o que se grava), por
 // isso o que o utilizador confirma é o que acontece. Só operações seguras: ficam de fora mover/eliminar/duplicar/criar
-// capítulos (mudam os índices a meio do plano) e a page-list (precisa de um PDF).
+// capítulos (mudam os índices a meio do plano). A lista de páginas (fix_page_list) precisa do PDF: quem a pede (a ferramenta
+// preview_rules) mete na operação o resumo das páginas (`pages`), por isso o plano continua autocontido e igual ao aplicar.
 import { runRules, type BookRule, type RuleReport } from '../../../utils/book-rules';
 import { splitChapters, classifyChapterPart } from '../../../utils/chapters';
 import { setImageAlts, type AltDecision } from '../../../utils/image-alt-scan';
 import { convertSpanStyles } from '../../../utils/inline-styles';
 import { fixTypography, TYPOGRAPHY_FIXES, type TypographyFix } from '../../../utils/typography';
+import { fillMissingPageBreaks, type PageLines } from '../../../services/page-list/page-list';
 import { applyStylePlan, planStyleRemovals, type PlannedStyle, type PlannedEdit } from '../../../utils/book-styles';
 import * as bookEdit from '../bookEdit';
 import type { Book, BookEdit } from '../bookEdit';
@@ -21,14 +23,15 @@ export type BookOp =
     | { type: 'hide_chapter'; index: number; hidden: boolean }
     | { type: 'set_image_alts'; items: AltDecision[] }
     | { type: 'inline_style_to_class'; style: Record<string, string>; cls: string; scope?: string[] }
-    | { type: 'typography'; fixes?: TypographyFix[] };
+    | { type: 'typography'; fixes?: TypographyFix[] }
+    | { type: 'fix_page_list'; pages?: PageLines[] }; // `pages` não é do modelo: a ferramenta preenche-o a partir do PDF
 
 export interface OpResult { label: string; changed: boolean; summary: string }
 export interface PlanResult { html: string; reports: RuleReport[]; opResults: OpResult[]; errors: string[] }
 
 const LABELS: Record<BookOp['type'], string> = {
     drop_caps: 'Capitulares', link_index: 'Ligar Índice', fix_links: 'Corrigir links', replace_text: 'Substituir texto',
-    rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice', set_image_alts: 'Texto alternativo', inline_style_to_class: 'Estilo inline → classe', typography: 'Tipografia',
+    rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice', set_image_alts: 'Texto alternativo', inline_style_to_class: 'Estilo inline → classe', typography: 'Tipografia', fix_page_list: 'Lista de páginas',
 };
 /** Os tipos de operação (completo por construção: LABELS é um Record). Ver server/ai-contract.test.js. */
 export const OP_TYPES = Object.keys(LABELS);
@@ -59,6 +62,7 @@ export function validateOps(ops: BookOp[]): string[] {
         if ('index' in op && !Number.isInteger(op.index)) errors.push(`${at}: "index" tem de ser um inteiro`);
         if (op.type === 'rename_chapter' && (typeof op.title !== 'string' || !op.title.trim() || op.title.length > 200 || BAD_TEXT.test(op.title))) errors.push(`${at}: título inválido`);
         if (op.type === 'set_chapter_level' && !LEVELS.includes(op.level)) errors.push(`${at}: nível tem de ser h1, h2 ou h3`);
+        if (op.type === 'fix_page_list' && (!Array.isArray(op.pages) || op.pages.length > 2000 || !op.pages.every((d) => Number.isInteger(d?.page) && Array.isArray(d.lines) && d.lines.length <= 12 && d.lines.every((l) => typeof l === 'string' && l.length <= 80)))) errors.push(`${at}: sem os dados do PDF de impressão (carrega o PDF no painel do PDF)`);
         if (op.type === 'hide_chapter' && typeof op.hidden !== 'boolean') errors.push(`${at}: "hidden" tem de ser true ou false`);
     });
     return errors;
@@ -106,6 +110,11 @@ function runOp(book: Book, op: BookOp, known?: ReadonlySet<string>): Step {
         case 'set_image_alts': {
             const { parts, changed } = setImageAlts(book.parts, op.items);
             return changed === 0 ? { summary: 'Sem imagens por escrever' } : { html: parts.join(''), summary: `${changed} ${changed === 1 ? 'imagem' : 'imagens'}` };
+        }
+        case 'fix_page_list': {
+            const { html, inserted } = fillMissingPageBreaks(book.html, op.pages ?? []);
+            if (!inserted.length) return { summary: 'Nenhum marcador para inserir (as que faltam são em branco, só figura, ou já não cabem entre os vizinhos)' };
+            return { html, summary: `${inserted.length} ${inserted.length === 1 ? 'marcador inserido' : 'marcadores inseridos'}: páginas ${inserted.join(', ')}` };
         }
         case 'hide_chapter': {
             if ((at!.level === 'break') === op.hidden) return { summary: op.hidden ? 'Já está escondido' : 'Já está visível' };
