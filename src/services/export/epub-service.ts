@@ -7,7 +7,7 @@ import { removeInaccessibleColors, removeInaccessibleCssColors } from './epub/co
 import { replaceImageUrlsInContent, stripPlaceholderImages, addImagesToArchive } from './epub/image-utils';
 import { buildSections } from './epub/chapters';
 import { generateNavXhtml, generateContentOpf, generateTocNcx, type CoverAssets } from './epub/assets';
-import { convertPageBreaks } from '../page-list/page-list';
+import { convertPageBreaks } from '../page-list/marker';
 import { buildIdToSectionMap, convertIndexLinks } from './epub/index-links';
 import { prepareTextForXml } from './epub/html-utils';
 

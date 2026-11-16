@@ -1,6 +1,7 @@
-import { readPdfPages } from './pdf-pages';
+// Confirma com o PDF de impressão as linhas em branco manuais do IDML (candidatas a p-top). Puro: recebe as páginas já lidas
+// (pdf-pages.ts), por isso o importador lê o PDF uma só vez e isto testa-se com páginas sintéticas.
+import type { PdfPageText } from './pdf-pages';
 import { normalize, buildPdfLines } from './pdf-text';
-import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from './marker';
 
 function median(nums: number[]): number {
     if (nums.length === 0) return 0;
@@ -17,16 +18,16 @@ function median(nums: number[]): number {
  * da página (>1.4×) é que fica p-top; caso contrário, ou sem PDF, fica sem p-top (mais seguro
  * que assumir).
  */
-export async function verifyBlankSpacing(html: string, data?: ArrayBuffer): Promise<string> {
+export function verifyBlankSpacing(html: string, pages?: PdfPageText[]): string {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const candidates = Array.from(doc.querySelectorAll('[data-blank-top]'));
     if (candidates.length === 0) return html;
-    if (!data) {
+    if (!pages) {
         for (const el of candidates) el.removeAttribute('data-blank-top');
         return doc.body.innerHTML;
     }
 
-    const pages = buildPdfLines(await readPdfPages(data));
+    const pdfLines = buildPdfLines(pages);
 
     for (const el of candidates) {
         el.removeAttribute('data-blank-top');
@@ -35,7 +36,7 @@ export async function verifyBlankSpacing(html: string, data?: ArrayBuffer): Prom
         // Curto (< 15, ex. nome de personagem "Hamlet") — startsWith seria ambíguo demais;
         // linha isolada de nome ocupa a linha TODA no PDF, exact match é fiável mesmo curto.
         const short = key.length < 15;
-        for (const lines of pages) {
+        for (const lines of pdfLines) {
             const idx = lines.findIndex(l => short ? l.text === key : l.text.startsWith(key));
             // idx 0 (não encontrado/1ª linha, sem anterior p/ comparar) OU 1 (1ª linha de CORPO
             // da página — a linha 0 é o cabeçalho corrente, mesma convenção de
@@ -52,17 +53,3 @@ export async function verifyBlankSpacing(html: string, data?: ArrayBuffer): Prom
     }
     return doc.body.innerHTML;
 }
-
-/**
- * Converte os marcadores do editor (`<span class="pagebreak" data-page="N">`) na forma
- * semântica do EPUB e recolhe (secção, página) para a page-list. Usado no export por secção.
- */
-export function convertPageBreaks(html: string, sectionNum: number, sink: { section: number; page: number }[]): string {
-    return html.replace(PAGEBREAK_MARKER_RE, (m) => {
-        const n = m.match(DATA_PAGE_RE)?.[1];
-        if (!n) return m;
-        sink.push({ section: sectionNum, page: parseInt(n) });
-        return `<span epub:type="pagebreak" role="doc-pagebreak" id="page-${n}" aria-label="${n}"></span>`;
-    });
-}
-

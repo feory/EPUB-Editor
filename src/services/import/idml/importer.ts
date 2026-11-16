@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../../../utils/format';
 import { insertPageBreaks, insertChapterHeadings } from '../../page-list/alignment';
-import { verifyBlankSpacing } from '../../page-list/page-list';
+import { verifyBlankSpacing } from '../../page-list/blank-spacing';
 import { readPdfPages, pdfToJpeg, getPdfPageCount, type PdfPageText } from '../../page-list/pdf-pages';
 import { anchorsFromPages, chapterAnchorsFromPages } from '../../page-list/pdf-text';
 import { buildFigures, placeFigures, toRasterName } from './figures';
@@ -601,7 +601,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     // espaçamento real com o PDF de impressão como árbitro (gap vs. entrelinha normal da página)
     // — sem PDF ficam sem p-top (mais seguro que assumir; muitos livros têm linhas em branco no
     // manuscrito sem correspondência nenhuma no miolo impresso).
-    if (detectSpacing) html = await verifyBlankSpacing(html, pdf?.slice(0));
+    if (detectSpacing) html = verifyBlankSpacing(html, pdf ? await pdfPages() : undefined);
     let pageBreaks: { inserted: number; total: number } | undefined;
     // Page-list: alinhar as páginas do PDF de impressão ao texto e inserir marcadores.
     if (pdf) {
