@@ -10,6 +10,7 @@ import type { PublicationFacts } from './publicationChecklist';
 import type { RuleBlock, SelectedBlocks } from './aiSelection';
 import type { PageListAudit } from '../../../services/page-list/audit';
 import type { PageLines } from '../../../services/page-list/alignment';
+import type { PdfStyles } from '../../../services/page-list/pdf-styles';
 
 export interface AiWorkspace {
     /** As partes do livro (1:1 com os capítulos) e o CSS, como estão agora. */
@@ -30,6 +31,8 @@ export interface AiWorkspace {
     pageListAudit(): Promise<PageListAudit | null>;
     /** As páginas do PDF sem marcador, com as linhas que o livro também tem (o que fix_page_list precisa); null sem PDF. */
     pageLines(): Promise<PageLines[] | null>;
+    /** A geometria e o estilo (margens, recuos, negrito/itálico, tamanhos) do PDF de impressão, o que fix_styles e check_styles comparam com o livro; null sem PDF. */
+    pdfStyles(): Promise<PdfStyles | null>;
     /** Onde estão os blocos selecionados no editor, nas partes do livro; null se já não se encontram. */
     locate(selection: SelectedBlocks): RuleBlock | null;
 }

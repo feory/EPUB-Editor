@@ -21,6 +21,7 @@ export function memoryWorkspace({ parts = [], css = '' }: { parts?: string[]; cs
         publicationFacts: async () => null,
         pageListAudit: async () => null,
         pageLines: async () => null,
+        pdfStyles: async () => null,
         locate: () => null,
         ...over,
     };

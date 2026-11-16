@@ -24,6 +24,11 @@ export const previewRulesTool: AiTool = {
             if (!pages) return { content: 'fix_page_list precisa do PDF de impressão do livro e não há nenhum carregado (ou não foi possível lê-lo): pede ao utilizador que o carregue no painel do PDF.', is_error: true };
             ops = ops.map((o) => (o?.type === 'fix_page_list' ? { type: 'fix_page_list' as const, pages } : o));
         }
+        if (ops.some((o) => o?.type === 'fix_styles')) {
+            const pdf = await workspace.pdfStyles();
+            if (!pdf) return { content: 'fix_styles precisa do PDF de impressão do livro e não há nenhum carregado (ou não foi possível lê-lo): pede ao utilizador que o carregue no painel do PDF.', is_error: true };
+            ops = ops.map((o) => (o?.type === 'fix_styles' ? { type: 'fix_styles' as const, kinds: o.kinds, pdf } : o));
+        }
         if (scope && ops.length) return { content: 'Há um bloco selecionado: só podes usar regras e estilos, sem "operations" (mexem no livro todo).', is_error: true };
         const rules = (scope ? scopeRules(input.rules as BookRule[], scope) : input.rules) as BookRule[];
         const plan = planStyles((input.styles ?? []) as NewStyle[], workspace.css());

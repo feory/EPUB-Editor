@@ -7,6 +7,8 @@ import { previewRulesTool } from './previewRules';
 import { runValidationTool } from './runValidation';
 import { checkPublicationTool } from './checkPublication';
 import { checkPageListTool } from './checkPageList';
+import { checkStylesTool } from './checkStyles';
+import type { PdfStyles } from '../../../../services/page-list/pdf-styles';
 import { AI_TOOLS } from './index';
 import type { Proposal, ToolContext } from './aiTool';
 import type { ValidationDigest, ValidationKind } from '../../../../utils/validation-digest';
@@ -22,7 +24,7 @@ const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = nu
 test('o registo tem uma ferramenta por nome', () => {
     const names = AI_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.sort()).toEqual(['check_page_list', 'check_publication', 'preview_rules', 'run_validation', 'survey_book']);
+    expect(names.sort()).toEqual(['check_page_list', 'check_publication', 'check_styles', 'preview_rules', 'run_validation', 'survey_book']);
 });
 
 test('survey_book: devolve o resumo do livro como está agora', () => {
@@ -123,4 +125,34 @@ test('preview_rules + fix_page_list: o resumo do PDF entra na operação; sem PD
     expect(out.operations[0]).toMatchObject({ label: 'Lista de páginas', changed: true });
     expect(out.operations[0].summary).toContain('páginas 2');
     expect(proposal()!.ops[0]).toEqual({ type: 'fix_page_list', pages }); // a proposta leva os dados: aplicar repete o que se viu
+});
+
+// Um PDF de uma página com um parágrafo recuado (x0 77 contra a margem 60) em corpo de 11 pt.
+const pdfRecuado: PdfStyles = { body: 11, pages: [{ left: 60, right: 360, gap: 14, lines: [{ key: 'textodetestecommaisdedozeletras', x0: 77, x1: 360, y: 600, size: 11, bold: false, italic: false }] }] };
+
+test('check_styles: sem PDF é erro; com PDF agrupa as diferenças por tipo', async () => {
+    expect((await checkStylesTool.run({}, setup().ctx)).is_error).toBe(true);
+    const { ctx } = setup([chapter('Um', '<p>Texto de teste com mais de doze letras</p>')], { pdfStyles: async () => pdfRecuado });
+    const out = JSON.parse((await checkStylesTool.run({}, ctx)).content);
+    expect(out.resumo).toEqual({ paragrafosVistos: 1, encontradosNoPdf: 1, comDiferencas: 1 });
+    expect(Object.keys(out.diferencas)[0]).toContain('indent');
+    expect(Object.values(out.diferencas)[0]).toMatchObject({ add: ['p-indent'], total: 1 });
+});
+
+test('preview_rules + fix_styles: o PDF entra na operação; sem PDF é erro; kinds limita o que se corrige', async () => {
+    const body = '<p>Texto de teste com mais de doze letras</p>';
+    const erro = await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_styles' }] }, setup([chapter('Um', body)]).ctx);
+    expect(erro.is_error).toBe(true);
+    expect(erro.content).toContain('PDF');
+
+    const { ctx, proposal } = setup([chapter('Um', body)], { pdfStyles: async () => pdfRecuado });
+    const out = JSON.parse((await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_styles' }] }, ctx)).content);
+    expect(out.errors).toEqual([]);
+    expect(out.operations[0]).toMatchObject({ label: 'Estilos segundo o PDF', changed: true });
+    expect(out.operations[0].summary).toContain('indentação 1');
+    expect(proposal()!.ops[0]).toEqual({ type: 'fix_styles', pdf: pdfRecuado }); // a proposta leva os dados: aplicar repete o que se viu
+
+    const so = JSON.parse((await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_styles', kinds: ['center'] }] }, ctx)).content);
+    expect(so.operations[0].changed).toBe(false);
+    expect((await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_styles', kinds: ['nada'] }] }, ctx)).content).toContain('kinds');
 });

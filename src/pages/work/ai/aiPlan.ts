@@ -9,6 +9,8 @@ import { setImageAlts, type AltDecision } from '../../../utils/image-alt-scan';
 import { convertSpanStyles } from '../../../utils/inline-styles';
 import { fixTypography, TYPOGRAPHY_FIXES, type TypographyFix } from '../../../utils/typography';
 import { fillMissingPageBreaks, type PageLines } from '../../../services/page-list/alignment';
+import { reviewStyles, STYLE_KINDS, type StyleKind } from '../../../services/page-list/style-audit';
+import type { PdfStyles } from '../../../services/page-list/pdf-styles';
 import { applyStylePlan, planStyleRemovals, type PlannedStyle, type PlannedEdit } from '../../../utils/book-styles';
 import * as bookEdit from '../bookEdit';
 import type { Book, BookEdit } from '../bookEdit';
@@ -24,14 +26,15 @@ export type BookOp =
     | { type: 'set_image_alts'; items: AltDecision[] }
     | { type: 'inline_style_to_class'; style: Record<string, string>; cls: string; scope?: string[] }
     | { type: 'typography'; fixes?: TypographyFix[] }
-    | { type: 'fix_page_list'; pages?: PageLines[] }; // `pages` não é do modelo: a ferramenta preenche-o a partir do PDF
+    | { type: 'fix_page_list'; pages?: PageLines[] } // `pages` não é do modelo: a ferramenta preenche-o a partir do PDF
+    | { type: 'fix_styles'; kinds?: StyleKind[]; pdf?: PdfStyles }; // idem `pdf`
 
 export interface OpResult { label: string; changed: boolean; summary: string }
 export interface PlanResult { html: string; reports: RuleReport[]; opResults: OpResult[]; errors: string[] }
 
 const LABELS: Record<BookOp['type'], string> = {
     drop_caps: 'Capitulares', link_index: 'Ligar Índice', fix_links: 'Corrigir links', replace_text: 'Substituir texto',
-    rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice', set_image_alts: 'Texto alternativo', inline_style_to_class: 'Estilo inline → classe', typography: 'Tipografia', fix_page_list: 'Lista de páginas',
+    rename_chapter: 'Renomear capítulo', set_chapter_level: 'Nível do capítulo', hide_chapter: 'Capítulo no Índice', set_image_alts: 'Texto alternativo', inline_style_to_class: 'Estilo inline → classe', typography: 'Tipografia', fix_page_list: 'Lista de páginas', fix_styles: 'Estilos segundo o PDF',
 };
 /** Os tipos de operação (completo por construção: LABELS é um Record). Ver server/ai-contract.test.js. */
 export const OP_TYPES = Object.keys(LABELS);
@@ -63,6 +66,12 @@ export function validateOps(ops: BookOp[]): string[] {
         if (op.type === 'rename_chapter' && (typeof op.title !== 'string' || !op.title.trim() || op.title.length > 200 || BAD_TEXT.test(op.title))) errors.push(`${at}: título inválido`);
         if (op.type === 'set_chapter_level' && !LEVELS.includes(op.level)) errors.push(`${at}: nível tem de ser h1, h2 ou h3`);
         if (op.type === 'fix_page_list' && (!Array.isArray(op.pages) || op.pages.length > 2000 || !op.pages.every((d) => Number.isInteger(d?.page) && Array.isArray(d.lines) && d.lines.length <= 12 && d.lines.every((l) => typeof l === 'string' && l.length <= 80)))) errors.push(`${at}: sem os dados do PDF de impressão (carrega o PDF no painel do PDF)`);
+        if (op.type === 'fix_styles') {
+            if (op.kinds !== undefined && (!Array.isArray(op.kinds) || !op.kinds.length || !op.kinds.every((k) => (STYLE_KINDS as readonly string[]).includes(k)))) errors.push(`${at}: "kinds" tem de ser uma lista de ${STYLE_KINDS.join('/')}`);
+            const finite = (n: unknown) => typeof n === 'number' && Number.isFinite(n);
+            const ok = (l: PdfStyles['pages'][number]['lines'][number]) => typeof l?.key === 'string' && [l.x0, l.x1, l.y, l.size].every(finite) && typeof l.bold === 'boolean' && typeof l.italic === 'boolean';
+            if (!op.pdf || !finite(op.pdf.body) || !Array.isArray(op.pdf.pages) || op.pdf.pages.length > 2000 || !op.pdf.pages.every((p) => [p?.left, p?.right, p?.gap].every(finite) && Array.isArray(p.lines) && p.lines.length <= 300 && p.lines.every(ok))) errors.push(`${at}: sem os dados do PDF de impressão (carrega o PDF no painel do PDF)`);
+        }
         if (op.type === 'hide_chapter' && typeof op.hidden !== 'boolean') errors.push(`${at}: "hidden" tem de ser true ou false`);
     });
     return errors;
@@ -115,6 +124,13 @@ function runOp(book: Book, op: BookOp, known?: ReadonlySet<string>): Step {
             const { html, inserted } = fillMissingPageBreaks(book.html, op.pages ?? []);
             if (!inserted.length) return { summary: 'Nenhum marcador para inserir (as que faltam são em branco, só figura, ou já não cabem entre os vizinhos)' };
             return { html, summary: `${inserted.length} ${inserted.length === 1 ? 'marcador inserido' : 'marcadores inseridos'}: páginas ${inserted.join(', ')}` };
+        }
+        case 'fix_styles': {
+            const { html, diffs } = reviewStyles(book.html, op.pdf!, op.kinds);
+            if (!diffs.length) return { summary: 'O estilo dos parágrafos já bate com o PDF (nos que se encontraram nele)' };
+            const NAMES: Record<StyleKind, string> = { indent: 'indentação', emphasis: 'negrito/itálico', center: 'centrado', small: 'letra pequena', spacing: 'espaço acima' };
+            const what = STYLE_KINDS.map((k) => [k, diffs.filter((d) => d.kind === k).length] as const).filter(([, n]) => n).map(([k, n]) => `${NAMES[k]} ${n}`).join(', ');
+            return { html, summary: `${diffs.length} ${diffs.length === 1 ? 'parágrafo corrigido' : 'correções'} (${what})` };
         }
         case 'hide_chapter': {
             if ((at!.level === 'break') === op.hidden) return { summary: op.hidden ? 'Já está escondido' : 'Já está visível' };

@@ -184,3 +184,13 @@ test('fix_page_list: sem os dados do PDF o plano recusa; com eles insere (é o q
     expect(r.opResults[0]).toMatchObject({ label: 'Lista de páginas', changed: true });
     expect(r.html).toContain('<span class="pagebreak" data-page="2"></span>Linha que abre a pagina dois');
 });
+
+test('fix_styles: sem os dados do PDF (ou com tipos inválidos) o plano recusa; com eles corrige', () => {
+    const parts = ['<p class="chapter-break-h1" data-title="Um"></p><h1>Um</h1><p>Texto de teste com mais de doze letras</p>'];
+    expect(runPlan(parts, [], [{ type: 'fix_styles' }]).errors[0]).toContain('PDF');
+    const pdf = { body: 11, pages: [{ left: 60, right: 360, gap: 14, lines: [{ key: 'textodetestecommaisdedozeletras', x0: 77, x1: 360, y: 600, size: 11, bold: false, italic: false }] }] };
+    expect(runPlan(parts, [], [{ type: 'fix_styles', pdf, kinds: ['x' as 'indent'] }]).errors[0]).toContain('kinds');
+    const r = runPlan(parts, [], [{ type: 'fix_styles', pdf }]);
+    expect(r.errors).toEqual([]);
+    expect(r.html).toContain('<p class="p-indent">Texto de teste');
+});

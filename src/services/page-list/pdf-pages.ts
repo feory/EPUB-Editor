@@ -11,14 +11,37 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 
 // Texto de cada página do PDF (itens do pdfjs + altura) — a ÚNICA leitura do ficheiro; tudo o resto trabalha sobre isto.
-export interface PdfPageText { vpH: number; items: { str: string; transform: number[] }[] }
+// `width` e `font` (negrito/itálico, lidos do nome da fonte) só interessam ao estilo (pdf-styles.ts); a lista de páginas ignora-os.
+export interface PdfPageText { vpH: number; items: { str: string; transform: number[]; width?: number; font?: { bold: boolean; italic: boolean } }[] }
+
+/** Negrito/itálico a partir do nome da fonte do PDF ("Foo-BoldItalic", "Foo Semibold Oblique"…). */
+export function fontStyleOf(name: string): { bold: boolean; italic: boolean } {
+    return { bold: /bold|black|heavy|semibold|demi/i.test(name), italic: /italic|oblique/i.test(name) };
+}
+
 export async function readPdfPages(data: ArrayBuffer): Promise<PdfPageText[]> {
     const pdf = await pdfjsLib.getDocument({ data }).promise;
     const pages: PdfPageText[] = [];
+    const byFont = new Map<string, { bold: boolean; italic: boolean }>(); // id interno do pdfjs → estilo (cache por documento)
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const vpH = page.getViewport({ scale: 1 }).height;
-        const items = (await page.getTextContent()).items as PdfPageText['items'];
+        const content = await page.getTextContent();
+        const texts = content.items as { str: string; transform: number[]; width: number; fontName: string }[];
+        // O nome real da fonte ("…SourceSansPro-Bold") só existe em commonObjs depois de o pdfjs carregar as fontes da página, o
+        // que o getTextContent não faz: uma vez por fonte nova, pede-se a lista de operadores dessa página (as fontes são do documento todo).
+        if (texts.some((t) => t.str && !byFont.has(t.fontName))) await page.getOperatorList();
+        const items = texts.map((t) => {
+            if (!t.str) return { str: t.str, transform: t.transform };
+            let font = byFont.get(t.fontName);
+            if (!font) {
+                let real: string | undefined;
+                try { real = page.commonObjs.has(t.fontName) ? page.commonObjs.get(t.fontName)?.name : undefined; } catch { /* não resolvida */ }
+                font = fontStyleOf(real ?? '');
+                byFont.set(t.fontName, font);
+            }
+            return { str: t.str, transform: t.transform, width: t.width, font };
+        });
         pages.push({ vpH, items });
     }
     return pages;
