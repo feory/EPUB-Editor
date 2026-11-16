@@ -2,6 +2,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { fillFolioGaps, dropFolioOutliers } from './folio';
 import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from './marker';
 import { splitChapterSegments } from '../../utils/chapters';
+import { isIndiceChapterTitle } from '../../utils/indice-links';
 
 // Worker partilhado com o pdf-service (já configurado lá); reconfigurar é idempotente.
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -192,11 +193,26 @@ export async function buildPdfLines(data: ArrayBuffer): Promise<{ y: number; tex
 // Índice do texto do corpo: todos os text nodes achatados numa string normalizada (`flat`) e, por posição nela,
 // o nó e o offset de origem (`map[pos]`) — para inserir marcadores no ponto exato onde uma âncora casa.
 // Chars que a normalização descarta (espaço, pontuação) não entram em nenhum dos dois.
+/** Texto máximo de uma entrada do Índice; um bloco maior já é corpo. */
+const INDICE_ENTRY_MAX = 150;
 function textIndex(doc: Document): { flat: string; map: { node: Text; offset: number }[] } {
     let flat = '';
     const map: { node: Text; offset: number }[] = [];
-    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    // Capítulo Índice fora do alinhamento: as suas linhas repetem títulos/subtítulos do corpo e roubavam-lhes os marcadores.
+    let inIndice = false;
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (n.nodeType === 1) {
+            const el = n as Element;
+            if (el.matches('p[class*="chapter-break"]')) inIndice = isIndiceChapterTitle(el.getAttribute('data-title') ?? '');
+            // Na importação ainda não há marcadores de capítulo: o Índice é só um bloco com o texto "Índice".
+            else if (el.matches('p,h1,h2,h3') && isIndiceChapterTitle(el.textContent ?? '')) inIndice = true;
+            continue;
+        }
+        const node = n as Text;
+        // O Índice acaba no 1.º bloco longo (entradas são curtas); nem sempre há outro marcador de capítulo a seguir.
+        if (inIndice && (node.parentElement?.closest('p,div,li,h1,h2,h3,h4,h5,h6')?.textContent ?? '').length > INDICE_ENTRY_MAX) inIndice = false;
+        if (inIndice) continue;
         const raw = node.textContent ?? '';
         for (let k = 0; k < raw.length; k++) {
             const nc = normalize(raw[k]);

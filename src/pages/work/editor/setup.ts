@@ -342,8 +342,12 @@ export function createEditorSetup(deps: SetupDeps) {
                 for (let c = block.parentElement?.closest(CONTAINER_SELECTOR); c; c = c.parentElement?.closest(CONTAINER_SELECTOR)) anchor = c as HTMLElement;
                 return anchor;
             });
+            // A <div> só com marcador de página (movePageBreaksToChapterStart) fica entre o marcador de capítulo e o
+            // heading: saltá-la, senão o marcador existente não é achado e cria-se um 2.º (capítulo duplicado).
+            const isPageHolder = (el: Element) => el.nodeName === 'DIV' && !!el.querySelector('span.pagebreak') && !(el.textContent || '').replace(/\u00a0/g, '').trim();
             const prevMarker = (anchor: HTMLElement) => {
-                const prev = anchor.previousElementSibling as HTMLElement | null;
+                let prev = anchor.previousElementSibling as HTMLElement | null;
+                while (prev && isPageHolder(prev)) prev = prev.previousElementSibling as HTMLElement | null;
                 return prev && prev.nodeName === 'P' && isLevelMarkerClass(prev.className) ? prev : null;
             };
             const plan = planChapterMarkers(blocks.map((block, i) => ({

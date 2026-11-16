@@ -279,6 +279,28 @@ function titleBlockSearchKey(rc: RenderContext, xml: string): string {
     return lines.slice(0, 2).join(' ');
 }
 
+// Abertura "PARTE N"/"CAPÍTULO N": o número vem numa story de 1 frame e o título (+ subtítulo) na story seguinte.
+const OPENER_RE = /^(parte|cap[ií]tulo)\s+([ivxlcdm]+|\d+)$/i;
+const plain = (html: string) => html.replace(/<[^>]+>/g, '').trim();
+
+function storyLines(rc: RenderContext, xml: string): string[] {
+    const story = new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('Story')[0];
+    const throwaway: NoteCounter = { n: 0, star: 0, defs: [] };
+    const lines: string[] = [];
+    for (const psr of Array.from(story?.children ?? [])) {
+        if (psr.tagName !== 'ParagraphStyleRange') continue;
+        for (const seg of renderPsr(rc, psr, throwaway)) if (plain(seg.text)) lines.push(seg.text.trim());
+    }
+    return lines;
+}
+
+// [0]="CAPÍTULO N", [1]=título → <h1>; o resto (subtítulo) → parágrafo itálico centrado.
+function renderOpening(lines: string[]): { html: string; searchKey: string } {
+    const heading = lines.slice(0, 2).join('<br>');
+    const rest = lines.slice(2).map(l => `<p class="p-center p-italic">${l}</p>`);
+    return { html: [`<h1>${heading}</h1>`, ...rest].join('\n'), searchKey: lines.slice(0, 2).map(plain).join(' ') };
+}
+
 // Renderiza o bloco de título: nº + título → <h1> simples (modelo 0.9.3.4+: o marcador
 // chapter-break-h1 é inserido ANTES pelo insertChapterMarkers e o heading fica intacto;
 // um <h1 class="chapter-break"> seria tratado como quebra SEM título e o texto sumiria).
@@ -435,6 +457,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     const frontTexts: string[] = []; // frontespício: texto solto heurístico (título vivo, caso raro)
     const partBlocks: { html: string; searchKey: string }[] = []; // divisórias "PARTE N" a repor por âncora do PDF
     let fichaDone = false;
+    let opening: string[] | null = null; // "CAPÍTULO N" à espera da story do título
 
     // Livros divididos em vários docs InDesign → processar cada .idml por ordem e concatenar.
     for (const idmlZip of idmlZips) {
@@ -475,6 +498,21 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
                 if (html) parts.push(html);
                 continue;
             }
+            // Abertura "PARTE N"/"CAPÍTULO N" (stories de 1 frame, fora do corpo encadeado): agrupa o nº com a story
+            // do título que se lhe segue; reposta no sítio pela página de abertura do PDF (partBlocks).
+            if (!threaded) {
+                const lines = storyLines(rc, xml);
+                if (lines.length && OPENER_RE.test(plain(lines[0]))) {
+                    if (lines.length >= 2) partBlocks.push(renderOpening(lines)); else opening = lines;
+                    continue;
+                }
+                if (opening && lines.length > 0 && lines.length <= 3) {
+                    partBlocks.push(renderOpening([...opening, ...lines]));
+                    opening = null;
+                    continue;
+                }
+            }
+            opening = null;
             if (!threaded && !STRUCTURAL_STYLES.test(xml) && !hasUserMappedStyle(xml, mapping)) {
                 // Epígrafe/citação de abertura (story 1 frame com recuo de bloco).
                 if (isBlockQuoteStory(xml)) {
