@@ -115,3 +115,17 @@ test('hideChapterPart / showChapterPart: esconde do Índice com [hidden] e volta
     expect(shown).toBe(part); // ida e volta devolve o original (sem título duplicado)
     expect(classifyChapterPart(shown, 0)).toEqual({ title: 'Cap Um', level: 'h1' });
 });
+
+test('changeChapterLevel: h1 → h2 com a <div> do marcador de página entre o marcador e o heading não duplica o título', () => {
+    const part = '<p class="chapter-break-h1" data-title="Cap"></p><div><span class="pagebreak" data-page="9"></span>&nbsp;</div><h1>Cap</h1><p>texto</p>';
+    const out = changeChapterLevel(part, 'h2');
+    expect(out).toBe('<p class="chapter-break-h2" data-title="Cap"></p><div><span class="pagebreak" data-page="9"></span>&nbsp;</div><h2>Cap</h2><p>texto</p>');
+    expect(out.match(/<h[123]/g)).toHaveLength(1);
+});
+
+test('changeChapterLevel: âncora de capítulo entre o marcador e o heading também é saltada', () => {
+    const part = '<p class="chapter-break-h1" data-title="Cap"></p><p class="chapter-anchor" id="idx-anchor-1"></p><h1>Cap</h1><p>x</p>';
+    const out = changeChapterLevel(part, 'h2');
+    expect(out.match(/<h[123]/g)).toHaveLength(1);
+    expect(out).toContain('<p class="chapter-anchor" id="idx-anchor-1"></p><h2>Cap</h2>');
+});

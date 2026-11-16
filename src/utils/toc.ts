@@ -80,6 +80,10 @@ export function renameChapterPart(part: string, newTitle: string): string {
     return retitleMarkerTag(open, safe) + part.slice(open.length);
 }
 
+// Blocos que podem ficar entre o marcador de capítulo e o seu heading: a <div> do marcador de página (movePageBreaksToChapterStart),
+// o parágrafo só com um marcador de página e a âncora de capítulo.
+const LEADING_FILLER_RE = /^(?:\s*(?:<div>\s*<span class="pagebreak"[^>]*><\/span>(?:&nbsp;|\u00a0|\s)*<\/div>|<p>\s*<span class="pagebreak"[^>]*><\/span>\s*<\/p>|<p\b[^>]*class="[^"]*chapter-anchor[^"]*"[^>]*>\s*<\/p>))*/i;
+
 /**
  * Muda o nível de uma parte de capítulo (h1/h2/h3/break), preservando o título.
  *  - heading → `break`: heading vira `<p>` comum, marcador perde o sufixo -hN.
@@ -92,18 +96,22 @@ export function changeChapterLevel(part: string, newLevel: Level): string {
     if (!boundary) return part;
 
     const title = boundary.title;
-    const rest = part.slice(boundary.raw.length);
+    // O heading nem sempre vem logo a seguir ao marcador: pode haver a <div> do marcador de página ou uma âncora de capítulo
+    // pelo meio. Sem os saltar, achava-se que não havia heading e criava-se um 2.º com o título (h1 e h2 duplicados).
+    const afterMarker = part.slice(boundary.raw.length);
+    const lead = afterMarker.match(LEADING_FILLER_RE)![0];
+    const rest = afterMarker.slice(lead.length);
     const headingMatch = rest.match(/^\s*<(h[123])[^>]*>([\s\S]*?)<\/\1>/i);
 
     if (newLevel === 'break') {
         const newRest = headingMatch ? `<p>${headingMatch[2]}</p>${rest.slice(headingMatch[0].length)}` : rest;
-        return `${chapterMarkerHtml(null, title)}${newRest}`;
+        return `${chapterMarkerHtml(null, title)}${lead}${newRest}`;
     }
 
     const n = newLevel.slice(1);
     const newMarker = chapterMarkerHtml(`h${n}` as 'h1' | 'h2' | 'h3', title);
-    if (headingMatch) return `${newMarker}<h${n}>${headingMatch[2]}</h${n}>${rest.slice(headingMatch[0].length)}`;
-    return `${newMarker}<h${n}>${title}</h${n}>${rest}`;
+    if (headingMatch) return `${newMarker}${lead}<h${n}>${headingMatch[2]}</h${n}>${rest.slice(headingMatch[0].length)}`;
+    return `${newMarker}<h${n}>${title}</h${n}>${afterMarker}`;
 }
 
 /**
