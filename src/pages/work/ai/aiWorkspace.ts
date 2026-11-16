@@ -8,6 +8,7 @@ import type { ValidationDigest, ValidationKind } from '../../../utils/validation
 import type { AiPlanInput } from './aiPlan';
 import type { PublicationFacts } from './publicationChecklist';
 import type { RuleBlock, SelectedBlocks } from './aiSelection';
+import type { PageListAudit } from '../../../services/page-list/page-list';
 
 export interface AiWorkspace {
     /** As partes do livro (1:1 com os capítulos) e o CSS, como estão agora. */
@@ -24,6 +25,8 @@ export interface AiWorkspace {
     validate(kind: ValidationKind): Promise<ValidationDigest | null>;
     /** Os dados do livro para a lista de verificação antes de exportar; null se não foi possível. */
     publicationFacts(): Promise<PublicationFacts | null>;
+    /** Cruza o PDF de impressão com os marcadores de página do livro; null se não há PDF carregado ou não foi possível lê-lo. */
+    pageListAudit(): Promise<PageListAudit | null>;
     /** Onde estão os blocos selecionados no editor, nas partes do livro; null se já não se encontram. */
     locate(selection: SelectedBlocks): RuleBlock | null;
 }

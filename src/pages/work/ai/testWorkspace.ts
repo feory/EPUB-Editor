@@ -19,6 +19,7 @@ export function memoryWorkspace({ parts = [], css = '' }: { parts?: string[]; cs
         restore: async (change) => { calls.push(`restore:${change.id}`); return true; },
         validate: async () => null,
         publicationFacts: async () => null,
+        pageListAudit: async () => null,
         locate: () => null,
         ...over,
     };

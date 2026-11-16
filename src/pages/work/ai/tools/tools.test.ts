@@ -6,6 +6,7 @@ import { surveyBookTool } from './surveyBook';
 import { previewRulesTool } from './previewRules';
 import { runValidationTool } from './runValidation';
 import { checkPublicationTool } from './checkPublication';
+import { checkPageListTool } from './checkPageList';
 import { AI_TOOLS } from './index';
 import type { Proposal, ToolContext } from './aiTool';
 import type { ValidationDigest, ValidationKind } from '../../../../utils/validation-digest';
@@ -21,7 +22,7 @@ const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = nu
 test('o registo tem uma ferramenta por nome', () => {
     const names = AI_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.sort()).toEqual(['check_publication', 'preview_rules', 'run_validation', 'survey_book']);
+    expect(names.sort()).toEqual(['check_page_list', 'check_publication', 'preview_rules', 'run_validation', 'survey_book']);
 });
 
 test('survey_book: devolve o resumo do livro como está agora', () => {
@@ -90,4 +91,20 @@ test('preview_rules com style_deletes: propõe apagar o que nada usa; em uso é 
     expect(bad.errors[0]).toContain('está em uso');
     expect(proposal()).toBeNull();
     expect((await previewRulesTool.run({ rules: [], style_deletes: 'p-velho' }, ctx)).is_error).toBe(true);
+});
+
+test('check_page_list: agrupa as páginas sem marcador pelo motivo', async () => {
+    const audit = { pagesWithFolio: 10, marked: 7, withoutFolio: 2, missing: [{ page: 56, reason: 'branca' as const }, { page: 43, reason: 'figura' as const }, { page: 68, reason: 'fora-de-ordem' as const }], orphanMarkers: [4] };
+    const { ctx } = setup([], { pageListAudit: async () => audit });
+    const out = JSON.parse((await checkPageListTool.run({}, ctx)).content);
+    expect(out.resumo).toEqual({ paginasComFolio: 10, comMarcador: 7, semMarcador: 3, paginasSemFolio: 2 });
+    expect(Object.values(out.semMarcador)).toEqual([[56], [43], [68]]);
+    expect(out.marcadoresSemPaginaNoPdf).toEqual([4]);
+});
+
+test('check_page_list: sem PDF devolve erro a dizer para o carregar', async () => {
+    const { ctx } = setup();
+    const out = await checkPageListTool.run({}, ctx);
+    expect(out.is_error).toBe(true);
+    expect(out.content).toContain('PDF');
 });

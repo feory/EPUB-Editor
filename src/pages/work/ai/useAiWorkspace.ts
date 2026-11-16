@@ -32,6 +32,14 @@ export function useAiWorkspace({ isbn, work, css }: { isbn: string | undefined; 
                 indiceTitles: work.chapters.filter((c) => isIndiceChapterTitle(c.title)).map((c) => c.title),
             });
         },
+        pageListAudit: async () => {
+            const { isbn, work } = live.current;
+            if (!isbn) return null;
+            const res = await ebooksApi.getPrintPdf(isbn).catch(() => null);
+            if (!res || res.status !== 200) return null;
+            const { auditPageListFromPdf } = await import('../../../services/page-list/page-list'); // o pdfjs só carrega quando se pede
+            return auditPageListFromPdf(res.data as ArrayBuffer, work.getBookParts().join('')).catch(() => null);
+        },
         locate: (selection) => locateBlocks(live.current.work.getBookParts(), selection, live.current.work.activeChapterIndex),
     }), [live]);
 }

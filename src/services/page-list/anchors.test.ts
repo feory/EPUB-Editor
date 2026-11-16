@@ -32,3 +32,23 @@ test('anchorsFromPages: sem folio nem interpolável (front-matter) não gera ân
     const noFolio = { vpH: H, items: [it('Folha de rosto sem numeracao nenhuma aqui', 50, 600)] };
     expect(anchorsFromPages([noFolio])).toEqual([]);
 });
+
+const { auditPageList } = await import('./page-list');
+
+test('auditPageList: marcada, em branco, figura, abre com figura e fora de ordem', () => {
+    const pages = [
+        page(1, ['Texto da pagina um que esta no livro com marcador']),
+        page(2, []),                                              // só cabeçalho + folio, e a marca do InDesign
+        page(3, ['ROTULO DE FIGURA QUE SO EXISTE NA IMAGEM AQUI']),
+        page(4, ['Texto da pagina quatro que esta no livro sem marcador']),
+        page(5, ['ROTULO DE FIGURA QUE O LIVRO NAO TEM AQUI', 'Texto da pagina cinco que esta no livro depois da figura']),
+    ];
+    pages[1].items.push(it('Marketing 7.indd 2', 50, 20));
+    const html = '<p>Texto da pagina um <span class="pagebreak" data-page="1"></span>que esta no livro com marcador</p>'
+        + '<p>Texto da pagina quatro que esta no livro sem marcador</p><p>Texto da pagina cinco que esta no livro depois da figura</p><p><span class="pagebreak" data-page="99"></span></p>';
+    const a = auditPageList(pages, html);
+    expect(a.marked).toBe(1);
+    expect(a.missing).toEqual([{ page: 2, reason: 'branca' }, { page: 3, reason: 'figura' }, { page: 4, reason: 'fora-de-ordem' }, { page: 5, reason: 'abre-com-figura' }]);
+    expect(a.orphanMarkers).toEqual([99]);
+    expect(a.pagesWithFolio).toBe(a.marked + a.missing.length);
+});

@@ -161,6 +161,56 @@ export function anchorsFromPages(pages: PdfPageText[]): PageAnchor[] {
     return anchors;
 }
 
+/** Porque é que uma página do PDF ficou sem marcador na lista de páginas. */
+export type MissingReason = 'branca' | 'figura' | 'abre-com-figura' | 'fora-de-ordem';
+export interface PageListAudit {
+    /** Páginas do PDF com folio (impresso ou interpolado): as que a lista de páginas devia cobrir. */
+    pagesWithFolio: number;
+    /** Dessas, as que têm marcador no livro. */
+    marked: number;
+    /** Páginas do PDF sem folio (front-matter): não entram na lista. */
+    withoutFolio: number;
+    missing: { page: number; reason: MissingReason }[];
+    /** Marcadores no livro cujo folio não existe no PDF. */
+    orphanMarkers: number[];
+}
+
+/**
+ * "O que falta na lista de páginas?": cruza as páginas do PDF com os marcadores do livro e diz, para cada página sem marcador,
+ * porquê — `branca` (só folio e marcas do InDesign), `figura` (há texto, mas nenhuma linha dele está no corpo: o texto vive na
+ * imagem), `abre-com-figura` (a 1.ª linha, a âncora, é texto de figura que o corpo não tem, mas o resto da página ESTÁ no livro) ou
+ * `fora-de-ordem` (a âncora está no livro e o alinhamento descartou-a por ficar fora da ordem do PDF).
+ * Só lê; não altera nada.
+ */
+export function auditPageList(pages: PdfPageText[], html: string): PageListAudit {
+    const { folios, printed } = detectFolios(pages);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const markers = new Set([...doc.body.querySelectorAll('span.pagebreak[data-page]')].map(el => parseInt(el.getAttribute('data-page') ?? '', 10)).filter(n => !isNaN(n)));
+    const { flat } = textIndex(doc);
+    const audit: PageListAudit = { pagesWithFolio: 0, marked: 0, withoutFolio: 0, missing: [], orphanMarkers: [] };
+    const inPdf = new Set<number>();
+    pages.forEach((page, idx) => {
+        const folio = folios[idx];
+        if (folio === null) { audit.withoutFolio++; return; }
+        audit.pagesWithFolio++;
+        inPdf.add(folio);
+        if (markers.has(folio)) { audit.marked++; return; }
+        const lines = pdfLines(page.items);
+        const body = (printed[idx] !== null ? lines.slice(1) : lines).map(l => normalize(l.text)).filter(t => t && !t.includes('indd'));
+        if (body.length === 0) { audit.missing.push({ page: folio, reason: 'branca' }); return; }
+        const usable = body.filter(t => t.length >= MIN_ANCHOR);
+        const inBody = (t: string) => flat.includes(t.slice(0, ANCHOR_LEN));
+        const reason: MissingReason = !usable.some(inBody) ? 'figura' : !inBody(usable[0]) ? 'abre-com-figura' : 'fora-de-ordem';
+        audit.missing.push({ page: folio, reason });
+    });
+    audit.orphanMarkers = [...markers].filter(n => !inPdf.has(n)).sort((a, b) => a - b);
+    return audit;
+}
+
+export async function auditPageListFromPdf(data: ArrayBuffer, html: string): Promise<PageListAudit> {
+    return auditPageList(await readPdfPages(data), html);
+}
+
 // Mapa folio→página física do PDF (1-based) — mesma deteção de zona (rodapé/cabeçalho) de
 // extractPdfPageAnchors, para código que precisa de saber EM QUE página do ficheiro está um
 // folio (ex. placeFiguresByPosition em idml/figures.ts, que recebe o folio via Page/Name do
