@@ -226,7 +226,8 @@ const BoxSection: React.FC<{
 };
 
 // Estilos combináveis de um parágrafo/item (tudo o que não é título nem o 'Padrão').
-const COMBINABLE_STYLES = BLOCK_STYLE_OPTIONS.filter(([f]) => !/^(h[1-3]|p)$/.test(f));
+// 'p-center'/'p-bottom' não são estilos do menu, mas o bloco pode tê-los (importação): sem chip não se tiravam.
+const COMBINABLE_STYLES: Array<readonly [string, string]> = [...BLOCK_STYLE_OPTIONS.filter(([f]) => !/^(h[1-3]|p)$/.test(f)), ['p-bottom', 'Baixo'], ['p-center', 'Centrado']];
 
 // "Criar estilo…": botão + formulário (nome + os campos de texto) que cria a classe no CSS do livro.
 // O estado (`draft`) vive em TextSection: com o formulário aberto os campos do bloco/regra atual escondem-se.
@@ -275,7 +276,9 @@ const StyleChips: React.FC<{
     classes: string[]; css: string; onToggle: (cls: string, on: boolean) => void;
 }> = ({ classes, css, onToggle }) => {
     const all: Array<readonly [string, string]> = [...COMBINABLE_STYLES, ...paragraphStyles.list(css).map((c) => [c, c] as const)];
-    const active = all.filter(([f]) => classes.includes(f));
+    // Todas as classes do bloco aparecem (também as sem rótulo, p.ex. vindas da importação): sem chip não se tiram.
+    const known = new Set(all.map(([f]) => f));
+    const active = [...all.filter(([f]) => classes.includes(f)), ...classes.filter((c) => !known.has(c)).map((c) => [c, c] as const)];
     const free = all.filter(([f]) => !classes.includes(f));
     return (
         <div className="flex flex-wrap items-center gap-1.5">
@@ -476,13 +479,13 @@ const TextSection: React.FC<{
                             {!draft && <NewStyleButton onOpen={startDraft} />}
                         </div>
                         {!draft && selector.startsWith('.') && paragraphStyles.list(css).includes(selector.slice(1)) && (
-                            <StyleNameField key={selector} cls={selector.slice(1)} onRename={(newCls) => {
+                            <StyleNameField key={`nome-${selector}`} cls={selector.slice(1)} onRename={(newCls) => {
                                 const err = onRenameStyle(selector.slice(1), newCls);
                                 if (!err) setPicked(`.${newCls}`);
                                 return err;
                             }} />
                         )}
-                        {!draft && selector && <TextFields key={selector} value={textPropsFrom(readRule(css, selector))} defaults={defaults} onChange={(patch) => onStyle(selector, patch)} />}
+                        {!draft && selector && <TextFields key={`campos-${selector}`} value={textPropsFrom(readRule(css, selector))} defaults={defaults} onChange={(patch) => onStyle(selector, patch)} />}
                     </>
                 )}
             </Section>

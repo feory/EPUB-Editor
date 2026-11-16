@@ -176,3 +176,30 @@ test('retag para h2 cria o marcador de capítulo antes do título (a fronteira t
     expect(reports[0].changed).toBe(1);
     expect(runRules(parts, [rule]).reports[0].changed).toBe(0); // idempotente: já não há h3 com esse texto
 });
+
+test('afterClass: só o parágrafo a seguir a um bloco com TODAS as classes; ignora os com outro estilo via noClass', () => {
+    const rule: BookRule = { select: { tag: ['p'], afterClass: ['p-top', 'p-bottom', 'p-bold'], noClass: ['p-center'] }, action: { type: 'addClass', value: 'p-indent' } };
+    const parts = [chapter('Um',
+        '<p class="p-top p-bottom p-bold">Sub</p><p>a</p><p>b</p>'
+        + '<p class="p-top p-bold">Meio</p><p>c</p>'
+        + '<p class="p-top p-bottom p-bold">Sub2</p><p class="p-center">d</p>')];
+    const out = runRules(parts, [rule]).parts[0];
+    expect(out).toContain('<p class="p-indent">a</p><p>b</p>');
+    expect(out).toContain('<p>c</p>'); // o bloco anterior só tem p-top + p-bold
+    expect(out).toContain('<p class="p-center">d</p>');
+    expect(validateRules([{ ...rule, select: { ...rule.select, deep: true } }]).length).toBeGreaterThan(0);
+});
+
+test('afterClass + following: todos os parágrafos até ao próximo bloco igual, título ou fim do capítulo', () => {
+    const rule: BookRule = { select: { tag: ['p'], afterClass: ['p-top', 'p-bottom', 'p-bold'], following: true, noClass: ['p-center'] }, action: { type: 'addClass', value: 'p-indent' } };
+    const sub = 'class="p-top p-bottom p-bold"';
+    const parts = [
+        chapter('Um', `<p ${sub}>S1</p><p>a</p><p>b</p><p class="p-center">c</p><p>d</p><p ${sub}>S2</p><p>e</p><h3>T</h3><p>f</p>`),
+        chapter('Dois', '<p>g</p>'),
+    ];
+    const out = runRules(parts, [rule]).parts;
+    expect(out[0]).toContain('<p class="p-indent">a</p><p class="p-indent">b</p><p class="p-center">c</p><p class="p-indent">d</p>');
+    expect(out[0]).toContain('<p class="p-indent">e</p><h3>T</h3><p>f</p>'); // o h3 fecha a zona
+    expect(out[1]).toContain('<p>g</p>'); // outro capítulo: não herda
+    expect(validateRules([{ select: { tag: ['p'], following: true }, action: rule.action }]).length).toBeGreaterThan(0);
+});

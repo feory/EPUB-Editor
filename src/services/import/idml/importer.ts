@@ -296,8 +296,13 @@ function storyLines(rc: RenderContext, xml: string): string[] {
 
 // [0]="CAPÍTULO N", [1]=título → <h1>; o resto (subtítulo) → parágrafo itálico centrado.
 function renderOpening(lines: string[]): { html: string; searchKey: string } {
-    const heading = lines.slice(0, 2).join('<br>');
-    const rest = lines.slice(2).map(l => `<p class="p-center p-italic">${l}</p>`);
+    // Redundante: o <h1> já é negrito e p-italic já dá o itálico — só se o <strong>/<em> envolver a linha toda (UM, de ponta a ponta).
+    const unwrap = (l: string, tag: 'strong' | 'em') => {
+        const m = new RegExp(`^<${tag}>([\\s\\S]*)</${tag}>$`).exec(l);
+        return m && !new RegExp(`</?${tag}>`).test(m[1]) ? m[1] : l;
+    };
+    const heading = lines.slice(0, 2).map(l => unwrap(l, 'strong')).join('<br>');
+    const rest = lines.slice(2).map(l => `<p class="p-center p-italic">${unwrap(l, 'em')}</p>`);
     return { html: [`<h1>${heading}</h1>`, ...rest].join('\n'), searchKey: lines.slice(0, 2).map(plain).join(' ') };
 }
 
@@ -576,10 +581,13 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     if (partBlocks.length > 0 && pdf) {
         const anchors = await extractChapterAnchors(pdf.slice(0), partBlocks.map(b => b.searchKey));
         const tagged = partBlocks.map((b, i) => ({ ...b, html: b.html.replace(/^<(h[1-6])/, `<$1 data-part-block="${i}"`) }));
-        html = insertChapterHeadings(html, anchors.flatMap(a => {
+        // Parte + 1.º capítulo abrem na mesma página (mesma âncora): um só ponto de inserção, na ordem do livro.
+        const byAnchor = new Map<string, string>();
+        for (const a of anchors) {
             const b = tagged.find(t => t.searchKey === a.title);
-            return b ? [{ anchor: a.anchor, headingHtml: b.html }] : [];
-        })).html;
+            if (b) byAnchor.set(a.anchor, [byAnchor.get(a.anchor), b.html].filter(Boolean).join('\n'));
+        }
+        html = insertChapterHeadings(html, [...byAnchor].map(([anchor, headingHtml]) => ({ anchor, headingHtml }))).html;
         const missing = tagged.filter((_, i) => !html.includes(`data-part-block="${i}"`));
         if (missing.length) html += '\n' + missing.map(m => m.html).join('\n');
         html = html.replace(/ data-part-block="\d+"/g, '');
@@ -609,7 +617,10 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
 
     // Figuras com legenda DENTRO da imagem (EPS) — colocar pela referência "Figura N" no corpo.
     const usedIds = new Set([...html.matchAll(/data-image-id="([^"]+)"/g)].map(m => m[1]));
-    const numberedRes = placeNumberedFigures(html, [...images.keys()].filter(id => !usedIds.has(id)));
+    // Livro com legendas em TEXTO (alguma figura com rótulo): as imagens restantes (anexos, vinhetas, figura sem referência)
+    // não são "Figura N" — o nº do nome do ficheiro ("flast01uf001") colava-as a referências que não são suas.
+    const hasTextCaptions = figs.some(f => f.imageId && f.label);
+    const numberedRes = placeNumberedFigures(html, hasTextCaptions ? [] : [...images.keys()].filter(id => !usedIds.has(id)));
     html = numberedRes.html;
 
     // Última tentativa: vinhetas puramente decorativas, sem legenda nem nº (ex. "Scribble3.eps"

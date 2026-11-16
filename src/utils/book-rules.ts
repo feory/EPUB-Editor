@@ -25,6 +25,10 @@ export interface RuleSelect {
     hasStyle?: string[];
     /** O bloco de conteúdo imediatamente anterior é um destes títulos (salta marcadores, âncoras, `hr` e vazios). */
     afterHeading?: ('h1' | 'h2' | 'h3')[];
+    /** O bloco de conteúdo imediatamente anterior tem TODAS estas classes (ex. ["p-top","p-bottom","p-bold"]); salta como o `afterHeading`. */
+    afterClass?: string[];
+    /** Com `afterClass`: não só o bloco imediatamente a seguir, mas TODOS os seguintes até ao próximo bloco com essas classes, um título h1–h3 ou o fim do capítulo. */
+    following?: boolean;
     /** Índices de capítulo (nas `parts[]`) a incluir / excluir. */
     chapters?: number[];
     exceptChapters?: number[];
@@ -44,7 +48,7 @@ export const blockKey = (text: string | null) => (text ?? '').replace(/\s+/g, ' 
 /** Todas as ações e chaves do `select`, como valores: `Record` obriga o compilador a avisar se se acrescenta uma e esta lista fica para trás.
  *  Existem para o teste de contrato com o prompt do servidor (server/ai-contract.test.js). */
 export const RULE_ACTION_TYPES = Object.keys({ addClass: 1, removeClass: 1, removeStyle: 1, retag: 1, delete: 1 } satisfies Record<RuleAction['type'], 1>);
-export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, startsWith: 1, afterHeading: 1, chapters: 1, exceptChapters: 1, deep: 1, block: 1 } satisfies Record<keyof RuleSelect, 1>);
+export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, startsWith: 1, afterHeading: 1, afterClass: 1, following: 1, chapters: 1, exceptChapters: 1, deep: 1, block: 1 } satisfies Record<keyof RuleSelect, 1>);
 
 export interface BookRule {
     select: RuleSelect;
@@ -91,7 +95,9 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
         const { select: s, action: a } = rule;
         if (!s.tag?.length || !s.tag.every((t) => TAG_RE.test(t))) errors.push(`${at}: "tag" obrigatória (ex. ["p"])`);
         if (s.block && !(Number.isInteger(s.block.chapter) && s.block.chapter >= 0 && Number.isInteger(s.block.index) && s.block.index >= 0 && Array.isArray(s.block.texts) && s.block.texts.length > 0 && s.block.texts.length <= MAX_BLOCKS && s.block.texts.every((t) => typeof t === 'string'))) errors.push(`${at}: "block" inválido`);
-        if (s.deep && s.afterHeading) errors.push(`${at}: "afterHeading" só vale ao nível do corpo (sem "deep")`);
+        if (s.deep && (s.afterHeading || s.afterClass)) errors.push(`${at}: "afterHeading"/"afterClass" só valem ao nível do corpo (sem "deep")`);
+        if (s.following && !s.afterClass) errors.push(`${at}: "following" só vale com "afterClass"`);
+        if (s.afterClass && (!Array.isArray(s.afterClass) || !s.afterClass.length || !s.afterClass.every((c) => CLASS_RE.test(c)))) errors.push(`${at}: "afterClass" tem de ser uma lista de classes`);
         if ((a.type === 'retag' || a.type === 'delete') && s.tag?.some((t) => STRUCTURAL.includes(t))) errors.push(`${at}: não se mexe em h1/h2 (capítulos)`);
         if (a.type === 'removeStyle' && (!Array.isArray(a.props) || !a.props.length || !a.props.every((p) => PROP_RE.test(p)))) errors.push(`${at}: "props" tem de ser uma lista de propriedades CSS (ex. ["margin-left"])`);
         if (s.hasStyle && (!Array.isArray(s.hasStyle) || !s.hasStyle.every((p) => PROP_RE.test(p)))) errors.push(`${at}: "hasStyle" inválido`);
@@ -107,6 +113,26 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
     return errors;
 }
 
+/** O bloco de conteúdo imediatamente anterior (salta marcadores, âncoras, hr e vazios). */
+const prevContent = (el: Element): Element | null => {
+    let prev = el.previousElementSibling;
+    while (prev && isFiller(prev)) prev = prev.previousElementSibling;
+    return prev;
+};
+const afterHeadingOk = (el: Element, headings: string[]): boolean => {
+    const prev = prevContent(el);
+    return !!prev && headings.includes(prev.tagName.toLowerCase());
+};
+/** `el` vem depois de um bloco com TODAS as `classes`, sem outro bloco assim nem título h1–h3 pelo meio (o próprio `el` não conta). */
+const inRunAfterClass = (el: Element, classes: string[]): boolean => {
+    for (let prev = el.previousElementSibling; prev; prev = prev.previousElementSibling) {
+        if (isMarker(prev)) continue;
+        if (classes.every((c) => prev!.classList.contains(c))) return true;
+        if (/^h[1-3]$/.test(prev.tagName.toLowerCase())) return false;
+    }
+    return false;
+};
+
 /** Elementos da regra, apanhados ANTES de alterar nada (retag/delete mudam os irmãos). */
 function select(doc: Document, s: RuleSelect): Element[] {
     if (s.block) {
@@ -121,11 +147,8 @@ function select(doc: Document, s: RuleSelect): Element[] {
         if (s.noClass && s.noClass.some((c) => el.classList.contains(c))) return false;
         if (s.hasStyle && !s.hasStyle.every((p) => styleDecls(el).some((d) => d.name === p))) return false;
         if (s.startsWith !== undefined && !blockKey(el.textContent).toLowerCase().startsWith(blockKey(s.startsWith).toLowerCase())) return false;
-        if (s.afterHeading) {
-            let prev = el.previousElementSibling;
-            while (prev && isFiller(prev)) prev = prev.previousElementSibling;
-            if (!prev || !(s.afterHeading as string[]).includes(prev.tagName.toLowerCase())) return false;
-        }
+        if (s.afterHeading && !afterHeadingOk(el, s.afterHeading)) return false;
+        if (s.afterClass && !(s.following ? inRunAfterClass(el, s.afterClass) : prevContent(el)?.classList && s.afterClass.every((c) => prevContent(el)!.classList.contains(c)))) return false;
         return true;
     });
 }

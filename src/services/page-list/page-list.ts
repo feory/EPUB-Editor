@@ -226,6 +226,22 @@ function textIndex(doc: Document): { flat: string; map: { node: Text; offset: nu
 
 export interface ChapterAnchor { title: string; anchor: string }
 
+const BODY_MAX_SIZE = 14; // pt: acima disto a linha é título/subtítulo, não corpo
+const MAX_PAGES_AFTER_OPENING = 4;
+
+// Linhas de uma página (topo→baixo, itens com y próximo agrupados) + o maior corpo de letra de cada uma.
+function pdfLines(items: PdfPageText['items']): { text: string; size: number }[] {
+    const sorted = items.filter(it => 'str' in it && it.str).sort((a, b) => b.transform[5] - a.transform[5]);
+    const lines: { y: number; parts: { x: number; str: string }[]; size: number }[] = [];
+    for (const it of sorted) {
+        const y = it.transform[5];
+        const last = lines[lines.length - 1];
+        if (last && last.y - y < SUPER_Y_TOL) { last.parts.push({ x: it.transform[4], str: it.str }); last.size = Math.max(last.size, Math.abs(it.transform[0])); }
+        else lines.push({ y, parts: [{ x: it.transform[4], str: it.str }], size: Math.abs(it.transform[0]) });
+    }
+    return lines.map(l => ({ text: l.parts.sort((a, b) => a.x - b.x).map(p => p.str).join(''), size: l.size }));
+}
+
 /**
  * Livros cujo corpo é uma story IDML CONTÍNUA sem CAPITULAR a marcar aberturas de capítulo
  * (única fronteira real = uma página de título dedicada, sem correspondência recuperável no
@@ -235,8 +251,17 @@ export interface ChapterAnchor { title: string; anchor: string }
  * (índice/TOC lista todos juntos — não é a página de abertura).
  */
 export async function extractChapterAnchors(data: ArrayBuffer, titles: string[]): Promise<ChapterAnchor[]> {
-    const pageTexts = (await readPdfPages(data)).map(({ items }) => normalize(items.map(it => it.str).join(' ')));
+    const pages = await readPdfPages(data);
+    const { printed } = detectFolios(pages);
+    const pageTexts = pages.map(({ items }) => normalize(items.map(it => it.str).join(' ')));
     const normTitles = titles.map(normalize);
+    // Início do corpo da página: sem cabeçalho corrente (1.ª linha, nas páginas com folio), sem a marca de fecho do InDesign
+    // ("Marketing 7.indd 12") e sem linhas de título (corpo grande) — o corpo real pode começar logo na página de abertura.
+    const bodyAnchor = (p: number): string => {
+        const lines = pdfLines(pages[p].items);
+        const body = (printed[p] !== null ? lines.slice(1) : lines).filter(l => l.size <= BODY_MAX_SIZE && !normalize(l.text).includes('indd'));
+        return normalize(body.map(l => l.text).join('')).slice(0, CHAPTER_ANCHOR_LEN);
+    };
     const anchors: ChapterAnchor[] = [];
     for (let ti = 0; ti < titles.length; ti++) {
         const nt = normTitles[ti];
@@ -251,14 +276,13 @@ export async function extractChapterAnchors(data: ArrayBuffer, titles: string[])
             if (pageTexts[p].length <= nt.length * 2) { pageIdx = p; break; }
         }
         if (pageIdx === -1) continue;
-        // Saltar página(s) em branco a seguir à abertura (comum: capítulo começa em página
-        // direita, verso fica vazio) até à 1ª página com texto real.
-        let next = pageIdx + 1;
-        while (next < pageTexts.length && pageTexts[next].length === 0) next++;
-        if (next >= pageTexts.length) continue;
-        const anchor = pageTexts[next].slice(0, CHAPTER_ANCHOR_LEN);
-        if (anchor.length < CHAPTER_MIN_ANCHOR) continue;
-        anchors.push({ title: titles[ti], anchor });
+        // 1.ª página (a da abertura ou as seguintes: verso em branco, outra abertura sem corpo) com corpo real.
+        for (let q = pageIdx; q < Math.min(pages.length, pageIdx + MAX_PAGES_AFTER_OPENING); q++) {
+            const anchor = bodyAnchor(q);
+            if (anchor.length < CHAPTER_MIN_ANCHOR) continue;
+            anchors.push({ title: titles[ti], anchor });
+            break;
+        }
     }
     return anchors;
 }

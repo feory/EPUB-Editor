@@ -13,12 +13,16 @@ import { buildPdfLines, mapFolioToPdfPage, normalize as normalizeForMatch } from
 
 export type FigureKind = 'gráfico' | 'fig' | 'quadro' | 'tabela' | 'mapa';
 
+/** Formatação da 1.ª linha da legenda: o rótulo ("figura 1.1", até ao delimitador do estilo aninhado) em negrito/maiúsculas + alinhamento. */
+export interface CaptionFmt { labelLen: number; bold: boolean; upper: boolean; cls: string }
+
 export interface Figure {
     imageId?: string;                      // imagem da galeria (sanitizeImageFilename) — figuras raster
     tableHtml?: string;                    // <table> reconstruída — Quadros (sem raster)
     label?: { kind: FigureKind; num: string }; // string: "2.1" não cabe em number sem colidir com "2.10"
     captionLines: string[];                // legenda + fonte + notas (cada uma um <p>); [0] = legenda
     captionSpacing?: string;               // classe p-top/p-bottom para captionLines[0] (DETECT_SPACING)
+    captionFmt?: CaptionFmt;               // formatação da legenda no InDesign (estilo aninhado + alinhamento) → classes do editor
     pageHint?: number[];                   // folio(s) (Page/Name) do spread onde a imagem vive — só
                                             // usado por placeFiguresByPosition (vinhetas sem legenda/nº)
 }
@@ -76,13 +80,37 @@ function scanSpacingStyles(stylesXml: string): Map<string, { before: number; aft
 // fora das células da tabela). Remove os PI <?ACE?> (auto-número) que partiriam o texto.
 // spacingStyles/detectSpacing: mesmo mecanismo do corpo principal (SpaceBefore/SpaceAfter,
 // estilo + override do parágrafo) → p-top/p-bottom em spacingCls, só na 1ª linha da legenda.
+// Estilos de legenda (Resources/Styles.xml): alinhamento do estilo + estilo de carácter aninhado ("até ao 1.º espaço-em →
+// negrito/maiúsculas") — é assim que o InDesign faz o "FIGURA 1.1" a negrito sem formatação local no texto.
+interface CaptionStyle { align?: string; nested?: { delim: string; bold: boolean; upper: boolean } }
+const NESTED_DELIMS: Record<string, string> = { EmSpace: '\u2003', EnSpace: '\u2002', Tab: '\t' };
+const ALIGN_CLS: Record<string, string> = { CenterAlign: 'p-center' }; // direita no editor é estilo inline, não classe
+function scanCaptionStyles(stylesXml: string): Map<string, CaptionStyle> {
+    const charStyles = new Map<string, { bold: boolean; upper: boolean }>();
+    for (const m of stylesXml.matchAll(/<CharacterStyle\b([^>]*)>/g)) {
+        const name = /\bSelf="CharacterStyle\/([^"]+)"/.exec(m[1])?.[1];
+        if (name) charStyles.set(name, { bold: /\bFontStyle="[^"]*bold/i.test(m[1]), upper: /\bCapitalization="AllCaps"/.test(m[1]) });
+    }
+    const out = new Map<string, CaptionStyle>();
+    for (const m of stylesXml.matchAll(/<ParagraphStyle\b([^>]*)>([\s\S]*?)<\/ParagraphStyle>/g)) {
+        const name = /\bSelf="ParagraphStyle\/([^"]+)"/.exec(m[1])?.[1];
+        if (!name) continue;
+        const nest = /<AllNestedStyles[\s\S]*?<AppliedCharacterStyle[^>]*>CharacterStyle\/([^<]+)<\/AppliedCharacterStyle>\s*<Delimiter[^>]*>([^<]+)<\/Delimiter>/.exec(m[2]);
+        const cs = nest && charStyles.get(nest[1]);
+        const delim = nest && NESTED_DELIMS[nest[2]];
+        out.set(name, { align: /\bJustification="([^"]+)"/.exec(m[1])?.[1], nested: cs && delim ? { delim, ...cs } : undefined });
+    }
+    return out;
+}
+
 function captionParasOf(
     storyXml: string,
     spacingStyles: Map<string, { before: number; after: number }>,
     detectSpacing: boolean,
-): { text: string; label?: Figure['label']; spacingCls?: string }[] {
+    captionStyles: Map<string, CaptionStyle> = new Map(),
+): { text: string; label?: Figure['label']; spacingCls?: string; fmt?: CaptionFmt }[] {
     const xml = storyXml.replace(/<\?ACE[^>]*\?>/g, '').replace(/<Table\b[\s\S]*?<\/Table>/g, '');
-    const out: { text: string; label?: Figure['label']; spacingCls?: string }[] = [];
+    const out: { text: string; label?: Figure['label']; spacingCls?: string; fmt?: CaptionFmt }[] = [];
     const re = /<ParagraphStyleRange([^>]*)>([\s\S]*?)<\/ParagraphStyleRange>/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(xml)) !== null) {
@@ -96,13 +124,20 @@ function captionParasOf(
             spacingCls = [before > 0 ? 'p-top' : '', after > 0 ? 'p-bottom' : ''].filter(Boolean).join(' ');
         }
         for (const seg of m[2].split(/<Br\s*\/>/)) {
-            const t = clean((seg.match(/<Content>([^<]*)<\/Content>/g) || []).map(c => c.replace(/<[^>]+>/g, '')).join(''));
+            const raw = (seg.match(/<Content>([^<]*)<\/Content>/g) || []).map(c => c.replace(/<[^>]+>/g, '')).join('');
+            const t = clean(raw);
             if (!t) continue;
+            const cs = captionStyles.get(style);
+            const cut = cs?.nested ? raw.indexOf(cs.nested.delim) : -1;
+            const cls = ALIGN_CLS[/\bJustification="([^"]+)"/.exec(attrs)?.[1] ?? cs?.align ?? ''] ?? '';
+            const fmt: CaptionFmt | undefined = (cut > 0 && cs?.nested && (cs.nested.bold || cs.nested.upper)) || cls
+                ? { labelLen: cut > 0 ? clean(raw.slice(0, cut)).length : 0, bold: !!(cut > 0 && cs?.nested?.bold), upper: !!(cut > 0 && cs?.nested?.upper), cls }
+                : undefined;
             const lab = t.match(LABEL_RE);
             // Estilo de legenda reconhecido (LEGENDAS/Figura titulo) OU, independentemente do
             // estilo, texto que começa mesmo por um rótulo de figura ("Figura 2:", "Gráfico 1")
             // — alguns livros centram a legenda num parágrafo TXT normal, sem estilo dedicado.
-            if (CAPTION_STYLE_RE.test(style) || lab) out.push({ text: t, label: lab ? toLabel(lab) : undefined, spacingCls });
+            if (CAPTION_STYLE_RE.test(style) || lab) out.push({ text: t, label: lab ? toLabel(lab) : undefined, spacingCls, fmt });
             else if (NOTE_STYLE_RE.test(style) && NOTE_RE.test(t)) out.push({ text: t }); // nota de tabela
         }
     }
@@ -153,6 +188,7 @@ export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promi
         ? scanSpacingStyles(await idmlZip.file('Resources/Styles.xml')?.async('string') ?? '')
         : new Map<string, { before: number; after: number }>();
 
+    const captionStyles = scanCaptionStyles(await idmlZip.file('Resources/Styles.xml')?.async('string') ?? '');
     const figures: Figure[] = [];
     const usedImages = new Set<string>();
     const usedTables = new Set<string>();
@@ -168,7 +204,7 @@ export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promi
         // (imagem e legenda vivem em frames/stories DIFERENTES na mesma spread).
         const storyIds = [...new Set([...sx.matchAll(/ParentStory="([^"]+)"/g)].map(mm => mm[1]))];
         const caps: ReturnType<typeof captionParasOf> = [];
-        for (const sid of storyIds) { const stx = await story(sid); caps.push(...captionParasOf(stx, spacingStyles, detectSpacing)); }
+        for (const sid of storyIds) { const stx = await story(sid); caps.push(...captionParasOf(stx, spacingStyles, detectSpacing, captionStyles)); }
         // linhas sem rótulo (fonte/notas) — anexadas à legenda da figura desta spread
         const extras = [...new Set(caps.filter(c => !c.label).map(c => c.text))];
 
@@ -184,7 +220,7 @@ export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promi
             // sempre, em vez da legenda da imagem desta spread especificamente.
             const fileNum = img.match(/(\d+(?:\.\d+)?)/)?.[1];
             const imgCap = (fileNum && figCaps.find(c => normalizeNum(c.label!.num) === normalizeNum(fileNum))) || figCaps[0];
-            figures.push({ imageId, label: imgCap?.label, captionLines: imgCap ? [imgCap.text, ...extras] : [], captionSpacing: imgCap?.spacingCls, pageHint });
+            figures.push({ imageId, label: imgCap?.label, captionLines: imgCap ? [imgCap.text, ...extras] : [], captionSpacing: imgCap?.spacingCls, captionFmt: imgCap?.fmt, pageHint });
         }
         // figuras TABELA (Quadro): tabela e legenda vivem na MESMA story (confirmado na prática —
         // duas tabelas de stories diferentes podem partilhar uma spread, e casar pela spread
@@ -193,18 +229,25 @@ export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promi
             const stx = await story(sid);
             const stTables = parseTables(stx);
             if (stTables.length === 0) continue;
-            const stCaps = captionParasOf(stx, spacingStyles, detectSpacing);
+            const stCaps = captionParasOf(stx, spacingStyles, detectSpacing, captionStyles);
             const tblCap = stCaps.find(c => c.label && (c.label.kind === 'quadro' || c.label.kind === 'tabela'));
             const stExtras = [...new Set(stCaps.filter(c => !c.label).map(c => c.text))];
             for (const tbl of stTables) {
                 if (usedTables.has(tbl)) continue; // story threaded por vários frames/spreads → mesma tabela repetida
                 usedTables.add(tbl);
-                figures.push({ tableHtml: tbl, label: tblCap?.label, captionLines: tblCap ? [tblCap.text, ...stExtras] : [], captionSpacing: tblCap?.spacingCls });
+                figures.push({ tableHtml: tbl, label: tblCap?.label, captionLines: tblCap ? [tblCap.text, ...stExtras] : [], captionSpacing: tblCap?.spacingCls, captionFmt: tblCap?.fmt });
             }
         }
     }
     return figures;
 }
+
+// Rótulo ("figura 1.1") em negrito/maiúsculas conforme o estilo aninhado do InDesign; o resto do texto fica como está.
+const captionHtml = (line: string, fmt?: CaptionFmt): string => {
+    if (!fmt?.labelLen || !(fmt.bold || fmt.upper)) return escapeHtml(line);
+    const label = escapeHtml(fmt.upper ? line.slice(0, fmt.labelLen).toUpperCase() : line.slice(0, fmt.labelLen));
+    return (fmt.bold ? `<strong>${label}</strong>` : label) + escapeHtml(line.slice(fmt.labelLen));
+};
 
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -225,6 +268,7 @@ export function insertFigures(html: string, figures: Figure[]): { html: string; 
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const blocks = targetBlocksOf(doc);
     let placed = 0;
+    const placedVisual = new Map<string, Node>(); // legenda (tipo+nº) → última imagem já colocada
     for (const fig of withRef) {
         const caption = fig.captionLines[0];
         const visual = fig.tableHtml
@@ -243,14 +287,27 @@ export function insertFigures(html: string, figures: Figure[]): { html: string; 
         }
 
         const { kind, num } = fig.label!;
-        const k = kind === 'gráfico' ? 'gr[áa]fico' : kind; // fig/quadro/tabela/mapa literais
-        const re = new RegExp(`[\\(\\[]?\\s*${k}\\.?\\s*${numPattern(num)}\\b`, 'i');
+        const k = kind === 'gráfico' ? 'gr[áa]fico' : kind === 'fig' ? 'figuras?|fig' : kind; // quadro/tabela/mapa literais; "Figura 1.1" tem de casar
+        const re = new RegExp(`[\\(\\[]?\\s*(?:${k})\\.?\\s*${numPattern(num)}\\b`, 'i');
+        // Mesma legenda para 2+ imagens (painéis de uma figura): as seguintes entram a seguir à última imagem, sob UMA legenda.
+        const key = `${kind}${num}`;
+        const lastVisual = placedVisual.get(key);
+        if (lastVisual) {
+            const extra = doc.createElement('div');
+            extra.innerHTML = visual;
+            let ref: Node = lastVisual;
+            while (extra.firstChild) { const node = extra.firstChild; lastVisual.parentNode!.insertBefore(node, ref.nextSibling); ref = node; }
+            placedVisual.set(key, ref);
+            placed++;
+            continue;
+        }
         const target = blocks.find(b => re.test(b.textContent || ''));
         if (!target) continue;
         const frag = doc.createElement('div');
         frag.innerHTML = visual + fig.captionLines.map((l, i) =>
-            `<p class="${['p-legendas', i === 0 ? fig.captionSpacing : ''].filter(Boolean).join(' ')}">${escapeHtml(l)}</p>`
+            `<p class="${['p-legendas', i === 0 ? fig.captionSpacing : '', i === 0 ? fig.captionFmt?.cls : ''].filter(Boolean).join(' ')}">${i === 0 ? captionHtml(l, fig.captionFmt) : escapeHtml(l)}</p>`
         ).join('');
+        placedVisual.set(key, frag.firstChild!);
         // inserir os filhos do frag a seguir ao bloco-alvo, por ordem
         let ref: Node = target;
         while (frag.firstChild) { const node = frag.firstChild; target.parentNode!.insertBefore(node, ref.nextSibling); ref = node; }

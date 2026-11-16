@@ -522,8 +522,8 @@ export function WorkPage() {
         className={`flex-1 w-full ${isFocusMode
           ? 'py-16 max-w-[1400px] mx-auto px-8'
           : (anySidebarOpen || reservePanelSpace)
-            ? 'py-8 max-w-none px-12 ml-0'
-            : (sidebars.isSidebarOpen ? 'py-8 max-w-[1800px] mx-auto px-6' : 'py-8 max-w-[1600px] mx-auto px-6')
+            ? `py-8 max-w-none ml-0 ${sidebars.isSidebarOpen ? 'px-12' : 'pl-4 pr-12'}` // sem Estrutura: o editor ganha o espaço da esquerda
+            : (sidebars.isSidebarOpen ? 'py-8 max-w-[1800px] mx-auto px-6' : 'py-8 max-w-[1800px] mx-auto pl-3 pr-6')
         }`}
         style={!isFocusMode && (anySidebarOpen || reservePanelSpace) ? { paddingRight: panelWidth + 20 } : undefined}
       >
