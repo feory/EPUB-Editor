@@ -168,7 +168,7 @@ function bodyLinesOf(page: PdfPageText, hasPrintedFolio: boolean): string[] {
 }
 
 /** Porque é que uma página do PDF ficou sem marcador na lista de páginas. */
-export type MissingReason = 'branca' | 'figura' | 'abre-com-figura' | 'fora-de-ordem';
+export type MissingReason = 'branca' | 'indice' | 'figura' | 'abre-com-figura' | 'fora-de-ordem';
 export interface PageListAudit {
     /** Páginas do PDF com folio (impresso ou interpolado): as que a lista de páginas devia cobrir. */
     pagesWithFolio: number;
@@ -183,7 +183,7 @@ export interface PageListAudit {
 
 /**
  * "O que falta na lista de páginas?": cruza as páginas do PDF com os marcadores do livro e diz, para cada página sem marcador,
- * porquê — `branca` (só folio e marcas do InDesign), `figura` (há texto, mas nenhuma linha dele está no corpo: o texto vive na
+ * porquê — `branca` (só folio e marcas do InDesign), `indice` (página do Índice, que não leva marcadores), `figura` (há texto, mas nenhuma linha dele está no corpo: o texto vive na
  * imagem), `abre-com-figura` (a 1.ª linha, a âncora, é texto de figura que o corpo não tem, mas o resto da página ESTÁ no livro) ou
  * `fora-de-ordem` (a âncora está no livro e o alinhamento descartou-a por ficar fora da ordem do PDF).
  * Só lê; não altera nada.
@@ -192,7 +192,7 @@ export function auditPageList(pages: PdfPageText[], html: string): PageListAudit
     const { folios, printed } = detectFolios(pages);
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const markers = new Set([...doc.body.querySelectorAll('span.pagebreak[data-page]')].map(el => parseInt(el.getAttribute('data-page') ?? '', 10)).filter(n => !isNaN(n)));
-    const { flat } = textIndex(doc);
+    const { flat, indice } = textIndex(doc);
     const audit: PageListAudit = { pagesWithFolio: 0, marked: 0, withoutFolio: 0, missing: [], orphanMarkers: [] };
     const inPdf = new Set<number>();
     pages.forEach((page, idx) => {
@@ -205,7 +205,7 @@ export function auditPageList(pages: PdfPageText[], html: string): PageListAudit
         if (body.length === 0) { audit.missing.push({ page: folio, reason: 'branca' }); return; }
         const usable = body.filter(t => t.length >= MIN_ANCHOR);
         const inBody = (t: string) => flat.includes(t.slice(0, ANCHOR_LEN));
-        const reason: MissingReason = !usable.some(inBody) ? 'figura' : !inBody(usable[0]) ? 'abre-com-figura' : 'fora-de-ordem';
+        const reason: MissingReason = usable.length && indice.includes(usable[0]) ? 'indice' : !usable.some(inBody) ? 'figura' : !inBody(usable[0]) ? 'abre-com-figura' : 'fora-de-ordem';
         audit.missing.push({ page: folio, reason });
     });
     audit.orphanMarkers = [...markers].filter(n => !inPdf.has(n)).sort((a, b) => a - b);
@@ -250,11 +250,18 @@ export function fillMissingPageBreaks(html: string, pages: PageLines[]): { html:
     const { flat, map, markers } = textIndex(doc);
     const have = new Set(markers.map(m => m.page));
     const known = [...markers]; // os que já existem + os que se vão acrescentando: definem as janelas das páginas seguintes
+    // Só contam os marcadores em ordem (a maior subsequência crescente de posições): um marcador existente fora do sítio (ex. a p.247
+    // dentro do capítulo 2) apertava a janela das páginas do meio até ficar vazia. Os fora de sítio não se tocam, só se ignoram.
+    const reliable = () => {
+        const sorted = [...known].sort((a, b) => a.page - b.page);
+        return longestIncreasing(sorted.map((m, i) => m.pos + i * 1e-6)).map(i => sorted[i]); // + i·1e-6: duas páginas na mesma posição não se excluem
+    };
     const points: { node: Text; offset: number; page: number }[] = [];
     for (const { page, lines } of [...pages].sort((a, b) => a.page - b.page)) {
         if (have.has(page)) continue;
-        const lo = Math.max(0, ...known.filter(m => m.page < page).map(m => m.pos));
-        const hi = Math.min(flat.length, ...known.filter(m => m.page > page).map(m => m.pos));
+        const trusted = reliable();
+        const lo = Math.max(0, ...trusted.filter(m => m.page < page).map(m => m.pos));
+        const hi = Math.min(flat.length, ...trusted.filter(m => m.page > page).map(m => m.pos));
         for (const line of lines) {
             const at = flat.indexOf(line, lo);
             if (at < 0 || at >= hi) continue;
@@ -303,8 +310,9 @@ export async function buildPdfLines(data: ArrayBuffer): Promise<{ y: number; tex
 // Chars que a normalização descarta (espaço, pontuação) não entram em nenhum dos dois.
 /** Texto máximo de uma entrada do Índice; um bloco maior já é corpo. */
 const INDICE_ENTRY_MAX = 150;
-function textIndex(doc: Document): { flat: string; map: { node: Text; offset: number }[]; markers: { page: number; pos: number }[] } {
+function textIndex(doc: Document): { flat: string; map: { node: Text; offset: number }[]; markers: { page: number; pos: number }[]; indice: string } {
     let flat = '';
+    let indice = ''; // o texto do Índice (fora de `flat`): para saber que uma página do PDF é do Índice
     const map: { node: Text; offset: number }[] = [];
     // Marcadores de página já no corpo e a posição (em `flat`) onde estão; os do Índice ficam de fora (não são do corpo).
     const markers: { page: number; pos: number }[] = [];
@@ -323,7 +331,7 @@ function textIndex(doc: Document): { flat: string; map: { node: Text; offset: nu
         const node = n as Text;
         // O Índice acaba no 1.º bloco longo (entradas são curtas); nem sempre há outro marcador de capítulo a seguir.
         if (inIndice && (node.parentElement?.closest('p,div,li,h1,h2,h3,h4,h5,h6')?.textContent ?? '').length > INDICE_ENTRY_MAX) inIndice = false;
-        if (inIndice) continue;
+        if (inIndice) { for (const ch of node.textContent ?? '') indice += normalize(ch); continue; }
         const raw = node.textContent ?? '';
         for (let k = 0; k < raw.length; k++) {
             const nc = normalize(raw[k]);
@@ -332,7 +340,7 @@ function textIndex(doc: Document): { flat: string; map: { node: Text; offset: nu
             map.push({ node, offset: k });
         }
     }
-    return { flat, map, markers };
+    return { flat, map, markers, indice };
 }
 
 export interface ChapterAnchor { title: string; anchor: string }

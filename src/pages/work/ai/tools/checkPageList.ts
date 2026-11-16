@@ -3,6 +3,7 @@ import type { MissingReason } from '../../../../services/page-list/page-list';
 
 const WHY: Record<MissingReason, string> = {
     'branca': 'página em branco (só folio e marcas do InDesign): não precisa de marcador',
+    'indice': 'página do Índice: não leva marcadores (de propósito)',
     'figura': 'só figura: o texto da página não está no corpo (está na imagem), por isso não há onde o ancorar',
     'abre-com-figura': 'a página abre com texto de uma figura (que o livro não tem) e o resto do texto ESTÁ no livro: o marcador só entra à mão',
     'fora-de-ordem': 'o texto da página ESTÁ no livro, mas o marcador não entrou (ordem diferente da do PDF): é a que vale a pena rever',

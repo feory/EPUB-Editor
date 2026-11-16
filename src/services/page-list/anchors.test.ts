@@ -76,3 +76,18 @@ test('pageLinesFromPages: só as páginas sem marcador, só as linhas que o livr
     expect(r.map(p => p.page)).toEqual([2]); // a 1 já tem marcador; a 3 não tem nenhuma linha no livro
     expect(r[0].lines).toEqual([normalize('Texto da pagina 2 que esta no livro mesmo').slice(0, 30)]);
 });
+
+test('fillMissingPageBreaks: um marcador existente fora do sítio não esvazia a janela das páginas do meio', () => {
+    const marker = (n: number) => `<span class="pagebreak" data-page="${n}"></span>`;
+    // a p.9 está (mal) no princípio, antes das p.1–3: fora de ordem — a janela da p.2 não pode ficar limitada por ela
+    const html = `<p>${marker(9)}Texto da pagina um que esta no livro ${marker(1)}fim</p><p>Linha que abre a pagina dois no livro aqui</p><p>Pagina tres ${marker(3)}texto</p>`;
+    const r = fillMissingPageBreaks(html, [{ page: 2, lines: [normalize('Linha que abre a pagina dois no livro aqui').slice(0, 30)] }]);
+    expect(r.inserted).toEqual([2]);
+    expect(r.html).toContain('<span class="pagebreak" data-page="9"></span>Texto'); // o mal colocado fica como estava
+});
+
+test('auditPageList: página cujo texto é do Índice → "indice" (o Índice não leva marcadores)', () => {
+    const pages = [page(1, ['Texto da pagina um que esta no livro com marcador']), page(2, ['Elementos chave do marketing no indice'])];
+    const html = '<p>Índice</p><p>Elementos chave do marketing no indice</p><p>Texto da pagina um <span class="pagebreak" data-page="1"></span>que esta no livro com marcador '.padEnd(300, 'x') + '</p>';
+    expect(auditPageList(pages, html).missing).toEqual([{ page: 2, reason: 'indice' }]);
+});
