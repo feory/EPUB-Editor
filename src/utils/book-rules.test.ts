@@ -203,3 +203,19 @@ test('afterClass + following: todos os parágrafos até ao próximo bloco igual,
     expect(out[1]).toContain('<p>g</p>'); // outro capítulo: não herda
     expect(validateRules([{ select: { tag: ['p'], following: true }, action: rule.action }]).length).toBeGreaterThan(0);
 });
+
+test('beforeClass: o bloco imediatamente seguinte tem as classes (o inverso de afterClass)', () => {
+    const rule: BookRule = { select: { tag: ['p'], beforeClass: ['p-quote'] }, action: { type: 'addClass', value: 'p-bottom' } };
+    const out = runRules([chapter('Um', '<p>a</p><p class="p-quote">q</p><p>b</p><hr><p class="p-quote">q2</p>')], [rule]).parts[0];
+    expect(out).toContain('<p class="p-bottom">a</p><p class="p-quote">q</p><p class="p-bottom">b</p><hr>'); // b: salta o hr até ao p-quote seguinte
+    expect(out).not.toContain('<p class="p-quote p-bottom">'); // os próprios p-quote não são apanhados (o seguinte de q é b)
+    expect(validateRules([{ ...rule, select: { ...rule.select, deep: true } }]).length).toBeGreaterThan(0);
+});
+
+test('afterHeading + following: todos os parágrafos de cada secção, até ao próximo título', () => {
+    const rule: BookRule = { select: { tag: ['p'], afterHeading: ['h2'], following: true }, action: { type: 'addClass', value: 'p-indent' } };
+    const out = runRules([chapter('Um', '<p>antes</p><h2>S1</h2><p>a</p><p>b</p><h3>T</h3><p>c</p><h2>S2</h2><p>d</p>')], [rule]).parts[0];
+    expect(out).toContain('<p>antes</p>'); // nenhum título h2 antes
+    expect(out).toContain('<p class="p-indent">a</p><p class="p-indent">b</p><h3>T</h3><p>c</p>'); // o h3 mais próximo manda e não é h2
+    expect(out).toContain('<p class="p-indent">d</p>');
+});
