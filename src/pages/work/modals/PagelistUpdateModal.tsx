@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { RefreshCw, Upload, Loader2 } from 'lucide-react';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { extractPdfPageAnchors } from '../../../services/page-list/page-list';
-import type { PageAnchor } from '../../../services/page-list/page-list';
+import { readPdfPages } from '../../../services/page-list/pdf-pages';
+import { anchorsFromPages, type PageAnchor } from '../../../services/page-list/pdf-text';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 
@@ -34,7 +34,7 @@ const PagelistUpdateModalComponent: React.FC<PagelistUpdateModalProps> = ({ isbn
         }
         let anchors: PageAnchor[];
         try {
-            anchors = await extractPdfPageAnchors(await file.arrayBuffer());
+            anchors = anchorsFromPages(await readPdfPages(await file.arrayBuffer()));
         } catch {
             // O PDF já ficou gravado no servidor — só a extração das páginas falhou.
             setErrorMsg('PDF carregado, mas falhou o processamento das páginas. Tenta novamente.');

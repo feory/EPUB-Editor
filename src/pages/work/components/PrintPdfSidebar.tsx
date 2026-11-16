@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, FileText, ChevronLeft, ChevronRight, Loader2, Upload, ZoomIn, ZoomOut } from 'lucide-react';
 import type { PDFDocumentProxy, TextLayer } from 'pdfjs-dist';
 import { ebooksApi } from '../../../api/ebooks-api';
-import { extractPdfPageAnchors } from '../../../services/page-list/page-list';
-import type { PageAnchor } from '../../../services/page-list/page-list';
+import { readPdfPages } from '../../../services/page-list/pdf-pages';
+import { anchorsFromPages, type PageAnchor } from '../../../services/page-list/pdf-text';
 import { nearestPdfPage } from '../../../services/page-list/nearest-page';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import { PanelResizeHandle } from './PanelResizeHandle';
@@ -40,7 +40,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     // front-matter sem numeração (ver PageAnchor.pdfPageIndex em page-list.ts).
     const folioMapRef = useRef<Map<number, number>>(new Map());
     const indexToFolioRef = useRef<Map<number, number>>(new Map()); // sentido inverso, p/ clique na página
-    // últimas âncoras calculadas (extractPdfPageAnchors é um parse O(páginas) do PDF inteiro) —
+    // últimas âncoras calculadas (a leitura do PDF (readPdfPages) é um parse O(páginas) do PDF inteiro) —
     // partilhadas com quem carregou o PDF (handleUpload → onPdfUploaded), em vez de o refazer.
     const anchorsRef = useRef<PageAnchor[]>([]);
 
@@ -59,13 +59,13 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
             const pdfjsLib = await import('pdfjs-dist');
             pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).toString();
             // getDocument neutraliza o ArrayBuffer que recebe — cópias próprias para o proxy
-            // do viewer e para extractPdfPageAnchors (também chama getDocument internamente).
+            // do viewer e para readPdfPages (também chama getDocument internamente).
             const pdf = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
             pdfRef.current = pdf;
             setPageCount(pdf.numPages);
             setPage(1);
             setStatus('ready');
-            const anchors = await extractPdfPageAnchors(buf.slice(0));
+            const anchors = anchorsFromPages(await readPdfPages(buf.slice(0)));
             anchorsRef.current = anchors;
             folioMapRef.current = new Map(anchors.map(a => [a.page, a.pdfPageIndex]));
             indexToFolioRef.current = new Map(anchors.map(a => [a.pdfPageIndex, a.page]));
@@ -145,7 +145,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
         setUploading(true);
         try {
             await ebooksApi.uploadPrintPdf(isbn, file);
-            await loadPdf(); // já corre extractPdfPageAnchors — reaproveitado abaixo, sem reparse
+            await loadPdf(); // já lê o PDF para as âncoras — reaproveitado abaixo, sem reparse
             onPdfUploaded?.(anchorsRef.current);
         } finally {
             setUploading(false);

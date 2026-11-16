@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename, toRasterName } from '../../../utils/format';
-import { buildPdfLines, mapFolioToPdfPage, normalize as normalizeForMatch } from '../../page-list/page-list';
+import { readPdfPages } from '../../page-list/pdf-pages';
+import { buildPdfLines, folioToPdfPage, normalize as normalizeForMatch } from '../../page-list/pdf-text';
 
 /**
  * Reconstrução de figuras no import IDML+PDF: cada imagem da Links/ é colocada no editor como
@@ -409,7 +410,7 @@ export function placeInlineFigures(html: string, imageIds: string[]): { html: st
     return { html: doc.body.innerHTML, placed };
 }
 
-const POS_MIN_ANCHOR = 15;   // mesmo mínimo de extractPdfPageAnchors (page-list.ts)
+const POS_MIN_ANCHOR = 15;   // mesmo mínimo de anchorsFromPages (pdf-text.ts)
 const POS_GAP_FACTOR = 3;    // quebra tem de ser bem maior que entrelinha normal — corpo de
                               // imagem, não um mero espaçamento de parágrafo (ver verifyBlankSpacing)
 
@@ -459,8 +460,9 @@ export async function placeFiguresByPosition(html: string, figures: Figure[], pd
     const candidates = figures.filter(f => f.imageId && f.pageHint && f.pageHint.length > 0);
     if (candidates.length === 0) return { html, placed: 0 };
 
-    const folioToPage = await mapFolioToPdfPage(pdfData.slice(0));
-    const pdfLines = await buildPdfLines(pdfData.slice(0));
+    const pdfPages = await readPdfPages(pdfData.slice(0));
+    const folioToPage = folioToPdfPage(pdfPages);
+    const pdfLines = buildPdfLines(pdfPages);
 
     const doc = new DOMParser().parseFromString(html, 'text/html');
     let placed = 0;

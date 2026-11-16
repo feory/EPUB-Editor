@@ -14,7 +14,7 @@ import { sendOnUnload } from './sendOnUnload';
 import type { Draft } from '../../utils/local-draft';
 import { listSubtitles } from '../../utils/indice-links';
 import type { DocxStyleMapping } from '../../services/import/document-importer';
-import type { PageAnchor } from '../../services/page-list/page-list';
+import type { PageAnchor } from '../../services/page-list/pdf-text';
 
 import { createSaver } from './saver';
 import * as bookEdit from './bookEdit';

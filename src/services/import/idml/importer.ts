@@ -1,6 +1,8 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../../../utils/format';
-import { extractPdfPageAnchors, insertPageBreaks, pdfToJpeg, extractChapterAnchors, insertChapterHeadings, verifyBlankSpacing, getPdfPageCount } from '../../page-list/page-list';
+import { insertPageBreaks, insertChapterHeadings, verifyBlankSpacing } from '../../page-list/page-list';
+import { readPdfPages, pdfToJpeg, getPdfPageCount, type PdfPageText } from '../../page-list/pdf-pages';
+import { anchorsFromPages, chapterAnchorsFromPages } from '../../page-list/pdf-text';
 import { buildFigures, placeFigures, toRasterName } from './figures';
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from '../document-importer';
 import { readIdmlStyles } from './styles';
@@ -259,7 +261,7 @@ function titleBlockNum(rc: RenderContext, xml: string): number | null {
 }
 
 // nº (linha 1) + título (linha 2) juntos — chave de pesquisa no PDF (livros sem CAPITULAR,
-// ver extractChapterAnchors): o título sozinho pode ser uma frase comum que ocorre à-toa no
+// ver chapterAnchorsFromPages): o título sozinho pode ser uma frase comum que ocorre à-toa no
 // corpo (ex. "A guerra" num livro sobre guerra); "II A guerra" junto só ocorre na página de
 // abertura (e no Índice, filtrado à parte por conter também os OUTROS títulos).
 const PART_TITLE_RE = /^parte\s+([ivxlcdm]+|\d+)\b/i;
@@ -567,10 +569,12 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     // o título no PDF de impressão (página de abertura dedicada) e usar a página seguinte como
     // âncora — requer PDF (upload opcional); sem PDF os títulos ficam por inserir (não há outra
     // fronteira recuperável do IDML).
+    // O PDF lê-se UMA vez para os 3 usos abaixo (títulos, partes, âncoras de página). pdfjs neutraliza o ArrayBuffer que lhe é
+    // passado — cópia própria: o `pdf` original tem de sobreviver (printPdf, figuras).
+    let pdfPagesRead: Promise<PdfPageText[]> | null = null;
+    const pdfPages = () => (pdfPagesRead ??= readPdfPages(pdf!.slice(0)));
     if (titleBlockRes.placed === 0 && titleBlocks.length > 0 && pdf) {
-        // pdfjs neutraliza o ArrayBuffer que lhe é passado (getDocument) — cópia própria, o
-        // extractPdfPageAnchors mais abaixo também precisa do `pdf` original intacto.
-        const chapterAnchors = await extractChapterAnchors(pdf.slice(0), titleBlocks.map(t => t.searchKey));
+        const chapterAnchors = chapterAnchorsFromPages(await pdfPages(), titleBlocks.map(t => t.searchKey));
         const withHtml = chapterAnchors
             .map(a => ({ anchor: a.anchor, headingHtml: titleBlocks.find(t => t.searchKey === a.title)?.html }))
             .filter((a): a is { anchor: string; headingHtml: string } => !!a.headingHtml);
@@ -579,7 +583,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     // Divisórias de Parte: inseridas antes do 1.º bloco da página que se segue à sua abertura no PDF;
     // as que não encontrarem âncora vão para o fim (como antes) em vez de se perderem.
     if (partBlocks.length > 0 && pdf) {
-        const anchors = await extractChapterAnchors(pdf.slice(0), partBlocks.map(b => b.searchKey));
+        const anchors = chapterAnchorsFromPages(await pdfPages(), partBlocks.map(b => b.searchKey));
         const tagged = partBlocks.map((b, i) => ({ ...b, html: b.html.replace(/^<(h[1-6])/, `<$1 data-part-block="${i}"`) }));
         // Parte + 1.º capítulo abrem na mesma página (mesma âncora): um só ponto de inserção, na ordem do livro.
         const byAnchor = new Map<string, string>();
@@ -600,7 +604,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     let pageBreaks: { inserted: number; total: number } | undefined;
     // Page-list: alinhar as páginas do PDF de impressão ao texto e inserir marcadores.
     if (pdf) {
-        const anchors = await extractPdfPageAnchors(pdf.slice(0)); // pdfjs neutraliza o ArrayBuffer — pdf original tem de sobreviver p/ printPdf
+        const anchors = anchorsFromPages(await pdfPages());
         const res = insertPageBreaks(html, anchors);
         html = res.html;
         pageBreaks = { inserted: res.inserted, total: res.total };

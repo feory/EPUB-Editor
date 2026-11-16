@@ -7,7 +7,7 @@ import { MarginPreview } from '../components/MarginPreview';
 import { ImportOptionsModal } from './work/modals/ImportOptionsModal';
 import { ConversionsModal } from './work/modals/ConversionsModal';
 import { PagelistUpdateModal } from './work/modals/PagelistUpdateModal';
-import type { PageAnchor } from '../services/page-list/page-list';
+import type { PageAnchor } from '../services/page-list/pdf-text';
 import { EpubMappingModal } from './EpubMappingModal';
 import { scanEpubClasses } from '../services/import/epub-importer';
 import { detectFormat } from '../services/import/import-file';

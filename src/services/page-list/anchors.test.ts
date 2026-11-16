@@ -3,7 +3,7 @@ import '../indesign/happy-dom';
 
 (globalThis as { DOMMatrix?: unknown }).DOMMatrix ??= class {};
 Object.assign(globalThis, { NodeFilter: { SHOW_ELEMENT: 1, SHOW_TEXT: 4 } }); // o walker de textIndex também lê elementos (marcadores)
-const { anchorsFromPages, normalize } = await import('./page-list');
+const { anchorsFromPages, normalize } = await import('./pdf-text');
 
 type Item = { str: string; transform: number[] };
 const it = (str: string, x: number, y: number): Item => ({ str, transform: [1, 0, 0, 1, x, y] });
@@ -137,4 +137,25 @@ test('insertPageBreaks: a página que abre com texto de figura (âncora fora do 
     expect(r.html).toContain(`${marker(2)}Texto da pagina dois que esta no livro depois da figura`);
     expect(r.inserted).toBe(3);
     expect(insertPageBreaks(r.html, anchorsFromPages(pages)).html).toBe(r.html); // idempotente
+});
+
+const { folioToPdfPage, buildPdfLines, chapterAnchorsFromPages } = await import('./pdf-text');
+
+test('folioToPdfPage: folio → página física (1-based), com o folio detetado como nas âncoras', () => {
+    const pages = [1, 2, 3].map(n => page(n + 10, [`Texto da pagina ${n} com texto suficiente`]));
+    expect([...folioToPdfPage(pages)]).toEqual([[11, 1], [12, 2], [13, 3]]);
+});
+
+test('buildPdfLines: linhas por página, topo→baixo, texto normalizado, itens da mesma linha por x', () => {
+    const pages = [{ vpH: H, items: [it('segunda linha', 50, 500), it('Primeira', 50, 600), it(' linha!', 90, 600)] }];
+    expect(buildPdfLines(pages)).toEqual([[{ y: 600, text: 'primeiralinha' }, { y: 500, text: 'segundalinha' }]]);
+});
+
+test('chapterAnchorsFromPages: título na página de abertura (letra grande) → âncora = início do corpo da página com texto, sem cabeçalho', () => {
+    const big = (str: string, y: number) => ({ str, transform: [30, 0, 0, 30, 50, y] });
+    const opening = { vpH: H, items: [it('2', 50, 750), it('CABECALHO CORRENTE', 80, 750), big('CAPITULO DOIS', 600)] };
+    const pages = [page(1, ['Texto da pagina um com texto suficiente aqui']), opening, page(3, ['Primeira linha do capitulo dois com texto suficiente aqui'])];
+    const r = chapterAnchorsFromPages(pages, ['CAPITULO DOIS']);
+    expect(r).toEqual([{ title: 'CAPITULO DOIS', anchor: normalize('Primeira linha do capitulo dois com texto suficiente aqui').slice(0, 60) }]);
+    expect(chapterAnchorsFromPages(pages, ['TITULO QUE NAO EXISTE'])).toEqual([]);
 });

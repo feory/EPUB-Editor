@@ -17,7 +17,7 @@ import { unwrapCommentAnchor } from '../../utils/comment-anchor';
 import type { UserStyleKind } from '../../utils/user-styles';
 import { fixLinks, validateLinks } from '../../services/validation/link-validator';
 import { insertPageBreaks } from '../../services/page-list/page-list';
-import type { PageAnchor } from '../../services/page-list/page-list';
+import type { PageAnchor } from '../../services/page-list/pdf-text';
 
 export type Level = ChapterLevel;
 
