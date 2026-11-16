@@ -1,9 +1,10 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../../../utils/format';
-import { insertPageBreaks, insertChapterHeadings } from '../../page-list/alignment';
+import { insertPageBreaks } from '../../page-list/alignment';
+import { placeTitleBlocks, placePartBlocks } from './openings';
 import { verifyBlankSpacing } from '../../page-list/blank-spacing';
 import { readPdfPages, pdfToJpeg, getPdfPageCount, type PdfPageText } from '../../page-list/pdf-pages';
-import { anchorsFromPages, chapterAnchorsFromPages } from '../../page-list/pdf-text';
+import { anchorsFromPages } from '../../page-list/pdf-text';
 import { buildFigures, placeFigures, toRasterName } from './figures';
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from '../document-importer';
 import { readIdmlStyles } from './styles';
@@ -574,29 +575,11 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     // passado — cópia própria: o `pdf` original tem de sobreviver (printPdf, figuras).
     let pdfPagesRead: Promise<PdfPageText[]> | null = null;
     const pdfPages = () => (pdfPagesRead ??= readPdfPages(pdf!.slice(0)));
-    if (titleBlockRes.placed === 0 && titleBlocks.length > 0 && pdf) {
-        const chapterAnchors = chapterAnchorsFromPages(await pdfPages(), titleBlocks.map(t => t.searchKey));
-        const withHtml = chapterAnchors
-            .map(a => ({ anchor: a.anchor, headingHtml: titleBlocks.find(t => t.searchKey === a.title)?.html }))
-            .filter((a): a is { anchor: string; headingHtml: string } => !!a.headingHtml);
-        html = insertChapterHeadings(html, withHtml).html;
-    }
+    const pagesIfPdf = pdf ? pdfPages : undefined;
+    if (titleBlockRes.placed === 0) html = await placeTitleBlocks(html, titleBlocks, pagesIfPdf);
     // Divisórias de Parte: inseridas antes do 1.º bloco da página que se segue à sua abertura no PDF;
     // as que não encontrarem âncora vão para o fim (como antes) em vez de se perderem.
-    if (partBlocks.length > 0 && pdf) {
-        const anchors = chapterAnchorsFromPages(await pdfPages(), partBlocks.map(b => b.searchKey));
-        const tagged = partBlocks.map((b, i) => ({ ...b, html: b.html.replace(/^<(h[1-6])/, `<$1 data-part-block="${i}"`) }));
-        // Parte + 1.º capítulo abrem na mesma página (mesma âncora): um só ponto de inserção, na ordem do livro.
-        const byAnchor = new Map<string, string>();
-        for (const a of anchors) {
-            const b = tagged.find(t => t.searchKey === a.title);
-            if (b) byAnchor.set(a.anchor, [byAnchor.get(a.anchor), b.html].filter(Boolean).join('\n'));
-        }
-        html = insertChapterHeadings(html, [...byAnchor].map(([anchor, headingHtml]) => ({ anchor, headingHtml }))).html;
-        const missing = tagged.filter((_, i) => !html.includes(`data-part-block="${i}"`));
-        if (missing.length) html += '\n' + missing.map(m => m.html).join('\n');
-        html = html.replace(/ data-part-block="\d+"/g, '');
-    } else if (partBlocks.length > 0) html += '\n' + partBlocks.map(b => b.html).join('\n');
+    html = await placePartBlocks(html, partBlocks, pagesIfPdf);
     // Linhas em branco manuais (candidatas a p-top, ver renderStory/data-blank-top) só confirmam
     // espaçamento real com o PDF de impressão como árbitro (gap vs. entrelinha normal da página)
     // — sem PDF ficam sem p-top (mais seguro que assumir; muitos livros têm linhas em branco no

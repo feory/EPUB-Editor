@@ -171,7 +171,7 @@ export function readBodyText(html: string): BodyText {
  * foi encontrada — antes desse bloco, nunca a meio (precisão ao nível do parágrafo chega:
  * uma abertura de capítulo começa sempre um parágrafo novo).
  */
-export function insertChapterHeadings(html: string, anchors: { anchor: string; headingHtml: string }[]): { html: string; inserted: number; total: number } {
+export function insertChapterHeadings(html: string, anchors: { anchor: string; headingHtml: string }[]): { html: string; inserted: number; total: number; /** Índices (em `anchors`) dos que ficaram no corpo. */ placed: number[] } {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const { flat, map } = textIndex(doc);
 
@@ -183,23 +183,24 @@ export function insertChapterHeadings(html: string, anchors: { anchor: string; h
         const bare = anchor.replace(/^\d+/, '');
         return bare.length >= CHAPTER_MIN_ANCHOR && bare !== anchor ? { pos: flat.indexOf(bare, from), anchor: bare } : { pos: -1, anchor };
     };
-    const hits: { pos: number; headingHtml: string; anchor: string }[] = [];
-    for (const { anchor, headingHtml } of anchors) {
+    const hits: { pos: number; headingHtml: string; anchor: string; idx: number }[] = [];
+    anchors.forEach(({ anchor, headingHtml }, idx) => {
         const found = locate(anchor);
-        if (found.pos >= 0) hits.push({ pos: found.pos, headingHtml, anchor: found.anchor });
-    }
+        if (found.pos >= 0) hits.push({ pos: found.pos, headingHtml, anchor: found.anchor, idx });
+    });
     const keptIdx = new Set(longestIncreasing(hits.map(h => h.pos)));
     // Âncora também presente antes (ex. título repetido no Índice): 1.ª ocorrência fora de ordem foi
     // descartada → repetir a busca depois do último hit mantido, sem passar o seguinte.
     let from = -1;
-    const keep: { pos: number; headingHtml: string; anchor: string }[] = [];
+    const keep: { pos: number; headingHtml: string; anchor: string; idx: number }[] = [];
     for (let i = 0; i < hits.length; i++) {
         if (keptIdx.has(i)) { from = hits[i].pos; keep.push(hits[i]); continue; }
         const next = hits.findIndex((_, k) => k > i && keptIdx.has(k));
         const p = flat.indexOf(hits[i].anchor, from + 1);
         if (p >= 0 && (next === -1 || p < hits[next].pos)) { from = p; keep.push({ ...hits[i], pos: p }); }
     }
-    const points = keep.map(h => ({ ...map[h.pos], headingHtml: h.headingHtml }));
+    const points = keep.map(h => ({ ...map[h.pos], headingHtml: h.headingHtml, idx: h.idx }));
+    const placed: number[] = [];
     for (let i = points.length - 1; i >= 0; i--) {
         let el: Node | null = points[i].node.parentNode;
         while (el && el.nodeType === 1 && !/^(P|H[1-6]|DIV|LI|BLOCKQUOTE|TABLE)$/i.test((el as Element).tagName)) {
@@ -209,8 +210,9 @@ export function insertChapterHeadings(html: string, anchors: { anchor: string; h
         const frag = doc.createElement('div');
         frag.innerHTML = points[i].headingHtml;
         while (frag.firstChild) el.parentNode.insertBefore(frag.firstChild, el);
+        placed.push(points[i].idx);
     }
-    return { html: doc.body.innerHTML, inserted: points.length, total: anchors.length };
+    return { html: doc.body.innerHTML, inserted: points.length, total: anchors.length, placed: placed.sort((a, b) => a - b) };
 }
 
 const PASS2_MIN_ANCHOR = 20; // âncora mínima para o 2º passo (por capítulo)
