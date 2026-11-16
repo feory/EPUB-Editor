@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../../../utils/format';
-import { insertPageBreaks, insertChapterHeadings, verifyBlankSpacing } from '../../page-list/page-list';
+import { insertPageBreaks, insertChapterHeadings } from '../../page-list/alignment';
+import { verifyBlankSpacing } from '../../page-list/page-list';
 import { readPdfPages, pdfToJpeg, getPdfPageCount, type PdfPageText } from '../../page-list/pdf-pages';
 import { anchorsFromPages, chapterAnchorsFromPages } from '../../page-list/pdf-text';
 import { buildFigures, placeFigures, toRasterName } from './figures';

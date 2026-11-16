@@ -33,7 +33,7 @@ test('anchorsFromPages: sem folio nem interpolável (front-matter) não gera ân
     expect(anchorsFromPages([noFolio])).toEqual([]);
 });
 
-const { auditPageList } = await import('./page-list');
+const { auditPageList, pageLinesFromPages } = await import('./audit');
 
 test('auditPageList: marcada, em branco, figura, abre com figura e fora de ordem', () => {
     const pages = [
@@ -53,7 +53,7 @@ test('auditPageList: marcada, em branco, figura, abre com figura e fora de ordem
     expect(a.pagesWithFolio).toBe(a.marked + a.missing.length);
 });
 
-const { fillMissingPageBreaks, pageLinesFromPages } = await import('./page-list');
+const { fillMissingPageBreaks } = await import('./alignment');
 
 test('fillMissingPageBreaks: só dentro da janela entre os marcadores vizinhos; idempotente; não toca nos existentes', () => {
     const html = '<p>Texto da pagina um que esta no livro <span class="pagebreak" data-page="1"></span>fim</p>'
@@ -93,7 +93,7 @@ test('auditPageList: página cujo texto é do Índice e sem marcador → "indice
 });
 
 
-const { insertPageBreaks } = await import('./page-list');
+const { insertPageBreaks } = await import('./alignment');
 
 // Índice com 2 páginas (9, 10) e o título "PARTE I" no corpo com o mesmo texto da 1.ª entrada do Índice.
 const ENTRADA = 'Parte I A aproximação da mente humana';

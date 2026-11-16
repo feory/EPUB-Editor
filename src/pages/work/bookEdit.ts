@@ -16,7 +16,7 @@ import { linkIndiceEntries, linkOneIndiceEntry, unlinkOneIndiceEntry, listSubtit
 import { unwrapCommentAnchor } from '../../utils/comment-anchor';
 import type { UserStyleKind } from '../../utils/user-styles';
 import { fixLinks, validateLinks } from '../../services/validation/link-validator';
-import { insertPageBreaks } from '../../services/page-list/page-list';
+import { insertPageBreaks } from '../../services/page-list/alignment';
 import type { PageAnchor } from '../../services/page-list/pdf-text';
 
 export type Level = ChapterLevel;

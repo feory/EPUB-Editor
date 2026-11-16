@@ -3,7 +3,7 @@ import '../indesign/happy-dom';
 
 (globalThis as { DOMMatrix?: unknown }).DOMMatrix ??= class {};
 Object.assign(globalThis, { NodeFilter: { SHOW_ELEMENT: 1, SHOW_TEXT: 4 } });
-const { insertPageBreaks } = await import('./page-list');
+const { insertPageBreaks } = await import('./alignment');
 
 test('texto do capítulo Índice não recebe marcadores; a página vai para o corpo', () => {
     const html = '<p class="chapter-break-h1" data-title="Índice">&nbsp;</p><h1>Índice</h1><p>Como as redes sociais abrem a mente</p>'

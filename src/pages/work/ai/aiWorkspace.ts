@@ -8,7 +8,8 @@ import type { ValidationDigest, ValidationKind } from '../../../utils/validation
 import type { AiPlanInput } from './aiPlan';
 import type { PublicationFacts } from './publicationChecklist';
 import type { RuleBlock, SelectedBlocks } from './aiSelection';
-import type { PageListAudit, PageLines } from '../../../services/page-list/page-list';
+import type { PageListAudit } from '../../../services/page-list/audit';
+import type { PageLines } from '../../../services/page-list/alignment';
 
 export interface AiWorkspace {
     /** As partes do livro (1:1 com os capítulos) e o CSS, como estão agora. */

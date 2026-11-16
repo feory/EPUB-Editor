@@ -3,7 +3,7 @@ import '../indesign/happy-dom';
 
 (globalThis as { DOMMatrix?: unknown }).DOMMatrix ??= class {};
 Object.assign(globalThis, { NodeFilter: { SHOW_ELEMENT: 1, SHOW_TEXT: 4 } }); // outros testes só definem SHOW_TEXT
-const { movePageBreaksToChapterStart } = await import('./page-list');
+const { movePageBreaksToChapterStart } = await import('./alignment');
 
 const PB = (n: number) => `<span class="pagebreak" data-page="${n}"></span>`;
 const OPENING = '<p class="chapter-break-h2" data-title="II">&nbsp;</p><div class="box b-caixa-preta"><h2 class="p-center">II</h2></div><h3 class="p-center">AGORA ANTES.</h3>';

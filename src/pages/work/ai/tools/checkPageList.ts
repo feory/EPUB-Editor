@@ -1,5 +1,5 @@
 import type { AiTool } from './aiTool';
-import type { MissingReason } from '../../../../services/page-list/page-list';
+import type { MissingReason } from '../../../../services/page-list/audit';
 
 const WHY: Record<MissingReason, string> = {
     'branca': 'página em branco (só folio e marcas do InDesign): não precisa de marcador',

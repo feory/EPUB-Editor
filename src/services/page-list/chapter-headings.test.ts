@@ -3,7 +3,7 @@ import '../indesign/happy-dom';
 
 (globalThis as { DOMMatrix?: unknown }).DOMMatrix ??= class {};
 (globalThis as { NodeFilter?: unknown }).NodeFilter ??= { SHOW_TEXT: 4 };
-const { insertChapterHeadings } = await import('./page-list');
+const { insertChapterHeadings } = await import('./alignment');
 
 test('insertChapterHeadings: âncora também no Índice (1.ª ocorrência fora de ordem) é reencontrada no corpo', () => {
     const [a, b, c] = ['capitulo1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'capitulo2yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy', 'capitulo3zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'];

@@ -8,7 +8,7 @@ import { splitChapters, classifyChapterPart } from '../../../utils/chapters';
 import { setImageAlts, type AltDecision } from '../../../utils/image-alt-scan';
 import { convertSpanStyles } from '../../../utils/inline-styles';
 import { fixTypography, TYPOGRAPHY_FIXES, type TypographyFix } from '../../../utils/typography';
-import { fillMissingPageBreaks, type PageLines } from '../../../services/page-list/page-list';
+import { fillMissingPageBreaks, type PageLines } from '../../../services/page-list/alignment';
 import { applyStylePlan, planStyleRemovals, type PlannedStyle, type PlannedEdit } from '../../../utils/book-styles';
 import * as bookEdit from '../bookEdit';
 import type { Book, BookEdit } from '../bookEdit';

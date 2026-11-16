@@ -79,8 +79,8 @@ export async function finalizeImport(
         : prependFichaTecnica(applyImportOptions(cleanEditorHtml(uploaded), decisions.options ?? NO_OPTIONS));
     const { metadata, cover, printPdf, pageBreaks, figuresPlaced } = extracted;
     // Os marcadores de capítulo só existem depois da limpeza (insertChapterMarkers): é só agora que um número de página que
-    // cai na abertura de um capítulo pode subir para junto do limite. (pdfjs só carrega se o import trouxe page-list.)
-    if (pageBreaks) html = (await import('../page-list/page-list')).movePageBreaksToChapterStart(html);
+    // cai na abertura de um capítulo pode subir para junto do limite. (O módulo só se carrega se o import trouxe page-list.)
+    if (pageBreaks) html = (await import('../page-list/alignment')).movePageBreaksToChapterStart(html);
     return { html, metadata, cover, printPdf, pageBreaks, figuresPlaced };
 }
 
