@@ -2,6 +2,7 @@
 // Trabalham sobre as `parts` do split de capítulos (1:1 com `chapters[]`), sem tocar no DOM.
 
 import { decodeEntities } from './entities';
+import { LEADING_FILLER_RE } from './chapter-filler';
 import { matchChapterBoundary, isExplicitH1Part, chapterMarkerHtml, retitleMarkerTag, stripHidden, flattenHeadingText, type ChapterLevel as Level } from './chapters';
 
 const escapeHtml = (s: string) =>
@@ -79,10 +80,6 @@ export function renameChapterPart(part: string, newTitle: string): string {
     const open = part.match(/^<(?:p|hr)\b[^>]*>/i)![0];
     return retitleMarkerTag(open, safe) + part.slice(open.length);
 }
-
-// Blocos que podem ficar entre o marcador de capítulo e o seu heading: a <div> do marcador de página (movePageBreaksToChapterStart),
-// o parágrafo só com um marcador de página e a âncora de capítulo.
-const LEADING_FILLER_RE = /^(?:\s*(?:<div>\s*<span class="pagebreak"[^>]*><\/span>(?:&nbsp;|\u00a0|\s)*<\/div>|<p>\s*<span class="pagebreak"[^>]*><\/span>\s*<\/p>|<p\b[^>]*class="[^"]*chapter-anchor[^"]*"[^>]*>\s*<\/p>))*/i;
 
 /**
  * Muda o nível de uma parte de capítulo (h1/h2/h3/break), preservando o título.

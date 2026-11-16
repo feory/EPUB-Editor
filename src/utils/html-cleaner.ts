@@ -5,6 +5,7 @@
 
 import { insertChapterMarkers, refreshChapterMarkers, chapterMarkerHtml } from './chapters';
 import { isColumnPlaceholder } from './containers';
+import { isBreakClass } from './chapter-filler';
 import { INDENT_CONTROLLED_CLASSES, SPECIAL_INDENT_CLASSES, TITLE_LIKE_CLASSES, ALINEA_PROTECTED_CLASSES } from './editor-classes';
 
 // Ocorrências de uma substring literal (split/join, não RegExp — sem escaping de caracteres
@@ -321,7 +322,7 @@ export function applyImportOptions(html: string, options: ImportOptions): string
     boldParagraphs.has(el as HTMLParagraphElement) || el.classList.contains('p-bold');
 
   paragraphs.forEach((p) => {
-    if (p.className.includes('chapter-break')) return; // structural marker — never indented
+    if (isBreakClass(p.className)) return; // structural marker — never indented
     const prev = p.previousElementSibling;
     // Itálico (inline ou classe p-italic) conta como título/rótulo tal como o negrito.
     const isItalicPara = (el: Element) => italicParagraphs.has(el as HTMLParagraphElement) || el.classList.contains('p-italic') || el.classList.contains('p-bold-italic');
@@ -347,7 +348,7 @@ export function applyImportOptions(html: string, options: ImportOptions): string
     const isTitleLikePara = TITLE_LIKE_CLASSES.some((cls) => p.classList.contains(cls));
     if (options.topAfterBoldTop && isTitleLikePara && p.classList.contains('p-top')) {
       const next = p.nextElementSibling;
-      if (next?.tagName === 'P' && !next.className.includes('chapter-break') && !next.classList.contains('footnote') && !next.classList.contains('p-top')) {
+      if (next?.tagName === 'P' && !isBreakClass(next.className) && !next.classList.contains('footnote') && !next.classList.contains('p-top')) {
         next.classList.add('p-top');
       }
     }
@@ -519,7 +520,7 @@ export function cleanEditorDOM(body: HTMLElement): void {
     // Placeholder logo a seguir a um capítulo sem título (marcador chapter-break plano,
     // sem heading a seguir) — mantém, é onde o utilizador vai escrever o conteúdo.
     const prev = p.previousElementSibling;
-    if (prev && /\bchapter-break\b/.test(prev.className)) return;
+    if (prev && isBreakClass(prev.className)) return;
     // Único parágrafo de uma coluna (bloco .grid): sem ele a coluna deixa de ser editável.
     if (isColumnPlaceholder(p)) return;
     const text = p.textContent || '';

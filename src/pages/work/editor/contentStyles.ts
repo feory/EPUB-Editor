@@ -1,5 +1,6 @@
 import { activeBlockCss, gridActiveCss, gripCss, PLUS_SIZE, COL_OUTLINE_OFFSET } from './blockGeometry';
 import { MARK, BODY_CLASS } from './ephemeral';
+import { BREAK_ATTR } from '../../../utils/chapter-filler';
 
 // content_style do editor: o CSS do livro + estilos só-editor (diff/spell/noBreak/
 // marcadores de UI/hr). Os marcadores `data-mce-*` nunca exportam para EPUB.
@@ -43,8 +44,8 @@ ${gripCss()}
    Com um bloco ativo (${MARK.active}; body.${BODY_CLASS.hasActive}, posta em setup.ts — NÃO usar :has,
    muito lento com milhares de blocos) só ESSE mostra o "+"; sem nenhum, qualquer bloco em hover.
    ${MARK.plusOpen} = menu de inserção aberto (rato saiu do bloco, o "+" fica). */
-body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]) { container-type: inline-size; }
-body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"])::after {
+body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not(${BREAK_ATTR}) { container-type: inline-size; }
+body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not(${BREAK_ATTR})::after {
   content: "+"; position: absolute; z-index: 1; display: block; box-sizing: border-box;
   width: ${PLUS_SIZE}px; height: ${PLUS_SIZE}px; margin: calc(var(--plus-dy, 0px) - ${PLUS_SIZE / 2}px) 0 0 calc(50cqw - ${PLUS_SIZE / 2}px);
   border: 1px solid #e2e8f0; border-radius: 50%; background: #fff;
@@ -54,8 +55,8 @@ body:not(.mce-content-readonly) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-
   transition: opacity .2s ease-in, transform .2s ease-in, visibility 0s linear .2s;
 }
 /* A entrada usa a transição DESTE estado: atraso de 60ms evita o "piscar" ao passar o rato por vários blocos. */
-body:not(.mce-content-readonly):not(.${BODY_CLASS.hasActive}):not(.${BODY_CLASS.gripMenu}) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]):hover::after,
-body:not(.mce-content-readonly):not(.${BODY_CLASS.gripMenu}) > :is(p,h1,h2,h3,h4,h5,h6):not([class*="chapter-break"]):is([${MARK.active}]:hover,[${MARK.plusOpen}])::after {
+body:not(.mce-content-readonly):not(.${BODY_CLASS.hasActive}):not(.${BODY_CLASS.gripMenu}) > :is(p,h1,h2,h3,h4,h5,h6):not(${BREAK_ATTR}):hover::after,
+body:not(.mce-content-readonly):not(.${BODY_CLASS.gripMenu}) > :is(p,h1,h2,h3,h4,h5,h6):not(${BREAK_ATTR}):is([${MARK.active}]:hover,[${MARK.plusOpen}])::after {
   visibility: visible; opacity: 1; transform: none;
   transition: opacity .22s ease-out .06s, transform .22s ease-out .06s, visibility 0s linear .06s;
 }

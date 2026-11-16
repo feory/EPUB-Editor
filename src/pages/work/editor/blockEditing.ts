@@ -8,6 +8,7 @@ import { readImageProps, applyImageProps, type ImageProps } from './imageProps';
 import { readGridProps, applyGridProps, applyGridToCells, type GridProps } from './gridProps';
 import { readSelectionProps, selectionPatchOps, type SelectionProps, type SelectionInfo } from './selectionProps';
 import { BLOCK_STYLE_OPTIONS } from './config';
+import { isBreakClass } from '../../../utils/chapter-filler';
 
 /** Seletor dos blocos de texto editáveis (parágrafo, títulos, item de lista). */
 export const TEXT_BLOCK_SELECTOR = 'p,h1,h2,h3,h4,h5,h6,li';
@@ -67,7 +68,7 @@ export function inspectBlock(ed: EditorLike): BlockInfo {
     const box = containerTarget(ed, node, '.box');
     const grid = containerTarget(ed, node, '.grid');
     const el = ed.closest(node, TEXT_BLOCK_SELECTOR);
-    const isText = !!el && !/(^|\s)chapter-break/.test(el.className);
+    const isText = !!el && !isBreakClass(el.className);
     const isImage = node.nodeName === 'IMG'; // uma imagem selecionada conta como seleção não recolhida, mas não é texto selecionado
     return {
         box: box ? readBoxProps(box) : null,

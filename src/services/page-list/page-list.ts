@@ -3,6 +3,7 @@ import { fillFolioGaps, dropFolioOutliers } from './folio';
 import { PAGEBREAK_MARKER_RE, DATA_PAGE_RE } from './marker';
 import { splitChapterSegments } from '../../utils/chapters';
 import { isIndiceChapterTitle } from '../../utils/indice-links';
+import { BREAK_SELECTOR, LEVEL_BREAK_SELECTOR, createPageHolder } from '../../utils/chapter-filler';
 
 // Worker partilhado com o pdf-service (já configurado lá); reconfigurar é idempotente.
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -204,7 +205,7 @@ function textIndex(doc: Document): { flat: string; map: { node: Text; offset: nu
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         if (n.nodeType === 1) {
             const el = n as Element;
-            if (el.matches('p[class*="chapter-break"]')) inIndice = isIndiceChapterTitle(el.getAttribute('data-title') ?? '');
+            if (el.matches(BREAK_SELECTOR)) inIndice = isIndiceChapterTitle(el.getAttribute('data-title') ?? '');
             // Na importação ainda não há marcadores de capítulo: o Índice é só um bloco com o texto "Índice".
             else if (el.matches('p,h1,h2,h3') && isIndiceChapterTitle(el.textContent ?? '')) inIndice = true;
             continue;
@@ -533,7 +534,6 @@ function insertPageBreaksCore(html: string, anchors: PageAnchor[]): { html: stri
 
 /** Texto (normalizado) máximo entre o marcador de capítulo e o marcador de página para este contar como "abertura do capítulo". */
 const CHAPTER_OPENING_MAX = 150;
-const CHAPTER_MARKER_SELECTOR = 'p[class*="chapter-break-h1"], p[class*="chapter-break-h2"]';
 
 /**
  * Quando o marcador de página cai logo a seguir à abertura de um capítulo h1/h2 (só os blocos curtos do título — caixa com o
@@ -544,7 +544,7 @@ export function movePageBreaksToChapterStart(html: string): string {
     if (!html.includes('pagebreak')) return html;
     const doc = new DOMParser().parseFromString(html, 'text/html');
     let moved = 0;
-    for (const marker of Array.from(doc.body.querySelectorAll(CHAPTER_MARKER_SELECTOR))) {
+    for (const marker of Array.from(doc.body.querySelectorAll(LEVEL_BREAK_SELECTOR))) {
         let firstText: Text | null = null;
         let textLen = 0;
         const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
@@ -554,7 +554,7 @@ export function movePageBreaksToChapterStart(html: string): string {
             if (marker.contains(node)) continue; // o texto do próprio marcador (&nbsp;) não conta
             if (node.nodeType === 1) {
                 const el = node as Element;
-                if (el.matches(CHAPTER_MARKER_SELECTOR) || el.matches('p[class*="chapter-break"]')) break; // chegou ao capítulo seguinte
+                if (el.matches(BREAK_SELECTOR)) break; // chegou ao capítulo seguinte
                 if (el.matches('span.pagebreak')) { target = el; break; }
                 continue;
             }
@@ -569,10 +569,7 @@ export function movePageBreaksToChapterStart(html: string): string {
         // própria com um &nbsp; (como o marcador de capítulo). <div> e não <p>: não entra na contagem dos <p> das Ligações do Índice.
         let top: Node = firstText;
         while (top.parentNode && top.parentNode !== doc.body) top = top.parentNode;
-        const holder = doc.createElement('div');
-        holder.appendChild(target);
-        holder.appendChild(doc.createTextNode('\u00a0'));
-        top.parentNode!.insertBefore(holder, top);
+        top.parentNode!.insertBefore(createPageHolder(doc, target), top);
         moved++;
     }
     return moved > 0 ? doc.body.innerHTML : html;

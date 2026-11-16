@@ -6,6 +6,7 @@ import { useStyles } from '../../../context/StyleContext';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { applyImportOptions, convertListsToDialogue } from '../../../utils/html-cleaner';
 import { splitChapterSegments } from '../../../utils/chapters';
+import { isBreakClass } from '../../../utils/chapter-filler';
 import type { ImportOptions } from '../../../utils/html-cleaner';
 import { cleanIndexText, linkIndexPages, wrapPageLinks, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
 import { sanitizeImageFilename } from '../../../utils/format';
@@ -473,7 +474,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                 // limpa só os parágrafos entre eles, mantendo classe E formatação inline.
                 for (const block of blocks) {
                     // Preservar títulos e marcadores de capítulo (fronteira do capítulo) intactos.
-                    if (/^H[1-6]$/.test(block.tagName) || /\bchapter-break/.test(block.className)) { out.push(block.outerHTML); continue; }
+                    if (/^H[1-6]$/.test(block.tagName) || isBreakClass(block.className)) { out.push(block.outerHTML); continue; }
                     const text = block.textContent ?? '';
                     if (!text.trim()) continue;
                     if (isPageContinuation(text)) continue; // linha só de páginas → descartar
@@ -503,7 +504,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const doc = new DOMParser().parseFromString(html, 'text/html');
             const range = doc.createRange(); // reusado por linkPageNumbers (createContextualFragment não precisa de posição)
-            const isBoundary = (block: Element) => /^H[1-6]$/.test(block.tagName) || /\bchapter-break/.test(block.className);
+            const isBoundary = (block: Element) => /^H[1-6]$/.test(block.tagName) || isBreakClass(block.className);
 
             // Envolve, num text node, cada número dentro de uma lista de páginas — preservando a
             // formatação inline (<em>/<strong>/versaletes/notas) e o texto à volta tal e qual.

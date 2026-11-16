@@ -13,6 +13,7 @@ import type { ActiveBlock } from './activeBlock';
 import { plusCenterY, PLUS_SIZE } from './blockGeometry';
 import { topLevelBlock, hitsPlus, gripState, gripZone, dropTargetAt, changeDetector } from './blockInteraction';
 import { MARK, BODY_CLASS } from './ephemeral';
+import { isBreakClass } from '../../../utils/chapter-filler';
 import { miniMenuAnchor, usePopupDismiss } from './overlays/popupDismiss';
 import { createMenus, type OpenMenu, type Pos } from './openMenu';
 
@@ -405,7 +406,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     ) => {
         const isPlusBlock = (block: HTMLElement | null): block is HTMLElement =>
             !!block && block !== editor.getBody() && /^(P|H[1-6])$/.test(block.nodeName)
-            && !/\bchapter-break/.test(block.className);
+            && !isBreakClass(block.className);
         miniMenuRef.current = attachMiniMenu(editor, { blockOf });
         // Botão "+": desenhado só em CSS (::after do bloco sob o rato, ver contentStyles.ts).
         // Pseudo-elementos não recebem eventos → o clique chega ao próprio bloco e é reconhecido

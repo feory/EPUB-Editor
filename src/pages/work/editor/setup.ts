@@ -18,6 +18,7 @@ import { blockCssInfo } from './cssInfo';
 import { registerImageTools } from './imageTools';
 import { MARK, registerEphemeralMarks } from './ephemeral';
 import { selectedTopBlocks } from './selectedBlock';
+import { isBreakClass, markerBefore } from '../../../utils/chapter-filler';
 import type { SelectedBlocks } from '../ai/aiSelection';
 
 export interface SetupLive {
@@ -305,7 +306,7 @@ export function createEditorSetup(deps: SetupDeps) {
             editor.dom.select(`[${MARK.empty}]`).forEach((el: HTMLElement) => editor.dom.setAttrib(el, MARK.empty, null));
             if (!editor.hasFocus()) return;
             const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
-            if (block && block.nodeName === 'P' && !/\bchapter-break/.test(block.className)
+            if (block && block.nodeName === 'P' && !isBreakClass(block.className)
                 && !(block.textContent || '').replace(/\u00a0/g, '').trim() && !block.querySelector('img')) {
                 editor.dom.setAttrib(block, MARK.empty, '1');
             }
@@ -331,7 +332,7 @@ export function createEditorSetup(deps: SetupDeps) {
         // (h2 vira subtítulo dentro do capítulo) NÃO seja re-inserido ao clicar.
         function syncChapterMarker() {
             // Seleção de vários blocos: getNode() é o ancestral comum (sem bloco) — usar os blocos selecionados.
-            const selected = (editor.selection.getSelectedBlocks() as HTMLElement[]).filter(b => /^(P|H[1-6])$/.test(b.nodeName) && !/\bchapter-break/.test(b.className));
+            const selected = (editor.selection.getSelectedBlocks() as HTMLElement[]).filter(b => /^(P|H[1-6])$/.test(b.nodeName) && !isBreakClass(b.className));
             const first = blockOf(editor.selection.getNode()) as HTMLElement | null;
             const blocks = selected.length ? selected : first ? [first] : [];
             if (!blocks.length) return;
@@ -342,12 +343,10 @@ export function createEditorSetup(deps: SetupDeps) {
                 for (let c = block.parentElement?.closest(CONTAINER_SELECTOR); c; c = c.parentElement?.closest(CONTAINER_SELECTOR)) anchor = c as HTMLElement;
                 return anchor;
             });
-            // A <div> só com marcador de página (movePageBreaksToChapterStart) fica entre o marcador de capítulo e o
-            // heading: saltá-la, senão o marcador existente não é achado e cria-se um 2.º (capítulo duplicado).
-            const isPageHolder = (el: Element) => el.nodeName === 'DIV' && !!el.querySelector('span.pagebreak') && !(el.textContent || '').replace(/\u00a0/g, '').trim();
+            // O marcador do bloco, salte o enchimento que a page-list deixa pelo meio (chapter-filler.ts): senão não se acha
+            // o existente e cria-se um 2.º (capítulo duplicado).
             const prevMarker = (anchor: HTMLElement) => {
-                let prev = anchor.previousElementSibling as HTMLElement | null;
-                while (prev && isPageHolder(prev)) prev = prev.previousElementSibling as HTMLElement | null;
+                const prev = markerBefore(anchor) as HTMLElement | null;
                 return prev && prev.nodeName === 'P' && isLevelMarkerClass(prev.className) ? prev : null;
             };
             const plan = planChapterMarkers(blocks.map((block, i) => ({
@@ -390,7 +389,7 @@ export function createEditorSetup(deps: SetupDeps) {
         // o marcador) e atalhos (Ctrl/Cmd/Alt).
         editor.on('keydown', (e: KeyboardEvent) => {
             const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
-            if (!block || !/\bchapter-break/.test(block.className)) return;
+            if (!block || !isBreakClass(block.className)) return;
             if (e.key === 'Enter' || (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey)) {
                 e.preventDefault();
             }
@@ -677,7 +676,7 @@ export function createEditorSetup(deps: SetupDeps) {
                         const body = editor.getBody();
                         const tops = [...new Set(editor.selection.getSelectedBlocks()
                             .map((b) => editor.dom.getParent(b, (n: Node) => n.parentNode === body) as HTMLElement | null)
-                            .filter((b): b is HTMLElement => !!b && !/chapter-break/.test(b.className)))];
+                            .filter((b): b is HTMLElement => !!b && !isBreakClass(b.className)))];
                         if (tops.length === 0) return editor.selection.setContent(`<div class="box">${html}</div>`);
                         const box = editor.dom.create('div', { class: 'box' });
                         tops[0].before(box);

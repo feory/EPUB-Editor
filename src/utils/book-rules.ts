@@ -4,6 +4,7 @@
 // `chapter-anchor` nunca são tocados.
 
 import { exclusiveOf } from './editor-classes';
+import { isStructureBlock, isFillerBlock } from './chapter-filler';
 
 export type RuleAction =
     | { type: 'addClass'; value: string }
@@ -84,9 +85,6 @@ const styleDecls = (el: Element): { name: string; text: string }[] =>
     (el.getAttribute('style') || '').split(';').map((d) => d.trim()).filter((d) => d.includes(':'))
         .map((d) => ({ name: d.slice(0, d.indexOf(':')).trim().toLowerCase(), text: d }));
 
-const isMarker = (el: Element) => /\bchapter-(break|anchor)/.test(el.className);
-const isFiller = (el: Element) =>
-    isMarker(el) || el.tagName === 'HR' || (!(el.textContent || '').trim() && !el.querySelector('img,table,svg'));
 
 export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<string>): string[] {
     const errors: string[] = [];
@@ -116,7 +114,7 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
 /** O bloco de conteúdo imediatamente anterior (salta marcadores, âncoras, hr e vazios). */
 const prevContent = (el: Element): Element | null => {
     let prev = el.previousElementSibling;
-    while (prev && isFiller(prev)) prev = prev.previousElementSibling;
+    while (prev && isFillerBlock(prev)) prev = prev.previousElementSibling;
     return prev;
 };
 const afterHeadingOk = (el: Element, headings: string[]): boolean => {
@@ -126,7 +124,7 @@ const afterHeadingOk = (el: Element, headings: string[]): boolean => {
 /** `el` vem depois de um bloco com TODAS as `classes`, sem outro bloco assim nem título h1–h3 pelo meio (o próprio `el` não conta). */
 const inRunAfterClass = (el: Element, classes: string[]): boolean => {
     for (let prev = el.previousElementSibling; prev; prev = prev.previousElementSibling) {
-        if (isMarker(prev)) continue;
+        if (isStructureBlock(prev)) continue;
         if (classes.every((c) => prev!.classList.contains(c))) return true;
         if (/^h[1-3]$/.test(prev.tagName.toLowerCase())) return false;
     }
@@ -142,7 +140,7 @@ function select(doc: Document, s: RuleSelect): Element[] {
     }
     const els = s.deep ? Array.from(doc.body.querySelectorAll(s.tag.join(','))) : Array.from(doc.body.children).filter((e) => s.tag.includes(e.tagName.toLowerCase()));
     return els.filter((el) => {
-        if (isMarker(el)) return false;
+        if (isStructureBlock(el)) return false;
         if (s.hasClass && !s.hasClass.every((c) => el.classList.contains(c))) return false;
         if (s.noClass && s.noClass.some((c) => el.classList.contains(c))) return false;
         if (s.hasStyle && !s.hasStyle.every((p) => styleDecls(el).some((d) => d.name === p))) return false;
