@@ -191,7 +191,7 @@ export class PdfHeuristics {
     if (isFootnoteParagraph) {
       pTagAttrs = ' class="footnote"';
     } else if (isSeparator) {
-      pTagAttrs = ' class="p-no-indent-margin-top" style="text-align: center"';
+      pTagAttrs = ' class="p-asterisk"'; // separador "* * *": o estilo do editor (centrado, sem recuo, espaço)
     } else if (isDeepIndented) {
       const indentPx = Math.round(indentDiff);
       pTagAttrs = ` style="text-indent: ${indentPx}px"`;

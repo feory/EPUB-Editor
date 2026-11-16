@@ -13,7 +13,7 @@ import type { BlockInfo, BlockEdit } from '../editor/blockEditing';
 import { readRule, hasRule } from '../../../utils/css-rule';
 import { GRID_RATIOS, EMPTY_GRID, type GridProps } from '../editor/gridProps';
 import { IMAGE_ALIGNS, EMPTY_IMAGE, type ImageProps } from '../editor/imageProps';
-import { BLOCK_STYLE_OPTIONS } from '../editor/config';
+import { BLOCK_CLASS_STYLES } from '../editor/blockStyles';
 import { readCustomStyle, updateCustomStyle } from '../../../utils/book-css';
 
 interface BlockSidebarProps {
@@ -226,8 +226,8 @@ const BoxSection: React.FC<{
 };
 
 // Estilos combináveis de um parágrafo/item (tudo o que não é título nem o 'Padrão').
-// 'p-center'/'p-bottom' não são estilos do menu, mas o bloco pode tê-los (importação): sem chip não se tiravam.
-const COMBINABLE_STYLES: Array<readonly [string, string]> = [...BLOCK_STYLE_OPTIONS.filter(([f]) => !/^(h[1-3]|p)$/.test(f)), ['p-bottom', 'Baixo'], ['p-center', 'Centrado']];
+// Os chips vêm do registo de estilos de bloco (blockStyles.ts), incluindo os que não estão no menu (centrado, espaço baixo, legado).
+const COMBINABLE_STYLES: Array<readonly [string, string]> = BLOCK_CLASS_STYLES.map((s) => [s.format, s.label] as const);
 
 // "Criar estilo…": botão + formulário (nome + os campos de texto) que cria a classe no CSS do livro.
 // O estado (`draft`) vive em TextSection: com o formulário aberto os campos do bloco/regra atual escondem-se.

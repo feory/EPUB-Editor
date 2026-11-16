@@ -6,7 +6,7 @@
 import { insertChapterMarkers, refreshChapterMarkers, chapterMarkerHtml } from './chapters';
 import { isColumnPlaceholder } from './containers';
 import { isBreakClass } from './chapter-filler';
-import { INDENT_CONTROLLED_CLASSES, SPECIAL_INDENT_CLASSES, TITLE_LIKE_CLASSES, ALINEA_PROTECTED_CLASSES } from './editor-classes';
+import { INDENT_CONTROLLED_CLASSES, SPECIAL_INDENT_CLASSES, TITLE_LIKE_CLASSES, ALINEA_PROTECTED_CLASSES, NO_DROP_CAP_CLASSES } from './editor-classes';
 
 // Ocorrências de uma substring literal (split/join, não RegExp — sem escaping de caracteres
 // especiais). Partilhado pelas várias contagens/substituições do find/replace do editor
@@ -459,7 +459,6 @@ export function prependFichaTecnica(html: string): string {
   return chapterMarkerHtml(null, 'Ficha Técnica') + doc.body.innerHTML;
 }
 
-const DROP_CAP_SKIP_CLASSES = ['footnote', 'alinea', 'p-quote', 'p-center'];
 // Fala de diálogo ("— texto…", ver convertListsToDialogue): CSS ::first-letter não funde
 // travessão (Unicode Pd) com a letra seguinte, por isso este caso usa span.drop-cap explícito
 // a envolver "— L" em vez de p.drop-cap::first-letter.
@@ -478,7 +477,7 @@ export function applyDropCapToFirstParagraph(part: string): { part: string; stat
   for (let el = heading.nextElementSibling; el; el = el.nextElementSibling) {
     if (el.tagName !== 'P') continue;
     const cls = el.classList;
-    if (DROP_CAP_SKIP_CLASSES.some((c) => cls.contains(c))) continue;
+    if (NO_DROP_CAP_CLASSES.some((c) => cls.contains(c))) continue;
     if (cls.contains('p-small') && cls.contains('p-non-indent')) continue;
     if ((el.textContent || '').trim() === '') continue;
 

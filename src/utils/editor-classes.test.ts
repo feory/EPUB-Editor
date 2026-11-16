@@ -5,8 +5,8 @@ import { BLOCK_CLASS_STYLES } from '../pages/work/editor/blockStyles';
 const sorted = (a: string[]) => [...a].sort();
 
 // As listas que cada módulo tinha escrita à mão, fixadas: a tabela tem de dar o mesmo (mais p-asterisk, que não constava de nenhuma).
-test('as consultas dão o que as listas antigas davam (+ p-asterisk)', () => {
-    expect(sorted(HEADING_STRIPPED_CLASSES)).toEqual(sorted(['p-indent', 'p-top', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-quote', 'p-legendas', 'p-non-indent', 'footnote', 'drop-cap', 'alinea', 'p-border-top', 'p-border-bottom', 'p-border-sides', 'p-asterisk']));
+test('as consultas dão o que as listas antigas davam (+ p-asterisk, p-bottom)', () => {
+    expect(sorted(HEADING_STRIPPED_CLASSES)).toEqual(sorted(['p-indent', 'p-top', 'p-bottom', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-quote', 'p-legendas', 'p-non-indent', 'footnote', 'drop-cap', 'alinea', 'p-border-top', 'p-border-bottom', 'p-border-sides', 'p-asterisk']));
     expect(sorted(INDENT_CONTROLLED_CLASSES)).toEqual(sorted(['footnote', 'alinea', 'drop-cap', 'p-non-indent', 'p-indent', 'p-center', 'p-bold', 'p-bold-italic', 'p-border-top', 'p-border-bottom', 'p-border-sides', 'p-asterisk']));
     expect(sorted(SPECIAL_INDENT_CLASSES)).toEqual(sorted(['footnote', 'alinea', 'drop-cap', 'p-center', 'p-border-top', 'p-border-bottom', 'p-border-sides', 'p-asterisk']));
     expect(sorted(ALINEA_PROTECTED_CLASSES)).toEqual(sorted(['p-indent', 'p-center', 'p-small', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-quote', 'p-legendas', 'drop-cap', 'footnote', 'p-asterisk']));

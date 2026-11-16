@@ -2,10 +2,11 @@ import { expect, test } from 'bun:test';
 import { BLOCK_STYLES, BLOCK_CLASS_STYLES } from './blockStyles';
 import { STYLE_FORMATS, BLOCK_STYLE_OPTIONS, MORE_STYLES_PARA, MORE_STYLES_HEAD, PARAGRAPH_QUICK_STYLES } from './config';
 
+const EXTRA = ['p-bottom', 'p-center', 'p-non-indent']; // só formato + chip do painel (group 'extra')
 const OLD_REGISTERED = ['p-indent', 'p-top', 'p-space', 'footnote', 'drop-cap', 'p-small', 'p-legendas', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-quote', 'p-asterisk', 'p-border-top', 'p-border-bottom', 'p-border-sides'];
 
 test('o registo regista os mesmos formatos de classe de antes (e nunca o wrapper box)', () => {
-    expect(BLOCK_CLASS_STYLES.map((s) => s.format).sort()).toEqual([...OLD_REGISTERED].sort());
+    expect(BLOCK_CLASS_STYLES.map((s) => s.format).sort()).toEqual([...OLD_REGISTERED, ...EXTRA].sort());
 });
 
 test('menu da barra: todos os estilos aparecem, cada formato uma só vez', () => {

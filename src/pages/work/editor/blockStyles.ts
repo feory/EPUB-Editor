@@ -5,7 +5,7 @@ export interface BlockStyle {
     format: string;      // nome do formato = classe CSS (box é wrapper: não é classe do próprio bloco)
     label: string;       // menu "Mais estilos" e painel do bloco
     toolbar?: string;    // rótulo no menu "Estilos" da barra, se diferente de `label`
-    group: 'paragraph' | 'border' | 'special';  // grupo no menu "Estilos" da barra
+    group: 'paragraph' | 'border' | 'special' | 'extra';  // grupo no menu "Estilos" da barra; 'extra' = só formato registado + chip do painel (alinhamento, espaço, legado)
     more: 'paragraph' | 'other' | null;         // "Mais estilos": junto dos parágrafos (blocos-título) ou dos restantes; null = só na barra
 }
 
@@ -20,6 +20,9 @@ export const BLOCK_STYLES: readonly BlockStyle[] = [
     { format: 'p-bold-italic', label: 'Negrito + Itálico', group: 'paragraph', more: 'paragraph' },
     { format: 'p-uppercase', label: 'Maiúsculas', group: 'paragraph', more: 'paragraph' },
     { format: 'p-legendas', label: 'Legenda', group: 'paragraph', more: 'paragraph' },
+    { format: 'p-bottom', label: 'Baixo', group: 'extra', more: null },
+    { format: 'p-center', label: 'Centrado', group: 'extra', more: null },
+    { format: 'p-non-indent', label: 'Sem Indentação', group: 'extra', more: null },
     { format: 'p-asterisk', label: 'Separador (*)', group: 'paragraph', more: null },
     { format: 'p-border-top', label: 'Borda Superior', group: 'border', more: 'other' },
     { format: 'p-border-bottom', label: 'Borda Inferior', group: 'border', more: 'other' },

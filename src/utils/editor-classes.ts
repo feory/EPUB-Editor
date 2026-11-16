@@ -18,6 +18,8 @@ interface Traits {
     protectsFromAlinea?: true;
     /** Título/rótulo: o espaço acima passa ao parágrafo seguinte. */
     titleLike?: true;
+    /** Nunca recebe capitular (o 1.º parágrafo a seguir a estes não conta). */
+    noDropCap?: true;
     /** Não coexiste com esta: acrescentar uma tira a outra. */
     excludes?: string;
 }
@@ -26,23 +28,24 @@ const STYLE_TRAITS: Record<string, Traits> = {
     'p-indent': { notInHeading: true, controlsIndent: true, protectsFromAlinea: true, excludes: 'p-non-indent' },
     'p-non-indent': { notInHeading: true, controlsIndent: true, excludes: 'p-indent' },
     'p-top': { notInHeading: true },
+    'p-bottom': { notInHeading: true },
     'p-space': {},
     'p-small': { notInHeading: true, protectsFromAlinea: true },
     'p-bold': { notInHeading: true, controlsIndent: true, protectsFromAlinea: true, titleLike: true },
     'p-italic': { notInHeading: true, protectsFromAlinea: true, titleLike: true },
     'p-bold-italic': { notInHeading: true, controlsIndent: true, protectsFromAlinea: true },
     'p-uppercase': { notInHeading: true, protectsFromAlinea: true, titleLike: true },
-    'p-center': { controlsIndent: true, specialIndent: true, protectsFromAlinea: true },
-    'p-quote': { notInHeading: true, protectsFromAlinea: true },
+    'p-center': { controlsIndent: true, specialIndent: true, protectsFromAlinea: true, noDropCap: true },
+    'p-quote': { notInHeading: true, protectsFromAlinea: true, noDropCap: true },
     'p-legendas': { notInHeading: true, protectsFromAlinea: true },
     'p-asterisk': { notInHeading: true, controlsIndent: true, specialIndent: true, protectsFromAlinea: true },
     'p-border-top': { notInHeading: true, controlsIndent: true, specialIndent: true },
     'p-border-bottom': { notInHeading: true, controlsIndent: true, specialIndent: true },
     'p-border-sides': { notInHeading: true, controlsIndent: true, specialIndent: true },
-    'footnote': { structural: true, notInHeading: true, controlsIndent: true, specialIndent: true, protectsFromAlinea: true },
+    'footnote': { structural: true, notInHeading: true, controlsIndent: true, specialIndent: true, protectsFromAlinea: true, noDropCap: true },
     'footnote-ref': { structural: true },
     'drop-cap': { notInHeading: true, controlsIndent: true, specialIndent: true, protectsFromAlinea: true },
-    'alinea': { notInHeading: true, controlsIndent: true, specialIndent: true },
+    'alinea': { notInHeading: true, controlsIndent: true, specialIndent: true, noDropCap: true },
     'chapter-break': { structural: true },
     'pagebreak': { structural: true },
     'small-caps': {},
@@ -63,6 +66,7 @@ export const INDENT_CONTROLLED_CLASSES = withTrait('controlsIndent');
 export const SPECIAL_INDENT_CLASSES = withTrait('specialIndent');
 export const ALINEA_PROTECTED_CLASSES = withTrait('protectsFromAlinea');
 export const TITLE_LIKE_CLASSES = withTrait('titleLike');
+export const NO_DROP_CAP_CLASSES = withTrait('noDropCap');
 
 /** A classe com que `cls` não pode coexistir, ou undefined. */
 export const exclusiveOf = (cls: string): string | undefined =>
