@@ -23,6 +23,14 @@ export interface AgentResult {
 }
 
 const MAX_TURNS = 8;
+
+/** O que se diz ao utilizador enquanto cada ferramenta corre (as validações e o PDF demoram segundos). */
+const STEP_LABELS: Record<string, string> = {
+    survey_book: 'A ler o livro…', preview_rules: 'A simular as alterações…', find_text: 'A procurar no livro…', search_docs: 'A consultar os guias…',
+    run_validation: 'A correr a validação…', check_publication: 'A verificar a publicação (inclui as validações)…', build_report: 'A preparar o relatório (corre as validações)…',
+    check_page_list: 'A comparar a lista de páginas com o PDF…', check_styles: 'A comparar os estilos com o PDF…', check_figures: 'A comparar as figuras com o PDF…',
+};
+export const stepLabel = (tool: string) => STEP_LABELS[tool] ?? 'A trabalhar…';
 const textOf = (content: Block[]) => content.filter((b) => b.type === 'text').map((b) => String(b.text ?? '')).join('\n').trim();
 
 export async function runAgent(opts: {
@@ -34,6 +42,8 @@ export async function runAgent(opts: {
     workspace: AiWorkspace;
     /** Só este bloco: as regras ficam limitadas a ele e as operações (que mexem no livro todo) recusam-se. */
     scope?: RuleBlock | null;
+    /** O que está a acontecer agora ('A pensar…' enquanto o modelo responde; o texto da ferramenta enquanto corre). */
+    onStep?: (label: string) => void;
 }): Promise<AgentResult> {
     let messages = opts.messages;
     let proposal: AgentResult['proposal'] = null;
@@ -50,6 +60,7 @@ export async function runAgent(opts: {
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
         opts.signal?.throwIfAborted();
+        opts.onStep?.('A pensar…');
         const res = await opts.send(messages, opts.signal);
         messages = [...messages, { role: 'assistant', content: res.content }];
         if (res.stop_reason !== 'tool_use') {
@@ -58,7 +69,7 @@ export async function runAgent(opts: {
             return { messages, text: text || note, proposal, report };
         }
         const results: Block[] = [];
-        for (const b of res.content.filter((x) => x.type === 'tool_use')) { opts.signal?.throwIfAborted(); results.push({ type: 'tool_result', tool_use_id: b.id, ...(await execute(b)) }); }
+        for (const b of res.content.filter((x) => x.type === 'tool_use')) { opts.signal?.throwIfAborted(); opts.onStep?.(stepLabel(String(b.name))); results.push({ type: 'tool_result', tool_use_id: b.id, ...(await execute(b)) }); }
         messages = [...messages, { role: 'user', content: results }];
     }
     return { messages, text: 'O assistente excedeu o limite de passos. Reformula o pedido.', proposal, report };

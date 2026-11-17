@@ -26,6 +26,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
     // O relatório preparado (texto) fica por descarregar até pedir outro ou limpar a conversa; não se guarda ao recarregar a página.
     const [report, setReport] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [step, setStep] = useState(''); // o que o assistente está a fazer (vazio = nada em especial)
     const [error, setError] = useState('');
     const history = useRef<AgentMessage[]>(stored ? (stored.pending ? [...stored.history, { role: 'user', content: `[Sistema: ${LOST_PROPOSAL}]` }] : stored.history) : []);
     const request = useRef('');
@@ -54,6 +55,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
                 messages: [...history.current, { role: 'user', content: block ? blockContext(workspace.parts(), block) + request.current : request.current }],
                 scope: block,
                 signal: abort.signal,
+                onStep: setStep,
                 send: async (messages, signal) => (await ebooksApi.aiChat(isbn, messages, signal)).data,
                 workspace,
             });
@@ -66,7 +68,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
             if (abort.signal.aborted) { setLines((l) => [...l, { role: 'assistant', text: 'Pedido cancelado.' }]); return false; }
             setError(isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error ?? 'Erro de rede' : 'Erro inesperado');
             return false;
-        } finally { controller.current = null; setBusy(false); }
+        } finally { controller.current = null; setStep(''); setBusy(false); }
     }, [isbn, busy, workspace, scoped]);
 
     /** Parar: cancela o pedido em curso (o modelo deixa de ser chamado; o que a ferramenta já corria acaba sozinho). */
@@ -104,5 +106,5 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
     }, [proposal]);
     const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setReport(null); setError(''); }, []); // o efeito apaga o que estava guardado
 
-    return { lines, proposal, report, busy, error, scoped, clearScope, send, stop, apply, discard, renameStyle, noteReverted, reset };
+    return { lines, proposal, report, busy, step, error, scoped, clearScope, send, stop, apply, discard, renameStyle, noteReverted, reset };
 }

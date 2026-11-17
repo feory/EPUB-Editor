@@ -73,6 +73,13 @@ test('Parar: cancelar a meio não volta a chamar o modelo e rejeita', async () =
     expect(calls).toBe(1);
 });
 
+test('onStep: "A pensar…" a cada chamada ao modelo e o texto da ferramenta enquanto ela corre', async () => {
+    const steps: string[] = [];
+    const s = script(tool('1', 'survey_book'), tool('2', 'run_validation', { type: 'links' }), text('ok'));
+    await runAgent({ messages: user, send: s.send, workspace: ws(book), onStep: (l) => steps.push(l) });
+    expect(steps).toEqual(['A pensar…', 'A ler o livro…', 'A pensar…', 'A correr a validação…', 'A pensar…']);
+});
+
 test('recusa e limite de passos têm mensagem; o histórico inclui as respostas', async () => {
     const refused = await runAgent({ messages: user, send: async () => ({ stop_reason: 'refusal', content: [] }), workspace: ws(book) });
     expect(refused.text).toContain('recusou');
