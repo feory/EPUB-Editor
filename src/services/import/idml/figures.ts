@@ -1,8 +1,7 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename, toRasterName } from '../../../utils/format';
-import { readPdfPages } from '../../page-list/pdf-pages';
+import type { PrintPdf } from '../../page-list/print-pdf';
 import { reviewFigures } from '../../page-list/figure-audit';
-import { pdfStyles } from '../../page-list/pdf-styles';
 import { buildPdfLines, folioToPdfPage, normalize as normalizeForMatch } from '../../page-list/pdf-text';
 
 /**
@@ -460,11 +459,11 @@ function biggestGap(lines: { y: number }[]): number | null {
  * Só apanha imagens que criam uma quebra CLARAMENTE maior que a entrelinha normal — uma vinheta
  * pequena ao lado de uma linha de texto (sem empurrar linhas) não é detetada e fica só na galeria.
  */
-export async function placeFiguresByPosition(html: string, figures: Figure[], pdfData: ArrayBuffer): Promise<{ html: string; placed: number }> {
+export async function placeFiguresByPosition(html: string, figures: Figure[], pdf: PrintPdf): Promise<{ html: string; placed: number }> {
     const candidates = figures.filter(f => f.imageId && f.pageHint && f.pageHint.length > 0);
     if (candidates.length === 0) return { html, placed: 0 };
 
-    const pdfPages = await readPdfPages(pdfData.slice(0));
+    const pdfPages = await pdf.pages();
     const folioToPage = folioToPdfPage(pdfPages);
     const pdfLines = buildPdfLines(pdfPages);
 
@@ -537,7 +536,7 @@ const placedImageIds = (html: string): Set<string> => new Set([...html.matchAll(
  *  4. placeFiguresByPosition — vinhetas sem legenda nem nº, pela maior quebra vertical da página impressa; só com PDF.
  * Cada passo só vê as imagens que os anteriores não colocaram. `imageIds` = as imagens da galeria do livro.
  */
-export async function placeFigures(html: string, figures: Figure[], imageIds: string[], pdf?: ArrayBuffer): Promise<{ html: string; placed: number }> {
+export async function placeFigures(html: string, figures: Figure[], imageIds: string[], pdf?: PrintPdf): Promise<{ html: string; placed: number }> {
     const byRef = insertFigures(html, figures);
     const inline = placeInlineFigures(byRef.html, imageIds);
     const hasTextCaptions = figures.some(f => f.imageId && f.label);
@@ -549,15 +548,14 @@ export async function placeFigures(html: string, figures: Figure[], imageIds: st
         const placedNow = placedImageIds(out);
         const unplaced = figures.filter(f => f.imageId && !f.label && f.pageHint?.length && !placedNow.has(f.imageId));
         if (unplaced.length > 0) {
-            const r = await placeFiguresByPosition(out, unplaced, pdf.slice(0));
+            const r = await placeFiguresByPosition(out, unplaced, pdf);
             out = r.html;
             byPosition = r.placed;
         }
     }
     if (pdf) { // a ordem de leitura do PDF acerta o sítio de cada figura com legenda (a 1.ª referência no corpo nem sempre é onde o impresso a põe)
         try {
-            const pages = await readPdfPages(pdf.slice(0));
-            out = reviewFigures(out, pdfStyles(pages), { strict: true }).html;
+            out = reviewFigures(out, await pdf.styles(), { strict: true }).html;
         } catch { /* sem PDF legível mantém-se a colocação por texto */ }
     }
     return { html: out, placed: byRef.placed + inline.placed + numbered.placed + byPosition };

@@ -21,8 +21,8 @@ async function withPrintPdf<T>({ isbn, work }: { isbn: string | undefined; work:
     const res = await ebooksApi.getPrintPdf(isbn).catch(() => null);
     if (!res || res.status !== 200) return null;
     try {
-        const { readPdfPages } = await import('../../../services/page-list/pdf-pages');
-        return fn(await readPdfPages(res.data as ArrayBuffer), work.getBookParts().join(''));
+        const { createPrintPdf } = await import('../../../services/page-list/print-pdf');
+        return fn(await createPrintPdf(res.data as ArrayBuffer).pages(), work.getBookParts().join(''));
     } catch { return null; }
 }
 

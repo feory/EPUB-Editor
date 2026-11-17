@@ -4,7 +4,8 @@ import { chapterMarkerHtml } from '../../../utils/chapters';
 import { insertPageBreaks } from '../../page-list/alignment';
 import { placeTitleBlocks, placePartBlocks } from './openings';
 import { verifyBlankSpacing } from '../../page-list/blank-spacing';
-import { readPdfPages, pdfToJpeg, getPdfPageCount, type PdfPageText } from '../../page-list/pdf-pages';
+import { createPrintPdf } from '../../page-list/print-pdf';
+import { pdfToJpeg, getPdfPageCount } from '../../page-list/pdf-pages';
 import { anchorsFromPages } from '../../page-list/pdf-text';
 import { buildFigures, placeFigures, toRasterName } from './figures';
 import type { ExtractedDocument, DocxStyleInfo, DocxStyleTarget, DocxStyleMapping } from '../document-importer';
@@ -574,8 +575,8 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     // fronteira recuperável do IDML).
     // O PDF lê-se UMA vez para os 3 usos abaixo (títulos, partes, âncoras de página). pdfjs neutraliza o ArrayBuffer que lhe é
     // passado — cópia própria: o `pdf` original tem de sobreviver (printPdf, figuras).
-    let pdfPagesRead: Promise<PdfPageText[]> | null = null;
-    const pdfPages = () => (pdfPagesRead ??= readPdfPages(pdf!.slice(0)));
+    const print = pdf ? createPrintPdf(pdf) : undefined;
+    const pdfPages = () => print!.pages();
     const pagesIfPdf = pdf ? pdfPages : undefined;
     if (titleBlockRes.placed === 0) html = await placeTitleBlocks(html, titleBlocks, pagesIfPdf);
     // Divisórias de Parte: inseridas antes do 1.º bloco da página que se segue à sua abertura no PDF;
@@ -597,7 +598,7 @@ export async function extractIdml(file: File, options: { styleMapping?: DocxStyl
     // Figuras: imagem/tabela + legenda no ponto da referência no corpo (todos os IDMLs).
     const figs: Awaited<ReturnType<typeof buildFigures>> = [];
     for (const idmlZip of idmlZips) figs.push(...await buildFigures(idmlZip, detectSpacing));
-    const figRes = await placeFigures(html, figs, [...images.keys()], pdf);
+    const figRes = await placeFigures(html, figs, [...images.keys()], print);
     html = figRes.html;
 
     return { html, images, pageBreaks, figuresPlaced: figRes.placed, printPdf: pdf };
