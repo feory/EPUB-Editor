@@ -8,6 +8,31 @@ export function miniMenuAnchor(): { top: number; left: number } {
     return { top: r ? r.bottom + 4 : 120, left: r ? r.left : 120 };
 }
 
+/** O topo do Mini-menu (para um painel que abre POR CIMA dele, sem o tapar). */
+export function miniMenuTop(): number {
+    const r = (document.querySelector('.tox-tinymce-aux .tox-pop') as HTMLElement | null)?.getBoundingClientRect();
+    return r ? r.top - 4 : 120;
+}
+
+const VIEWPORT_GAP = 8;
+/**
+ * `ref` de um painel `position:fixed` que abre para baixo a partir de `top`: se por baixo ficava cortado e por cima há mais espaço,
+ * abre DE BAIXO PARA CIMA, a acabar em `aboveY` (por omissão o próprio `top`). Se nem assim cabe, usa o maior dos dois lados e
+ * limita a altura (o painel precisa de `overflow-y-auto`). Idempotente: pode correr a cada render.
+ */
+export function openUpIfClipped(top: number, aboveY = top) {
+    return (el: HTMLElement | null) => {
+        if (!el) return;
+        const h = el.scrollHeight;
+        const below = window.innerHeight - top - VIEWPORT_GAP;
+        const above = aboveY - VIEWPORT_GAP;
+        if (h <= below || above <= below) { el.style.top = `${top}px`; return; }
+        const fit = Math.min(h, above);
+        el.style.top = `${aboveY - fit}px`;
+        if (h > above) el.style.maxHeight = `${above}px`;
+    };
+}
+
 /**
  * Ciclo de vida de um painel React aberto junto ao Mini-menu: enquanto `active`, fecha (`onClose`) ao
  * clicar fora, carregar Esc, fazer scroll (página ou editor) ou redimensionar a janela. O iframe do editor

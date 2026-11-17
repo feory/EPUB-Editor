@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { TinyMCEEditor } from '../types';
 import { chapterOfTarget } from '../../../../utils/indice-marker';
-import { usePopupDismiss } from './popupDismiss';
+import { usePopupDismiss, openUpIfClipped, miniMenuTop } from './popupDismiss';
 
 export interface IndiceLinkSubtitle { chapterIndex: number; index: number; text: string; anchor?: true; id?: string }
 export interface IndiceLinkChapter { title: string; level: string }
@@ -52,7 +52,7 @@ export function IndiceLinkPanel({ top, left, editorRef, chapters, subtitles, own
 
     return (
         <div
-            ref={rootRef}
+            ref={(el) => { rootRef.current = el; openUpIfClipped(top, miniMenuTop())(el); }}
             style={{ position: 'fixed', top, left, zIndex: 1401 }}
             className="w-80 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
         >

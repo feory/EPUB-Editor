@@ -3,6 +3,7 @@ import {
     StickyNote, Image as ImageIcon, Copy, Trash2, Minus, BookMarked, Columns2, LayoutGrid, Plus, Square,
     MoreVertical, ChevronDown, Anchor, BookOpen, SlidersHorizontal, Scissors, CopyPlus, ArrowUpToLine, ArrowDownToLine, Paintbrush, ClipboardPaste, Group, Ungroup,
 } from 'lucide-react';
+import { openUpIfClipped, miniMenuTop } from './popupDismiss';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
 import { BOX_VARIANTS, type BoxVariant } from '../boxProps';
 import { useStyles } from '../../../../context/StyleContext';
@@ -101,6 +102,7 @@ export function BlockOverlays({
                     {/* preventDefault: o editor não perde o foco; dismissGripMenu põe o cursor onde se clicou */}
                     <div className="fixed inset-0 z-[110]" onMouseDown={(e) => { e.preventDefault(); dismissGripMenu(e.clientX, e.clientY); }} />
                     <div
+                        ref={openUpIfClipped(gripMenu.top)}
                         style={{ position: 'fixed', top: gripMenu.top, left: gripMenu.left, zIndex: 111 }}
                         className="w-48 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
                     >
@@ -123,6 +125,7 @@ export function BlockOverlays({
                 <>
                     <div
                         data-style-menu
+                        ref={openUpIfClipped(styleMenu.top, miniMenuTop())}
                         onMouseLeave={closeStyleMenu}
                         style={{ position: 'fixed', top: styleMenu.top, left: styleMenu.left, zIndex: 1401 }}
                         className="w-72 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
@@ -275,6 +278,7 @@ export function BlockOverlays({
                 <>
                     <div className="fixed inset-0 z-[110]" onMouseDown={(e) => { e.preventDefault(); closeElementMenu(); }} />
                     <div
+                        ref={openUpIfClipped(elMenu.top)}
                         style={{ position: 'fixed', top: elMenu.top, left: elMenu.left, maxHeight: `calc(100vh - ${elMenu.top}px - 8px)`, zIndex: 111 }}
                         className="w-60 overflow-y-auto p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
                     >
