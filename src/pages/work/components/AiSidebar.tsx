@@ -67,7 +67,8 @@ export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; changes: Changes; isbn: str
     // Ao chegar uma resposta (ou a proposta, ou um erro) a lista desce até ao fim.
     useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [ai.lines, ai.proposal, ai.busy, ai.error]);
     const total = ai.proposal?.reports.reduce((n, r) => n + r.changed, 0) ?? 0;
-    const submit = () => { if (text.trim()) { void ai.send(text); setText(''); } };
+    // Se o pedido não correu (erro, cancelado), o texto volta à caixa para não ter de se reescrever (sem pisar o que entretanto se escreveu).
+    const submit = () => { const sent = text; if (sent.trim()) { void ai.send(sent).then((ok) => { if (!ok) setText((now) => now || sent); }); setText(''); } };
 
     return (
         <aside data-ai-sidebar style={{ width, ...frame }} className="fixed right-4 top-[var(--wp-header-h,57px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">

@@ -40,11 +40,12 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
     const persist = useCallback(() => saveChat(key, { lines, history: history.current, pending: !!proposal }), [key, lines, proposal]);
     useEffect(() => { persist(); }, [persist]);
 
-    const send = useCallback(async (text: string) => {
-        if (!isbn || !text.trim() || busy) return;
+    /** `true` se o pedido terminou; `false` se não chegou a correr, falhou ou foi cancelado (a interface devolve o texto à caixa). */
+    const send = useCallback(async (text: string): Promise<boolean> => {
+        if (!isbn || !text.trim() || busy) return false;
         request.current = text.trim();
         const block = scoped ? workspace.locate(scoped) : null;
-        if (scoped && !block) { setError('Não encontrei os blocos selecionados no livro. Seleciona-os de novo no editor ou tira o âmbito (×).'); return; }
+        if (scoped && !block) { setError('Não encontrei os blocos selecionados no livro. Seleciona-os de novo no editor ou tira o âmbito (×).'); return false; }
         setLines((l) => [...l, { role: 'user', text: request.current }]);
         setProposal(null); setError(''); setBusy(true);
         const abort = controller.current = new AbortController();
@@ -60,9 +61,11 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
             setLines((l) => [...l, { role: 'assistant', text: result.text || '(sem resposta)' }]);
             setProposal(result.proposal);
             if (result.report) setReport(result.report);
+            return true;
         } catch (e) {
-            if (abort.signal.aborted) { setLines((l) => [...l, { role: 'assistant', text: 'Pedido cancelado.' }]); return; }
+            if (abort.signal.aborted) { setLines((l) => [...l, { role: 'assistant', text: 'Pedido cancelado.' }]); return false; }
             setError(isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error ?? 'Erro de rede' : 'Erro inesperado');
+            return false;
         } finally { controller.current = null; setBusy(false); }
     }, [isbn, busy, workspace, scoped]);
 
