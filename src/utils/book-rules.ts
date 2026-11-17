@@ -11,6 +11,7 @@ export type RuleAction =
     | { type: 'removeClass'; value: string }
     | { type: 'removeStyle'; props: string[] }
     | { type: 'wrap'; tag: string; text?: string } // o inverso de unwrap: põe o conteúdo do bloco (ou só as ocorrências de `text`, dentro de um mesmo nó de texto) em <strong>/<em>…
+    | { type: 'keepTogether'; withNext?: boolean } // sem quebra de página entre os blocos: corridas de blocos selecionados seguidos (≥2) ou, com `withNext`, cada bloco + o seguinte, num <div class="noBreak">
     | { type: 'retag'; to: string }
     | { type: 'unwrap'; tags: string[] } // tira estas etiquetas de formatação de dentro do bloco, ficando o texto (ex. <strong> → negrito removido)
     | { type: 'delete' };
@@ -58,7 +59,7 @@ export const blockKey = (text: string | null) => (text ?? '').replace(/\s+/g, ' 
 
 /** Todas as ações e chaves do `select`, como valores: `Record` obriga o compilador a avisar se se acrescenta uma e esta lista fica para trás.
  *  Existem para o teste de contrato com o prompt do servidor (server/ai-contract.test.js). */
-export const RULE_ACTION_TYPES = Object.keys({ addClass: 1, removeClass: 1, removeStyle: 1, unwrap: 1, wrap: 1, retag: 1, delete: 1 } satisfies Record<RuleAction['type'], 1>);
+export const RULE_ACTION_TYPES = Object.keys({ addClass: 1, removeClass: 1, removeStyle: 1, unwrap: 1, wrap: 1, keepTogether: 1, retag: 1, delete: 1 } satisfies Record<RuleAction['type'], 1>);
 export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, startsWith: 1, afterHeading: 1, afterClass: 1, beforeClass: 1, following: 1, chapters: 1, exceptChapters: 1, deep: 1, position: 1, block: 1 } satisfies Record<keyof RuleSelect, 1>);
 
 export interface BookRule {
@@ -114,6 +115,7 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
         if ((a.type === 'retag' || a.type === 'delete') && s.tag?.some((t) => STRUCTURAL.includes(t))) errors.push(`${at}: não se mexe em h1/h2 (capítulos)`);
         if (a.type === 'removeStyle' && (!Array.isArray(a.props) || !a.props.length || !a.props.every((p) => PROP_RE.test(p)))) errors.push(`${at}: "props" tem de ser uma lista de propriedades CSS (ex. ["margin-left"])`);
         if (a.type === 'unwrap' && (!Array.isArray(a.tags) || !a.tags.length || !a.tags.every((t) => UNWRAP_TAGS.includes(t)))) errors.push(`${at}: "tags" tem de ser uma lista de ${UNWRAP_TAGS.join('/')}`);
+        if (a.type === 'keepTogether' && a.withNext !== undefined && typeof a.withNext !== 'boolean') errors.push(`${at}: "withNext" tem de ser true ou false`);
         if (a.type === 'wrap' && (!UNWRAP_TAGS.includes(a.tag) || (a.text !== undefined && (typeof a.text !== 'string' || !a.text.trim() || a.text.length > 200)))) errors.push(`${at}: "tag" tem de ser ${UNWRAP_TAGS.join('/')} e "text" (opcional) até 200 caracteres`);
         if (s.hasStyle && (!Array.isArray(s.hasStyle) || !s.hasStyle.every((p) => PROP_RE.test(p)))) errors.push(`${at}: "hasStyle" inválido`);
         if (a.type === 'retag' && !RETAG_TARGETS.includes(a.to)) errors.push(`${at}: retag só para ${RETAG_TARGETS.join('/')}`);
@@ -188,6 +190,36 @@ function select(doc: Document, s: RuleSelect): Element[] {
         if (s.afterClass && !(s.following ? inRunAfterClass(el, s.afterClass) : hasAll(prevContent(el), s.afterClass))) return false;
         if (s.beforeClass && !hasAll(nextContent(el), s.beforeClass)) return false;
         return true;
+    });
+}
+
+const inNoBreak = (el: Element) => !!el.closest('.noBreak');
+
+/**
+ * `keepTogether`: agrupa em `<div class="noBreak">` (a "União" do editor). Por omissão as corridas de blocos selecionados que são
+ * irmãos seguidos (≥ 2); com `withNext`, cada bloco selecionado com o irmão seguinte (que não seja marcador/enchimento). Devolve os grupos criados.
+ */
+function keepTogether(doc: Document, els: Element[], withNext: boolean): { wrapper: Element; before: string }[] {
+    const groups: Element[][] = [];
+    const chosen = new Set(els);
+    for (const el of els) {
+        if (inNoBreak(el) || el.parentElement?.classList.contains('noBreak')) continue;
+        const next = el.nextElementSibling;
+        if (withNext) {
+            if (next && !isFillerBlock(next) && !inNoBreak(next)) groups.push([el, next]);
+        } else if (!chosen.has(el.previousElementSibling as Element)) {
+            const run = [el];
+            for (let n = next; n && chosen.has(n) && !inNoBreak(n); n = n.nextElementSibling) run.push(n);
+            if (run.length > 1) groups.push(run);
+        }
+    }
+    return groups.map((g) => {
+        const before = g.map((e) => e.outerHTML).join('');
+        const wrapper = doc.createElement('div');
+        wrapper.className = 'noBreak';
+        g[0].before(wrapper);
+        wrapper.append(...g);
+        return { wrapper, before };
     });
 }
 
@@ -285,7 +317,12 @@ export function runRules(parts: string[], rules: BookRule[], knownClasses?: Read
         for (const rule of wanted) {
             const report = reports[rules.indexOf(rule)];
             let hits = 0;
-            for (const el of select(doc, rule.select)) {
+            if (rule.action.type === 'keepTogether') {
+                for (const { wrapper, before } of keepTogether(doc, select(doc, rule.select), !!rule.action.withNext)) {
+                    hits++;
+                    if (report.samples.length < MAX_SAMPLES) report.samples.push({ chapter: ci, before: clip(before), after: clip(wrapper.outerHTML) });
+                }
+            } else for (const el of select(doc, rule.select)) {
                 const before = el.outerHTML;
                 const result = apply(doc, el, rule.action);
                 if (result === undefined) continue;

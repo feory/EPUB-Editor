@@ -243,3 +243,21 @@ test('position: first apanha o primeiro <li> de cada lista', () => {
     expect(r.errors).toEqual([]);
     expect(r.parts[0]).toBe('<ul><li class="p-top">a</li><li>b</li></ul><ol><li class="p-top">c</li><li>d</li></ol>');
 });
+
+test('keepTogether: junta a corrida de blocos selecionados seguidos num div.noBreak (sem fundir), idempotente', () => {
+    const rule: BookRule = { select: { tag: ['p'], hasClass: ['x'] }, action: { type: 'keepTogether' } };
+    const html = '<p>a</p><p class="x">b</p><p class="x">c</p><p>d</p><p class="x">e</p>';
+    const r = runRules([html], [rule]);
+    expect(r.errors).toEqual([]);
+    expect(r.parts[0]).toBe('<p>a</p><div class="noBreak"><p class="x">b</p><p class="x">c</p></div><p>d</p><p class="x">e</p>');
+    expect(r.reports[0].changed).toBe(1);
+    expect(runRules(r.parts, [rule]).reports[0].changed).toBe(0);
+});
+
+test('keepTogether withNext: cada bloco selecionado fica unido ao seguinte', () => {
+    const rule: BookRule = { select: { tag: ['p'], hasClass: ['t'] }, action: { type: 'keepTogether', withNext: true } };
+    const r = runRules(['<p class="t">título</p><p>texto</p><p>outro</p>'], [rule]);
+    expect(r.parts[0]).toBe('<div class="noBreak"><p class="t">título</p><p>texto</p></div><p>outro</p>');
+    expect(runRules(r.parts, [rule]).reports[0].changed).toBe(0);
+    expect(validateRules([{ select: { tag: ['p'] }, action: { type: 'keepTogether', withNext: 'x' as never } }])).toHaveLength(1);
+});
