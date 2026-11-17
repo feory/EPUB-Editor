@@ -41,13 +41,13 @@ export const TEXT_PATTERNS = [
 ];
 
 // "Mais estilos" (botão ⋮ do mini-menu): estilos secundários mostrados em 2 colunas
-// num overlay React. Bloco parágrafo → oferece títulos + outros; bloco título → parágrafos + outros.
+// num overlay React. Bloco parágrafo → oferece títulos + outros; bloco título → SÓ converter em parágrafo padrão (um título não leva estilos).
 const HEADING_STYLES = [['h1', 'Título 1'], ['h2', 'Título 2'], ['h3', 'Título 3']] as const;
 const moreStyles = (more: BlockStyle['more']) => BLOCK_STYLES.filter((s) => s.more === more).map((s) => [s.format, s.label] as const);
 const PARAGRAPH_STYLES = [['p', 'Padrão'] as const, ...moreStyles('paragraph')];
 const OTHER_STYLES = moreStyles('other');
 export const MORE_STYLES_PARA: ReadonlyArray<readonly [string, string]> = [...HEADING_STYLES, ...OTHER_STYLES];
-export const MORE_STYLES_HEAD: ReadonlyArray<readonly [string, string]> = [...PARAGRAPH_STYLES, ...OTHER_STYLES];
+export const MORE_STYLES_HEAD: ReadonlyArray<readonly [string, string]> = [['p', 'Parágrafo padrão']];
 
 // STYLE_FORMATS com os estilos personalizados do livro (classes) no fim de "Parágrafos".
 export const styleFormatsWith = (custom: string[]) => STYLE_FORMATS.map((group) =>

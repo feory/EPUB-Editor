@@ -21,7 +21,7 @@ test('"Mais estilos" e painel do bloco derivam do mesmo registo', () => {
     expect(para.slice(0, 3)).toEqual(['h1', 'h2', 'h3']);
     expect(para).toContain('box');
     expect(para).not.toContain('p-asterisk'); // só na barra
-    expect(MORE_STYLES_HEAD[0][0]).toBe('p');
+    expect(MORE_STYLES_HEAD).toEqual([['p', 'Parágrafo padrão']]); // título: só converter em parágrafo padrão, sem estilos
     expect(BLOCK_STYLE_OPTIONS.map(([f]) => f)).not.toContain('box'); // wrapper, não estilo do bloco
     expect(PARAGRAPH_QUICK_STYLES.map(([, l]) => l)).toContain('Legenda');
     expect(new Set(BLOCK_STYLES.map((s) => s.format)).size).toBe(BLOCK_STYLES.length);

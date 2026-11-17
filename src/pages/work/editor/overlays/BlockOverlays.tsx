@@ -64,7 +64,7 @@ export function BlockOverlays({
 }: Props) {
     const { getCurrentCss } = useStyles();
     // Estilos de parágrafo criados pelo utilizador (aplicam-se também a títulos) vêm a seguir aos fixos.
-    const customParaStyles = styleMenu ? paragraphStyles.list(getCurrentCss()).map((c) => [c, c] as const) : [];
+    const customParaStyles = styleMenu?.kind === 'para' ? paragraphStyles.list(getCurrentCss()).map((c) => [c, c] as const) : [];
     return (
         <>
             {plusMenu && (
