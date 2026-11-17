@@ -16,11 +16,50 @@ const SHORT_KEY = 6;       // chars: primeira linha curta de uma legenda ("FIGUR
 const MAX_IMAGE_GAP = 120; // pt: a imagem tem de estar a esta distância da legenda para decidir de que lado fica
 const SLACK = 4;           // pt: a baseline da legenda pode ficar um pouco dentro da caixa da imagem
 
-const isImageBlock = (el: Element) => (el.tagName === 'IMG' || (el.tagName !== 'TABLE' && !!el.querySelector('img'))) && fold(el.textContent ?? '').length < MIN_TEXT;
+const isImageBlock = (el: Element) => !el.classList.contains('noBreak') && (el.tagName === 'IMG' || (el.tagName !== 'TABLE' && !!el.querySelector('img'))) && fold(el.textContent ?? '').length < MIN_TEXT;
 const isCaption = (el: Element) => el.tagName === 'P' && !el.querySelector('img') && (el.classList.contains('p-legendas') || CAPTION_RE.test(el.textContent ?? ''));
 const snippet = (el: Element) => (el.textContent ?? '').trim().slice(0, 60);
 
 interface Unit { images: Element[]; caption: Element; captionFirst: boolean; all: Element[] }
+
+/** As figuras com legenda: o(s) bloco(s) de imagem seguidos + a legenda logo a seguir (ou, em falta, logo antes). `seen` conta as figuras vistas, com ou sem legenda. */
+function findFigureUnits(kids: Element[]): { units: Unit[]; seen: number } {
+    const units: Unit[] = [];
+    const used = new Set<Element>();
+    let seen = 0;
+    for (let i = 0; i < kids.length; i++) {
+        if (!isImageBlock(kids[i]) || used.has(kids[i])) continue;
+        let j = i;
+        while (j + 1 < kids.length && isImageBlock(kids[j + 1])) j++;
+        seen++;
+        const images = kids.slice(i, j + 1);
+        const after = kids[j + 1], before = kids[i - 1];
+        const captionFirst = !(after && isCaption(after) && !used.has(after));
+        const caption = !captionFirst ? after : before && isCaption(before) && !used.has(before) ? before : null;
+        i = j;
+        if (!caption) continue;
+        units.push({ images, caption, captionFirst, all: captionFirst ? [caption, ...images] : [...images, caption] });
+        for (const e of [...images, caption]) used.add(e);
+    }
+    return { units, seen };
+}
+
+/**
+ * Imagem(ns) e legenda de cada figura juntas num `<div class="noBreak">` (a "União" do editor: sem quebra de página entre elas).
+ * Só figuras com legenda; as que já estão unidas ficam como estão (idempotente). Corre DEPOIS de reviewFigures: este não
+ * volta a ver as figuras já unidas.
+ */
+export function keepFiguresTogether(html: string): { html: string; wrapped: number } {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const { units } = findFigureUnits(Array.from(doc.body.children));
+    for (const u of units) {
+        const wrapper = doc.createElement('div');
+        wrapper.className = 'noBreak';
+        u.all[0].before(wrapper);
+        wrapper.append(...u.all);
+    }
+    return { html: units.length ? doc.body.innerHTML : html, wrapped: units.length };
+}
 
 /**
  * `strict`: não espera 2+ páginas — qualquer figura cuja ordem de leitura difere da do PDF (a legenda vem depois/antes de parágrafos
@@ -65,23 +104,8 @@ export function reviewFigures(html: string, pdf: PdfStyles, { strict = false }: 
     });
 
     // 2. As figuras com legenda: o(s) bloco(s) de imagem seguidos + a legenda logo a seguir (ou, em falta, logo antes).
-    const units: Unit[] = [];
-    const used = new Set<Element>();
-    let seen = 0;
-    for (let i = 0; i < kids.length; i++) {
-        if (!isImageBlock(kids[i]) || used.has(kids[i])) continue;
-        let j = i;
-        while (j + 1 < kids.length && isImageBlock(kids[j + 1])) j++;
-        seen++;
-        const images = kids.slice(i, j + 1);
-        const after = kids[j + 1], before = kids[i - 1];
-        const captionFirst = !(after && isCaption(after) && !used.has(after));
-        const caption = !captionFirst ? after : before && isCaption(before) && !used.has(before) ? before : null;
-        i = j;
-        if (!caption) continue;
-        units.push({ images, caption, captionFirst, all: captionFirst ? [caption, ...images] : [...images, caption] });
-        for (const e of [...images, caption]) used.add(e);
-    }
+    const { units, seen } = findFigureUnits(kids);
+    const used = new Set(units.flatMap((u) => [...u.images, u.caption]));
 
     // 3. Parágrafos de referência: só os que seguem a ordem do PDF (a maior subsequência crescente; um casamento errado não decide nada).
     const anchors = kids.map((el, idx) => ({ el, idx, w: where.get(el) })).filter((a): a is { el: Element; idx: number; w: { pos: number; pi: number; y: number } } => !!a.w && !used.has(a.el) && !isCaption(a.el));

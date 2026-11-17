@@ -7,7 +7,7 @@ import { convertSpanStyles } from '../../../utils/inline-styles';
 import { fixTypography, TYPOGRAPHY_FIXES, type TypographyFix } from '../../../utils/typography';
 import { fillMissingPageBreaks, type PageLines } from '../../../services/page-list/alignment';
 import { reviewStyles, STYLE_KINDS, type StyleKind } from '../../../services/page-list/style-audit';
-import { reviewFigures } from '../../../services/page-list/figure-audit';
+import { reviewFigures, keepFiguresTogether } from '../../../services/page-list/figure-audit';
 import type { PdfStyles } from '../../../services/page-list/pdf-styles';
 import * as bookEdit from '../bookEdit';
 import type { Book, BookEdit } from '../bookEdit';
@@ -25,7 +25,8 @@ export type BookOp =
     | { type: 'typography'; fixes?: TypographyFix[] }
     | { type: 'fix_page_list'; pages?: PageLines[] } // `pages` não é do modelo: a ferramenta preenche-o a partir do PDF
     | { type: 'fix_styles'; kinds?: StyleKind[]; pdf?: PdfStyles } // idem `pdf`
-    | { type: 'fix_figures'; pdf?: PdfStyles };
+    | { type: 'fix_figures'; pdf?: PdfStyles }
+    | { type: 'keep_figures_together' };
 
 export interface OpResult { label: string; changed: boolean; summary: string }
 export interface PlanResult { html: string; reports: RuleReport[]; opResults: OpResult[]; errors: string[] }
@@ -162,6 +163,13 @@ export const OPS: { [K in BookOp['type']]: OpDef<K> } = {
             const NAMES: Record<StyleKind, string> = { indent: 'indentação', emphasis: 'negrito/itálico', center: 'centrado', small: 'letra pequena', spacing: 'espaço acima' };
             const what = STYLE_KINDS.map((k) => [k, diffs.filter((d) => d.kind === k).length] as const).filter(([, n]) => n).map(([k, n]) => `${NAMES[k]} ${n}`).join(', ');
             return { html, summary: `${diffs.length} ${diffs.length === 1 ? 'parágrafo corrigido' : 'correções'} (${what})` };
+        },
+    },
+    keep_figures_together: {
+        label: 'Figuras unidas à legenda',
+        run: (book) => {
+            const { html, wrapped } = keepFiguresTogether(book.html);
+            return wrapped === 0 ? { summary: 'Nenhuma figura com legenda por unir' } : { html, summary: `${wrapped} ${wrapped === 1 ? 'figura unida' : 'figuras unidas'} à legenda (sem quebra de página entre elas)` };
         },
     },
     fix_figures: {

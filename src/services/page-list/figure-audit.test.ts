@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import '../indesign/happy-dom';
 
 (globalThis as { DOMMatrix?: unknown }).DOMMatrix ??= class {};
-const { reviewFigures } = await import('./figure-audit');
+const { reviewFigures, keepFiguresTogether } = await import('./figure-audit');
 const { imageBoxes } = await import('./pdf-pages');
 type Pdf = import('./pdf-styles').PdfStyles;
 type Box = import('./pdf-pages').PdfImageBox;
@@ -89,4 +89,18 @@ test('strict: sem marcadores de capítulo (importação), um h1 depois do fronte
     const front = '<p class="chapter-break" data-title="Frontespício"></p><h1>Capítulo Um</h1>';
     const r = reviewFigures(`${front}${p(0)}${p(1)}${FIG}${p(2)}${p(3)}`, pdf(), { strict: true });
     expect(r.html).toBe(`${front}${p(0)}${FIG}${p(1)}${p(2)}${p(3)}`);
+});
+
+test('keepFiguresTogether: imagem + legenda num div.noBreak, idempotente, sem tocar em imagens sem legenda', () => {
+    const r = keepFiguresTogether(book(p(0), FIG, p(1)));
+    expect(r.wrapped).toBe(1);
+    expect(r.html).toBe(book(p(0), `<div class="noBreak">${FIG}</div>`, p(1)));
+    expect(keepFiguresTogether(r.html)).toEqual({ html: r.html, wrapped: 0 });
+    const lone = book(p(0), '<img data-image-id="x" src="x" alt="">', p(1));
+    expect(keepFiguresTogether(lone)).toEqual({ html: lone, wrapped: 0 });
+});
+
+test('keepFiguresTogether: legenda antes da imagem também fica unida', () => {
+    const capFirst = '<p class="p-legendas">Figura 1.1 Legenda da primeira figura</p><img data-image-id="a" src="x" alt="">';
+    expect(keepFiguresTogether(book(p(0), capFirst)).html).toBe(book(p(0), `<div class="noBreak">${capFirst}</div>`));
 });
