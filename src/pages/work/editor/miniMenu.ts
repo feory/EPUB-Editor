@@ -87,24 +87,30 @@ export function attachMiniMenu(
         const pop = popOf();
         if (!pop || !pop.offsetHeight) return; // ausente/escondido pelo TinyMCE
         if ([...reasons].some((r) => HIDES_SELECTION_BAR.has(r))) { pop.style.visibility = 'hidden'; return; }
-        if (!editor.selection.isCollapsed()) return; // seleção de texto → barra de seleção, não mexer
-        if (reasons.size) { pop.style.visibility = 'hidden'; return; }
-        // blockOf não inclui 'li' (pega/"+" não se estendem a listas) — mas o mini-menu sim.
-        const selNode = editor.selection.getNode();
-        const block = (blockOf(selNode) || editor.dom.getParent(selNode, 'li')) as HTMLElement | null;
-        if (!block || !/^(P|H[1-6]|LI)$/.test(block.nodeName)) return;
+        const selecting = !editor.selection.isCollapsed(); // seleção de texto → barra de seleção (e o formulário do link)
+        if (reasons.size && !selecting) { pop.style.visibility = 'hidden'; return; }
         const iframe = iframeOf(editor);
         if (!iframe) return;
         const ir = iframe.getBoundingClientRect();
-        // Dentro de uma caixa (ou grelha numa caixa) o mini-menu fica por cima da caixa mais exterior, não do bloco.
-        let anchor: HTMLElement = block;
-        for (let box = block.closest('.box'); box; box = box.parentElement?.closest('.box') ?? null) anchor = box as HTMLElement;
-        const br = anchor.getBoundingClientRect();
+        let br: DOMRect;
+        if (selecting) {
+            br = editor.selection.getRng().getBoundingClientRect();
+            if (!br.width && !br.height) return;
+        } else {
+            // blockOf não inclui 'li' (pega/"+" não se estendem a listas) — mas o mini-menu sim.
+            const selNode = editor.selection.getNode();
+            const block = (blockOf(selNode) || editor.dom.getParent(selNode, 'li')) as HTMLElement | null;
+            if (!block || !/^(P|H[1-6]|LI)$/.test(block.nodeName)) return;
+            // Dentro de uma caixa (ou grelha numa caixa) o mini-menu fica por cima da caixa mais exterior, não do bloco.
+            let anchor: HTMLElement = block;
+            for (let box = block.closest('.box'); box; box = box.parentElement?.closest('.box') ?? null) anchor = box as HTMLElement;
+            br = anchor.getBoundingClientRect();
+        }
         const parentRect = (pop.offsetParent as HTMLElement | null)?.getBoundingClientRect();
 
         pop.style.bottom = '';
         pop.style.right = '';
-        pop.style.left = '0px'; // medir a largura/altura naturais
+        if (!selecting) pop.style.left = '0px'; // medir a largura/altura naturais (na seleção o TinyMCE decide a horizontal)
         // Barra principal presa à janela (sticky) tapa o topo do iframe: o limite é o fundo dela.
         const headerBottom = editor.getContainer()?.querySelector('.tox-editor-header')?.getBoundingClientRect().bottom ?? 0;
         const placed = placeVertically(ir.top + br.top, ir.top + br.bottom, br.top < ir.height && br.bottom > 0,
@@ -130,6 +136,7 @@ export function attachMiniMenu(
             pop.classList.remove(placed.side === 'top' ? 'tox-pop--top' : 'tox-pop--bottom');
             pop.classList.add(placed.side === 'top' ? 'tox-pop--bottom' : 'tox-pop--top');
         }
+        if (selecting) { lastPos = null; return; } // só a vertical: sempre por cima da seleção, não salta para baixo ao fazer scroll
         const maxLeft = (parentRect ? parentRect.right : window.innerWidth) - pop.offsetWidth - 4;
         const viewLeft = Math.max(4, Math.min(ir.left + br.left - RING, maxLeft));
         if (lastPos && pop.querySelector('.tox-tbtn[aria-expanded="true"]')) {

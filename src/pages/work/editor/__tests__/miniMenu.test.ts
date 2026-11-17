@@ -39,6 +39,7 @@ function setup() {
         aux: { top: 654, left: 0, width: 1470, height: 0 },
         iframe: { top: 200, left: 400, width: 900, height: 400 },
         block: { top: 100, left: 20, width: 860, height: 40 }, // relativo ao iframe
+        sel: { top: 100, left: 40, width: 200, height: 18 }, // relativo ao iframe: o texto selecionado
         collapsed: true,
     };
 
@@ -68,7 +69,7 @@ function setup() {
     const calls = { nodeChanged: 0, focus: [] as unknown[] };
     const editor = {
         on: (names: string, fn: () => void) => names.split(' ').forEach((n) => (handlers[n] ??= []).push(fn)),
-        selection: { isCollapsed: () => s.collapsed, getNode: () => block },
+        selection: { isCollapsed: () => s.collapsed, getNode: () => block, getRng: () => ({ getBoundingClientRect: () => rectOf({ ...s.sel, top: s.sel.top, left: s.sel.left }) }) },
         dom: { getParent: () => null },
         getContainer: () => container,
         getWin: () => win,
@@ -195,15 +196,28 @@ test('8. supressão: cada motivo esconde; só reaparece sem motivos (inclui hove
     expect(t.pop.style.visibility).toBe('');
 });
 
-test('9. seleção de texto: não mexe na barra de seleção (só toolbar/pega a escondem)', () => {
+test('9. seleção de texto: a barra (e o formulário do link) fica por cima da seleção, só na vertical; toolbar/pega escondem-na', () => {
     const t = setup();
     t.s.collapsed = false;
-    t.pop.style.top = '999px';
+    t.pop.style.left = '123px';
     t.scroll();
-    expect(t.pop.style.top).toBe('999px');
+    expect(t.view.popBottom()).toBe(t.s.iframe.top + t.s.sel.top - 4);
+    expect(t.pop.style.left).toBe('123px'); // a horizontal é do TinyMCE
     t.menu.suppress('plusMenu', true);
     expect(t.pop.style.visibility).toBe('');
     t.menu.suppress('grip', true);
+    expect(t.pop.style.visibility).toBe('hidden');
+});
+
+test('9b. seleção quase no topo e scroll pequeno: o formulário do link fica preso ao topo visível, não passa para baixo', () => {
+    const t = setup();
+    t.s.collapsed = false;
+    t.s.sel.top = 10; // sem espaço por cima (pop 48px)
+    t.scroll();
+    expect(t.pop.style.visibility).toBe('');
+    expect(t.view.popTop()).toBe(t.s.iframe.top + 4);
+    t.s.sel.top = -40; // a seleção saiu por cima
+    t.scroll();
     expect(t.pop.style.visibility).toBe('hidden');
 });
 
