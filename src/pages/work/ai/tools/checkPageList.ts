@@ -12,11 +12,12 @@ export const WHY: Record<MissingReason, string> = {
 /** "O que falta na lista de páginas?": as páginas do PDF sem marcador no livro, agrupadas pelo motivo (ver auditPageList). */
 export const checkPageListTool: AiTool = {
     name: 'check_page_list',
-    async run(_input, { workspace }) {
+    async run(_input, { workspace, suggest }) {
         const audit = await workspace.pageListAudit();
         if (!audit) return { content: 'Não há PDF de impressão carregado para este livro (ou não foi possível lê-lo): sem ele não se sabe que páginas existem. Carrega-o no painel do PDF.', is_error: true };
         const semMarcador: Record<string, number[]> = {};
         for (const m of audit.missing) (semMarcador[WHY[m.reason]] ??= []).push(m.page);
+        if (audit.missing.some((m) => m.reason === 'fora-de-ordem' || m.reason === 'abre-com-figura')) suggest({ label: 'Corrigir lista de páginas', prompt: 'Corrige a lista de páginas', edits: true });
         return { content: JSON.stringify({
             resumo: { paginasComFolio: audit.pagesWithFolio, comMarcador: audit.marked, semMarcador: audit.missing.length, paginasSemFolio: audit.withoutFolio },
             semMarcador,

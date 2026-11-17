@@ -10,6 +10,9 @@ import type { BookOp, OpResult } from '../aiPlan';
 /** A proposta do modelo: o que mudaria no livro, simulado; só se aplica quando o utilizador carrega em Aplicar. */
 export interface Proposal { styles: PlannedStyle[]; edits: PlannedEdit[]; /** Estilos do utilizador a apagar. */ removals: string[]; rules: BookRule[]; ops: BookOp[]; opResults: OpResult[]; reports: RuleReport[] }
 
+/** Um passo seguinte que o painel oferece como botão: `prompt` é o pedido que se envia ao carregar. */
+export interface Suggestion { label: string; prompt: string; /** Propõe alterações ao livro: desativado em modo leitura. */ edits?: true }
+
 export interface ToolResult { content: string; is_error?: true }
 
 export interface ToolContext {
@@ -21,6 +24,8 @@ export interface ToolContext {
     propose(proposal: Proposal | null): void;
     /** A ferramenta que prepara um relatório entrega aqui o texto: a interface oferece-o para descarregar (.txt). */
     deliver(report: string): void;
+    /** A ferramenta que encontra algo corrigível oferece aqui o passo seguinte (botão no painel, sem depender do modelo). */
+    suggest(suggestion: Suggestion): void;
 }
 
 export interface AiTool {

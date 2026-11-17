@@ -25,6 +25,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
     const [proposal, setProposal] = useState<AgentResult['proposal']>(null);
     // O relatório preparado (texto) fica por descarregar até pedir outro ou limpar a conversa; não se guarda ao recarregar a página.
     const [report, setReport] = useState<string | null>(null);
+    const [suggestions, setSuggestions] = useState<AgentResult['suggestions']>([]); // botões do passo seguinte, até ao pedido seguinte
     const [busy, setBusy] = useState(false);
     const [step, setStep] = useState(''); // o que o assistente está a fazer (vazio = nada em especial)
     const [error, setError] = useState('');
@@ -48,7 +49,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
         const block = scoped ? workspace.locate(scoped) : null;
         if (scoped && !block) { setError('Não encontrei os blocos selecionados no livro. Seleciona-os de novo no editor ou tira o âmbito (×).'); return false; }
         setLines((l) => [...l, { role: 'user', text: request.current }]);
-        setProposal(null); setError(''); setBusy(true);
+        setProposal(null); setSuggestions([]); setError(''); setBusy(true);
         const abort = controller.current = new AbortController();
         try {
             const result = await runAgent({
@@ -63,6 +64,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
             setLines((l) => [...l, { role: 'assistant', text: result.text || '(sem resposta)' }]);
             setProposal(result.proposal);
             if (result.report) setReport(result.report);
+            setSuggestions(result.suggestions);
             return true;
         } catch (e) {
             if (abort.signal.aborted) { setLines((l) => [...l, { role: 'assistant', text: 'Pedido cancelado.' }]); return false; }
@@ -104,7 +106,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
         if (proposal) history.current = [...history.current, discardedNote()];
         setProposal(null);
     }, [proposal]);
-    const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setReport(null); setError(''); }, []); // o efeito apaga o que estava guardado
+    const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setReport(null); setSuggestions([]); setError(''); }, []); // o efeito apaga o que estava guardado
 
-    return { lines, proposal, report, busy, step, error, scoped, clearScope, send, stop, apply, discard, renameStyle, noteReverted, reset };
+    return { lines, proposal, report, suggestions, busy, step, error, scoped, clearScope, send, stop, apply, discard, renameStyle, noteReverted, reset };
 }

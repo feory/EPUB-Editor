@@ -127,6 +127,15 @@ export const AiSidebar: React.FC<{ ai: Ai; chapterTitles: string[]; onGoTo: (cha
                 {ai.busy && <p className="text-text-muted flex items-center gap-2">{ai.step || 'A trabalhar…'} <button onClick={ai.stop} className="px-2 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold">Parar</button></p>}
                 {ai.error && <p className="text-rose-600">{ai.error}</p>}
 
+                {!ai.busy && !ai.proposal && ai.suggestions.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {ai.suggestions.map((s) => (
+                            <button key={s.label} onClick={() => void ai.send(s.prompt)} disabled={readOnly && s.edits}
+                                className="px-3 h-8 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold disabled:opacity-50">{s.label}</button>
+                        ))}
+                    </div>
+                )}
+
                 {ai.report && (
                     <div className="rounded-xl border border-border p-3 flex items-center justify-between gap-2">
                         <p className="text-xs text-slate-600"><span className="font-semibold">Relatório pronto</span> ({ai.report.split('\n').length} linhas)</p>

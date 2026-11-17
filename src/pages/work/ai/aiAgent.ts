@@ -5,7 +5,7 @@ import type { AiWorkspace } from './aiWorkspace';
 import type { RuleBlock } from './aiSelection';
 import { runPlan } from './aiPlan';
 import { AI_TOOLS } from './tools';
-import type { Proposal, ToolContext, ToolResult } from './tools/aiTool';
+import type { Proposal, Suggestion, ToolContext, ToolResult } from './tools/aiTool';
 import { charStyles, paragraphStyles } from '../../../utils/user-styles';
 import { EDITOR_CLASSES } from '../../../utils/editor-classes';
 import { classesForRules } from '../../../utils/book-styles';
@@ -20,6 +20,8 @@ export interface AgentResult {
     proposal: Proposal | null;
     /** O relatório preparado nesta conversa (texto simples), se o modelo o pediu. */
     report: string | null;
+    /** Passos seguintes que as ferramentas ofereceram (botões no painel), sem repetidos. */
+    suggestions: Suggestion[];
 }
 
 const MAX_TURNS = 8;
@@ -48,7 +50,11 @@ export async function runAgent(opts: {
     let messages = opts.messages;
     let proposal: AgentResult['proposal'] = null;
     let report: string | null = null;
-    const ctx: ToolContext = { workspace: opts.workspace, scope: opts.scope ?? null, propose: (p) => { proposal = p; }, deliver: (r) => { report = r; } };
+    const suggestions: Suggestion[] = [];
+    const ctx: ToolContext = {
+        workspace: opts.workspace, scope: opts.scope ?? null, propose: (p) => { proposal = p; }, deliver: (r) => { report = r; },
+        suggest: (s) => { if (!suggestions.some((x) => x.label === s.label)) suggestions.push(s); },
+    };
 
     const execute = async (call: Block): Promise<ToolResult> => {
         const tool = AI_TOOLS.find((t) => t.name === call.name);
@@ -66,13 +72,13 @@ export async function runAgent(opts: {
         if (res.stop_reason !== 'tool_use') {
             const text = textOf(res.content);
             const note = res.stop_reason === 'refusal' ? 'O assistente recusou este pedido.' : res.stop_reason === 'max_tokens' ? 'A resposta foi cortada.' : '';
-            return { messages, text: text || note, proposal, report };
+            return { messages, text: text || note, proposal, report, suggestions };
         }
         const results: Block[] = [];
         for (const b of res.content.filter((x) => x.type === 'tool_use')) { opts.signal?.throwIfAborted(); opts.onStep?.(stepLabel(String(b.name))); results.push({ type: 'tool_result', tool_use_id: b.id, ...(await execute(b)) }); }
         messages = [...messages, { role: 'user', content: results }];
     }
-    return { messages, text: 'O assistente excedeu o limite de passos. Reformula o pedido.', proposal, report };
+    return { messages, text: 'O assistente excedeu o limite de passos. Reformula o pedido.', proposal, report, suggestions };
 }
 
 /**

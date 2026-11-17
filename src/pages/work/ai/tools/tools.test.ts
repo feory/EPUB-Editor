@@ -14,7 +14,7 @@ import { findTextTool } from './findText';
 import { searchDocsTool, searchDocs } from './searchDocs';
 import type { PdfStyles } from '../../../../services/page-list/pdf-styles';
 import { AI_TOOLS } from './index';
-import type { Proposal, ToolContext } from './aiTool';
+import type { Proposal, Suggestion, ToolContext } from './aiTool';
 import type { ValidationDigest, ValidationKind } from '../../../../utils/validation-digest';
 
 const chapter = (title: string, body: string) => `<p class="chapter-break-h1" data-title="${title}"></p><h1>${title}</h1>${body}`;
@@ -22,8 +22,9 @@ const digest = (n: number): ValidationDigest => ({ source: 's', valid: !n, group
 const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = null, css = '') => {
     let proposal: Proposal | null = null;
     let report: string | null = null;
-    const ctx: ToolContext = { workspace: memoryWorkspace({ parts, css }, over), scope, propose: (p) => { proposal = p; }, deliver: (r) => { report = r; } };
-    return { ctx, proposal: () => proposal, report: () => report };
+    const suggestions: Suggestion[] = [];
+    const ctx: ToolContext = { workspace: memoryWorkspace({ parts, css }, over), scope, propose: (p) => { proposal = p; }, deliver: (r) => { report = r; }, suggest: (s) => { suggestions.push(s); } };
+    return { ctx, proposal: () => proposal, report: () => report, suggestions };
 };
 
 test('o registo tem uma ferramenta por nome', () => {
@@ -237,4 +238,24 @@ test('find_text: limita a 20 resultados (e diz quantos há), recusa queries curt
     expect(findTextTool.run({ query: 'a' }, ctx)).toMatchObject({ is_error: true });
     expect(findTextTool.run({ query: 'x'.repeat(121) }, ctx)).toMatchObject({ is_error: true });
     expect(JSON.parse((findTextTool.run({ query: 'inexistente' }, ctx) as { content: string }).content)).toMatchObject({ blocosEncontrados: 0, resultados: [] });
+});
+
+test('sugestões: as verificações com algo corrigível oferecem o passo seguinte; sem nada a corrigir, não', async () => {
+    const labels = (r: { suggestions: Suggestion[] }) => r.suggestions.map((x) => x.label);
+    const ordem = { pagesWithFolio: 3, marked: 1, withoutFolio: 0, orphanMarkers: [], missing: [{ page: 68, reason: 'fora-de-ordem' as const }] };
+    const a = setup([], { pageListAudit: async () => ordem }); await checkPageListTool.run({}, a.ctx);
+    expect(labels(a)).toEqual(['Corrigir lista de páginas']);
+    expect(a.suggestions[0]).toMatchObject({ prompt: 'Corrige a lista de páginas', edits: true });
+    const b = setup([], { pageListAudit: async () => ({ ...ordem, missing: [{ page: 56, reason: 'branca' as const }] }) }); await checkPageListTool.run({}, b.ctx);
+    expect(b.suggestions).toEqual([]); // só as em branco/Índice/figura: normal, nada a corrigir
+
+    const c = setup([chapter('Um', '<p>Texto de teste com mais de doze letras</p>')], { pdfStyles: async () => pdfRecuado }); await checkStylesTool.run({}, c.ctx);
+    expect(labels(c)).toEqual(['Corrigir estilos pelo PDF']);
+    const d = setup([livroFigura], { pdfStyles: async () => pdfFigura }); await checkFiguresTool.run({}, d.ctx);
+    expect(labels(d)).toEqual(['Pôr as figuras no sítio']);
+
+    const e = setup([], { validate: async () => digest(2) }); await runValidationTool.run({ type: 'epub' }, e.ctx);
+    expect(labels(e)).toEqual(['Propor correções']);
+    const f = setup([], { validate: async () => digest(0) }); await runValidationTool.run({ type: 'epub' }, f.ctx);
+    expect(f.suggestions).toEqual([]);
 });
