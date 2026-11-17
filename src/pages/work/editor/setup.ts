@@ -84,6 +84,42 @@ export function createEditorSetup(deps: SetupDeps) {
                 },
             });
         });
+        // Marcador de página (page-list) à mão no cursor: span.pagebreak[data-page]. Sugere a seguinte ao marcador anterior.
+        editor.addCommand('mcePageBreak', () => {
+            const bookmark = editor.selection.getBookmark(2, true);
+            const markers = Array.from(editor.getBody().querySelectorAll('span.pagebreak[data-page]'));
+            const pageOf = (el: Element) => parseInt(el.getAttribute('data-page') || '', 10);
+            const here = editor.selection.getRng();
+            const before = markers.filter((m) => m.compareDocumentPosition(here.startContainer) & Node.DOCUMENT_POSITION_FOLLOWING);
+            const suggested = before.length ? pageOf(before[before.length - 1]) + 1 : markers.length ? Math.max(1, pageOf(markers[0]) - 1) : 1;
+            editor.windowManager.open({
+                title: 'Marcador de página',
+                body: { type: 'panel', items: [{ type: 'input', name: 'page', label: 'Página n.º' }] },
+                initialData: { page: String(suggested) },
+                buttons: [{ type: 'cancel', text: 'Cancelar' }, { type: 'submit', text: 'Inserir', primary: true }],
+                onSubmit: (api: { getData: () => { page: string }; close: () => void }) => {
+                    const page = api.getData().page.trim();
+                    if (!/^\d+$/.test(page) || parseInt(page, 10) < 1) { editor.notificationManager.open({ text: 'Indica um número de página (1 ou mais).', type: 'error', timeout: 3000 }); return; }
+                    const n = parseInt(page, 10);
+                    if (markers.some((m) => pageOf(m) === n)) { editor.notificationManager.open({ text: `A página ${n} já tem marcador.`, type: 'error', timeout: 3000 }); return; }
+                    api.close();
+                    editor.selection.moveToBookmark(bookmark);
+                    editBlocks(editor, () => {
+                        editor.insertContent(`<span class="pagebreak" data-page="${n}"></span>`);
+                        editor.focus();
+                    });
+                },
+            });
+        });
+        // Remove os marcadores de página do bloco de topo onde está o cursor.
+        editor.addCommand('mcePageBreakRemove', () => {
+            const body = editor.getBody();
+            let top: Node | null = editor.selection.getNode();
+            while (top && top.parentNode !== body) top = top.parentNode;
+            const markers = top && top.nodeType === 1 ? Array.from((top as Element).querySelectorAll('span.pagebreak')) : [];
+            if (!markers.length) { editor.notificationManager.open({ text: 'Este bloco não tem marcador de página.', type: 'info', timeout: 3000 }); return; }
+            editBlocks(editor, () => { markers.forEach((m) => editor.dom.remove(m)); editor.focus(); });
+        });
         editor.addCommand('mceChapterBreak', () => {
             const bookmark = editor.selection.getBookmark(2, true);
             editor.windowManager.open({
@@ -220,7 +256,8 @@ export function createEditorSetup(deps: SetupDeps) {
             const wanted = new Set<Element>();
             if (live.current.aiScope && selected) {
                 const kids = editor.getBody().children;
-                for (let i = 0; i < selected.texts.length; i++) if (kids[selected.index + i]) wanted.add(kids[selected.index + i]);
+                if (selected.item !== undefined) { const li = kids[selected.index]?.querySelectorAll('li')[selected.item]; if (li) wanted.add(li); }
+                else for (let i = 0; i < selected.texts.length; i++) if (kids[selected.index + i]) wanted.add(kids[selected.index + i]);
             }
             const marked = editor.dom.select(`[${MARK.aiScope}]`) as Element[];
             if (marked.length === wanted.size && marked.every((el) => wanted.has(el))) return;
@@ -229,8 +266,7 @@ export function createEditorSetup(deps: SetupDeps) {
         };
         editor.on('aiscopechange', markAiScope); // despachado pelo WorkEditor quando a prop muda
         // Ao abrir o painel da IA, nenhum bloco fica ativo (anel, mini-menu) nem selecionado (âmbito): tira o cursor do editor.
-        editor.on('aiopenchange', () => {
-            if (!live.current.aiOpen) return;
+        const clearAiSelection = () => {
             (editor.getDoc().activeElement as HTMLElement | null)?.blur();
             editor.selection.getSel()?.removeAllRanges();
             selected = null;
@@ -238,9 +274,11 @@ export function createEditorSetup(deps: SetupDeps) {
             live.current.onSelectedBlock?.(null);
             markAiScope();
             editor.nodeChanged(); // o bloco ativo (activeBlock.ts) reavalia-se sem cursor e limpa o anel
-        });
+        };
+        editor.on('aiopenchange', () => { if (live.current.aiOpen) clearAiSelection(); });
+        editor.on('aiclearselection', clearAiSelection); // clique fora do editor e do painel (WorkEditor)
         editor.on('NodeChange', () => { // o cursor continua nos blocos quando o foco passa para o painel da IA: só um NodeChange o muda
-            if (!editor.hasFocus() && live.current.aiOpen) return; // sem foco com o painel aberto, a seleção (limpa ou herdada) não conta
+            if (!editor.hasFocus() && live.current.aiOpen) { markAiScope(); return; } // o conteúdo pode ter sido recarregado (alteração da IA): volta a marcar o âmbito // sem foco com o painel aberto, a seleção (limpa ou herdada) não conta
             selected = selectedTopBlocks(editor.getBody(), editor.selection.getRng());
             markAiScope();
             const json = JSON.stringify(selected);
@@ -414,6 +452,8 @@ export function createEditorSetup(deps: SetupDeps) {
                     else if (value === 'image') editor.execCommand('mceImage');
                     else if (value === 'hr') editor.execCommand('mceInsertContent', false, '<hr>');
                     else if (value === 'anchor') editor.execCommand('mceInsertAnchor');
+                    else if (value === 'pagebreak') editor.execCommand('mcePageBreak');
+                    else if (value === 'pagebreak-remove') editor.execCommand('mcePageBreakRemove');
                     else editor.formatter.apply(value); // p-quote, p-small, footnote
                 })();
                 editor.focus();
@@ -493,7 +533,8 @@ export function createEditorSetup(deps: SetupDeps) {
             icon: 'ps-htmledit',
             tooltip: 'Editar HTML',
             onAction: () => {
-                const block = blockOf(editor.selection.getNode()) as HTMLElement | null;
+                const node = editor.selection.getNode();
+                const block = (blockOf(node) || editor.dom.getParent(node, 'li')) as HTMLElement | null; // blockOf não inclui <li>
                 if (!block) return;
                 const body = editor.getBody();
                 let top = block;

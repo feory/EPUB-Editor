@@ -75,5 +75,7 @@ export const SLASH_ITEMS = [
     { value: 'footnote', text: 'Nota de rodapé', icon: 'ps-smalltext' },
     { value: 'image', text: 'Imagem', icon: 'image' },
     { value: 'hr', text: 'Divisória', icon: 'horizontal-rule' },
+    { value: 'pagebreak', text: 'Marcador de página', icon: 'page-break' },
+    { value: 'pagebreak-remove', text: 'Remover marcador de página', icon: 'remove' },
     { value: 'anchor', text: 'Âncora (ligar ao Índice)', icon: 'bookmark' },
 ];

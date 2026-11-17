@@ -90,6 +90,20 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         editor.focus();
         editor.execCommand('mceInsertAnchor');
     };
+    const pageBreakAction = () => {
+        menus.close('style');
+        const editor = editorRef.current;
+        if (!editor) return;
+        editor.focus();
+        editor.execCommand('mcePageBreak');
+    };
+    const pageBreakRemoveAction = () => {
+        menus.close('style');
+        const editor = editorRef.current;
+        if (!editor) return;
+        editor.focus();
+        editor.execCommand('mcePageBreakRemove');
+    };
     const styleAction = (format: string) => {
         menus.close('style');
         const editor = editorRef.current;
@@ -626,7 +640,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
         plusMenu, gripMenu, hrCtl, dropLine, styleMenu, menuBtn, boxBar, setBoxVariant, parentHandle, selectParent: () => { const c = parentTargetRef.current; if (c) selectBoxRef.current(c); }, openGridPanel: () => onOpenPanel?.(), gridPlus, gridMenu, openGridMenu, closeGridMenu: () => menus.close('grid'), gridAction, elMenu, openElementMenu, elementAction, closeElementMenu: () => menus.close('element'),
         closePlusMenu: () => menus.close('plus'), plusAction,
         dismissGripMenu, gripAction, setHrWidth, deleteHr,
-        styleAction, anchorAction, closeStyleMenu: () => menus.close('style'),
+        styleAction, anchorAction, pageBreakAction, pageBreakRemoveAction, closeStyleMenu: () => menus.close('style'),
     };
     const render = <><BlockOverlays {...internal} readOnly={readOnly} />{htmlEdit.element}</>;
 

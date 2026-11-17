@@ -214,6 +214,16 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     useEffect(() => { channelRef.current?.load(htmlContent, { undo: 'reset' }); }, [htmlContent]);
     useEffect(() => { editorRef.current?.nodeChanged(); }, [textPanelOpen]); // a barra da seleção relê live.textPanelOpen
     useEffect(() => { editorRef.current?.dispatch('aiopenchange'); }, [aiOpen]); // ao abrir o painel da IA, nenhum bloco fica ativo
+    useEffect(() => { // clique fora do editor (incl. zona do chat) limpa o bloco selecionado
+        if (!aiOpen) return;
+        const onDown = (e: MouseEvent) => {
+            const t = e.target as Element | null;
+            if (!t || !t.isConnected || editorRef.current?.getContainer()?.contains(t) || t.closest('.tox, [role="dialog"], [data-ai-sidebar] :is(textarea, input, select, button, a)')) return; // controlos do chat (escrever, enviar, ×) mantêm o âmbito
+            editorRef.current?.dispatch('aiclearselection');
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [aiOpen]);
     useEffect(() => { editorRef.current?.dispatch('aiscopechange'); }, [aiScope]); // destaca/limpa os blocos do âmbito da IA
     useEffect(() => { editorRef.current?.dispatch('pdfpanelchange'); }, [showPrintPdfPanel]); // o botão "Ver PDF" relê live.showPrintPdfPanel
     useEffect(() => {

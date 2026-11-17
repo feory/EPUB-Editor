@@ -1,7 +1,7 @@
 import {
     Pilcrow, Heading1, Heading2, Heading3, Quote, Type,
     StickyNote, Image as ImageIcon, Copy, Trash2, Minus, BookMarked, Columns2, LayoutGrid, Plus, Square,
-    MoreVertical, ChevronDown, Anchor, SlidersHorizontal, Scissors, CopyPlus, ArrowUpToLine, ArrowDownToLine, Paintbrush, ClipboardPaste, Group, Ungroup,
+    MoreVertical, ChevronDown, Anchor, BookOpen, SlidersHorizontal, Scissors, CopyPlus, ArrowUpToLine, ArrowDownToLine, Paintbrush, ClipboardPaste, Group, Ungroup,
 } from 'lucide-react';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
 import { BOX_VARIANTS, type BoxVariant } from '../boxProps';
@@ -47,6 +47,8 @@ export interface BlockOverlaysProps {
     deleteHr: () => void;
     styleAction: (format: string) => void;
     anchorAction: () => void;                        // "Âncora" no menu ⋮ (mceInsertAnchor no cursor)
+    pageBreakAction: () => void;                     // "Marcador de página" no menu ⋮ (mcePageBreak no cursor)
+    pageBreakRemoveAction: () => void;               // "Remover marcador de página" no menu ⋮ (marcadores do bloco)
     closeStyleMenu: () => void;
     readOnly?: boolean;
 }
@@ -57,7 +59,7 @@ type Props = BlockOverlaysProps;
 export function BlockOverlays({
     plusMenu, gripMenu, hrCtl, menuBtn, parentHandle, selectParent, boxBar, setBoxVariant, openGridPanel, gridPlus, gridMenu, openGridMenu, closeGridMenu, gridAction, elMenu, openElementMenu, closeElementMenu, elementAction, dropLine, closePlusMenu, plusAction,
     dismissGripMenu, gripAction, setHrWidth, deleteHr,
-    styleMenu, styleAction, anchorAction, closeStyleMenu, readOnly,
+    styleMenu, styleAction, anchorAction, pageBreakAction, pageBreakRemoveAction, closeStyleMenu, readOnly,
 }: Props) {
     const { getCurrentCss } = useStyles();
     // Estilos de parágrafo criados pelo utilizador (aplicam-se também a títulos) vêm a seguir aos fixos.
@@ -147,6 +149,22 @@ export function BlockOverlays({
                                 className="flex w-full items-center gap-2 text-left px-2 py-1.5 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition-colors"
                             >
                                 <Anchor size={14} className="text-slate-400" /> Âncora (ligar ao Índice)
+                            </button>
+                            <button
+                                type="button"
+                                onMouseDown={(ev) => ev.preventDefault()}
+                                onClick={pageBreakAction}
+                                className="flex w-full items-center gap-2 text-left px-2 py-1.5 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition-colors"
+                            >
+                                <BookOpen size={14} className="text-slate-400" /> Marcador de página
+                            </button>
+                            <button
+                                type="button"
+                                onMouseDown={(ev) => ev.preventDefault()}
+                                onClick={pageBreakRemoveAction}
+                                className="flex w-full items-center gap-2 text-left px-2 py-1.5 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition-colors"
+                            >
+                                <Trash2 size={14} className="text-slate-400" /> Remover marcador de página
                             </button>
                         </div>
                     </div>
