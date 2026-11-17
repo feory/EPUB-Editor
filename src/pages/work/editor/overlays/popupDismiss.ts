@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { TinyMCEEditor } from '../types';
-import { useLive } from '../liveProps';
+import { useLive } from '../../../../hooks/useLive';
 
 /** Posição para um painel React logo abaixo do pop do Mini-menu (coords da janela, para `position: fixed`). */
 export function miniMenuAnchor(): { top: number; left: number } {

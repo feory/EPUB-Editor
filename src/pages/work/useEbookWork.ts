@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useReducer } from 'react';
 import type { RefObject } from 'react';
+import { useLive } from '../../hooks/useLive';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { ebooksApi, type AiChange } from '../../api/ebooks-api';
@@ -96,22 +97,16 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     // Gravar usa SEMPRE o getter "latest" (inclui a edição ainda presa no debounce) — não o
     // getSyncedHtmlContent, que só vê o que já passou pelo reducer.
     const { getLatestHtmlContent } = chapterSync;
-    const latestRef = useRef(getLatestHtmlContent);
-    const readOnlyRef = useRef(readOnly);
-    useEffect(() => {
-        latestRef.current = getLatestHtmlContent;
-        readOnlyRef.current = readOnly;
-    });
+    const live = useLive({ getLatestHtmlContent, readOnly });
 
-    // As refs só são lidas dentro dos callbacks do saver (efeitos/eventos), nunca no render.
-    // eslint-disable-next-line react-hooks/refs
+    // `live` só é lido dentro dos callbacks do saver (efeitos/eventos), nunca no render.
     const saver = useMemo(() => !isbn ? null : createSaver({
         isbn,
-        getContent: () => latestRef.current(),
+        getContent: () => live.current.getLatestHtmlContent(),
         send: async (content) => { await ebooksApi.saveContent(isbn, await compressHtmlAsync(content)); },
         sendOnUnload: (content) => sendOnUnload(isbn, content),
         drafts,
-        readOnly: () => readOnlyRef.current,
+        readOnly: () => live.current.readOnly,
         onBusy: setIsSaving,
         onSaved: (content, notify) => {
             // Cache a staleTime: Infinity — sem isto reentrar no editor recarregava o texto antigo.
@@ -131,7 +126,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
                 ? 'Erro ao guardar o trabalho. Cópia guardada neste computador.'
                 : 'Sem ligação ao servidor — cópia guardada neste computador.', 6000);
         },
-    }), [isbn, queryClient, showNotification]);
+    }), [isbn, queryClient, showNotification, live]);
 
     const save = useCallback((content: string, notify = false) => { void saver?.save(content, notify); }, [saver]);
 

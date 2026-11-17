@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { TinyMCEEditor } from '../types';
-import { useLive } from '../liveProps';
+import { useLive } from '../../../../hooks/useLive';
 import { IndiceLinkPanel, type IndiceLinkChapter, type IndiceLinkSubtitle } from './IndiceLinkPanel';
 import { miniMenuAnchor } from './popupDismiss';
 

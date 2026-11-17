@@ -24,7 +24,7 @@ import { tinymceEditorLike } from '../editor/blockEditingTinymce';
 import { createEditorSetup } from '../editor/setup';
 import { syncCustomStyleFormats } from '../editor/formats';
 import { paragraphStyles, charStyles } from '../../../utils/user-styles';
-import { useLive } from '../editor/liveProps';
+import { useLive } from '../../../hooks/useLive';
 import { editBlocks } from '../editor/blockEdit';
 import { buildContentStyle } from '../editor/contentStyles';
 import { EDITOR_PLUGINS, EDITOR_TOOLBAR, STYLE_FORMATS, TEXT_PATTERNS } from '../editor/config';

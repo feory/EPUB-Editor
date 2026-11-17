@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { isIndiceChapterTitle } from '../../../utils/indice-links';
-import { useLive } from '../editor/liveProps';
+import { useLive } from '../../../hooks/useLive';
 import type { useEbookWork } from '../useEbookWork';
 import type { AiWorkspace } from './aiWorkspace';
 import type { AiCssSide } from './aiPlan';
