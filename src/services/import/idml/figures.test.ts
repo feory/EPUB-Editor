@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
 import '../../indesign/happy-dom';
 
-const { insertFigures, placeFigures } = await import('./figures');
+const { insertFigures, placeFigures, placeNumberedFigures } = await import('./figures');
 
 const fig = (imageId: string) => ({ imageId, label: { kind: 'fig' as const, num: '1.1' }, captionLines: ['figura 1.1 Alicerces do marketing 7.0.'] });
 
@@ -53,4 +53,12 @@ test('placeFigures: sem PDF não há colocação por posição (vinheta sem lege
     const { html: out, placed } = await placeFigures('<p>texto</p>', [{ imageId: 'deco', captionLines: [], pageHint: [3] }], ['deco']);
     expect(ids(out)).toEqual([]);
     expect(placed).toBe(0);
+});
+
+test('"Figura A.3" (anexo): a referência com letra casa e a imagem entra', () => {
+    const f = { imageId: 'anexoA3', label: { kind: 'fig' as const, num: 'A.3' }, captionLines: ['FIGURA A.3 Esquema do anexo.'] };
+    const { html, placed } = insertFigures('<p>Ver (Figura A.3) abaixo.</p><p>Seguinte.</p>', [f]);
+    expect(placed).toBe(1);
+    expect(html).toContain('data-image-id="anexoA3"');
+    expect(placeNumberedFigures('<p>FIGURA A.3 Esquema.</p>', ['Figura A.3']).placed).toBe(1);
 });

@@ -70,3 +70,23 @@ test('imageBoxes: segue save/restore/transform e ignora o pequeno e o fundo da p
     const args = [null, [200, 0, 0, 100, 50, 400], null, null, null, null, [10, 0, 0, 10, 0, 0], null, null, null, [600, 0, 0, 800, 0, 0], null, null];
     expect(imageBoxes(fn, args, OPS, 612, 792)).toEqual([{ x0: 50, x1: 250, y0: 400, y1: 500 }]); // a unidade fora do transform (1×1), o ícone (10×10) e a página inteira ficam de fora
 });
+
+test('strict (importação): figura uma página fora de ordem já é movida para depois do parágrafo que a antecede no PDF', () => {
+    const r = reviewFigures(book(p(0), p(1), FIG, p(2), p(3)), pdf(), { strict: true });
+    expect(r.html).toBe(book(p(0), FIG, p(1), p(2), p(3)));
+    expect(reviewFigures(r.html, pdf(), { strict: true }).diffs).toEqual([]);
+});
+
+test('strict: a figura fica onde o PDF a põe, mesmo que o parágrafo que a cita esteja antes', () => {
+    const citing = '<p>Primeiro paragrafo do livro (Figura 1.1)</p>';
+    const r = reviewFigures(book(citing, FIG, p(1), p(2), p(3)), pdf(), { strict: true });
+    expect(r.html).toBe(book(citing, FIG, p(1), p(2), p(3))); // PDF: legenda logo a seguir ao 1.º parágrafo — já está
+    const noPdfSitio: Pdf = { body: 11, pages: [pdfPage([line(P[0], 600)]), pdfPage([line(P[1], 600), line('figura11legendadaprimeirafigura', 300)]), pdfPage([line(P[2], 600)]), pdfPage([line(P[3], 600)])] };
+    expect(reviewFigures(book(citing, FIG, p(1), p(2), p(3)), noPdfSitio, { strict: true }).html).toBe(book(citing, p(1), FIG, p(2), p(3)));
+});
+
+test('strict: sem marcadores de capítulo (importação), um h1 depois do frontespício deixa de saltar o livro', () => {
+    const front = '<p class="chapter-break" data-title="Frontespício"></p><h1>Capítulo Um</h1>';
+    const r = reviewFigures(`${front}${p(0)}${p(1)}${FIG}${p(2)}${p(3)}`, pdf(), { strict: true });
+    expect(r.html).toBe(`${front}${p(0)}${FIG}${p(1)}${p(2)}${p(3)}`);
+});

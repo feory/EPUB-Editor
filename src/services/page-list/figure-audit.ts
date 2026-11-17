@@ -22,7 +22,11 @@ const snippet = (el: Element) => (el.textContent ?? '').trim().slice(0, 60);
 
 interface Unit { images: Element[]; caption: Element; captionFirst: boolean; all: Element[] }
 
-export function reviewFigures(html: string, pdf: PdfStyles): { html: string; diffs: FigureDiff[]; /** Figuras com legenda que o PDF confirmou, e as que se viram. */ checked: number; seen: number } {
+/**
+ * `strict`: não espera 2+ páginas — qualquer figura cuja ordem de leitura difere da do PDF (a legenda vem depois/antes de parágrafos
+ * que o PDF põe antes/depois dela) é movida. Para a importação; o assistente mantém a tolerância de páginas (no impresso as figuras flutuam).
+ */
+export function reviewFigures(html: string, pdf: PdfStyles, { strict = false }: { strict?: boolean } = {}): { html: string; diffs: FigureDiff[]; /** Figuras com legenda que o PDF confirmou, e as que se viram. */ checked: number; seen: number } {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const kids = Array.from(doc.body.children);
     const flat = flatLines(pdf);
@@ -33,6 +37,8 @@ export function reviewFigures(html: string, pdf: PdfStyles): { html: string; dif
     let chapter = '', skip = false, cursor = 0;
     kids.forEach((el) => {
         if (el.tagName === 'P' && /(^| )chapter-break/.test(el.className)) { chapter = el.getAttribute('data-title') ?? chapter; skip = SKIP_CHAPTER.test(chapter.trim()); }
+        // Na importação ainda não há marcadores de capítulo (só o do frontespício): os títulos h1/h2 é que dizem onde acaba a zona a saltar.
+        if (strict && /^H[12]$/.test(el.tagName)) { chapter = (el.textContent ?? '').trim() || chapter; skip = SKIP_CHAPTER.test(chapter); }
         chapterOf.push(chapter);
         if (el.tagName !== 'P' || skip || el.querySelector('img') || Array.from(el.classList).some((c) => SKIP_CLASS.test(c))) return;
         const text = fold(el.textContent ?? '');
@@ -91,12 +97,12 @@ export function reviewFigures(html: string, pdf: PdfStyles): { html: string; dif
         const start = kids.indexOf(u.all[0]), end = kids.indexOf(u.all[u.all.length - 1]);
         const prev = [...reliable].reverse().find((a) => a.idx < start), next = reliable.find((a) => a.idx > end);
         const text = snippet(u.caption);
-        const late = !!prev && prev.w.pi - w.pi >= FAR_PAGES, early = !!next && w.pi - next.w.pi >= FAR_PAGES;
+        const late = !!prev && (strict ? prev.w.pos > w.pos : prev.w.pi - w.pi >= FAR_PAGES), early = !!next && (strict ? next.w.pos < w.pos : w.pi - next.w.pi >= FAR_PAGES);
         if (!late && !early) continue;
-        // Onde pôr: a seguir ao parágrafo que cita a figura ("Figura 2.1"), se houver um perto da legenda no PDF; senão, ao que a antecede no PDF.
+        // Onde pôr: a seguir ao parágrafo que cita a figura ("Figura 2.1"), se houver um perto da legenda no PDF; senão, ao que a antecede no PDF. Em `strict` só vale o PDF (o impresso pode pôr a figura depois de outra secção, não junto da citação).
         const num = /\d[\d.]*\d|\d/.exec(u.caption.textContent ?? '')?.[0];
         const cite = num && new RegExp(`\\b(figura|fig\\.?)\\s*${num.replace(/\./g, '\\.')}(?!\\d)`, 'i');
-        const target = (cite && reliable.find((a) => Math.abs(a.w.pi - w.pi) <= 1 && cite.test(a.el.textContent ?? ''))) || [...reliable].reverse().find((a) => a.w.pos < w.pos);
+        const target = (!strict && cite && reliable.find((a) => Math.abs(a.w.pi - w.pi) <= 1 && cite.test(a.el.textContent ?? ''))) || [...reliable].reverse().find((a) => a.w.pos < w.pos);
         const here = chapterOf[start];
         const fixable = !!target && chapterOf[target.idx] === here;
         diffs.push({ kind: 'posicao', chapter: here, caption: text, page: w.pi + 1, after: target ? snippet(target.el) : undefined, fixable,

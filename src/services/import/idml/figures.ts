@@ -1,6 +1,8 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename, toRasterName } from '../../../utils/format';
 import { readPdfPages } from '../../page-list/pdf-pages';
+import { reviewFigures } from '../../page-list/figure-audit';
+import { pdfStyles } from '../../page-list/pdf-styles';
 import { buildPdfLines, folioToPdfPage, normalize as normalizeForMatch } from '../../page-list/pdf-text';
 
 /**
@@ -39,7 +41,9 @@ const targetBlocksOf = (doc: Document): Element[] =>
 
 // Nº simples ("5") ou decimal capítulo.figura ("11.4"). "figuras?" antes de "fig" — alguns
 // livros escrevem a palavra completa ("Figura 2:"), não só a abreviatura.
-const LABEL_RE = /^(gr[áa]fico|figuras?|fig|quadro|tabela|mapa)\.?\s*(\d+(?:\.\d+)?)/i;
+// Também de anexo: letra maiúscula + ponto antes do número ("FIGURA A.3").
+const NUM = '(?:[A-Z]\\.)?\\d+(?:\\.\\d+)?';
+const LABEL_RE = /^(gr[áa]fico|figuras?|fig|quadro|tabela|mapa)\.?\s*((?:[A-Z]\.)?\d+(?:\.\d+)?)/i;
 const NOTE_RE = /^\s*([*†‡]|nota\s*:)/i; // marcador de nota de tabela
 
 // Nomes de estilo de legenda/nota variam por livro (ex. "LEGENDAS" vs "Figura titulo").
@@ -56,11 +60,11 @@ function toLabel(lab: RegExpMatchArray): Figure['label'] {
 // removidos (nomes de ficheiro tipo "001" → 1) e o resultado tolera zeros à esquerda no texto
 // procurado; funciona para nº simples ("5"/"005" → "0*5") e decimal ("11.4" → "0*11\.0*4") sem
 // colisão entre partes (ex. "2.1" vs "2.10").
-const numPattern = (num: string) => num.split('.').map(p => `0*${parseInt(p, 10)}`).join('\\.');
+const numPattern = (num: string) => num.split('.').map(p => /^[a-z]$/i.test(p) ? p.toUpperCase() : `0*${parseInt(p, 10)}`).join('\\.');
 
 // Normaliza um nº (zeros à esquerda por parte removidos) para comparar valores extraídos de
 // sítios diferentes (nome de ficheiro "001" vs texto "1") por igualdade, não por regex.
-const normalizeNum = (num: string) => num.split('.').map(p => parseInt(p, 10)).join('.');
+const normalizeNum = (num: string) => num.split('.').map(p => /^[a-z]$/i.test(p) ? p.toUpperCase() : parseInt(p, 10)).join('.');
 
 // Espaço antes/depois (pt) por estilo de parágrafo (Resources/Styles.xml) — mesmo sinal que
 // spacingClasses em idml/importer.ts, mas independente (idml/figures.ts é regex-only, sem
@@ -219,7 +223,7 @@ export async function buildFigures(idmlZip: JSZip, detectSpacing = false): Promi
             // — necessário quando a story partilhada pelas spreads (corpo principal, referenciado
             // por TODAS) tem várias legendas embutidas: sem isto, a 1ª do livro inteiro "ganhava"
             // sempre, em vez da legenda da imagem desta spread especificamente.
-            const fileNum = img.match(/(\d+(?:\.\d+)?)/)?.[1];
+            const fileNum = img.match(new RegExp(`(${NUM})`))?.[1];
             const imgCap = (fileNum && figCaps.find(c => normalizeNum(c.label!.num) === normalizeNum(fileNum))) || figCaps[0];
             figures.push({ imageId, label: imgCap?.label, captionLines: imgCap ? [imgCap.text, ...extras] : [], captionSpacing: imgCap?.spacingCls, captionFmt: imgCap?.fmt, pageHint });
         }
@@ -343,7 +347,7 @@ export function placeNumberedFigures(html: string, imageIds: string[]): { html: 
     const blocks = targetBlocksOf(doc);
     let placed = 0;
     for (const id of [...imageIds].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))) {
-        const num = id.match(/\d+(?:\.\d+)?/)?.[0];
+        const num = id.match(new RegExp(NUM))?.[0];
         if (!num) continue;
         const re = new RegExp(`(?:${FIG_REF_WORDS})\\.?\\s*${numPattern(num)}\\b`, 'i');
         const target = blocks.find(b => re.test(b.textContent || ''));
@@ -395,10 +399,10 @@ export function placeInlineFigures(html: string, imageIds: string[]): { html: st
     // ordem, evita desalinhar toda a lista se faltar uma imagem/legenda a meio.
     const unmatched: Element[] = [];
     for (const cap of captions) {
-        const cn = (cap.textContent || '').match(/(\d+(?:\.\d+)?)/)?.[1];
+        const cn = (cap.textContent || '').match(new RegExp(`(${NUM})`))?.[1];
         const id = cn && ids.find(i => {
             if (used.has(i)) return false;
-            const idn = i.match(/\d+(?:\.\d+)?/)?.[0];
+            const idn = i.match(new RegExp(NUM))?.[0];
             return !!idn && normalizeNum(idn) === normalizeNum(cn);
         });
         if (id) place(cap, id); else unmatched.push(cap);
@@ -549,6 +553,12 @@ export async function placeFigures(html: string, figures: Figure[], imageIds: st
             out = r.html;
             byPosition = r.placed;
         }
+    }
+    if (pdf) { // a ordem de leitura do PDF acerta o sítio de cada figura com legenda (a 1.ª referência no corpo nem sempre é onde o impresso a põe)
+        try {
+            const pages = await readPdfPages(pdf.slice(0));
+            out = reviewFigures(out, pdfStyles(pages), { strict: true }).html;
+        } catch { /* sem PDF legível mantém-se a colocação por texto */ }
     }
     return { html: out, placed: byRef.placed + inline.placed + numbered.placed + byPosition };
 }
