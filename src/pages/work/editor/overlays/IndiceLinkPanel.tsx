@@ -1,13 +1,15 @@
 import { useMemo, useRef, useState } from 'react';
 import type { TinyMCEEditor } from '../types';
 import { chapterOfTarget } from '../../../../utils/indice-marker';
-import { usePopupDismiss, openUpIfClipped, miniMenuTop } from './popupDismiss';
+import { usePopupDismiss } from './popupDismiss';
 
 export interface IndiceLinkSubtitle { chapterIndex: number; index: number; text: string; anchor?: true; id?: string }
 export interface IndiceLinkChapter { title: string; level: string }
 
 interface Props {
-    top: number;
+    top?: number;                // por baixo do Mini-menu…
+    bottom?: number;             // …ou por cima (ancorado pelo fundo: a lista a crescer não o faz descer)
+    maxHeight: number;
     left: number;
     editorRef: React.MutableRefObject<TinyMCEEditor | null>;
     chapters: IndiceLinkChapter[];
@@ -22,7 +24,7 @@ interface Props {
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 /** "Ligar a…" do Índice: capítulos recolhidos, clicar na seta expande os subtítulos; pesquisa filtra e expande. */
-export function IndiceLinkPanel({ top, left, editorRef, chapters, subtitles, ownIndex, currentTarget, onPick, onClose }: Props) {
+export function IndiceLinkPanel({ top, bottom, maxHeight, left, editorRef, chapters, subtitles, ownIndex, currentTarget, onPick, onClose }: Props) {
     const [query, setQuery] = useState('');
     const currentChapterIndex = chapterOfTarget(currentTarget);
     const [open, setOpen] = useState<Set<number>>(() => new Set(currentChapterIndex >= 0 ? [currentChapterIndex] : subtitles.filter((t) => t.id === currentTarget).map((t) => t.chapterIndex)));
@@ -52,11 +54,11 @@ export function IndiceLinkPanel({ top, left, editorRef, chapters, subtitles, own
 
     return (
         <div
-            ref={(el) => { rootRef.current = el; openUpIfClipped(top, miniMenuTop())(el); }}
-            style={{ position: 'fixed', top, left, zIndex: 1401 }}
-            className="w-80 rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
+            ref={rootRef}
+            style={{ position: 'fixed', top, bottom, left, maxHeight, zIndex: 1401 }}
+            className="w-80 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 text-sm text-slate-700"
         >
-            <div className="p-2 border-b border-slate-100">
+            <div className="shrink-0 p-2 border-b border-slate-100">
                 <input
                     autoFocus
                     value={query}
@@ -65,7 +67,7 @@ export function IndiceLinkPanel({ top, left, editorRef, chapters, subtitles, own
                     className="w-full px-2 py-1.5 rounded-lg border border-slate-200 outline-none focus:border-slate-400"
                 />
             </div>
-            <div className="max-h-80 overflow-y-auto p-1.5">
+            <div className="max-h-80 min-h-0 flex-1 overflow-y-auto p-1.5">
                 {currentTarget && (
                     <button type="button" onClick={() => onPick(null)} className="block w-full text-left px-2 py-1.5 mb-1 rounded-lg text-red-600 hover:bg-red-50">
                         Remover ligação

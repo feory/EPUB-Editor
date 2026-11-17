@@ -1,7 +1,9 @@
 import { test, expect, beforeEach } from 'bun:test';
 
 (globalThis as { window?: unknown }).window = { innerHeight: 800 };
-const { openUpIfClipped } = await import('./popupDismiss');
+let pop: { top: number; bottom: number; left: number } | null = null;
+(globalThis as { document?: unknown }).document = { querySelector: () => (pop ? { getBoundingClientRect: () => pop } : null) };
+const { openUpIfClipped, placePanelBesideMiniMenu } = await import('./popupDismiss');
 
 const el = (scrollHeight: number) => ({ scrollHeight, style: {} as Record<string, string> }) as unknown as HTMLElement & { style: Record<string, string> };
 beforeEach(() => { (globalThis as unknown as { window: { innerHeight: number } }).window.innerHeight = 800; });
@@ -36,4 +38,17 @@ test('mais espaço por baixo do que por cima: mantém-se em baixo', () => {
     const e = el(900);
     openUpIfClipped(100)(e);
     expect(e.style.top).toBe('100px');
+});
+
+test('painel junto ao mini-menu: cabe por baixo → por baixo (top)', () => {
+    pop = { top: 100, bottom: 148, left: 50 };
+    expect(placePanelBesideMiniMenu(440)).toEqual({ top: 152, maxHeight: 640 });
+});
+
+test('últimos parágrafos (pouco espaço por baixo): por cima, ancorado pelo fundo, e fica aí', () => {
+    pop = { top: 600, bottom: 648, left: 50 };
+    const r = placePanelBesideMiniMenu(440);
+    expect(r.top).toBeUndefined();
+    expect(r.bottom).toBe(800 - 596); // 204: o painel acaba 4px por cima do mini-menu
+    expect(r.maxHeight).toBe(588);
 });

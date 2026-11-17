@@ -14,6 +14,19 @@ export function miniMenuTop(): number {
     return r ? r.top - 4 : 120;
 }
 
+/**
+ * Onde abrir um painel de `height` (px) junto ao Mini-menu, DECIDIDO UMA VEZ ao abrir: por baixo dele se cabe; senão por cima
+ * (ancorado pelo FUNDO: o painel cresce para cima, nunca desce) quando por cima há mais espaço. `maxHeight` = o espaço do lado escolhido.
+ */
+export function placePanelBesideMiniMenu(height: number): { top?: number; bottom?: number; maxHeight: number } {
+    const belowTop = miniMenuAnchor().top;
+    const spaceBelow = window.innerHeight - belowTop - VIEWPORT_GAP;
+    const aboveBottom = miniMenuTop();
+    const spaceAbove = aboveBottom - VIEWPORT_GAP;
+    if (height <= spaceBelow || spaceAbove <= spaceBelow) return { top: belowTop, maxHeight: spaceBelow };
+    return { bottom: window.innerHeight - aboveBottom, maxHeight: spaceAbove };
+}
+
 const VIEWPORT_GAP = 8;
 /**
  * `ref` de um painel `position:fixed` que abre para baixo a partir de `top`: se por baixo ficava cortado e por cima há mais espaço,
