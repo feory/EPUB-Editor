@@ -129,6 +129,8 @@ Mostra-te quantas alterações faz de cada tipo e um exemplo antes de aplicares.
 
 O assistente também serve para **perguntar** e **conferir**.
 
+Podes perguntar-lhe **como se faz** qualquer coisa na aplicação («como partilho um livro?», «onde importo um EPUB?»). Ele consulta estes mesmos guias e responde com os passos que lá estão; se o assunto não vier nos guias, diz-to em vez de inventar.
+
 ### 4.1 Auditoria: «o que está inconsistente?»
 
 Procura incoerências na formatação do livro:

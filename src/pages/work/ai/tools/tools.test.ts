@@ -11,6 +11,7 @@ import { checkStylesTool } from './checkStyles';
 import { checkFiguresTool } from './checkFigures';
 import { buildReportTool } from './buildReport';
 import { findTextTool } from './findText';
+import { searchDocsTool, searchDocs } from './searchDocs';
 import type { PdfStyles } from '../../../../services/page-list/pdf-styles';
 import { AI_TOOLS } from './index';
 import type { Proposal, ToolContext } from './aiTool';
@@ -28,7 +29,7 @@ const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = nu
 test('o registo tem uma ferramenta por nome', () => {
     const names = AI_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.sort()).toEqual(['build_report', 'check_figures', 'check_page_list', 'check_publication', 'check_styles', 'find_text', 'preview_rules', 'run_validation', 'survey_book']);
+    expect(names.sort()).toEqual(['build_report', 'check_figures', 'check_page_list', 'check_publication', 'check_styles', 'find_text', 'preview_rules', 'run_validation', 'search_docs', 'survey_book']);
 });
 
 test('survey_book: devolve o resumo do livro como está agora', () => {
@@ -202,6 +203,16 @@ test('build_report: entrega o texto à interface com cada falha localizada; a re
     expect(text).toContain('Ficheiros: cap1.xhtml');
     expect(text).toContain('Exemplo: <a href="#x">y</a>');
     expect(text).toContain('LISTA DE PÁGINAS'); // sem PDF de lista de páginas: diz-o
+});
+
+test('search_docs: acha a secção dos guias que responde à pergunta; sem assunto conhecido não inventa', async () => {
+    expect(searchDocs('como partilho um livro com um colega')[0].title).toContain('Partilhar');
+    expect(searchDocs('como faço uma nota de rodapé')[0].title).toContain('nota de rodapé');
+    const hit = JSON.parse((await searchDocsTool.run({ query: 'como crio um estilo próprio?' }, setup().ctx)).content);
+    expect(hit.secoes.length).toBeGreaterThan(0);
+    expect(hit.secoes[0].texto).toContain('##');
+    expect(JSON.parse((await searchDocsTool.run({ query: 'zzzqqq xyzxyz' }, setup().ctx)).content).secoes).toEqual([]);
+    expect((await searchDocsTool.run({}, setup().ctx)).is_error).toBe(true);
 });
 
 test('find_text: acha o texto sem acentos nem maiúsculas, com capítulo, posição, tipo e excerto; diz se o bloco começa por ele', () => {
