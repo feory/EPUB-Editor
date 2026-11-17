@@ -8,6 +8,7 @@ import { AltReview } from './AltReview';
 import type { useAiChanges } from '../ai/useAiChanges';
 import { ChangesView } from './ChangesView';
 import { charStyles, paragraphStyles } from '../../../utils/user-styles';
+import { recallStep, recalled } from '../ai/promptHistory';
 
 type Ai = ReturnType<typeof useAiAssistant>;
 type Alt = ReturnType<typeof useAltReview>;
@@ -62,13 +63,33 @@ export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; changes: Changes; isbn: str
     const frame = useEditorFrame();
     const [text, setText] = useState('');
     const [view, setView] = useState<View>('chat');
+    // ↑/↓ recuperam os pedidos anteriores; `recall` = quantos para trás (null = o rascunho, guardado em `draft`).
+    const [recall, setRecall] = useState<number | null>(null);
+    const draft = useRef('');
     const go = (next: View) => { if (next === 'alt') alt.load(); setView(next); };
     const listRef = useRef<HTMLDivElement>(null);
     // Ao chegar uma resposta (ou a proposta, ou um erro) a lista desce até ao fim.
     useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [ai.lines, ai.proposal, ai.busy, ai.error]);
     const total = ai.proposal?.reports.reduce((n, r) => n + r.changed, 0) ?? 0;
     // Se o pedido não correu (erro, cancelado), o texto volta à caixa para não ter de se reescrever (sem pisar o que entretanto se escreveu).
-    const submit = () => { const sent = text; if (sent.trim()) { void ai.send(sent).then((ok) => { if (!ok) setText((now) => now || sent); }); setText(''); } };
+    const submit = () => { const sent = text; if (sent.trim()) { void ai.send(sent).then((ok) => { if (!ok) setText((now) => now || sent); }); setText(''); setRecall(null); } };
+    // ↑ no início da caixa (ou ↓ no fim) percorre os pedidos anteriores; noutro sítio as setas movem o cursor como sempre.
+    const browse = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        const dir = e.key === 'ArrowUp' ? 'up' : e.key === 'ArrowDown' ? 'down' : null;
+        const el = e.currentTarget;
+        if (!dir || e.shiftKey || el.selectionStart !== el.selectionEnd) return;
+        if (dir === 'up' ? el.selectionStart !== 0 : el.selectionStart !== el.value.length || recall === null) return;
+        const prompts = ai.lines.filter((l) => l.role === 'user').map((l) => l.text);
+        const next = recallStep(prompts.length, recall, dir);
+        if (next === recall) return;
+        e.preventDefault();
+        if (recall === null) draft.current = text;
+        setRecall(next);
+        const value = recalled(prompts, next, draft.current);
+        setText(value);
+        // o cursor fica no sítio de onde a seta seguinte continua (↑ no início, ↓ no fim), também em pedidos de várias linhas
+        requestAnimationFrame(() => { const at = dir === 'up' ? 0 : value.length; el.setSelectionRange(at, at); });
+    };
 
     return (
         <aside data-ai-sidebar style={{ width, ...frame }} className="fixed right-4 top-[var(--wp-header-h,57px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">
@@ -147,8 +168,8 @@ export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; changes: Changes; isbn: str
                 </div>
             )}
             <div className="p-3 border-t border-border flex gap-2">
-                <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={ai.scoped ? (ai.scoped.texts.length === 1 ? 'O que queres alterar neste bloco?' : 'O que queres alterar nestes blocos?') : 'O que queres alterar no livro?'}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
+                <textarea value={text} onChange={(e) => { setText(e.target.value); setRecall(null); }} rows={2} placeholder={ai.scoped ? (ai.scoped.texts.length === 1 ? 'O que queres alterar neste bloco?' : 'O que queres alterar nestes blocos?') : 'O que queres alterar no livro?'}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } else browse(e); }}
                     className="flex-1 resize-none rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-slate-400" />
                 <button onClick={submit} disabled={ai.busy || !text.trim()} aria-label="Enviar" className="self-end h-9 w-9 flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-800 text-white disabled:opacity-50"><Send size={15} /></button>
             </div>
