@@ -1,11 +1,9 @@
-// IA do editor: proxy SEM ESTADO para a API da Anthropic (ou da OpenRouter, ver ai-openrouter.js). A chave, o modelo, o prompt de sistema e as ferramentas vivem
+// IA do editor: proxy SEM ESTADO para a API da OpenRouter (ver ai-openrouter.js). A chave, o modelo, o prompt de sistema e as ferramentas vivem
 // aqui (o cliente não os pode alterar); as ferramentas EXECUTAM-SE no cliente, que tem o livro (utils/book-survey.ts e
 // utils/book-rules.ts). Ciclo: o cliente envia as mensagens → devolvemos UMA resposta do modelo → se pede ferramentas, o
 // cliente corre-as, acrescenta os tool_result e volta a chamar. O modelo nunca aplica nada: propõe com `preview_rules` e o
 // utilizador confirma na UI.
-import Anthropic from '@anthropic-ai/sdk';
 import { corsHeaders, safeSegment } from '../response.js';
-import { ANTHROPIC_API_KEY, AI_MODEL } from '../config.js';
 import { effectiveOpenRouter } from '../ai-settings.js';
 import { openrouterBackend } from '../ai-openrouter.js';
 import { loadImageForModel } from '../ai-images.js';
@@ -152,21 +150,6 @@ function invalidMessages(messages) {
   return null;
 }
 
-/** Backend da Anthropic: as opções específicas (esforço, cache, fallback de recusas) ficam aqui. */
-export const anthropicBackend = (client) => ({
-  meta: { provider: 'anthropic', model: AI_MODEL },
-  create: ({ system, tools, messages }) => client.beta.messages.create({
-    model: AI_MODEL,
-    max_tokens: MAX_TOKENS,
-    output_config: { effort: 'medium' }, // o padrão do Opus 5.5; explícito para não mudar em silêncio
-    system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-    ...(tools.length ? { tools } : {}),
-    messages,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default', // recusa por classificador de segurança → o servidor repete noutro modelo
-  }),
-});
-
 /** `backend` injetável (testes): { create({ system, tools, messages }) → resposta no formato da Anthropic }, ou uma função que o devolve
  *  (o Painel muda a chave/modelo sem reiniciar); null = IA não configurada. */
 export function makeChat(backendOrResolver) {
@@ -265,21 +248,15 @@ export function makeAlt(backendOrResolver, loadImage = loadImageForModel) {
   };
 }
 
-let anthropicClient = null;
 let openrouterCache = { sig: '', backend: null };
 
-/**
- * O fornecedor em vigor, decidido a CADA pedido: a OpenRouter configurada no Painel (chave + modelo) manda; sem ela, a Anthropic
- * se houver ANTHROPIC_API_KEY no ambiente; senão nenhum (503). Para voltar à Anthropic, remove-se a chave no Painel.
- */
+/** O backend em vigor, decidido a CADA pedido: a OpenRouter configurada no Painel (chave + modelo); sem ela, nenhum (503). */
 export function resolveBackend() {
   const { apiKey, model } = effectiveOpenRouter();
-  if (apiKey && model) {
-    const sig = `${apiKey}|${model}`;
-    if (openrouterCache.sig !== sig) openrouterCache = { sig, backend: openrouterBackend({ apiKey, model, maxTokens: MAX_TOKENS }) };
-    return openrouterCache.backend;
-  }
-  return ANTHROPIC_API_KEY ? anthropicBackend(anthropicClient ??= new Anthropic({ apiKey: ANTHROPIC_API_KEY })) : null;
+  if (!apiKey || !model) return null;
+  const sig = `${apiKey}|${model}`;
+  if (openrouterCache.sig !== sig) openrouterCache = { sig, backend: openrouterBackend({ apiKey, model, maxTokens: MAX_TOKENS }) };
+  return openrouterCache.backend;
 }
 
 export const chat = makeChat(resolveBackend);

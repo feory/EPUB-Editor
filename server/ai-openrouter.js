@@ -4,6 +4,8 @@
 // fallback) deixam-se cair. Erros levam `.status` (o mesmo contrato dos erros do SDK da Anthropic).
 const URL = 'https://openrouter.ai/api/v1/chat/completions';
 const TIMEOUT_MS = 170_000;
+const RETRIES = 2; // tentativas EXTRA depois da primeira
+const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 
 const FINISH = { stop: 'end_turn', length: 'max_tokens', tool_calls: 'tool_use', content_filter: 'refusal' };
 
@@ -62,19 +64,39 @@ export function fromOpenAiResponse(data) {
   };
 }
 
-/** `fetchImpl` injetável (testes). */
-export function openrouterBackend({ apiKey, model, maxTokens, fetchImpl = fetch }) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Espera antes da tentativa `n` (0-based): o `Retry-After` do fornecedor (até 10 s) ou 0,5 s, 1 s… */
+const backoff = (n, res) => {
+  const header = Number(res?.headers.get('retry-after'));
+  return header > 0 ? Math.min(header, 10) * 1000 : 500 * 2 ** n;
+};
+
+/**
+ * `fetchImpl` e `sleepImpl` injetáveis (testes). Repete (até RETRIES vezes) o que costuma ser passageiro: 429/5xx e falhas de
+ * rede. NÃO repete o timeout (já esperou TIMEOUT_MS) nem erros do pedido (400, 401, 402…).
+ */
+export function openrouterBackend({ apiKey, model, maxTokens, fetchImpl = fetch, sleepImpl = sleep }) {
   return {
     meta: { provider: 'openrouter', model },
     async create({ system, tools, messages }) {
-      const res = await fetchImpl(URL, {
+      const init = () => ({
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, max_tokens: maxTokens, messages: toOpenAiMessages(system, messages), usage: { include: true }, ...(tools.length ? { tools: toOpenAiTools(tools) } : {}) }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-      if (!res.ok) throw Object.assign(new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 300)}`), { status: res.status });
-      return fromOpenAiResponse(await res.json());
+      for (let n = 0; ; n++) {
+        let res;
+        try { res = await fetchImpl(URL, init()); }
+        catch (err) {
+          if (n < RETRIES && err?.name !== 'TimeoutError' && err?.name !== 'AbortError') { await sleepImpl(backoff(n)); continue; }
+          throw err;
+        }
+        if (res.ok) return fromOpenAiResponse(await res.json());
+        if (n < RETRIES && RETRY_STATUS.has(res.status)) { await sleepImpl(backoff(n, res)); continue; }
+        throw Object.assign(new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 300)}`), { status: res.status });
+      }
     },
   };
 }

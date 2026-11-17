@@ -1,15 +1,14 @@
 import { test, expect } from 'bun:test';
-import Anthropic from '@anthropic-ai/sdk';
 
 process.env.JWT_SECRET ??= 'test-secret'; // config.js exige-o ao ser importado
-const { makeChat: makeChatWith, makeAlt, anthropicBackend } = await import('./routes/ai.js');
-const makeChat = (client) => makeChatWith(client && anthropicBackend(client));
+const { makeChat, makeAlt } = await import('./routes/ai.js');
+const makeChatWith = makeChat;
 const { uid, post } = await import('./test-helpers.js');
 
 const user = () => ({ sub: uid('ai'), role: 'user', email: 'a@t.pt' });
 const fakeClient = (impl) => {
   const calls = [];
-  return { calls, beta: { messages: { create: async (p) => { calls.push(p); return impl(p); } } } };
+  return { calls, create: async (p) => { calls.push(p); return impl(p); } };
 };
 const ok = () => ({ content: [{ type: 'text', text: 'olá' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } });
 const msgs = [{ role: 'user', content: 'põe as citações mais pequenas' }];
@@ -34,17 +33,15 @@ test('mensagens inválidas → 400 e a API não é chamada', async () => {
   expect(c.calls).toHaveLength(0);
 });
 
-test('pedido válido: modelo, sistema e ferramentas do servidor; sem tool_choice forçado nem amostragem', async () => {
+test('pedido válido: sistema e ferramentas do servidor (o que o cliente envia nunca os altera)', async () => {
   const c = fakeClient(ok);
   const res = await makeChat(c)(post({ messages: msgs, system: 'ignorado', tools: [], model: 'outro' }), user());
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({ content: [{ type: 'text', text: 'olá' }], stop_reason: 'end_turn' });
   const p = c.calls[0];
-  expect(p.model).toBe('claude-opus-5-5');
-  expect(p.tools.map((t) => t.name)).toEqual(['survey_book', 'preview_rules', 'check_publication', 'check_page_list', 'check_styles', 'check_figures', 'build_report', 'run_validation']);
-  expect(p.system[0].text).toContain('survey_book');
+  expect(p.tools.map((t) => t.name)).toEqual(['survey_book', 'preview_rules', 'check_publication', 'check_page_list', 'check_styles', 'check_figures', 'search_docs', 'build_report', 'run_validation']);
+  expect(p.system).toContain('survey_book');
   expect(p.messages).toEqual(msgs);
-  for (const k of ['tool_choice', 'temperature', 'top_p', 'top_k']) expect(p).not.toHaveProperty(k);
 });
 
 test('o ciclo de ferramentas passa: tool_use e tool_result são aceites', async () => {
@@ -58,7 +55,7 @@ test('o ciclo de ferramentas passa: tool_use e tool_result são aceites', async 
 });
 
 test('erro da API → 502 genérico (sem detalhes); 429 mantém-se', async () => {
-  const boom = (status) => () => { throw new Anthropic.APIError(status, undefined, 'segredo interno', new Headers()); };
+  const boom = (status) => () => { throw Object.assign(new Error('segredo interno'), { status }); };
   const r500 = await makeChat(fakeClient(boom(500)))(post({ messages: msgs }), user());
   expect(r500.status).toBe(502);
   expect(JSON.stringify(await r500.json())).not.toContain('segredo');
@@ -123,18 +120,33 @@ test('openrouter: pedido ao endpoint com chave, modelo e ferramentas; resposta p
   expect(calls[0].init.headers.Authorization).toBe('Bearer sk-or-x');
   const sent = JSON.parse(calls[0].init.body);
   expect(sent.model).toBe('prov/modelo');
-  expect(sent.tools.map((t) => t.function.name)).toEqual(['survey_book', 'preview_rules', 'check_publication', 'check_page_list', 'check_styles', 'check_figures', 'build_report', 'run_validation']);
+  expect(sent.tools.map((t) => t.function.name)).toEqual(['survey_book', 'preview_rules', 'check_publication', 'check_page_list', 'check_styles', 'check_figures', 'search_docs', 'build_report', 'run_validation']);
   expect(sent.messages[0].role).toBe('system');
 });
 
 test('openrouter: erro HTTP → 502 sem detalhes (429 mantém-se); falha de rede → 502', async () => {
-  const failing = (status) => makeChatWith(openrouterBackend({ apiKey: 'k', model: 'm', maxTokens: 1, fetchImpl: async () => new Response('segredo interno', { status }) }));
+  const failing = (status) => makeChatWith(openrouterBackend({ apiKey: 'k', model: 'm', maxTokens: 1, fetchImpl: async () => new Response('segredo interno', { status }), sleepImpl: async () => {} }));
   const r500 = await failing(500)(post({ messages: msgs }), user());
   expect(r500.status).toBe(502);
   expect(JSON.stringify(await r500.json())).not.toContain('segredo');
   expect((await failing(429)(post({ messages: msgs }), user())).status).toBe(429);
-  const down = makeChatWith(openrouterBackend({ apiKey: 'k', model: 'm', maxTokens: 1, fetchImpl: async () => { throw new TypeError('fetch failed'); } }));
+  const down = makeChatWith(openrouterBackend({ apiKey: 'k', model: 'm', maxTokens: 1, fetchImpl: async () => { throw new TypeError('fetch failed'); }, sleepImpl: async () => {} }));
   expect((await down(post({ messages: msgs }), user())).status).toBe(502);
+});
+
+test('openrouter: repete 429/5xx e falhas de rede (2 vezes) e recupera; 400 e timeout não se repetem', async () => {
+  const ok = () => Response.json({ choices: [{ finish_reason: 'stop', message: { content: 'olá' } }], usage: {} });
+  const run = async (steps) => {
+    let n = 0; const waits = [];
+    const backend = openrouterBackend({ apiKey: 'k', model: 'm', maxTokens: 1, sleepImpl: async (ms) => { waits.push(ms); }, fetchImpl: async () => { const s = steps[n++]; if (s instanceof Error) throw s; return s; } });
+    const out = await backend.create({ system: 'S', tools: [], messages: msgs }).then((r) => r.content[0].text, (e) => e.status ?? e.name);
+    return { out, calls: n, waits };
+  };
+  expect(await run([new Response('x', { status: 503 }), new TypeError('fetch failed'), ok()])).toEqual({ out: 'olá', calls: 3, waits: [500, 1000] });
+  expect(await run([new Response('x', { status: 429, headers: { 'retry-after': '2' } }), ok()])).toEqual({ out: 'olá', calls: 2, waits: [2000] });
+  expect(await run([new Response('x', { status: 500 }), new Response('x', { status: 500 }), new Response('x', { status: 500 })])).toMatchObject({ out: 500, calls: 3 });
+  expect(await run([new Response('x', { status: 400 })])).toMatchObject({ out: 400, calls: 1 });
+  expect(await run([Object.assign(new Error('t'), { name: 'TimeoutError' })])).toMatchObject({ out: 'TimeoutError', calls: 1 });
 });
 
 // ---- Texto alternativo ----
@@ -193,7 +205,7 @@ test('openrouter: imagem do utilizador vira image_url (data URI) e sem ferrament
 test('o prompt de sistema explica a nota de Aplicar e como reverter', async () => {
   const c = fakeClient(ok);
   await makeChat(c)(post({ messages: msgs }), user());
-  const sys = c.calls[0].system[0].text;
+  const sys = c.calls[0].system;
   expect(sys).toContain('APLICOU');
   expect(sys).toContain('Nunca digas que "nada foi aplicado"');
   expect(sys).toContain('Antes de IA');
