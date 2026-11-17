@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import { sanitizeImageFilename, toRasterName } from '../../../utils/format';
 import type { PrintPdf } from '../../page-list/print-pdf';
 import { reviewFigures } from '../../page-list/figure-audit';
-import { buildPdfLines, folioToPdfPage, normalize as normalizeForMatch } from '../../page-list/pdf-text';
+import { buildPdfLines, folioToPdfPage, normalize as normalizeForMatch, MIN_ANCHOR, anchorBefore, anchorAfter, biggestGap } from '../../page-list/pdf-text';
 
 /**
  * Reconstrução de figuras no import IDML+PDF: cada imagem da Links/ é colocada no editor como
@@ -413,40 +413,6 @@ export function placeInlineFigures(html: string, imageIds: string[]): { html: st
     return { html: doc.body.innerHTML, placed };
 }
 
-const POS_MIN_ANCHOR = 15;   // mesmo mínimo de anchorsFromPages (pdf-text.ts)
-const POS_GAP_FACTOR = 3;    // quebra tem de ser bem maior que entrelinha normal — corpo de
-                              // imagem, não um mero espaçamento de parágrafo (ver verifyBlankSpacing)
-
-function anchorBefore(lines: { text: string }[], endIdx: number, minLen: number): string {
-    let j = endIdx, s = lines[endIdx]?.text || '';
-    while (s.length < minLen && j > 0) { j--; s = lines[j].text + s; }
-    return s;
-}
-function anchorAfter(lines: { text: string }[], startIdx: number, minLen: number): string {
-    let j = startIdx, s = lines[startIdx]?.text || '';
-    while (s.length < minLen && j < lines.length - 1) { j++; s += lines[j].text; }
-    return s;
-}
-
-// Índice da linha a seguir à maior quebra vertical entre linhas consecutivas da página (onde uma
-// imagem sem legenda empurra o texto) — só conta se for bem maior que a entrelinha normal da
-// página (POS_GAP_FACTOR×, mais exigente que o 1.4× de verifyBlankSpacing: aqui é preciso
-// distinguir o CORPO de uma imagem de um mero espaçamento de parágrafo).
-function biggestGap(lines: { y: number }[]): number | null {
-    if (lines.length < 2) return null;
-    const gaps: number[] = [];
-    let maxGap = -Infinity, maxIdx = -1;
-    for (let k = 1; k < lines.length; k++) {
-        const g = lines[k - 1].y - lines[k].y;
-        gaps.push(g);
-        if (g > maxGap) { maxGap = g; maxIdx = k; }
-    }
-    const normal = gaps.filter(g => g > 0 && g < 40).sort((a, b) => a - b);
-    const normalGap = normal.length ? normal[Math.floor(normal.length / 2)] : 0;
-    if (maxIdx < 0 || normalGap <= 0 || maxGap < normalGap * POS_GAP_FACTOR) return null;
-    return maxIdx;
-}
-
 /**
  * Última tentativa para figuras SEM legenda nem nº reconhecível — vinhetas puramente decorativas
  * (ex. "Scribble3.eps" em "Cai neve no Diabo": um desenho embutido a meio de um poema, sem
@@ -477,9 +443,9 @@ export async function placeFiguresByPosition(html: string, figures: Figure[], pd
             const lines = pdfLines[pdfPageIndex - 1];
             const gapIdx = biggestGap(lines);
             if (gapIdx === null) continue;
-            const before = anchorBefore(lines, gapIdx - 1, POS_MIN_ANCHOR);
-            const after = anchorAfter(lines, gapIdx, POS_MIN_ANCHOR);
-            if (before.length >= POS_MIN_ANCHOR || after.length >= POS_MIN_ANCHOR) { anchor = { before, after }; break; }
+            const before = anchorBefore(lines, gapIdx - 1, MIN_ANCHOR);
+            const after = anchorAfter(lines, gapIdx, MIN_ANCHOR);
+            if (before.length >= MIN_ANCHOR || after.length >= MIN_ANCHOR) { anchor = { before, after }; break; }
         }
         if (!anchor) continue;
 
@@ -501,11 +467,11 @@ export async function placeFiguresByPosition(html: string, figures: Figure[], pd
         }
 
         let insertPos = -1;
-        if (anchor.before.length >= POS_MIN_ANCHOR) {
+        if (anchor.before.length >= MIN_ANCHOR) {
             const pos = flat.indexOf(anchor.before);
             if (pos >= 0) insertPos = pos + anchor.before.length;
         }
-        if (insertPos < 0 && anchor.after.length >= POS_MIN_ANCHOR) {
+        if (insertPos < 0 && anchor.after.length >= MIN_ANCHOR) {
             const pos = flat.indexOf(anchor.after);
             if (pos >= 0) insertPos = pos;
         }

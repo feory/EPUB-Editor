@@ -200,3 +200,38 @@ export function chapterAnchorsFromPages(pages: PdfPageText[], titles: string[]):
     }
     return anchors;
 }
+
+// Geometria das linhas de uma página, para colocar uma imagem pela posição no PDF (usada pela importação IDML: figures.ts).
+const POS_GAP_FACTOR = 3;    // quebra tem de ser bem maior que entrelinha normal — corpo de
+                              // imagem, não um mero espaçamento de parágrafo (ver verifyBlankSpacing)
+
+export function anchorBefore(lines: { text: string }[], endIdx: number, minLen: number): string {
+    let j = endIdx, s = lines[endIdx]?.text || '';
+    while (s.length < minLen && j > 0) { j--; s = lines[j].text + s; }
+    return s;
+}
+export function anchorAfter(lines: { text: string }[], startIdx: number, minLen: number): string {
+    let j = startIdx, s = lines[startIdx]?.text || '';
+    while (s.length < minLen && j < lines.length - 1) { j++; s += lines[j].text; }
+    return s;
+}
+
+// Índice da linha a seguir à maior quebra vertical entre linhas consecutivas da página (onde uma
+// imagem sem legenda empurra o texto) — só conta se for bem maior que a entrelinha normal da
+// página (POS_GAP_FACTOR×, mais exigente que o 1.4× de verifyBlankSpacing: aqui é preciso
+// distinguir o CORPO de uma imagem de um mero espaçamento de parágrafo).
+export function biggestGap(lines: { y: number }[]): number | null {
+    if (lines.length < 2) return null;
+    const gaps: number[] = [];
+    let maxGap = -Infinity, maxIdx = -1;
+    for (let k = 1; k < lines.length; k++) {
+        const g = lines[k - 1].y - lines[k].y;
+        gaps.push(g);
+        if (g > maxGap) { maxGap = g; maxIdx = k; }
+    }
+    const normal = gaps.filter(g => g > 0 && g < 40).sort((a, b) => a - b);
+    const normalGap = normal.length ? normal[Math.floor(normal.length / 2)] : 0;
+    if (maxIdx < 0 || normalGap <= 0 || maxGap < normalGap * POS_GAP_FACTOR) return null;
+    return maxIdx;
+}
+
