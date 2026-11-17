@@ -113,6 +113,8 @@ export interface WorkEditorRef {
     scrollToContent: (text: string, paragraphIndex?: number) => void;
     /** N-ésimo parágrafo NÃO vazio (índice de `extractParagraphs`): ignora marcadores de capítulo e `<p>` vazios. */
     scrollToParagraph: (index: number, placeCursor?: boolean) => void;
+    /** N-ésimo bloco de TOPO do capítulo carregado (todos, também os vazios e os marcadores: a posição que o `find_text` do assistente devolve). */
+    scrollToBlock: (index: number) => void;
     /** Elemento do capítulo carregado que corresponde ao HTML de um relatório (id, ou etiqueta + src/href/alt + texto). Devolve se o achou. */
     scrollToHtml: (html: string) => boolean;
     /** Índice (como em `scrollToParagraph`) do parágrafo com o cursor; null sem editor/cursor. */
@@ -832,6 +834,15 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             if (placeCursor) editor.selection.setCursorLocation(block, 0);
             block.scrollIntoView({ behavior: 'instant', block: 'center' });
             pulseHighlight(block);
+        },
+
+        scrollToBlock: (index: number) => {
+            const editor = editorRef.current;
+            const block = editor?.getBody()?.children[index];
+            if (!editor || !block) return;
+            editor.focus();
+            block.scrollIntoView({ behavior: 'instant', block: 'center' });
+            pulseHighlight(block as HTMLElement);
         },
 
         afterChapterChange: (fn: () => void) => { afterChapterChangeRef.current = fn; },

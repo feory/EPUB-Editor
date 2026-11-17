@@ -80,6 +80,12 @@ test('o alt tem o seu próprio limite: esgotá-lo não bloqueia o chat (e vice-v
   expect((await makeChat(fakeClient(ok))(post({ messages: msgs }), u)).status).toBe(200);
 });
 
+test('o prompt de sistema explica as ligações [[cap:N,bloco:M]]', async () => {
+  const c = fakeClient(ok);
+  await makeChat(c)(post({ messages: msgs }), user());
+  expect(c.calls[0].system).toContain('[[cap:N,bloco:M]]');
+});
+
 test('o prompt de sistema diz que o texto do livro são dados e não instruções', async () => {
   const c = fakeClient(ok);
   await makeChat(c)(post({ messages: msgs }), user());

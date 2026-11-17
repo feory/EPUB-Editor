@@ -59,6 +59,8 @@ import { sanitizeImageFilename } from '../utils/format';
 import { getStoredFont, storeFont, getStoredFontSize, storeFontSize } from './work/utils/editorFonts';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { imageTag } from '../utils/book-image';
+import { splitChapters } from '../utils/chapters';
+import { blockOffset } from './work/ai/aiLinks';
 
 const HistoryModal = lazy(() => import('./work/modals/HistoryModal').then(m => ({ default: m.HistoryModal })));
 const CompareModal = lazy(() => import('./work/modals/CompareModal').then(m => ({ default: m.CompareModal })));
@@ -347,6 +349,16 @@ export function WorkPage() {
     (imageId) => `data-image-id="${imageId}"`,
     (editor, imageId) => editor.scrollToImage(imageId),
   );
+  // Botões nas respostas do assistente ([[cap:N,bloco:M]]): salta para o capítulo (e bloco) no editor. Com o livro todo aberto
+  // (-1) a posição conta desde o início; num capítulo, é local e, se for outro, muda-se primeiro e o scroll corre depois.
+  const handleGoToAiLocation = (chapter: number, block?: number) => {
+    const editor = editorRef.current;
+    if (!editor || chapter < 0 || chapter >= work.chapters.length) return;
+    const wholeBook = work.activeChapterIndex === -1;
+    const scroll = () => editorRef.current?.scrollToBlock((wholeBook ? blockOffset(splitChapters(work.fullHtmlContent), chapter) : 0) + (block ?? 0));
+    if (wholeBook || chapter === work.activeChapterIndex) scroll();
+    else { editor.afterChapterChange(scroll); work.setActiveChapterIndex(chapter); }
+  };
   const handleGoToVersionDiffItem = useGoToParagraph(
     editorRef, work.fullHtmlContent, work.activeChapterIndex, work.setActiveChapterIndex,
   );
@@ -652,7 +664,7 @@ export function WorkPage() {
       )}
 
       {sidebars.showAiSidebar && (
-        <AiSidebar ai={ai} alt={altReview} changes={aiChanges} isbn={isbn ?? ''} readOnly={work.readOnly} onClose={() => sidebars.setShowAiSidebar(false)} width={panelWidth} onResize={handlePanelResize} />
+        <AiSidebar ai={ai} alt={altReview} chapterTitles={work.chapters.map((c) => c.title)} onGoTo={handleGoToAiLocation} changes={aiChanges} isbn={isbn ?? ''} readOnly={work.readOnly} onClose={() => sidebars.setShowAiSidebar(false)} width={panelWidth} onResize={handlePanelResize} />
       )}
 
       {sidebars.showTextSidebar && (
