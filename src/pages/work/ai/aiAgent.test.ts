@@ -65,6 +65,14 @@ test('uma ferramenta que lança não deita o pedido abaixo: o erro volta ao mode
     expect(results(s.seen[1])[0]).toMatchObject({ is_error: true, content: expect.stringContaining('survey_book falhou: boom') });
 });
 
+test('Parar: cancelar a meio não volta a chamar o modelo e rejeita', async () => {
+    const abort = new AbortController();
+    let calls = 0;
+    const send = async (): Promise<ChatResponse> => { calls++; abort.abort(); return tool('1', 'survey_book'); };
+    await expect(runAgent({ messages: user, send, signal: abort.signal, workspace: ws(book) })).rejects.toBeDefined();
+    expect(calls).toBe(1);
+});
+
 test('recusa e limite de passos têm mensagem; o histórico inclui as respostas', async () => {
     const refused = await runAgent({ messages: user, send: async () => ({ stop_reason: 'refusal', content: [] }), workspace: ws(book) });
     expect(refused.text).toContain('recusou');

@@ -168,7 +168,7 @@ export function makeChat(backendOrResolver) {
     if (problem) return fail(problem, 400);
 
     try {
-      const response = await backend.create({ system: SYSTEM, tools: TOOLS, messages: body.messages });
+      const response = await backend.create({ system: SYSTEM, tools: TOOLS, messages: body.messages, signal: req.signal });
       recordAiUsage({ userId: user.sub, isbn, kind: 'chat', backend, usage: response.usage });
       return Response.json(
         { content: response.content, stop_reason: response.stop_reason, stop_details: response.stop_details ?? null, usage: response.usage },
@@ -182,6 +182,7 @@ export function makeChat(backendOrResolver) {
   };
 }
 
+      if (req.signal?.aborted) return fail('Pedido cancelado', 499); // o cliente já saiu: ninguém lê isto
 // ---- Texto alternativo das imagens ----
 const MAX_ALT_IMAGES = 10; // por pedido; o cliente parte o livro em lotes
 const ALT_CONCURRENCY = 3;

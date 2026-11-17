@@ -29,6 +29,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
     const [error, setError] = useState('');
     const history = useRef<AgentMessage[]>(stored ? (stored.pending ? [...stored.history, { role: 'user', content: `[Sistema: ${LOST_PROPOSAL}]` }] : stored.history) : []);
     const request = useRef('');
+    const controller = useRef<AbortController | null>(null);
     // O utilizador tira o âmbito (×) para o bloco atual; um bloco diferente volta a limitá-lo.
     const selectedKey = selected ? `${selected.index}${selected.item ?? ''}:${selected.tags.join()}:${selected.texts.join('|')}` : null;
     const [offFor, setOffFor] = useState<string | null>(null);
@@ -46,11 +47,13 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
         if (scoped && !block) { setError('Não encontrei os blocos selecionados no livro. Seleciona-os de novo no editor ou tira o âmbito (×).'); return; }
         setLines((l) => [...l, { role: 'user', text: request.current }]);
         setProposal(null); setError(''); setBusy(true);
+        const abort = controller.current = new AbortController();
         try {
             const result = await runAgent({
                 messages: [...history.current, { role: 'user', content: block ? blockContext(workspace.parts(), block) + request.current : request.current }],
                 scope: block,
-                send: async (messages) => (await ebooksApi.aiChat(isbn, messages)).data,
+                signal: abort.signal,
+                send: async (messages, signal) => (await ebooksApi.aiChat(isbn, messages, signal)).data,
                 workspace,
             });
             history.current = compactHistory(result.messages); // só o texto: as ferramentas não se reenviam nos pedidos seguintes (poupa tokens)
@@ -58,9 +61,13 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
             setProposal(result.proposal);
             if (result.report) setReport(result.report);
         } catch (e) {
+            if (abort.signal.aborted) { setLines((l) => [...l, { role: 'assistant', text: 'Pedido cancelado.' }]); return; }
             setError(isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error ?? 'Erro de rede' : 'Erro inesperado');
-        } finally { setBusy(false); }
+        } finally { controller.current = null; setBusy(false); }
     }, [isbn, busy, workspace, scoped]);
+
+    /** Parar: cancela o pedido em curso (o modelo deixa de ser chamado; o que a ferramenta já corria acaba sozinho). */
+    const stop = useCallback(() => controller.current?.abort(), []);
 
     const apply = useCallback(async () => {
         if (!proposal) return;
@@ -94,5 +101,5 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
     }, [proposal]);
     const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setReport(null); setError(''); }, []); // o efeito apaga o que estava guardado
 
-    return { lines, proposal, report, busy, error, scoped, clearScope, send, apply, discard, renameStyle, noteReverted, reset };
+    return { lines, proposal, report, busy, error, scoped, clearScope, send, stop, apply, discard, renameStyle, noteReverted, reset };
 }

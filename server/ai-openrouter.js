@@ -73,21 +73,22 @@ const backoff = (n, res) => {
 };
 
 /**
- * `fetchImpl` e `sleepImpl` injetáveis (testes). Repete (até RETRIES vezes) o que costuma ser passageiro: 429/5xx e falhas de
+ * `fetchImpl` e `sleepImpl` injetáveis (testes). `signal` cancela o pedido (o utilizador carregou em Parar). Repete (até RETRIES vezes) o que costuma ser passageiro: 429/5xx e falhas de
  * rede. NÃO repete o timeout (já esperou TIMEOUT_MS) nem erros do pedido (400, 401, 402…).
  */
 export function openrouterBackend({ apiKey, model, maxTokens, fetchImpl = fetch, sleepImpl = sleep }) {
   return {
     meta: { provider: 'openrouter', model },
-    async create({ system, tools, messages }) {
+    async create({ system, tools, messages, signal }) {
       const init = () => ({
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, max_tokens: maxTokens, messages: toOpenAiMessages(system, messages), usage: { include: true }, ...(tools.length ? { tools: toOpenAiTools(tools) } : {}) }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS),
       });
       for (let n = 0; ; n++) {
         let res;
+        if (signal?.aborted) throw signal.reason ?? Object.assign(new Error('cancelado'), { name: 'AbortError' });
         try { res = await fetchImpl(URL, init()); }
         catch (err) {
           if (n < RETRIES && err?.name !== 'TimeoutError' && err?.name !== 'AbortError') { await sleepImpl(backoff(n)); continue; }

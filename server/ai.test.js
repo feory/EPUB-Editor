@@ -163,6 +163,17 @@ test('openrouter: repete 429/5xx e falhas de rede (2 vezes) e recupera; 400 e ti
   expect(await run([Object.assign(new Error('t'), { name: 'TimeoutError' })])).toMatchObject({ out: 'TimeoutError', calls: 1 });
 });
 
+test('openrouter: o sinal de cancelar aborta o pedido e não se repete', async () => {
+  let calls = 0;
+  const abort = new AbortController();
+  const fetchImpl = async (_u, init) => { calls++; abort.abort(); init.signal.throwIfAborted(); return Response.json({}); };
+  const backend = openrouterBackend({ apiKey: 'k', model: 'm', maxTokens: 1, fetchImpl, sleepImpl: async () => {} });
+  await expect(backend.create({ system: 'S', tools: [], messages: msgs, signal: abort.signal })).rejects.toBeDefined();
+  expect(calls).toBe(1);
+  await expect(backend.create({ system: 'S', tools: [], messages: msgs, signal: abort.signal })).rejects.toBeDefined(); // já cancelado: nem chama
+  expect(calls).toBe(1);
+});
+
 // ---- Texto alternativo ----
 const img = { data: 'QUJD', mediaType: 'image/jpeg' };
 const altBackend = (impl) => { const calls = []; return { calls, create: async (p) => { calls.push(p); return impl(p, calls.length); } }; };

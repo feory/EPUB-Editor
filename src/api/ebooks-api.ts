@@ -223,8 +223,8 @@ export const ebooksApi = {
         apiClient.post(`/ebooks/${isbn}/content`, { content }),
 
     // IA do editor: uma resposta do modelo por chamada (as ferramentas correm no cliente — pages/work/ai/aiAgent.ts)
-    aiChat: (isbn: string, messages: unknown[]) =>
-        apiClient.post<{ content: { type: string; [key: string]: unknown }[]; stop_reason: string | null }>(`/ebooks/${isbn}/ai`, { messages }, { timeout: 180_000 }),
+    aiChat: (isbn: string, messages: unknown[], signal?: AbortSignal) =>
+        apiClient.post<{ content: { type: string; [key: string]: unknown }[]; stop_reason: string | null }>(`/ebooks/${isbn}/ai`, { messages }, { timeout: 180_000, signal }),
 
     // Texto alternativo das imagens: o servidor lê as imagens do disco e pede a descrição ao modelo de visão (lotes de até 10)
     aiAlt: (isbn: string, images: { id: string; chapter: string; before: string; after: string }[], language: string) =>

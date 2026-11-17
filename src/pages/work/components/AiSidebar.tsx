@@ -97,7 +97,7 @@ export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; changes: Changes; isbn: str
                 {ai.lines.map((l, i) => (
                     <div key={i} className={l.role === 'user' ? 'self-end max-w-[85%] rounded-xl bg-slate-700 text-white px-3 py-2' : 'self-start max-w-[90%] rounded-xl bg-slate-100 text-slate-800 px-3 py-2 whitespace-pre-wrap'}>{l.role === 'user' ? l.text : inline(l.text)}</div>
                 ))}
-                {ai.busy && <p className="text-text-muted">A trabalhar…</p>}
+                {ai.busy && <p className="text-text-muted flex items-center gap-2">A trabalhar… <button onClick={ai.stop} className="px-2 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold">Parar</button></p>}
                 {ai.error && <p className="text-rose-600">{ai.error}</p>}
 
                 {ai.report && (

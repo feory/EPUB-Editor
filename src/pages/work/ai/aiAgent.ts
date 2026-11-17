@@ -27,7 +27,9 @@ const textOf = (content: Block[]) => content.filter((b) => b.type === 'text').ma
 
 export async function runAgent(opts: {
     messages: AgentMessage[];
-    send: (messages: AgentMessage[]) => Promise<ChatResponse>;
+    send: (messages: AgentMessage[], signal?: AbortSignal) => Promise<ChatResponse>;
+    /** Parar: cancela o pedido em curso e não volta a chamar o modelo (rejeita com o `reason` do sinal). */
+    signal?: AbortSignal;
     /** O livro aberto: as ferramentas leem-no na hora de cada chamada (ver aiWorkspace.ts). */
     workspace: AiWorkspace;
     /** Só este bloco: as regras ficam limitadas a ele e as operações (que mexem no livro todo) recusam-se. */
@@ -47,7 +49,8 @@ export async function runAgent(opts: {
     };
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-        const res = await opts.send(messages);
+        opts.signal?.throwIfAborted();
+        const res = await opts.send(messages, opts.signal);
         messages = [...messages, { role: 'assistant', content: res.content }];
         if (res.stop_reason !== 'tool_use') {
             const text = textOf(res.content);
@@ -55,7 +58,7 @@ export async function runAgent(opts: {
             return { messages, text: text || note, proposal, report };
         }
         const results: Block[] = [];
-        for (const b of res.content.filter((x) => x.type === 'tool_use')) results.push({ type: 'tool_result', tool_use_id: b.id, ...(await execute(b)) });
+        for (const b of res.content.filter((x) => x.type === 'tool_use')) { opts.signal?.throwIfAborted(); results.push({ type: 'tool_result', tool_use_id: b.id, ...(await execute(b)) }); }
         messages = [...messages, { role: 'user', content: results }];
     }
     return { messages, text: 'O assistente excedeu o limite de passos. Reformula o pedido.', proposal, report };
