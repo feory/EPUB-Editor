@@ -1,9 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { isAxiosError } from 'axios';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { runAgent, appliedNote, discardedNote, renameProposalStyle, summarizeProposal, type AgentMessage, type AgentResult } from './aiAgent';
 import { blockContext, type SelectedBlocks } from './aiSelection';
 import type { AiWorkspace } from './aiWorkspace';
+import { aiErrorMessage } from './aiError';
 import { chatKey, compactHistory, loadChat, saveChat } from './chatStore';
 
 export interface AiLine { role: 'user' | 'assistant'; text: string }
@@ -66,7 +66,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
             return true;
         } catch (e) {
             if (abort.signal.aborted) { setLines((l) => [...l, { role: 'assistant', text: 'Pedido cancelado.' }]); return false; }
-            setError(isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error ?? 'Erro de rede' : 'Erro inesperado');
+            setError(aiErrorMessage(e));
             return false;
         } finally { controller.current = null; setStep(''); setBusy(false); }
     }, [isbn, busy, workspace, scoped]);
