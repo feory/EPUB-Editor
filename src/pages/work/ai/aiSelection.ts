@@ -6,11 +6,12 @@ import { blockKey, type BookRule, type RuleSelect } from '../../../utils/book-ru
 export type RuleBlock = NonNullable<RuleSelect['block']>;
 
 /** O que o editor sabe dos blocos selecionados: a posição do primeiro entre os blocos de topo do que ele mostra, e tag e início do texto de cada um. */
-export interface SelectedBlocks { index: number; tags: string[]; texts: string[] }
+export interface SelectedBlocks { index: number; tags: string[]; texts: string[]; item?: number } // `item`: um <li> da lista de topo `index`
 
 const childrenOf = (part: string) => Array.from(new DOMParser().parseFromString(part, 'text/html').body.children);
-const matchesAt = (els: Element[], at: number, sel: SelectedBlocks) =>
-    at >= 0 && sel.texts.every((text, i) => els[at + i] && els[at + i].tagName.toLowerCase() === sel.tags[i] && blockKey(els[at + i].textContent) === text);
+const matchesAt = (els: Element[], at: number, sel: SelectedBlocks) => sel.item !== undefined
+    ? (() => { const li = els[at]?.querySelectorAll('li')[sel.item!]; return !!li && blockKey(li.textContent) === sel.texts[0]; })()
+    : at >= 0 && sel.texts.every((text, i) => els[at + i] && els[at + i].tagName.toLowerCase() === sel.tags[i] && blockKey(els[at + i].textContent) === text);
 
 /**
  * Onde estão os blocos nas `parts`. `activeChapter` -1 = o editor mostra o livro todo (a posição conta desde o início do livro).
@@ -19,7 +20,7 @@ const matchesAt = (els: Element[], at: number, sel: SelectedBlocks) =>
  */
 export function locateBlocks(parts: string[], sel: SelectedBlocks, activeChapter: number): RuleBlock | null {
     const parsed = parts.map(childrenOf);
-    const at = (chapter: number, index: number): RuleBlock => ({ chapter, index, texts: sel.texts });
+    const at = (chapter: number, index: number): RuleBlock => ({ chapter, index, texts: sel.texts, ...(sel.item !== undefined && { item: sel.item }) });
     if (activeChapter >= 0) {
         if (matchesAt(parsed[activeChapter] ?? [], sel.index, sel)) return at(activeChapter, sel.index);
     } else {
@@ -41,7 +42,8 @@ export const scopeRules = (rules: BookRule[], block: RuleBlock): BookRule[] =>
 
 /** O que se diz ao modelo (junto ao pedido) sobre os blocos: o HTML deles, para escolher as tags e as classes certas. */
 export function blockContext(parts: string[], block: RuleBlock): string {
-    const els = childrenOf(parts[block.chapter] ?? '').slice(block.index, block.index + block.texts.length);
+    const top = childrenOf(parts[block.chapter] ?? '');
+    const els = block.item !== undefined ? [...(top[block.index]?.querySelectorAll('li') ?? [])].slice(block.item, block.item + 1) : top.slice(block.index, block.index + block.texts.length);
     const html = els.map((e) => e.outerHTML).join('\n').slice(0, 800);
     const tags = [...new Set(els.map((e) => e.tagName.toLowerCase()))];
     const what = els.length === 1 ? 'UM bloco' : `${els.length} blocos seguidos`;

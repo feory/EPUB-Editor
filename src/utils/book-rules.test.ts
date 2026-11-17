@@ -219,3 +219,27 @@ test('afterHeading + following: todos os parágrafos de cada secção, até ao p
     expect(out).toContain('<p class="p-indent">a</p><p class="p-indent">b</p><h3>T</h3><p>c</p>'); // o h3 mais próximo manda e não é h2
     expect(out).toContain('<p class="p-indent">d</p>');
 });
+
+test('unwrap: tira <strong>/<b> de dentro do bloco, deixa o texto; idempotente', () => {
+    const r = runRules(['<p>a <strong>b <em>c</em></strong> <b>d</b></p>'], [{ select: { tag: ['p'] }, action: { type: 'unwrap', tags: ['strong', 'b'] } }]);
+    expect(r.errors).toEqual([]);
+    expect(r.parts[0]).toBe('<p>a b <em>c</em> d</p>');
+    expect(runRules(r.parts, [{ select: { tag: ['p'] }, action: { type: 'unwrap', tags: ['strong', 'b'] } }]).reports[0].changed).toBe(0);
+    expect(runRules(['<p>x</p>'], [{ select: { tag: ['p'] }, action: { type: 'unwrap', tags: ['span'] } }]).errors.length).toBe(1);
+});
+
+test('wrap: repõe <strong> no bloco todo ou só no texto; idempotente', () => {
+    const run = (html: string, action: BookRule['action']) => runRules([html], [{ select: { tag: ['p'] }, action }]);
+    const all = run('<p>a <em>b</em></p>', { type: 'wrap', tag: 'strong' });
+    expect(all.parts[0]).toBe('<p><strong>a <em>b</em></strong></p>');
+    expect(run(all.parts[0], { type: 'wrap', tag: 'strong' }).reports[0].changed).toBe(0);
+    const part = run('<p>um dois um</p>', { type: 'wrap', tag: 'strong', text: 'um' });
+    expect(part.parts[0]).toBe('<p><strong>um</strong> dois <strong>um</strong></p>');
+    expect(run(part.parts[0], { type: 'wrap', tag: 'strong', text: 'um' }).reports[0].changed).toBe(0);
+});
+
+test('position: first apanha o primeiro <li> de cada lista', () => {
+    const r = runRules(['<ul><li>a</li><li>b</li></ul><ol><li>c</li><li>d</li></ol>'], [{ select: { tag: ['li'], deep: true, position: 'first' }, action: { type: 'addClass', value: 'p-top' } }], new Set(['p-top']));
+    expect(r.errors).toEqual([]);
+    expect(r.parts[0]).toBe('<ul><li class="p-top">a</li><li>b</li></ul><ol><li class="p-top">c</li><li>d</li></ol>');
+});

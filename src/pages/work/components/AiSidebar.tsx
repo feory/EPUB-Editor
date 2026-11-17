@@ -70,7 +70,7 @@ export const AiSidebar: React.FC<{ ai: Ai; alt: Alt; changes: Changes; isbn: str
     const submit = () => { if (text.trim()) { void ai.send(text); setText(''); } };
 
     return (
-        <aside style={{ width, ...frame }} className="fixed right-4 top-[var(--wp-header-h,57px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">
+        <aside data-ai-sidebar style={{ width, ...frame }} className="fixed right-4 top-[var(--wp-header-h,57px)] bottom-8 bg-surface rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col z-40">
             <PanelResizeHandle width={width} onResize={onResize} />
             <div className="flex items-center justify-between px-5 py-3 border-b border-border">
                 <span className="text-sm font-bold text-slate-700">{TITLES[view]}</span>

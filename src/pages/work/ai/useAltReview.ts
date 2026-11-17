@@ -6,7 +6,7 @@ import { needsAlt } from '../../../utils/image-alt';
 import type { AiWorkspace } from './aiWorkspace';
 
 /** Uma imagem do livro com o que está gravado (`alt`, `decorative`) e o rascunho do utilizador (`draft*`). */
-export interface AltItem extends BookImage { draftAlt: string; draftDecorative: boolean; error?: string }
+export interface AltItem extends BookImage { draftAlt: string; draftDecorative: boolean; error?: string; suggest?: { alt: string; decorative: boolean } }  // `suggest`: texto gerado por validar (aceitar/rejeitar)
 type Phase = 'idle' | 'confirm' | 'running' | 'saving';
 
 const BATCH = 10; // o servidor aceita até 10 imagens por pedido
@@ -17,7 +17,7 @@ export const isPending = (it: AltItem) => needsAlt(it.alt, it.decorative);
 export const isDirty = (it: AltItem) =>
     (it.draftDecorative !== it.decorative || it.draftAlt.trim() !== it.alt.trim()) && (it.draftDecorative || it.draftAlt.trim() !== '');
 
-const fromBook = (im: BookImage): AltItem => ({ ...im, draftAlt: im.alt, draftDecorative: im.decorative });
+const fromBook = (im: BookImage): AltItem => ({ ...im, draftAlt: im.alt, draftDecorative: im.decorative, suggest: undefined });
 
 /**
  * Texto alternativo das imagens do livro: lista TODAS as imagens com o alt atual, editável a qualquer altura. A IA só
@@ -29,19 +29,21 @@ export function useAltReview({ isbn, workspace }: { isbn: string | undefined; wo
     const [done, setDone] = useState(0);
     const [message, setMessage] = useState('');
     const [busyIds, setBusyIds] = useState<string[]>([]); // imagens a gerar uma a uma (botão Gerar de cada imagem)
+    const [all, setAll] = useState(false); // gerar de novo o texto de TODAS as imagens (não só das sem texto)
     const cancelled = useRef(false);
 
     /** Lê o livro agora (alts podem ter mudado no editor). Descarta rascunhos: chamar ao abrir a vista. */
     const load = useCallback(() => { setItems(scanImages(workspace.parts()).map(fromBook)); setMessage(''); setPhase('idle'); }, [workspace]);
 
-    const toGenerate = items.filter((it) => isPending(it) && !it.draftAlt.trim() && !it.draftDecorative);
-    const askGenerate = useCallback(() => setPhase('confirm'), []);
-    const cancelConfirm = useCallback(() => setPhase('idle'), []);
+    const toGenerate = all ? items : items.filter((it) => isPending(it) && !it.draftAlt.trim() && !it.draftDecorative);
+    const askGenerate = useCallback((everything = false) => { setAll(everything); setPhase('confirm'); }, []);
+    const cancelConfirm = useCallback(() => { setAll(false); setPhase('idle'); }, []);
 
     const generate = useCallback(async () => {
         if (!isbn) return;
         cancelled.current = false; setPhase('running'); setDone(0); setMessage('');
         const queue = toGenerate;
+        const validate = all; // gerar de novo em todas: cada texto fica por validar, não substitui o rascunho
         for (let i = 0; i < queue.length && !cancelled.current; i += BATCH) {
             const batch = queue.slice(i, i + BATCH);
             try {
@@ -49,7 +51,8 @@ export function useAltReview({ isbn, workspace }: { isbn: string | undefined; wo
                 setItems((cur) => cur.map((it) => {
                     const r = data.results.find((x) => x.id === it.id);
                     if (!r) return it;
-                    return 'error' in r ? { ...it, error: r.error } : { ...it, error: undefined, draftAlt: r.alt, draftDecorative: r.decorative };
+                    if ('error' in r) return { ...it, error: r.error };
+                    return validate ? { ...it, error: undefined, suggest: { alt: r.alt, decorative: r.decorative } } : { ...it, error: undefined, draftAlt: r.alt, draftDecorative: r.decorative };
                 }));
             } catch (e) {
                 const msg = isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error ?? 'Erro de rede' : 'Erro inesperado';
@@ -57,8 +60,9 @@ export function useAltReview({ isbn, workspace }: { isbn: string | undefined; wo
             }
             setDone(Math.min(i + BATCH, queue.length));
         }
+        setAll(false);
         setPhase('idle');
-    }, [isbn, workspace, toGenerate]);
+    }, [isbn, workspace, toGenerate, all]);
 
     /** Gera (ou volta a gerar) o texto de UMA imagem, p.ex. uma acabada de acrescentar. Só mexe no rascunho. */
     const generateOne = useCallback(async (id: string) => {
@@ -79,6 +83,8 @@ export function useAltReview({ isbn, workspace }: { isbn: string | undefined; wo
     const cancel = useCallback(() => { cancelled.current = true; }, []);
     const patch = useCallback((id: string, p: Partial<Pick<AltItem, 'draftAlt' | 'draftDecorative'>>) =>
         setItems((cur) => cur.map((it) => (it.id === id ? { ...it, ...p, error: undefined } : it))), []);
+    const accept = useCallback((id: string) => setItems((cur) => cur.map((it) => it.id === id && it.suggest ? { ...it, draftAlt: it.suggest.alt, draftDecorative: it.suggest.decorative, suggest: undefined } : it)), []);
+    const reject = useCallback((id: string) => setItems((cur) => cur.map((it) => it.id === id ? { ...it, suggest: undefined } : it)), []);
     const discard = useCallback(() => setItems((cur) => cur.map((it) => fromBook(it))), []);
 
     const dirty = items.filter(isDirty);
@@ -95,5 +101,5 @@ export function useAltReview({ isbn, workspace }: { isbn: string | undefined; wo
         setPhase('idle');
     }, [dirty, workspace]);
 
-    return { phase, items, busyIds, done, message, dirtyCount: dirty.length, pendingCount: items.filter(isPending).length, generateCount: toGenerate.length, load, askGenerate, cancelConfirm, generate, generateOne, cancel, patch, discard, save };
+    return { phase, items, busyIds, done, message, dirtyCount: dirty.length, pendingCount: items.filter(isPending).length, suggestCount: items.filter((it) => it.suggest).length, generateCount: toGenerate.length, regenerateAll: all, load, askGenerate, cancelConfirm, generate, generateOne, cancel, accept, reject, patch, discard, save };
 }

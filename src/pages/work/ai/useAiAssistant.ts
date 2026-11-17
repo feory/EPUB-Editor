@@ -30,7 +30,7 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
     const history = useRef<AgentMessage[]>(stored ? (stored.pending ? [...stored.history, { role: 'user', content: `[Sistema: ${LOST_PROPOSAL}]` }] : stored.history) : []);
     const request = useRef('');
     // O utilizador tira o âmbito (×) para o bloco atual; um bloco diferente volta a limitá-lo.
-    const selectedKey = selected ? `${selected.index}:${selected.tags.join()}:${selected.texts.join('|')}` : null;
+    const selectedKey = selected ? `${selected.index}${selected.item ?? ''}:${selected.tags.join()}:${selected.texts.join('|')}` : null;
     const [offFor, setOffFor] = useState<string | null>(null);
     const scoped = selected && selectedKey !== offFor ? selected : null;
     const clearScope = useCallback(() => setOffFor(selectedKey), [selectedKey]);

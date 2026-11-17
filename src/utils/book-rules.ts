@@ -10,7 +10,9 @@ export type RuleAction =
     | { type: 'addClass'; value: string }
     | { type: 'removeClass'; value: string }
     | { type: 'removeStyle'; props: string[] }
+    | { type: 'wrap'; tag: string; text?: string } // o inverso de unwrap: põe o conteúdo do bloco (ou só as ocorrências de `text`, dentro de um mesmo nó de texto) em <strong>/<em>…
     | { type: 'retag'; to: string }
+    | { type: 'unwrap'; tags: string[] } // tira estas etiquetas de formatação de dentro do bloco, ficando o texto (ex. <strong> → negrito removido)
     | { type: 'delete' };
 
 export interface RuleSelect {
@@ -40,12 +42,15 @@ export interface RuleSelect {
     exceptChapters?: number[];
     /** Por omissão só filhos diretos do corpo; `true` entra em caixas, listas, células… */
     deep?: boolean;
+    /** Só o primeiro / último irmão (ex. `deep` + tag li: o primeiro item de CADA lista). */
+    position?: 'first' | 'last';
     /**
      * Só os blocos selecionados: os filhos `index`, `index+1`… do corpo da parte `chapter`, cada um com o texto que começa pelo
      * `texts[i]` correspondente (ver `blockKey`). Quem o põe é o editor (blocos selecionados), nunca o modelo; se o livro mudou e
      * algum texto já não bate, a regra não apanha nada.
      */
-    block?: { chapter: number; index: number; texts: string[] };
+    block?: { chapter: number; index: number; texts: string[]; item?: number };
+    // `item`: o bloco é o `item`-ésimo <li> (ordem do documento) da lista de topo `index`; `texts` tem então só o texto desse <li>.
 }
 
 /** O início do texto de um bloco, normalizado: identifica-o (junto com a posição) sem guardar o bloco todo. */
@@ -53,8 +58,8 @@ export const blockKey = (text: string | null) => (text ?? '').replace(/\s+/g, ' 
 
 /** Todas as ações e chaves do `select`, como valores: `Record` obriga o compilador a avisar se se acrescenta uma e esta lista fica para trás.
  *  Existem para o teste de contrato com o prompt do servidor (server/ai-contract.test.js). */
-export const RULE_ACTION_TYPES = Object.keys({ addClass: 1, removeClass: 1, removeStyle: 1, retag: 1, delete: 1 } satisfies Record<RuleAction['type'], 1>);
-export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, startsWith: 1, afterHeading: 1, afterClass: 1, beforeClass: 1, following: 1, chapters: 1, exceptChapters: 1, deep: 1, block: 1 } satisfies Record<keyof RuleSelect, 1>);
+export const RULE_ACTION_TYPES = Object.keys({ addClass: 1, removeClass: 1, removeStyle: 1, unwrap: 1, wrap: 1, retag: 1, delete: 1 } satisfies Record<RuleAction['type'], 1>);
+export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, startsWith: 1, afterHeading: 1, afterClass: 1, beforeClass: 1, following: 1, chapters: 1, exceptChapters: 1, deep: 1, position: 1, block: 1 } satisfies Record<keyof RuleSelect, 1>);
 
 export interface BookRule {
     select: RuleSelect;
@@ -78,6 +83,7 @@ const CLASS_RE = /^[a-z][a-z0-9-]*$/;
 const TAG_RE = /^[a-z][a-z0-9]*$/;
 const RETAG_TARGETS = ['p', 'h2', 'h3', 'h4', 'h5', 'h6'];
 // shortcut: retag/delete de h1/h2 recusados — mexem nos capítulos (marcadores, sidebar 1:1), upgrade quando houver regra para isso.
+const UNWRAP_TAGS = ['strong', 'b', 'em', 'i', 'u'];
 const STRUCTURAL = ['h1', 'h2'];
 const MAX_SAMPLES = 3;
 /** Quantos blocos seguidos se podem selecionar de uma vez. */
@@ -97,8 +103,9 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
         const at = `regra ${i + 1}`;
         const { select: s, action: a } = rule;
         if (!s.tag?.length || !s.tag.every((t) => TAG_RE.test(t))) errors.push(`${at}: "tag" obrigatória (ex. ["p"])`);
-        if (s.block && !(Number.isInteger(s.block.chapter) && s.block.chapter >= 0 && Number.isInteger(s.block.index) && s.block.index >= 0 && Array.isArray(s.block.texts) && s.block.texts.length > 0 && s.block.texts.length <= MAX_BLOCKS && s.block.texts.every((t) => typeof t === 'string'))) errors.push(`${at}: "block" inválido`);
+        if (s.block && !(Number.isInteger(s.block.chapter) && s.block.chapter >= 0 && Number.isInteger(s.block.index) && s.block.index >= 0 && (s.block.item === undefined || (Number.isInteger(s.block.item) && s.block.item >= 0)) && Array.isArray(s.block.texts) && s.block.texts.length > 0 && s.block.texts.length <= MAX_BLOCKS && s.block.texts.every((t) => typeof t === 'string'))) errors.push(`${at}: "block" inválido`);
         if (s.deep && (s.afterHeading || s.afterClass || s.beforeClass)) errors.push(`${at}: "afterHeading"/"afterClass"/"beforeClass" só valem ao nível do corpo (sem "deep")`);
+        if (s.position && s.position !== 'first' && s.position !== 'last') errors.push(`${at}: "position" tem de ser "first" ou "last"`);
         if (s.following && !s.afterClass && !s.afterHeading) errors.push(`${at}: "following" só vale com "afterClass" ou "afterHeading"`);
         for (const key of ['afterClass', 'beforeClass'] as const) {
             const list = s[key];
@@ -106,6 +113,8 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
         }
         if ((a.type === 'retag' || a.type === 'delete') && s.tag?.some((t) => STRUCTURAL.includes(t))) errors.push(`${at}: não se mexe em h1/h2 (capítulos)`);
         if (a.type === 'removeStyle' && (!Array.isArray(a.props) || !a.props.length || !a.props.every((p) => PROP_RE.test(p)))) errors.push(`${at}: "props" tem de ser uma lista de propriedades CSS (ex. ["margin-left"])`);
+        if (a.type === 'unwrap' && (!Array.isArray(a.tags) || !a.tags.length || !a.tags.every((t) => UNWRAP_TAGS.includes(t)))) errors.push(`${at}: "tags" tem de ser uma lista de ${UNWRAP_TAGS.join('/')}`);
+        if (a.type === 'wrap' && (!UNWRAP_TAGS.includes(a.tag) || (a.text !== undefined && (typeof a.text !== 'string' || !a.text.trim() || a.text.length > 200)))) errors.push(`${at}: "tag" tem de ser ${UNWRAP_TAGS.join('/')} e "text" (opcional) até 200 caracteres`);
         if (s.hasStyle && (!Array.isArray(s.hasStyle) || !s.hasStyle.every((p) => PROP_RE.test(p)))) errors.push(`${at}: "hasStyle" inválido`);
         if (a.type === 'retag' && !RETAG_TARGETS.includes(a.to)) errors.push(`${at}: retag só para ${RETAG_TARGETS.join('/')}`);
         // h2 sem marcador de capítulo é só um título (ex. corrigir h1 → h3): só a partir de outros títulos, nunca de parágrafos.
@@ -157,6 +166,11 @@ const inRunAfterClass = (el: Element, classes: string[]): boolean => {
 
 /** Elementos da regra, apanhados ANTES de alterar nada (retag/delete mudam os irmãos). */
 function select(doc: Document, s: RuleSelect): Element[] {
+    if (s.block?.item !== undefined) {
+        const li = doc.body.children[s.block.index]?.querySelectorAll('li')[s.block.item];
+        if (!li || blockKey(li.textContent) !== s.block.texts[0]) return [];
+        return select(doc, { ...s, block: undefined, deep: true }).filter((x) => x === li);
+    }
     if (s.block) {
         const els = s.block.texts.map((_, i) => doc.body.children[s.block!.index + i]);
         if (els.some((el, i) => !el || blockKey(el.textContent) !== s.block!.texts[i])) return [];
@@ -165,6 +179,7 @@ function select(doc: Document, s: RuleSelect): Element[] {
     const els = s.deep ? Array.from(doc.body.querySelectorAll(s.tag.join(','))) : Array.from(doc.body.children).filter((e) => s.tag.includes(e.tagName.toLowerCase()));
     return els.filter((el) => {
         if (isStructureBlock(el)) return false;
+        if (s.position && (s.position === 'first' ? el.previousElementSibling : el.nextElementSibling)) return false;
         if (s.hasClass && !s.hasClass.every((c) => el.classList.contains(c))) return false;
         if (s.noClass && s.noClass.some((c) => el.classList.contains(c))) return false;
         if (s.hasStyle && !s.hasStyle.every((p) => styleDecls(el).some((d) => d.name === p))) return false;
@@ -198,6 +213,36 @@ function apply(doc: Document, el: Element, a: RuleAction): Element | null | unde
             if (kept.length === all.length) return undefined;
             if (kept.length) el.setAttribute('style', `${kept.map((d) => d.text).join('; ')};`);
             else el.removeAttribute('style');
+            return el;
+        }
+        case 'unwrap': {
+            const found = Array.from(el.querySelectorAll(a.tags.join(',')));
+            if (!found.length) return undefined;
+            found.forEach((n) => n.replaceWith(...Array.from(n.childNodes)));
+            el.normalize();
+            return el;
+        }
+        case 'wrap': {
+            const inside = (n: Node) => { for (let p = n.parentElement; p && p !== el.parentElement; p = p.parentElement) if (p.tagName.toLowerCase() === a.tag) return true; return false; };
+            if (a.text === undefined) {
+                if (!el.textContent?.trim() || (el.children.length === 1 && el.firstElementChild!.tagName.toLowerCase() === a.tag && el.textContent === el.firstElementChild!.textContent)) return undefined;
+                const w = doc.createElement(a.tag);
+                w.append(...Array.from(el.childNodes));
+                el.append(w);
+                return el;
+            }
+            const walker = doc.createTreeWalker(el, 4);
+            const nodes: Text[] = [];
+            for (let n = walker.nextNode(); n; n = walker.nextNode()) if ((n as Text).data.includes(a.text) && !inside(n)) nodes.push(n as Text);
+            if (!nodes.length) return undefined;
+            for (const t of nodes) {
+                const frag = doc.createDocumentFragment();
+                t.data.split(a.text).forEach((piece, i) => {
+                    if (i) { const w = doc.createElement(a.tag); w.textContent = a.text!; frag.append(w); }
+                    if (piece) frag.append(piece);
+                });
+                t.replaceWith(frag);
+            }
             return el;
         }
         case 'retag': {

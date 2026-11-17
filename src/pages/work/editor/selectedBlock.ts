@@ -26,6 +26,13 @@ const endsAtStartOf = (top: Element, node: Node, offset: number) => {
  */
 export function selectedTopBlocks(body: HTMLElement, range: RangeLike): SelectedBlocks | null {
     const first = topOf(body, range.startContainer);
+    if (first && /^(ul|ol)$/i.test(first.tagName)) { // lista: só o <li> onde está a seleção (um só)
+        const liOf = (n: Node) => (n.nodeType === 1 ? (n as Element) : n.parentElement)?.closest('li') ?? null;
+        const li = liOf(range.startContainer);
+        if (!li || li !== liOf(range.endContainer) || !first.contains(li)) return null;
+        const text = blockKey(li.textContent);
+        return text && !li.querySelector('img') ? { index: Array.from(body.children).indexOf(first), tags: ['li'], texts: [text], item: Array.from(first.querySelectorAll('li')).indexOf(li) } : null;
+    }
     let last = topOf(body, range.endContainer);
     if (!first || !last) return null;
     if (!range.collapsed && last !== first && endsAtStartOf(last, range.endContainer, range.endOffset)) last = last.previousElementSibling;
