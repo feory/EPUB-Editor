@@ -18,7 +18,8 @@ import { blockCssInfo } from './cssInfo';
 import { registerImageTools } from './imageTools';
 import { MARK, registerEphemeralMarks } from './ephemeral';
 import { selectedTopBlocks } from './selectedBlock';
-import { isBreakClass, markerBefore } from '../../../utils/chapter-filler';
+import { isBreakClass, markerBefore, chapterBreakClass } from '../../../utils/chapter-filler';
+import { chapterMarkerHtml } from '../../../utils/chapters';
 import type { SelectedBlocks } from '../ai/aiSelection';
 
 export interface SetupLive {
@@ -138,7 +139,7 @@ export function createEditorSetup(deps: SetupDeps) {
                     api.close();
                     editor.selection.moveToBookmark(bookmark);
                     // Marcador + parágrafo vazio a seguir, pronto para o conteúdo do capítulo.
-                    const html = `<p class="chapter-break" data-title="${safeTitle}"></p><p><br data-mce-bogus="1"></p>`;
+                    const html = `${chapterMarkerHtml(null, safeTitle)}<p><br data-mce-bogus="1"></p>`;
                     // Sempre INSERIDO no cursor (nunca substitui um bloco existente): um bloco
                     // vazio "por perto" do cursor podia na verdade ser o 1º parágrafo do capítulo
                     // SEGUINTE (ex. Ficha Técnica começa com uma linha em branco antes do texto) —
@@ -396,12 +397,12 @@ export function createEditorSetup(deps: SetupDeps) {
             for (const action of plan) {
                 const anchor = anchors[action.block];
                 if (action.kind === 'create') {
-                    const marker = editor.dom.create('p', { class: `chapter-break-${action.level}`, 'data-title': action.title });
+                    const marker = editor.dom.create('p', { class: chapterBreakClass(action.level), 'data-title': action.title });
                     anchor.parentNode!.insertBefore(marker, anchor);
                 } else if (action.kind === 'setLevel') {
                     // Só sincroniza o nível (classe) — o título é só editável pelo botão
                     // de edição da Estrutura/TOC, nunca ao escrever no heading do editor.
-                    editor.dom.setAttrib(prevMarker(anchor)!, 'class', `chapter-break-${action.level}`);
+                    editor.dom.setAttrib(prevMarker(anchor)!, 'class', chapterBreakClass(action.level));
                 } else {
                     editor.dom.remove(prevMarker(anchor)!); // heading despromovido → remover o seu marcador
                 }

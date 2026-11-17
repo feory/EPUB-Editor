@@ -55,3 +55,10 @@ test('classes: marcador plano e de nível; âncora é estrutura mas não é marc
     expect(isBreakClass('chapter-anchor')).toBe(false);
     expect(isStructureBlock(el('<p class="chapter-anchor"></p>'))).toBe(true);
 });
+
+test('chapterBreakClass: único sítio que escreve o nome da classe do marcador', async () => {
+    const { chapterBreakClass, isBreakClass } = await import('./chapter-filler');
+    expect(chapterBreakClass(null)).toBe('chapter-break');
+    expect(chapterBreakClass('h2')).toBe('chapter-break-h2');
+    expect([null, 'h1', 'h2', 'h3'].every((l) => isBreakClass(chapterBreakClass(l as 'h1' | null)))).toBe(true);
+});

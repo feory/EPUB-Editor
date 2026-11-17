@@ -6,6 +6,7 @@
  */
 
 import { decodeEntities } from './entities';
+import { chapterBreakClass } from './chapter-filler';
 
 // A chapter break is a standalone MARKER paragraph placed BEFORE each heading
 // (<p class="chapter-break-h1|-h2" data-title="…">) — the marker, not the heading,
@@ -46,7 +47,7 @@ const escapeAttr = (s: string) => s.replace(/"/g, '&quot;');
  * (quem o escreve escolhe o escape: texto de heading vs. valor RAW de um data-title existente). Único construtor.
  */
 export const chapterMarkerHtml = (level: 'h1' | 'h2' | 'h3' | null, escapedTitle: string): string =>
-    `<p class="chapter-break${level ? `-${level}` : ''}" data-title="${escapedTitle}"></p>`;
+    `<p class="${chapterBreakClass(level)}" data-title="${escapedTitle}"></p>`;
 
 /** Marcador de nível h1/h2 (o que o editor cria/sincroniza), pelo nome de classe. */
 export const isLevelMarkerClass = (className: string): boolean => /\bchapter-break-h[12]\b/.test(className);

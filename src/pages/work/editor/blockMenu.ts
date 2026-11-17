@@ -2,10 +2,12 @@
 // O hook (useBlockOverlays) trata do passo de undo, do cursor e da área de transferência.
 
 import { CONTAINER_SELECTOR } from '../../../utils/containers';
+import { isBreakClass } from '../../../utils/chapter-filler';
 
 export interface StyleSnapshot { classes: string[]; style: string }
 
-const UI_CLASS = /^(mce-|diff-|chapter-break)/;
+const UI_CLASS = /^(mce-|diff-)/;
+const isUiClass = (c: string) => UI_CLASS.test(c) || isBreakClass(c);
 
 /** O bloco que contém o elemento: uma imagem num parágrafo age sobre o parágrafo. */
 export const blockOf = (el: Element): Element => (el.nodeName === 'IMG' && el.parentElement?.nodeName === 'P' ? el.parentElement : el);
@@ -37,13 +39,13 @@ export function insertEmptyParagraph(el: Element, where: 'before' | 'after'): El
 
 export function snapshotStyles(el: Element): StyleSnapshot {
     const block = blockOf(el);
-    return { classes: Array.from(block.classList).filter((c) => !UI_CLASS.test(c)), style: block.getAttribute('style') ?? '' };
+    return { classes: Array.from(block.classList).filter((c) => !isUiClass(c)), style: block.getAttribute('style') ?? '' };
 }
 
 /** Aplica classes e style copiados (substitui os do bloco; as classes de UI ficam). */
 export function applyStyles(el: Element, snap: StyleSnapshot): void {
     const block = blockOf(el);
-    Array.from(block.classList).filter((c) => !UI_CLASS.test(c)).forEach((c) => block.classList.remove(c));
+    Array.from(block.classList).filter((c) => !isUiClass(c)).forEach((c) => block.classList.remove(c));
     snap.classes.forEach((c) => block.classList.add(c));
     block.removeAttribute('data-mce-style'); // o TinyMCE serializa-o de preferência ao style
     if (snap.style) block.setAttribute('style', snap.style); else block.removeAttribute('style');

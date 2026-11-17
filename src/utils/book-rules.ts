@@ -4,7 +4,7 @@
 // `chapter-anchor` nunca são tocados.
 
 import { exclusiveOf } from './editor-classes';
-import { isStructureBlock, isFillerBlock } from './chapter-filler';
+import { isStructureBlock, isFillerBlock, chapterBreakClass } from './chapter-filler';
 
 export type RuleAction =
     | { type: 'addClass'; value: string }
@@ -253,7 +253,7 @@ function apply(doc: Document, el: Element, a: RuleAction): Element | null | unde
             el.replaceWith(next);
             if (a.to === 'h2') { // um h2 é fronteira de capítulo: leva o marcador (a linha tracejada no editor), como quando se faz h2 no editor
                 const marker = doc.createElement('p');
-                marker.className = 'chapter-break-h2';
+                marker.className = chapterBreakClass('h2');
                 marker.setAttribute('data-title', (next.textContent || '').replace(/\s+/g, ' ').trim());
                 next.before(marker);
             }

@@ -9,6 +9,9 @@
 /** Classe de marcador de capítulo: plano (`chapter-break`) ou de nível (`chapter-break-h1`…). */
 export const isBreakClass = (className: string): boolean => /(^|\s)chapter-break/.test(className);
 
+/** A classe do marcador: `level` null = quebra plana. Único sítio que escreve o nome (chapters.ts, editor e regras da IA importam daqui). */
+export const chapterBreakClass = (level: 'h1' | 'h2' | 'h3' | null): string => (level ? `chapter-break-${level}` : 'chapter-break');
+
 /** Seletores CSS do mesmo conceito (editor, geometria, page-list). */
 export const BREAK_ATTR = '[class*="chapter-break"]';
 export const BREAK_SELECTOR = `p${BREAK_ATTR}`;

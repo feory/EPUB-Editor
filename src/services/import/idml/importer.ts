@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { sanitizeImageFilename } from '../../../utils/format';
+import { chapterMarkerHtml } from '../../../utils/chapters';
 import { insertPageBreaks } from '../../page-list/alignment';
 import { placeTitleBlocks, placePartBlocks } from './openings';
 import { verifyBlankSpacing } from '../../page-list/blank-spacing';
@@ -171,7 +172,7 @@ function renderFicha(rc: RenderContext, xml: string, counter: NoteCounter): stri
 // principal). Bloco próprio (chapter-break), sem heading real (não é capítulo de conteúdo).
 function renderFrontMatter(imageIds: string[], texts: string[]): string {
     if (imageIds.length === 0 && texts.length === 0) return '';
-    const out = ['<p class="chapter-break" data-title="Frontespício"></p>'];
+    const out = [chapterMarkerHtml(null, 'Frontespício')];
     // O mesmo rosto/capa aparece muitas vezes em mais do que 1 spread do InDesign (ex. duas
     // páginas de layout espelhado) — readingOrder devolve um id por spread, sem deduplicar;
     // sem isto, a mesma imagem entrava 2x no frontespício.
