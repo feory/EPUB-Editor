@@ -15,7 +15,7 @@ test('tudo em ordem: tudo ok', () => {
 
 test('metadados obrigatórios em falta → falta; só recomendados → aviso; capa e imagens', () => {
     expect(states(buildChecklist(facts({ metadata: { ...meta, author: '  ' } }), [])).Metadados).toBe('falta');
-    expect(states(buildChecklist(facts({ metadata: { ...meta, subjects: '', publisher: undefined } }), [])).Metadados).toBe('aviso');
+    expect(states(buildChecklist(facts({ metadata: { ...meta, description: '', publisher: undefined } }), [])).Metadados).toBe('aviso');
     const s = states(buildChecklist(facts({ hasCover: false, images: { total: 4, withoutAlt: 2 } }), []));
     expect(s.Capa).toBe('falta');
     expect(s['Texto alternativo das imagens']).toBe('falta');

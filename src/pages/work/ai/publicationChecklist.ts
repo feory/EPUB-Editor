@@ -19,7 +19,7 @@ export type ChecklistState = 'ok' | 'falta' | 'aviso' | 'info';
 export interface ChecklistItem { item: string; estado: ChecklistState; detalhe?: string; resolver?: string }
 
 const REQUIRED: [keyof PublicationFacts['metadata'], string][] = [['title', 'título'], ['author', 'autor'], ['language', 'língua']];
-const RECOMMENDED: [keyof PublicationFacts['metadata'], string][] = [['description', 'descrição'], ['publisher', 'editora'], ['pub_date', 'data de publicação'], ['subjects', 'assuntos'], ['ebook_isbn', 'ISBN do ebook']];
+const RECOMMENDED: [keyof PublicationFacts['metadata'], string][] = [['description', 'descrição'], ['publisher', 'editora'], ['pub_date', 'data de publicação'], ['ebook_isbn', 'ISBN do ebook']];
 const blank = (v: string | undefined) => !v || !v.trim();
 
 export function collectFacts(input: { ebook: Partial<Ebook> | undefined; hasCover: boolean; parts: string[]; indiceTitles: string[] }): PublicationFacts {
