@@ -498,6 +498,7 @@ export function WorkPage() {
           onShowFonts={() => setShowFonts(true)}
           onCleanIndex={() => editorRef.current?.cleanIndexSelection()}
           onLinkIndexPages={() => editorRef.current?.linkIndexPagesSelection()}
+          onIndentIndex={() => editorRef.current?.indentIndexSubentries()}
           onConversions={() => setShowConversions(true)}
           onUpdatePageList={() => setShowPagelistUpdate(true)}
           onLinkIndiceEntries={work.handleLinkIndiceEntries}

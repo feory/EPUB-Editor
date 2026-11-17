@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NotificationsBell } from '../../home/NotificationsBell';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, FileUp, Save, History, Download, Loader2, Eye, AlertTriangle, Keyboard, Hash, ChevronDown, ChevronRight, Palette, Shield, Accessibility, GitCompare, ListX, Wand2, Link2, Link, Wrench, Type, ListTree, RefreshCw, BookMarked, MessageSquare
+  ArrowLeft, FileUp, Save, History, Download, Loader2, Eye, AlertTriangle, Keyboard, Hash, ChevronDown, ChevronRight, Palette, Shield, Accessibility, GitCompare, ListX, IndentIncrease, Wand2, Link2, Link, Wrench, Type, ListTree, RefreshCw, BookMarked, MessageSquare
 } from 'lucide-react';
 
 interface WorkToolbarProps {
@@ -30,6 +30,7 @@ interface WorkToolbarProps {
   onShowFonts: () => void;
   onCleanIndex: () => void;
   onLinkIndexPages: () => void;
+  onIndentIndex: () => void;
   onConversions: () => void;
   onEditToc: () => void;
   onUpdatePageList: () => void;
@@ -39,7 +40,7 @@ interface WorkToolbarProps {
 
 const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
   isLoading, htmlContent, lastSaved,
-  onSave, onFetchHistory, onValidate, onValidateEpub, onValidateAccessibility, onValidateLinks, onPreview, onExport, onFileSelect, onToggleGrammar, grammarAvailable, onToggleImageGallery, onToggleComments, unresolvedCommentsCount, onOpenCompare, onShowShortcuts, onShowStats, onShowStyleEditor, onShowFonts, onCleanIndex, onLinkIndexPages, onConversions, onEditToc, onUpdatePageList, onLinkIndiceEntries,
+  onSave, onFetchHistory, onValidate, onValidateEpub, onValidateAccessibility, onValidateLinks, onPreview, onExport, onFileSelect, onToggleGrammar, grammarAvailable, onToggleImageGallery, onToggleComments, unresolvedCommentsCount, onOpenCompare, onShowShortcuts, onShowStats, onShowStyleEditor, onShowFonts, onCleanIndex, onLinkIndexPages, onIndentIndex, onConversions, onEditToc, onUpdatePageList, onLinkIndiceEntries,
   readOnly
 }) => {
   const navigate = useNavigate();
@@ -226,6 +227,13 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
                     >
                       <Link size={16} className="text-slate-400 shrink-0" />
                       <span className="flex-1 text-left">Ligação Páginas do Índice Remissivo</span>
+                    </button>
+                    <button
+                      onClick={() => { onIndentIndex(); setActiveMenu(null); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
+                    >
+                      <IndentIncrease size={16} className="text-slate-400 shrink-0" />
+                      <span className="flex-1 text-left">Recuar Subentradas do Índice Remissivo</span>
                     </button>
                   </div>
                   )}

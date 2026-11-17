@@ -8,7 +8,7 @@ import { applyImportOptions, convertListsToDialogue } from '../../../utils/html-
 import { splitChapterSegments } from '../../../utils/chapters';
 import { isBreakClass } from '../../../utils/chapter-filler';
 import type { ImportOptions } from '../../../utils/html-cleaner';
-import { cleanIndexText, linkIndexPages, wrapPageLinks, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
+import { cleanIndexText, indentIndexSubentries, linkIndexPages, wrapPageLinks, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
 import { sanitizeImageFilename } from '../../../utils/format';
 import {
     getContentBlocks, getNonEmptyBlocks, unwrapNode, clearMarkers,
@@ -165,6 +165,7 @@ export interface WorkEditorRef {
     getCurrentFolio: () => number | null;
     cleanIndexSelection: () => void;
     linkIndexPagesSelection: () => void;
+    indentIndexSubentries: () => void;
     applyConversions: (options: ImportOptions) => void;
 
     // Edita o que está sob o cursor (painel lateral): caixa, bloco de texto, imagem, colunas, estilo
@@ -557,6 +558,20 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             editBlocks(editor, () => {
                 if (useSelection) editor.selection.setContent(out.join(''));
                 else editor.setContent(out.join(''));
+            });
+        },
+
+        // Subentradas do Índice Remissivo (começam por minúscula) com recuo à esquerda; a seleção, ou o capítulo todo.
+        indentIndexSubentries: () => {
+            const editor = editorRef.current;
+            if (!editor) return;
+            const selected = editor.selection.getContent({ format: 'html' });
+            const useSelection = !!selected.trim();
+            const { html, changed } = indentIndexSubentries(useSelection ? selected : editor.getContent());
+            if (!changed) return;
+            editBlocks(editor, () => {
+                if (useSelection) editor.selection.setContent(html);
+                else editor.setContent(html);
             });
         },
 

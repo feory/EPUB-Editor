@@ -45,3 +45,14 @@ test('linkIndexPages: escapa caracteres HTML do termo sem afetar o markup do lin
         'A &amp; B, <span class="idx-link" data-target="page-5">5</span>',
     ]);
 });
+
+test('indentIndexSubentries: só as linhas que começam por minúscula ganham padding-left:40px; idempotente', async () => {
+    await import('../services/indesign/happy-dom');
+    const { indentIndexSubentries } = await import('./index-cleaner');
+    const html = '<p>Estratégia de vendas, 118–120</p><p>aumentadas, 197–198</p><p style="color:red">consultivas, 194–196</p><p>Estrutura em três atos, 158</p><p>e a evolução, 192</p>';
+    const r = indentIndexSubentries(html);
+    expect(r.changed).toBe(3);
+    expect(r.html).toBe('<p>Estratégia de vendas, 118–120</p><p style="padding-left:40px;">aumentadas, 197–198</p><p style="color:red; padding-left:40px;">consultivas, 194–196</p><p>Estrutura em três atos, 158</p><p style="padding-left:40px;">e a evolução, 192</p>');
+    expect(indentIndexSubentries(r.html)).toEqual({ html: r.html, changed: 0 });
+    expect(indentIndexSubentries('<p>12, 5</p><p>Só maiúsculas</p>').changed).toBe(0);
+});
