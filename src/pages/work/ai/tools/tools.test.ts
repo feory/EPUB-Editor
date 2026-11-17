@@ -10,6 +10,7 @@ import { checkPageListTool } from './checkPageList';
 import { checkStylesTool } from './checkStyles';
 import { checkFiguresTool } from './checkFigures';
 import { buildReportTool } from './buildReport';
+import { findTextTool } from './findText';
 import type { PdfStyles } from '../../../../services/page-list/pdf-styles';
 import { AI_TOOLS } from './index';
 import type { Proposal, ToolContext } from './aiTool';
@@ -27,7 +28,7 @@ const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = nu
 test('o registo tem uma ferramenta por nome', () => {
     const names = AI_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.sort()).toEqual(['build_report', 'check_figures', 'check_page_list', 'check_publication', 'check_styles', 'preview_rules', 'run_validation', 'survey_book']);
+    expect(names.sort()).toEqual(['build_report', 'check_figures', 'check_page_list', 'check_publication', 'check_styles', 'find_text', 'preview_rules', 'run_validation', 'survey_book']);
 });
 
 test('survey_book: devolve o resumo do livro como está agora', () => {
@@ -201,4 +202,28 @@ test('build_report: entrega o texto à interface com cada falha localizada; a re
     expect(text).toContain('Ficheiros: cap1.xhtml');
     expect(text).toContain('Exemplo: <a href="#x">y</a>');
     expect(text).toContain('LISTA DE PÁGINAS'); // sem PDF de lista de páginas: diz-o
+});
+
+test('find_text: acha o texto sem acentos nem maiúsculas, com capítulo, posição, tipo e excerto; diz se o bloco começa por ele', () => {
+    const { ctx } = setup([
+        chapter('Preços', '<p class="p-bold">Nota importante: os preços incluem IVA.</p><p>Ver a nota IMPORTANTE na página seguinte, e outra nota importante.</p><p>nada</p>'),
+        chapter('Promoções', '<p class="p-bold">Nota importante: as promoções não acumulam.</p>'),
+    ]);
+    const out = JSON.parse((findTextTool.run({ query: 'nota  importante' }, ctx) as { content: string }).content);
+    expect(out).toMatchObject({ blocosEncontrados: 3, mostrados: 3 });
+    expect(out.resultados.map((r: { capitulo: number; titulo: string; tipo: string; comecaPor: boolean; ocorrencias: number }) => [r.capitulo, r.titulo, r.tipo, r.comecaPor, r.ocorrencias]))
+        .toEqual([[0, 'Preços', 'p.p-bold', true, 1], [0, 'Preços', 'p', false, 2], [1, 'Promoções', 'p.p-bold', true, 1]]);
+    expect(out.resultados[0].excerto).toContain('Nota importante');
+    const acc = JSON.parse((findTextTool.run({ query: 'PRECOS', chapters: [0] }, ctx) as { content: string }).content);
+    expect(acc.resultados.map((r: { bloco: number }) => r.bloco)).toEqual([1, 2]); // o bloco 0 é o marcador de capítulo; o h1 é o 1 e o parágrafo com "preços" o 2
+});
+
+test('find_text: limita a 20 resultados (e diz quantos há), recusa queries curtas ou longas', () => {
+    const { ctx } = setup([chapter('Um', Array.from({ length: 30 }, (_, i) => `<p>linha ${i} alvo</p>`).join(''))]);
+    const out = JSON.parse((findTextTool.run({ query: 'alvo' }, ctx) as { content: string }).content);
+    expect(out).toMatchObject({ blocosEncontrados: 30, mostrados: 20 });
+    expect(JSON.parse((findTextTool.run({ query: 'alvo', limit: 3 }, ctx) as { content: string }).content).mostrados).toBe(3);
+    expect(findTextTool.run({ query: 'a' }, ctx)).toMatchObject({ is_error: true });
+    expect(findTextTool.run({ query: 'x'.repeat(121) }, ctx)).toMatchObject({ is_error: true });
+    expect(JSON.parse((findTextTool.run({ query: 'inexistente' }, ctx) as { content: string }).content)).toMatchObject({ blocosEncontrados: 0, resultados: [] });
 });

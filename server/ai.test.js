@@ -39,7 +39,7 @@ test('pedido válido: sistema e ferramentas do servidor (o que o cliente envia n
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({ content: [{ type: 'text', text: 'olá' }], stop_reason: 'end_turn' });
   const p = c.calls[0];
-  expect(p.tools.map((t) => t.name)).toEqual(['survey_book', 'preview_rules', 'check_publication', 'check_page_list', 'check_styles', 'check_figures', 'search_docs', 'build_report', 'run_validation']);
+  expect(p.tools.map((t) => t.name)).toEqual(['survey_book', 'preview_rules', 'check_publication', 'check_page_list', 'check_styles', 'check_figures', 'search_docs', 'find_text', 'build_report', 'run_validation']);
   expect(p.system).toContain('survey_book');
   expect(p.messages).toEqual(msgs);
 });
@@ -134,7 +134,7 @@ test('openrouter: pedido ao endpoint com chave, modelo e ferramentas; resposta p
   expect(calls[0].init.headers.Authorization).toBe('Bearer sk-or-x');
   const sent = JSON.parse(calls[0].init.body);
   expect(sent.model).toBe('prov/modelo');
-  expect(sent.tools.map((t) => t.function.name)).toEqual(['survey_book', 'preview_rules', 'check_publication', 'check_page_list', 'check_styles', 'check_figures', 'search_docs', 'build_report', 'run_validation']);
+  expect(sent.tools.map((t) => t.function.name)).toEqual(['survey_book', 'preview_rules', 'check_publication', 'check_page_list', 'check_styles', 'check_figures', 'search_docs', 'find_text', 'build_report', 'run_validation']);
   expect(sent.messages[0].role).toBe('system');
 });
 

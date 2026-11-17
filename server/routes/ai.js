@@ -42,6 +42,8 @@ Figuras segundo o PDF ("as figuras estão no sítio certo?", "há imagens fora d
 
 Relatório ("prepara um relatório com todas as falhas", "quero um .txt com os problemas do livro", "lista tudo o que está mal"): chama build_report (sem argumentos; demora porque corre as validações). Junta publicação, lista de páginas, estilos e figuras (estes contra o PDF) e validações num texto com cada falha, a sua localização (capítulo, página do PDF, ficheiro) e um excerto do texto. O relatório NÃO vem na resposta da ferramenta: a interface mostra por baixo da tua resposta um botão "Descarregar .txt". Responde com uma linha por secção com o nº de falhas, diz o que não se fez (ex. sem PDF) e que o relatório se descarrega no botão; não copies o conteúdo para a conversa.
 
+Procurar texto ("onde aparece X?", "quantas vezes escrevi X?", ou antes de propor uma regra sobre UM parágrafo concreto): chama find_text com "query" (2–120 caracteres, sem acentos nem maiúsculas). Devolve até 20 blocos com capítulo, posição, tag.classes e um excerto. Usa-o para confirmar que o texto existe, em que capítulo e com que classes, em vez de adivinhares um select.startsWith; se houver vários, pergunta ao utilizador com os excertos. Responde SÓ com o que devolve; "blocosEncontrados" maior que "mostrados" = há mais.
+
 Aplicar e reverter:
 - Quando o utilizador carrega em Aplicar na interface, recebes uma mensagem "[Sistema: o utilizador APLICOU a proposta anterior…]" com o resumo do que foi gravado (regras, operações, estilos novos e os valores antes/depois dos estilos alterados). A partir daí o livro JÁ tem essas alterações. Nunca digas que "nada foi aplicado" se recebeste essa mensagem; se a proposta foi DESCARTADA, recebes outra mensagem a dizê-lo.
 - Não podes desfazer nada sozinho. Se o utilizador pede para reverter e a alteração é invertível, propõe a regra/estilo inverso (com preview_rules), usando o resumo (ex. os valores "antes" dos estilos). Se não for possível, diz que pode restaurar a versão "Antes de IA" no histórico do livro.
@@ -108,6 +110,11 @@ export const TOOLS = [
     name: 'check_figures',
     description: 'Compara a posição das figuras com legenda do livro com a ordem de leitura do PDF de impressão e devolve as que estão fora do sítio (2+ páginas do texto) ou com imagem e legenda trocadas. Não altera nada. Falha se não há PDF carregado.',
     input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'find_text',
+    description: 'Procura texto nos blocos de topo do livro (sem acentos nem maiúsculas) e devolve até 20 resultados: capítulo (índice e título), posição do bloco, tag.classes, nº de ocorrências, se o bloco COMEÇA pelo texto e um excerto. Não altera nada.',
+    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'O texto a procurar (2–120 caracteres).' }, chapters: { type: 'array', items: { type: 'integer' }, description: 'Só estes capítulos (índices do survey_book). Opcional.' }, limit: { type: 'integer', description: 'Máximo de resultados (até 20). Opcional.' } }, required: ['query'] },
   },
   {
     name: 'build_report',
