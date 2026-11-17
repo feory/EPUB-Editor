@@ -57,6 +57,14 @@ test('ferramenta desconhecida e rules mal formadas → is_error', async () => {
     expect(results(s.seen[2])[0].is_error).toBe(true);
 });
 
+test('uma ferramenta que lança não deita o pedido abaixo: o erro volta ao modelo', async () => {
+    const s = script(tool('1', 'survey_book'), text('não consegui ler o livro'));
+    const broken = { ...ws(book), parts: () => { throw new Error('boom'); } };
+    const r = await runAgent({ messages: user, send: s.send, workspace: broken });
+    expect(r.text).toBe('não consegui ler o livro');
+    expect(results(s.seen[1])[0]).toMatchObject({ is_error: true, content: expect.stringContaining('survey_book falhou: boom') });
+});
+
 test('recusa e limite de passos têm mensagem; o histórico inclui as respostas', async () => {
     const refused = await runAgent({ messages: user, send: async () => ({ stop_reason: 'refusal', content: [] }), workspace: ws(book) });
     expect(refused.text).toContain('recusou');

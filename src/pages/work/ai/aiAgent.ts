@@ -40,7 +40,10 @@ export async function runAgent(opts: {
 
     const execute = async (call: Block): Promise<ToolResult> => {
         const tool = AI_TOOLS.find((t) => t.name === call.name);
-        return tool ? tool.run((call.input ?? {}) as Record<string, unknown>, ctx) : { content: `ferramenta desconhecida: ${String(call.name)}`, is_error: true };
+        if (!tool) return { content: `ferramenta desconhecida: ${String(call.name)}`, is_error: true };
+        // Uma ferramenta que lança não deita o pedido abaixo: o modelo vê o erro e explica ao utilizador.
+        try { return await tool.run((call.input ?? {}) as Record<string, unknown>, ctx); }
+        catch (e) { return { content: `a ferramenta ${tool.name} falhou: ${e instanceof Error ? e.message : String(e)}`, is_error: true }; }
     };
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
