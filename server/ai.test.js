@@ -72,6 +72,14 @@ test('limite por utilizador: o 61.º pedido leva 429 com Retry-After; outro util
   expect((await chat(post({ messages: msgs }), user())).status).toBe(200);
 });
 
+test('o alt tem o seu próprio limite: esgotá-lo não bloqueia o chat (e vice-versa)', async () => {
+  const u = user();
+  const alt = makeAlt({ create: async () => ({ content: [{ type: 'text', text: '{"alt":"x"}' }], stop_reason: 'end_turn', usage: {} }) }, async () => ({ data: 'QQ==', mediaType: 'image/png' }));
+  for (let i = 0; i < 60; i++) expect((await alt(post({ images: [{ id: 'a' }] }), 'isbn', u)).status).toBe(200);
+  expect((await alt(post({ images: [{ id: 'a' }] }), 'isbn', u)).status).toBe(429);
+  expect((await makeChat(fakeClient(ok))(post({ messages: msgs }), u)).status).toBe(200);
+});
+
 // ---- OpenRouter ----
 const { openrouterBackend, toOpenAiMessages, fromOpenAiResponse } = await import('./ai-openrouter.js');
 

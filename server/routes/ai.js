@@ -14,6 +14,7 @@ const MAX_BODY_CHARS = 500_000;
 const MAX_TOKENS = 16_000;
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_REQUESTS = 60; // por utilizador; um pedido do utilizador gasta 3–5 chamadas do ciclo
+const MAX_ALT_REQUESTS = 60; // balde à parte: "gerar todos" são vários lotes e não pode esgotar o do chat
 const MAX_STORE_SIZE = 10_000;
 // `thinking`/`fallback` voltam tal e qual na resposta anterior (o modelo exige-os de volta no ciclo de ferramentas).
 const ALLOWED_BLOCKS = new Set(['text', 'tool_use', 'tool_result', 'thinking', 'redacted_thinking', 'fallback']);
@@ -119,17 +120,18 @@ export const TOOLS = [
   },
 ];
 
-const store = new Map(); // utilizador → { count, resetAt }
+const store = new Map(); // `balde:utilizador` → { count, resetAt }
 
-function overLimit(userId) {
+function overLimit(bucket, userId, max) {
   const now = Date.now();
-  const entry = store.get(userId);
+  const key = `${bucket}:${userId}`;
+  const entry = store.get(key);
   if (!entry || entry.resetAt < now) {
     if (store.size >= MAX_STORE_SIZE) for (const [k, v] of store) if (v.resetAt < now) store.delete(k);
-    store.set(userId, { count: 1, resetAt: now + WINDOW_MS });
+    store.set(key, { count: 1, resetAt: now + WINDOW_MS });
     return null;
   }
-  if (entry.count >= MAX_REQUESTS) return Math.ceil((entry.resetAt - now) / 1000);
+  if (entry.count >= max) return Math.ceil((entry.resetAt - now) / 1000);
   entry.count++;
   return null;
 }
@@ -156,7 +158,7 @@ export function makeChat(backendOrResolver) {
   return async function chat(req, user, isbn) {
     const backend = typeof backendOrResolver === 'function' ? backendOrResolver() : backendOrResolver;
     if (!backend) return fail('IA não configurada', 503);
-    const wait = overLimit(user.sub);
+    const wait = overLimit('chat', user.sub, MAX_REQUESTS);
     if (wait) return fail('Demasiados pedidos à IA. Tenta mais tarde.', 429, { 'Retry-After': String(wait) });
 
     let body;
@@ -207,7 +209,7 @@ export function makeAlt(backendOrResolver, loadImage = loadImageForModel) {
   return async function altText(req, isbn, user) {
     const backend = typeof backendOrResolver === 'function' ? backendOrResolver() : backendOrResolver;
     if (!backend) return fail('IA não configurada', 503);
-    const wait = overLimit(user.sub);
+    const wait = overLimit('alt', user.sub, MAX_ALT_REQUESTS);
     if (wait) return fail('Demasiados pedidos à IA. Tenta mais tarde.', 429, { 'Retry-After': String(wait) });
 
     let body;
