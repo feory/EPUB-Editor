@@ -4,6 +4,7 @@
 // `chapter-anchor` nunca são tocados.
 
 import { exclusiveOf } from './editor-classes';
+import { RULE_ACTION_TYPES as RULE_ACTIONS, RULE_SELECT_KEYS as RULE_SELECTS } from '../../shared/ai-contract.js';
 import { isStructureBlock, isFillerBlock, chapterBreakClass } from './chapter-filler';
 
 export type RuleAction =
@@ -57,10 +58,14 @@ export interface RuleSelect {
 /** O início do texto de um bloco, normalizado: identifica-o (junto com a posição) sem guardar o bloco todo. */
 export const blockKey = (text: string | null) => (text ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
 
-/** Todas as ações e chaves do `select`, como valores: `Record` obriga o compilador a avisar se se acrescenta uma e esta lista fica para trás.
- *  Existem para o teste de contrato com o prompt do servidor (server/ai-contract.test.js). */
-export const RULE_ACTION_TYPES = Object.keys({ addClass: 1, removeClass: 1, removeStyle: 1, unwrap: 1, wrap: 1, keepTogether: 1, retag: 1, delete: 1 } satisfies Record<RuleAction['type'], 1>);
-export const RULE_SELECT_KEYS = Object.keys({ tag: 1, hasClass: 1, noClass: 1, hasStyle: 1, startsWith: 1, afterHeading: 1, afterClass: 1, beforeClass: 1, following: 1, chapters: 1, exceptChapters: 1, deep: 1, position: 1, block: 1 } satisfies Record<keyof RuleSelect, 1>);
+/** Todas as ações e chaves do `select`. A lista vive em shared/ai-contract.js (o servidor injeta-a no prompt); estas verificações fazem o
+ *  compilador avisar se se acrescenta uma ação/chave ao tipo e a lista partilhada fica para trás (ou ao contrário). */
+void (RULE_ACTIONS satisfies readonly RuleAction['type'][]);
+void (RULE_SELECTS satisfies readonly (keyof RuleSelect)[]);
+void ({} satisfies Record<Exclude<RuleAction['type'], (typeof RULE_ACTIONS)[number]>, never>);
+void ({} satisfies Record<Exclude<keyof RuleSelect, (typeof RULE_SELECTS)[number]>, never>);
+export const RULE_ACTION_TYPES: readonly string[] = RULE_ACTIONS;
+export const RULE_SELECT_KEYS: readonly string[] = RULE_SELECTS;
 
 export interface BookRule {
     select: RuleSelect;

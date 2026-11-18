@@ -1,12 +1,13 @@
 // O relatório de validação (ACE ou EPUBCheck) condensado para o modelo da IA: agrupado por regra, com contagem, gravidade,
 // ficheiros e poucos exemplos de HTML. Um livro grande tem centenas de entradas repetidas; assim cabe em poucos tokens.
 // O texto do livro não vai: só mensagens de erro e o HTML do elemento com problema (curto).
+import { VALIDATION_ORDER as SHARED_VALIDATION_ORDER } from '../../shared/ai-contract.js';
 import type { ValidationResult } from '../api/ebooks-api';
 import type { ValidationReport } from '../services/validation/footnote-validator';
 import type { LinkReport } from '../services/validation/link-validator';
 
 /** As validações do editor, pela ordem em que `all` as corre: as rápidas (no editor) primeiro, depois as que geram o EPUB. */
-export const VALIDATION_ORDER = ['footnotes', 'links', 'epub', 'accessibility'] as const;
+export const VALIDATION_ORDER = SHARED_VALIDATION_ORDER;
 export type ValidationKind = typeof VALIDATION_ORDER[number];
 
 export interface ValidationDigest {

@@ -2,9 +2,10 @@
 // indentação, o negrito/itálico, o centrado, o tamanho e o espaço acima batem com as classes do HTML. `reviewStyles` devolve as
 // diferenças e o HTML já corrigido (a ferramenta de leitura ignora o HTML; a operação fix_styles usa-o). Puro: recebe o `PdfStyles` já lido.
 import { INDENT_CONTROLLED_CLASSES, SPECIAL_INDENT_CLASSES } from '../../utils/editor-classes';
+import { STYLE_KINDS as SHARED_STYLE_KINDS } from '../../../shared/ai-contract.js';
 import { fold, type PdfStyles, type StyledLine, type StylePage } from './pdf-styles';
 
-export const STYLE_KINDS = ['indent', 'emphasis', 'center', 'small', 'spacing'] as const;
+export const STYLE_KINDS = SHARED_STYLE_KINDS;
 export type StyleKind = typeof STYLE_KINDS[number];
 export interface StyleDiff { kind: StyleKind; chapter: string; text: string; /** Página do PDF (1-based). */ page: number; add: string[]; remove: string[]; why: string }
 

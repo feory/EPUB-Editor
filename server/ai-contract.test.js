@@ -1,6 +1,6 @@
-// Contrato entre o prompt/ferramentas do SERVIDOR (server/routes/ai.js) e o que o CLIENTE sabe validar e produzir. O servidor não
-// importa de src/, por isso o mesmo contrato está escrito duas vezes (prosa para o modelo, código para o editor); este teste
-// falha se um lado ficar para trás — antes, só se descobria em produção, quando o modelo propunha algo que o editor recusava.
+// Contrato entre o prompt/ferramentas do SERVIDOR (server/routes/ai.js) e o que o CLIENTE sabe validar e produzir. Os nomes, enums,
+// limites e schemas vivem numa só fonte (shared/ai-contract.js) que as duas pontas leem; este teste verifica que cada ponta a usa
+// por inteiro: o prompt descreve tudo o que o editor executa, e o editor executa tudo o que o servidor oferece ao modelo.
 import { test, expect } from 'bun:test';
 import '../src/services/indesign/happy-dom'; // DOMParser no bun (surveyBook)
 
@@ -8,7 +8,8 @@ process.env.JWT_SECRET ??= 'test-secret'; // config.js exige-o ao ser importado
 const { SYSTEM, TOOLS } = await import('./routes/ai.js');
 const { OP_TYPES } = await import('../src/pages/work/ai/aiPlan.ts');
 const { RULE_ACTION_TYPES, RULE_SELECT_KEYS } = await import('../src/utils/book-rules.ts');
-const { STYLE_PROPS } = await import('../src/utils/book-styles.ts');
+const { STYLE_PROPS: CLIENT_STYLE_PROPS } = await import('../src/utils/book-styles.ts');
+const contract = await import('../shared/ai-contract.js');
 const { surveyBook } = await import('../src/utils/book-survey.ts');
 
 const preview = TOOLS.find((t) => t.name === 'preview_rules');
@@ -34,15 +35,15 @@ test('cada ação e cada chave do select que o motor de regras entende está des
   for (const k of SELECT_SET_BY_EDITOR) expect(text).not.toContain(`${k}:`);
 });
 
-test('a lista de propriedades de estilo do prompt é EXATAMENTE a que o editor aceita', () => {
-  const listed = /Propriedades permitidas: ([\w, -]+)\./.exec(text)?.[1].split(',').map((s) => s.trim());
-  expect(listed).toBeDefined();
-  expect([...listed].sort()).toEqual([...STYLE_PROPS].sort());
+test('o prompt traz TODAS as listas partilhadas (propriedades de estilo, correções, tipografia) e o editor usa as mesmas', () => {
+  expect([...CLIENT_STYLE_PROPS]).toEqual([...contract.STYLE_PROPS]);
+  for (const v of [...contract.STYLE_PROPS, ...contract.STYLE_KINDS, ...contract.TYPOGRAPHY_FIXES]) expect(text).toContain(v);
 });
 
 test('os parâmetros do preview_rules são os que o ciclo do cliente lê', async () => {
   const { PREVIEW_INPUT_KEYS } = await import('../src/pages/work/ai/tools/previewRules.ts');
   expect(Object.keys(preview.input_schema.properties).sort()).toEqual([...PREVIEW_INPUT_KEYS].sort());
+  expect([...PREVIEW_INPUT_KEYS]).toEqual([...contract.PREVIEW_INPUT_KEYS]);
   expect(preview.input_schema.required).toEqual(['rules']);
 });
 
@@ -60,4 +61,19 @@ test('os campos do survey_book que o prompt menciona existem mesmo no resumo', (
 test('as ferramentas do servidor são EXATAMENTE as do registo do cliente (um schema por ferramenta executável)', async () => {
   const { AI_TOOLS } = await import('../src/pages/work/ai/tools/index.ts');
   expect(TOOLS.map((t) => t.name).sort()).toEqual(AI_TOOLS.map((t) => t.name).sort());
+});
+
+test('o schema de cada ferramenta oferecida ao modelo é o da fonte partilhada', () => {
+  for (const t of TOOLS) expect(t.input_schema).toBe(contract.TOOL_SCHEMAS[t.name]);
+  expect(Object.keys(contract.TOOL_SCHEMAS).sort()).toEqual(TOOLS.map((t) => t.name).sort());
+});
+
+test('as validações do run_validation são as do editor (mais "all") e os limites da compressão valem no servidor', async () => {
+  const { VALIDATION_ORDER } = await import('../src/utils/validation-digest.ts');
+  expect([...contract.TOOL_SCHEMAS.run_validation.properties.type.enum].sort()).toEqual([...VALIDATION_ORDER, 'all'].sort());
+  const { compressOptions } = await import('./image-compress.js');
+  const { maxWidth, quality } = contract.COMPRESS_LIMITS;
+  expect(compressOptions({ maxWidth: maxWidth.min, quality: quality.max }).error).toBeUndefined();
+  expect(compressOptions({ maxWidth: maxWidth.min - 1 }).error).toBeDefined();
+  expect(compressOptions({ quality: quality.max + 1 }).error).toBeDefined();
 });

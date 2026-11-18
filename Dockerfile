@@ -75,6 +75,7 @@ RUN bun install --production \
 
 COPY --chown=appuser:appuser server.js ./
 COPY --chown=appuser:appuser server/ ./server/
+COPY --chown=appuser:appuser shared/ ./shared/
 COPY --chown=appuser:appuser tools/ ./tools/
 RUN mkdir -p data temp && chown appuser:appuser /app data temp
 

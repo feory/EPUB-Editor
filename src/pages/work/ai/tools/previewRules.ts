@@ -2,10 +2,11 @@ import type { BookRule } from '../../../../utils/book-rules';
 import { planStyles, planStyleEdits, planStyleRemovals, classesForRules, type NewStyle, type StyleEdit } from '../../../../utils/book-styles';
 import { runPlan, type BookOp } from '../aiPlan';
 import { scopeRules } from '../aiSelection';
+import { PREVIEW_INPUT_KEYS as SHARED_PREVIEW_INPUT_KEYS } from '../../../../../shared/ai-contract.js';
 import type { AiTool } from './aiTool';
 
 /** Os parâmetros do preview_rules que a ferramenta lê. Ver server/ai-contract.test.js, que os compara com o schema do servidor. */
-export const PREVIEW_INPUT_KEYS = ['rules', 'styles', 'style_edits', 'style_deletes', 'operations'] as const;
+export const PREVIEW_INPUT_KEYS = SHARED_PREVIEW_INPUT_KEYS;
 
 /** Simula regras, estilos e operações sobre o livro SEM alterar nada e guarda a proposta (se válida e com efeito). */
 export const previewRulesTool: AiTool = {

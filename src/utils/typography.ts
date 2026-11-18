@@ -1,7 +1,9 @@
 // Tipografia do livro inteiro (português): aspas retas/curvas → «…», travessão de diálogo, reticências e espaços. Só mexe em
 // TEXTO (nunca em tags nem atributos) e só reescreve as partes que mudam. Puro (DOM do parser), sem rede.
 
-export const TYPOGRAPHY_FIXES = ['quotes', 'dashes', 'ellipsis', 'spaces'] as const;
+import { TYPOGRAPHY_FIXES as SHARED_TYPOGRAPHY_FIXES } from '../../shared/ai-contract.js';
+
+export const TYPOGRAPHY_FIXES = SHARED_TYPOGRAPHY_FIXES;
 export type TypographyFix = typeof TYPOGRAPHY_FIXES[number];
 
 export interface TypographyResult {

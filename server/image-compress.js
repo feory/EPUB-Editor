@@ -1,16 +1,19 @@
 // Comprime uma imagem do livro SEM mudar nome nem extensão (o livro continua a apontar para o mesmo ficheiro):
 // reduz a largura se passar de `maxWidth` (nunca amplia) e recodifica no mesmo formato. Devolve null se não valer a pena
 // (GIF — pode ser animado —, ilegível, ou o resultado não é pelo menos MIN_GAIN mais pequeno).
+import { COMPRESS_LIMITS } from '../shared/ai-contract.js';
+
 const MIN_GAIN = 0.03;
 
-export const DEFAULT_COMPRESS = { maxWidth: 1600, quality: 82 };
+export const DEFAULT_COMPRESS = { maxWidth: COMPRESS_LIMITS.maxWidth.default, quality: COMPRESS_LIMITS.quality.default };
 
 /** Valida as opções vindas do cliente/modelo; devolve { maxWidth, quality } ou { error }. */
 export function compressOptions(input = {}) {
   const maxWidth = input.maxWidth ?? DEFAULT_COMPRESS.maxWidth;
   const quality = input.quality ?? DEFAULT_COMPRESS.quality;
-  if (!Number.isInteger(maxWidth) || maxWidth < 400 || maxWidth > 6000) return { error: 'maxWidth tem de ser um inteiro entre 400 e 6000' };
-  if (!Number.isInteger(quality) || quality < 40 || quality > 95) return { error: 'quality tem de ser um inteiro entre 40 e 95' };
+  const { maxWidth: w, quality: q } = COMPRESS_LIMITS;
+  if (!Number.isInteger(maxWidth) || maxWidth < w.min || maxWidth > w.max) return { error: `maxWidth tem de ser um inteiro entre ${w.min} e ${w.max}` };
+  if (!Number.isInteger(quality) || quality < q.min || quality > q.max) return { error: `quality tem de ser um inteiro entre ${q.min} e ${q.max}` };
   return { maxWidth, quality };
 }
 

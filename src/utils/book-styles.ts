@@ -4,6 +4,7 @@ import { createCustomStyle, applyBookRule, customStyleClasses, deleteCustomStyle
 import { readRuleBody } from './css-rule';
 import { paragraphStyles, charStyles } from './user-styles';
 import { EDITOR_CLASSES, STRUCTURAL_CLASSES } from './editor-classes';
+import { STYLE_PROPS as SHARED_STYLE_PROPS } from '../../shared/ai-contract.js';
 
 /** Classes que uma regra da IA pode acrescentar: as do editor (menos as estruturais), os estilos do utilizador e `extra` (estilos a criar). */
 export const classesForRules = (css: string, extra: string[] = []): Set<string> =>
@@ -13,13 +14,8 @@ export const classesForRules = (css: string, extra: string[] = []): Set<string> 
 export interface NewStyle { name: string; props: Record<string, string>; kind?: 'paragraph' | 'char' }
 export interface PlannedStyle { cls: string; body: string }
 
-export const STYLE_PROPS = [
-    'font-size', 'font-weight', 'font-style', 'font-variant', 'line-height', 'letter-spacing',
-    'text-align', 'text-indent', 'text-transform', 'color', 'background-color', 'background', 'border-radius',
-    'margin', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right',
-    'padding', 'padding-top', 'padding-bottom', 'padding-left', 'padding-right',
-    'border-top', 'border-bottom', 'border-left', 'border-right',
-];
+/** Vem de shared/ai-contract.js (o servidor injeta a mesma lista no prompt do modelo). */
+export const STYLE_PROPS: readonly string[] = SHARED_STYLE_PROPS;
 const VALUE_RE = /^[\w\s.,%#+-]{1,40}$/; // sem ; { } ( ) " ' : /
 
 export function planStyles(styles: NewStyle[], css: string): { planned: PlannedStyle[]; errors: string[] } {

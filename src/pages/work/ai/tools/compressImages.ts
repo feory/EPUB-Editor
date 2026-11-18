@@ -1,3 +1,4 @@
+import { COMPRESS_LIMITS } from '../../../../../shared/ai-contract.js';
 import type { AiTool } from './aiTool';
 
 const mb = (n: number) => `${(n / 1e6).toFixed(1)} MB`;
@@ -12,7 +13,7 @@ export const compressImagesTool: AiTool = {
             maxWidth: typeof max_width === 'number' ? max_width : undefined,
             quality: typeof quality === 'number' ? quality : undefined,
         });
-        if (!res) return { content: 'Não foi possível comprimir as imagens (falhou, ou os valores estão fora dos limites: largura 400–6000, qualidade 40–95).', is_error: true };
+        if (!res) return { content: `Não foi possível comprimir as imagens (falhou, ou os valores estão fora dos limites: largura ${COMPRESS_LIMITS.maxWidth.min}–${COMPRESS_LIMITS.maxWidth.max}, qualidade ${COMPRESS_LIMITS.quality.min}–${COMPRESS_LIMITS.quality.max}).`, is_error: true };
         return { content: JSON.stringify({
             imagens: res.total, comprimidas: res.compressed, antes: mb(res.before), depois: mb(res.after),
             poupado: res.before ? `${Math.round((1 - res.after / res.before) * 100)}%` : '0%', larguraMaxima: res.maxWidth, qualidadeJpegWebp: res.quality,

@@ -8,6 +8,7 @@ import { effectiveOpenRouter } from '../ai-settings.js';
 import { openrouterBackend } from '../ai-openrouter.js';
 import { loadImageForModel } from '../ai-images.js';
 import { recordAiUsage } from '../ai-usage.js';
+import { STYLE_PROPS, STYLE_KINDS, TYPOGRAPHY_FIXES, COMPRESS_LIMITS, TOOL_SCHEMAS } from '../../shared/ai-contract.js';
 
 const MAX_MESSAGES = 60;
 const MAX_BODY_CHARS = 500_000;
@@ -40,7 +41,7 @@ Estilos segundo o PDF ("falta indentação?", "que parágrafos estão sem negrit
 
 Figuras segundo o PDF ("as figuras estão no sítio certo?", "há imagens fora do sítio?", "a legenda está antes ou depois da imagem?"): chama check_figures (sem argumentos). Compara a posição de cada figura COM legenda ("Figura N …") com a ordem de leitura do PDF de impressão e devolve "resumo" (figuras, com legenda achada no PDF, com diferenças) e "diferencas" (tipo "fora do sítio" ou "imagem e legenda trocadas", capítulo, legenda, página do PDF, depois de que parágrafo o PDF a põe, se é corrigível). No impresso as figuras flutuam para o topo/fundo da página, por isso só conta como fora do sítio a 2 ou mais páginas do texto; as sem legenda não se veem: diz-o. Para CORRIGIR ("põe as figuras no sítio", "corrige as figuras pelo PDF"): preview_rules com rules [] e operations [{ "type": "fix_figures" }] (sem mais campos): move imagem + legenda para depois do parágrafo que cita a figura (ou que a antecede no PDF), só dentro do mesmo capítulo, e troca imagem/legenda quando o PDF as tem ao contrário. Se a ferramenta diz que não há PDF, diz ao utilizador que o carregue no painel do PDF.
 
-Comprimir imagens ("comprime as imagens", "o ebook está pesado", "reduz o tamanho das imagens"): chama compress_images (max_width e quality opcionais; por omissão 1600 px e 82). Substitui os ficheiros no servidor, SEM volta atrás: se o pedido for vago (ex. "o livro está pesado"), diz primeiro o que vais fazer e pergunta se o utilizador quer; só chama a ferramenta quando ele pede para comprimir. Responde com a poupança (antes/depois) e avisa que não se desfaz.
+Comprimir imagens ("comprime as imagens", "o ebook está pesado", "reduz o tamanho das imagens"): chama compress_images (max_width e quality opcionais; por omissão ${COMPRESS_LIMITS.maxWidth.default} px e ${COMPRESS_LIMITS.quality.default}). Substitui os ficheiros no servidor, SEM volta atrás: se o pedido for vago (ex. "o livro está pesado"), diz primeiro o que vais fazer e pergunta se o utilizador quer; só chama a ferramenta quando ele pede para comprimir. Responde com a poupança (antes/depois) e avisa que não se desfaz.
 
 Relatório ("prepara um relatório com todas as falhas", "quero um .txt com os problemas do livro", "lista tudo o que está mal"): chama build_report (sem argumentos; demora porque corre as validações). Junta publicação, lista de páginas, estilos e figuras (estes contra o PDF) e validações num texto com cada falha, a sua localização (capítulo, página do PDF, ficheiro) e um excerto do texto. O relatório NÃO vem na resposta da ferramenta: a interface mostra por baixo da tua resposta um botão "Descarregar .txt". Responde com uma linha por secção com o nº de falhas, diz o que não se fez (ex. sem PDF) e que o relatório se descarrega no botão; não copies o conteúdo para a conversa.
 
@@ -71,79 +72,66 @@ following?: boolean (com afterClass ou afterHeading: todos os blocos seguintes, 
 chapters?: number[] , exceptChapters?: number[] (índices do survey), position?: "first"|"last" (só o primeiro/último irmão: com tag ["li"] e deep:true, o primeiro item de CADA lista), deep?: boolean (por omissão só filhos diretos do corpo; não se combina com afterHeading, afterClass nem beforeClass) }.
 action: { type: "addClass"|"removeClass", value: string } | { type: "removeStyle", props: string[] } (tira essas propriedades do atributo style inline; o resto do style fica) | { type: "unwrap", tags: ("strong"|"b"|"em"|"i"|"u")[] } (tira essas etiquetas de DENTRO do bloco, deixando o texto: é assim que se tira negrito/itálico/sublinhado que está em <strong>/<b>/<em>/<i>/<u> e não numa classe nem style; usa select.tag do bloco, p. ex. ["p"]. Negrito: ["strong","b"]) | { type: "wrap", tag: "strong"|"b"|"em"|"i"|"u", text?: string } (o inverso de unwrap: põe o conteúdo do bloco em <strong> etc.; com "text" só as ocorrências desse texto (dentro de um mesmo nó de texto, até 200 caracteres). Serve para repor negrito/itálico retirado: sem "text" todo o bloco; se só parte era negrito, usa "text" com essa parte) | { type: "retag", to: "p"|"h2"|"h3"|"h4"|"h5"|"h6" } (para "h2" só a partir de h3–h6; não cria capítulo, é só o nível do título) | { type: "delete" } | { type: "keepTogether", withNext?: boolean } (MANTER JUNTOS NA PAGINAÇÃO, sem quebra de página entre eles — NÃO funde parágrafos: põe os blocos num bloco "União" (div noBreak). Sem "withNext": os blocos selecionados que são seguidos ficam num só grupo (precisa de 2 ou mais seguidos); com "withNext": true cada bloco selecionado fica unido ao bloco a seguir, p. ex. um título + o parágrafo seguinte, ou um parágrafo isolado + o seguinte). Quando o utilizador pede "juntar"/"manter juntos" blocos que NÃO são figuras, é esta ação; para figuras usa a operação keep_figures_together.
 Acrescentar p-indent tira p-non-indent e vice-versa. Os blocos do survey_book trazem "inlineStyles" (os style inline mais comuns). Se o aspeto que o utilizador quer mudar vem de um style inline (ex. margin-left, text-indent), REMOVE-o com removeStyle (select com hasStyle) em vez de o sobrepor com uma classe: o inline vence as classes e o resultado ficaria igual.
-styles (opcional): [{ name: string, kind?: "paragraph"|"char", props: { [propriedade]: valor } }] cria estilos NOVOS: kind "paragraph" (por omissão) = classe do nome em minúsculas com hífenes; kind "char" = estilo de caracteres, classe "c-nome" (aplica-se a <span class>) que as regras já podem usar. Propriedades permitidas: font-size, font-weight, font-style, font-variant, line-height, letter-spacing, text-align, text-indent, text-transform, color, background-color, background, border-radius, margin, margin-top, margin-bottom, margin-left, margin-right, padding, padding-top, padding-bottom, padding-left, padding-right, border-top, border-bottom, border-left, border-right. Outra propriedade é recusada. Valores simples (ex. "0.9em", "1.5em", "center", "#555"), sem funções nem url(). Falha se o estilo já existir.
+styles (opcional): [{ name: string, kind?: "paragraph"|"char", props: { [propriedade]: valor } }] cria estilos NOVOS: kind "paragraph" (por omissão) = classe do nome em minúsculas com hífenes; kind "char" = estilo de caracteres, classe "c-nome" (aplica-se a <span class>) que as regras já podem usar. Propriedades permitidas: ${STYLE_PROPS.join(', ')}. Outra propriedade é recusada. Valores simples (ex. "0.9em", "1.5em", "center", "#555"), sem funções nem url(). Falha se o estilo já existir.
 style_edits (opcional): [{ cls: string, props: { [propriedade]: valor } }] ALTERA estilos que já existem: os do editor (como p-quote) e os do utilizador (cls sem o ponto, ver allowedClasses) e também os títulos "h1", "h2" e "h3" (cls = "h1"…). Sem regra no livro, os títulos têm por omissão font-size 2em (h1), 1.5em (h2) e 1.17em (h3). Valor "" remove a propriedade. O valor atual de cada estilo está em styleRules do survey_book: usa-o para pedidos relativos (ex. "10% mais pequeno"). Não se desfaz pelo histórico: só propõe edições pedidas pelo utilizador.
 style_deletes (opcional): [cls, …] APAGA estilos do utilizador (cls sem o ponto) que NINGUÉM usa: o editor recusa os que estão em uso (e diz quantas vezes), e só vale depois das regras do mesmo pedido, por isso "tira a classe X e apaga o estilo X" cabe num só preview_rules. Só apagas os que o utilizador pediu; os candidatos estão em audit.styleUsage.unused do survey_book. Apagar não se desfaz sozinho, mas o Reverter do registo repõe o CSS de antes.
-operations (opcional): operações do editor, executadas por ordem DEPOIS das regras: [{ type: "drop_caps" } (capitular no 1.º parágrafo de cada capítulo), { type: "link_index" } (liga as entradas do Índice aos capítulos), { type: "fix_links" } (corrige o espaçamento dos links), { type: "replace_text", find, replace } (substitui texto em TODO o livro; find 2–200 caracteres, sem < > " & =; replace sem < >), { type: "rename_chapter", index, title }, { type: "set_chapter_level", index, level: "h1"|"h2"|"h3" }, { type: "hide_chapter", index, hidden: true|false } (esconde/mostra o capítulo no Índice do EPUB), { type: "fix_page_list" } (insere os marcadores de página que faltam, a partir do PDF de impressão carregado; sem campos), { type: "fix_styles", kinds?: ["indent"|"emphasis"|"center"|"small"|"spacing"] } (corrige indentação, negrito/itálico, centrado, letra pequena e espaço acima dos parágrafos soltos segundo o PDF de impressão carregado; sem "kinds" faz todos; o editor junta os dados do PDF), { type: "fix_figures" } (põe as figuras com legenda no sítio que o PDF de impressão carregado indica e acerta a ordem imagem/legenda; sem campos; o editor junta os dados do PDF), { type: "keep_figures_together" } (põe cada figura com legenda — imagem(ns) + legenda — num bloco "União" (div noBreak): sem quebra de página entre elas; sem campos; idempotente; usa-a DEPOIS de fix_figures, na mesma proposta se for preciso — o que já está unido deixa de ser movido por fix_figures), { type: "typography", fixes?: ["quotes"|"dashes"|"ellipsis"|"spaces"] } (tipografia portuguesa em TODO o livro, só em texto: "quotes" aspas retas/curvas → «…»; "dashes" travessão de diálogo no início do parágrafo e " - " → " – "; "ellipsis" "..." → "…"; "spaces" espaços duplicados e antes de pontuação; sem "fixes" faz as quatro; blocos com aspas desemparelhadas ficam como estavam e são contados), { type: "inline_style_to_class", style: { propriedade: valor }, cls: "c-nome", scope?: ["h1"] } (troca os <span style="…"> cujo style é EXATAMENTE esse — ordem/maiúsculas não contam — por <span class="cls">; scope limita a spans dentro dessas tags)]. index = índice do capítulo no survey_book. Não há operações para mover, eliminar ou criar capítulos: diz ao utilizador que o faça no editor de capítulos. O resultado traz "operations" com o que cada uma faria (changed=false: já estava feito).`;
+operations (opcional): operações do editor, executadas por ordem DEPOIS das regras: [{ type: "drop_caps" } (capitular no 1.º parágrafo de cada capítulo), { type: "link_index" } (liga as entradas do Índice aos capítulos), { type: "fix_links" } (corrige o espaçamento dos links), { type: "replace_text", find, replace } (substitui texto em TODO o livro; find 2–200 caracteres, sem < > " & =; replace sem < >), { type: "rename_chapter", index, title }, { type: "set_chapter_level", index, level: "h1"|"h2"|"h3" }, { type: "hide_chapter", index, hidden: true|false } (esconde/mostra o capítulo no Índice do EPUB), { type: "fix_page_list" } (insere os marcadores de página que faltam, a partir do PDF de impressão carregado; sem campos), { type: "fix_styles", kinds?: [${STYLE_KINDS.map((k) => `"${k}"`).join("|")}] } (corrige indentação, negrito/itálico, centrado, letra pequena e espaço acima dos parágrafos soltos segundo o PDF de impressão carregado; sem "kinds" faz todos; o editor junta os dados do PDF), { type: "fix_figures" } (põe as figuras com legenda no sítio que o PDF de impressão carregado indica e acerta a ordem imagem/legenda; sem campos; o editor junta os dados do PDF), { type: "keep_figures_together" } (põe cada figura com legenda — imagem(ns) + legenda — num bloco "União" (div noBreak): sem quebra de página entre elas; sem campos; idempotente; usa-a DEPOIS de fix_figures, na mesma proposta se for preciso — o que já está unido deixa de ser movido por fix_figures), { type: "typography", fixes?: [${TYPOGRAPHY_FIXES.map((k) => `"${k}"`).join("|")}] } (tipografia portuguesa em TODO o livro, só em texto: "quotes" aspas retas/curvas → «…»; "dashes" travessão de diálogo no início do parágrafo e " - " → " – "; "ellipsis" "..." → "…"; "spaces" espaços duplicados e antes de pontuação; sem "fixes" faz as quatro; blocos com aspas desemparelhadas ficam como estavam e são contados), { type: "inline_style_to_class", style: { propriedade: valor }, cls: "c-nome", scope?: ["h1"] } (troca os <span style="…"> cujo style é EXATAMENTE esse — ordem/maiúsculas não contam — por <span class="cls">; scope limita a spans dentro dessas tags)]. index = índice do capítulo no survey_book. Não há operações para mover, eliminar ou criar capítulos: diz ao utilizador que o faça no editor de capítulos. O resultado traz "operations" com o que cada uma faria (changed=false: já estava feito).`;
 
 export const TOOLS = [
   {
     name: 'survey_book',
     description: 'Resumo do livro: capítulos (índice, título, nível), blocos por "tag.classe1.classe2" com contagem, nº de capítulos e exemplos de texto, estilos criados pelo utilizador e a auditoria (audit: anomalias de formatação). Sem argumentos.',
-    input_schema: { type: 'object', properties: {} },
+    input_schema: TOOL_SCHEMAS.survey_book,
   },
   {
     name: 'preview_rules',
     description: `Simula regras sobre o livro SEM alterar nada. Devolve erros de validação, ou por regra: blocos que mudariam, capítulos afetados e exemplos antes/depois. ${RULES_DOC}`,
-    input_schema: {
-      type: 'object',
-      properties: {
-        rules: { type: 'array', items: { type: 'object' }, description: 'Lista de regras { select, action }.' },
-        styles: { type: 'array', items: { type: 'object' }, description: 'Estilos de parágrafo novos { name, props } (opcional).' },
-        style_edits: { type: 'array', items: { type: 'object' }, description: 'Alterações a estilos existentes { cls, props } (opcional).' },
-        style_deletes: { type: 'array', items: { type: 'string' }, description: 'Classes de estilos do utilizador a APAGAR, sem o ponto (opcional). Só os que nada usa.' },
-        operations: { type: 'array', items: { type: 'object' }, description: 'Operações do editor { type, … } (opcional).' },
-      },
-      required: ['rules'],
-    },
+    input_schema: TOOL_SCHEMAS.preview_rules,
   },
   {
     name: 'check_publication',
     description: 'Lista de verificação antes de exportar: metadados, capa, texto alternativo das imagens, entradas do Índice, lista de páginas e as quatro validações (notas, links, EPUBCheck, ACE). Devolve itens com estado ok/falta/aviso/info e onde resolver. Sem argumentos. Demora uns segundos.',
-    input_schema: { type: 'object', properties: {} },
+    input_schema: TOOL_SCHEMAS.check_publication,
   },
   {
     name: 'check_page_list',
     description: 'Cruza o PDF de impressão com os marcadores de página do livro e devolve que páginas ficaram sem marcador e porquê (em branco, do Índice, só figura, abre com figura, ou texto no livro mas fora de ordem). Não altera nada.',
-    input_schema: { type: 'object', properties: {} },
+    input_schema: TOOL_SCHEMAS.check_page_list,
   },
   {
     name: 'check_styles',
     description: 'Compara o estilo dos parágrafos do livro (indentação, negrito/itálico, centrado, letra pequena, espaço acima) com o PDF de impressão e devolve as diferenças agrupadas por tipo, com exemplos. Não altera nada. Falha se não há PDF carregado.',
-    input_schema: { type: 'object', properties: {} },
+    input_schema: TOOL_SCHEMAS.check_styles,
   },
   {
     name: 'check_figures',
     description: 'Compara a posição das figuras com legenda do livro com a ordem de leitura do PDF de impressão e devolve as que estão fora do sítio (2+ páginas do texto) ou com imagem e legenda trocadas. Não altera nada. Falha se não há PDF carregado.',
-    input_schema: { type: 'object', properties: {} },
+    input_schema: TOOL_SCHEMAS.check_figures,
   },
   {
     name: 'search_docs',
     description: 'Procura nos guias da aplicação (Como fazer, Editor, Assistente) as secções que respondem a uma pergunta de "como faço X?". Devolve o texto das secções. Não altera nada.',
-    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'A pergunta ou as palavras-chave do assunto.' } }, required: ['query'] },
+    input_schema: TOOL_SCHEMAS.search_docs,
   },
   {
     name: 'find_text',
     description: 'Procura texto nos blocos de topo do livro (sem acentos nem maiúsculas) e devolve até 20 resultados: capítulo (índice e título), posição do bloco, tag.classes, nº de ocorrências, se o bloco COMEÇA pelo texto e um excerto. Não altera nada.',
-    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'O texto a procurar (2–120 caracteres).' }, chapters: { type: 'array', items: { type: 'integer' }, description: 'Só estes capítulos (índices do survey_book). Opcional.' }, limit: { type: 'integer', description: 'Máximo de resultados (até 20). Opcional.' } }, required: ['query'] },
+    input_schema: TOOL_SCHEMAS.find_text,
   },
   {
     name: 'build_report',
     description: 'Prepara um relatório em texto com todas as falhas detetadas (publicação, lista de páginas, estilos e figuras contra o PDF, validações), cada uma com a localização e um excerto do texto, e entrega-o à interface para descarregar em .txt. Sem argumentos. Demora (corre as validações). Não altera o livro.',
-    input_schema: { type: 'object', properties: {} },
+    input_schema: TOOL_SCHEMAS.build_report,
   },
   {
     name: 'compress_images',
     description: 'Comprime as imagens do livro no servidor: reduz as mais largas que max_width (nunca amplia) e recodifica PNG/JPEG/WebP no mesmo formato, mantendo nome e extensão (o livro não muda). GIF fica como está. DESTRUTIVO e sem volta atrás: só quando o utilizador pede explicitamente para comprimir/reduzir o peso das imagens. Devolve quantas imagens, o tamanho antes/depois e a poupança. Falha em modo leitura.',
-    input_schema: { type: 'object', properties: {
-      max_width: { type: 'integer', description: 'Largura máxima em píxeis (400–6000). Por omissão 1600.' },
-      quality: { type: 'integer', description: 'Qualidade JPEG/WebP (40–95). Por omissão 82.' },
-    } },
+    input_schema: TOOL_SCHEMAS.compress_images,
   },
   {
     name: 'run_validation',
     description: 'Corre validações do livro sobre o estado atual e devolve, por validação, ok ou o relatório agrupado por regra (gravidade, contagem, descrição, ficheiros e exemplos de HTML). As do EPUB demoram uns segundos. Falha em modo leitura.',
-    input_schema: { type: 'object', properties: { type: { type: 'string', enum: ['accessibility', 'epub', 'footnotes', 'links', 'all'], description: '"accessibility" (ACE, por omissão), "epub" (EPUBCheck), "footnotes", "links" ou "all" (todas, por ordem: notas, links, epub, accessibility).' } } },
+    input_schema: TOOL_SCHEMAS.run_validation,
   },
 ];
 
