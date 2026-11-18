@@ -35,6 +35,8 @@ export interface AiWorkspace {
     pageLines(): Promise<PageLines[] | null>;
     /** A geometria e o estilo (margens, recuos, negrito/itálico, tamanhos) do PDF de impressão, o que fix_styles e check_styles comparam com o livro; null sem PDF. */
     pdfStyles(): Promise<PdfStyles | null>;
+    /** Comprime as imagens do livro no servidor (reduz a largura e recodifica; sem volta atrás); null se não foi possível (modo leitura, ou falhou). */
+    compressImages(opts: { maxWidth?: number; quality?: number }): Promise<{ total: number; compressed: number; before: number; after: number; maxWidth: number; quality: number } | null>;
     /** Onde estão os blocos selecionados no editor, nas partes do livro; null se já não se encontram. */
     locate(selection: SelectedBlocks): RuleBlock | null;
 }

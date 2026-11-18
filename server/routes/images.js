@@ -1,10 +1,11 @@
 import { existsSync, mkdirSync, unlinkSync } from 'fs';
-import { stat, readdir } from 'fs/promises';
+import { stat, readdir, rename } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { corsHeaders, handleGetFile, safeSegment } from '../response.js';
 import { DATA_DIR } from '../config.js';
 import { debugLog } from '../log.js';
+import { compressOptions, compressImageBuffer } from '../image-compress.js';
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'];
 const MAX_IMAGE_SIZE = 2_000_000;
@@ -255,38 +256,81 @@ export async function batchImages(req, isbn) {
     return Response.json({ error: 'Image too large' }, { status: 413, headers: corsHeaders });
   }
 
-  await Promise.all(images.map(async (file) => {
+  // Se a pasta desaparecer a meio do pedido (ENOENT no open), recria-a e tenta uma vez.
+  const writeImage = async (name, data) => {
+    const path = join(imagesDir, name);
+    try { await Bun.write(path, data); }
+    catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+      mkdirSync(imagesDir, { recursive: true });
+      await Bun.sleep(50);
+      await Bun.write(path, data);
+    }
+  };
+
+  // Em série: com a pasta num bind mount do Docker (macOS) muitas escritas em paralelo davam ENOENT no open.
+  for (const file of images) {
     // EPS vetorial → rasterizar com Ghostscript (cor, alta-res) e guardar como PNG.
     if (/\.eps$/i.test(file.name)) {
       const id = sanitizeName(file.name.replace(/\.eps$/i, '')) || 'image';
       const png = await epsToPng(await file.arrayBuffer());
-      if (png) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.png`); await Bun.write(join(imagesDir, `${id}.png`), png); saved.push({ id, filename: `${id}.png` }); }
+      if (png) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.png`); await writeImage(`${id}.png`, png); saved.push({ id, filename: `${id}.png` }); }
       else debugLog(`[EPS] conversão falhou (gs ausente?): ${file.name}`);
-      return;
+      continue;
     }
     // PSD (Photoshop) → rasterizar com ImageMagick e guardar como PNG.
     if (/\.psd$/i.test(file.name)) {
       const id = sanitizeName(file.name.replace(/\.psd$/i, '')) || 'image';
       const png = await psdToPng(await file.arrayBuffer());
-      if (png) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.png`); await Bun.write(join(imagesDir, `${id}.png`), png); saved.push({ id, filename: `${id}.png` }); }
+      if (png) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.png`); await writeImage(`${id}.png`, png); saved.push({ id, filename: `${id}.png` }); }
       else debugLog(`[PSD] conversão falhou (ImageMagick ausente?): ${file.name}`);
-      return;
+      continue;
     }
     // TIFF (fotografia de alta resolução) → sem suporte em browsers, rasterizar para JPEG.
     if (/\.tiff?$/i.test(file.name)) {
       const id = sanitizeName(file.name.replace(/\.tiff?$/i, '')) || 'image';
       const jpeg = await tiffToJpeg(await file.arrayBuffer());
-      if (jpeg) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.jpg`); await Bun.write(join(imagesDir, `${id}.jpg`), jpeg); saved.push({ id, filename: `${id}.jpg` }); }
+      if (jpeg) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.jpg`); await writeImage(`${id}.jpg`, jpeg); saved.push({ id, filename: `${id}.jpg` }); }
       else debugLog(`[TIFF] conversão falhou (sharp ausente?): ${file.name}`);
-      return;
+      continue;
     }
     let filename = sanitizeName(file.name);
     if (!filename.match(/\.(png|jpg|jpeg|gif|webp)$/i)) filename += '.png';
     const id = filename.replace(/\.(png|jpg|jpeg|gif|webp)$/i, '');
     clearImageVariants(imagesDir, thumbnailsDir, id, filename);
-    await Bun.write(join(imagesDir, filename), file);
+    await writeImage(filename, file);
     saved.push({ id, filename });
-  }));
+  }
 
   return Response.json({ message: 'Batch saved', saved }, { headers: corsHeaders });
+}
+
+/**
+ * Comprime as imagens do livro (reduz largura + recodifica, mesmo nome e extensão). Substitui os ficheiros no disco — não há
+ * volta atrás. Em série (bind mounts do Docker falham com escritas em paralelo) e com escrita atómica (.tmp + rename).
+ */
+export async function compressImages(req, isbn) {
+  const body = await req.json().catch(() => ({}));
+  const opts = compressOptions(body ?? {});
+  if (opts.error) return Response.json({ error: opts.error }, { status: 400, headers: corsHeaders });
+  const imagesDir = join(DATA_DIR, isbn, 'images');
+  const thumbnailsDir = join(DATA_DIR, isbn, 'thumbnails');
+  const files = existsSync(imagesDir) ? (await readdir(imagesDir)).filter(f => /\.(png|jpe?g|webp)$/i.test(f)) : [];
+  let before = 0, after = 0, compressed = 0;
+  const changed = [];
+  for (const f of files) {
+    const path = join(imagesDir, f);
+    const input = Buffer.from(await Bun.file(path).arrayBuffer());
+    before += input.length;
+    const out = await compressImageBuffer(input, f.slice(f.lastIndexOf('.') + 1), opts);
+    if (!out) { after += input.length; continue; }
+    const tmp = `${path}.tmp`;
+    await Bun.write(tmp, out.buffer);
+    await rename(tmp, path);
+    safeUnlink(join(thumbnailsDir, f));
+    after += out.buffer.length;
+    compressed++;
+    changed.push({ filename: f, before: input.length, after: out.buffer.length });
+  }
+  return Response.json({ total: files.length, compressed, before, after, changed, ...opts }, { headers: corsHeaders });
 }

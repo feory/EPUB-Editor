@@ -11,6 +11,7 @@ import { checkStylesTool } from './checkStyles';
 import { checkFiguresTool } from './checkFigures';
 import { buildReportTool } from './buildReport';
 import { findTextTool } from './findText';
+import { compressImagesTool } from './compressImages';
 import { searchDocsTool, searchDocs } from './searchDocs';
 import type { PdfStyles } from '../../../../services/page-list/pdf-styles';
 import { AI_TOOLS } from './index';
@@ -30,7 +31,7 @@ const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = nu
 test('o registo tem uma ferramenta por nome', () => {
     const names = AI_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.sort()).toEqual(['build_report', 'check_figures', 'check_page_list', 'check_publication', 'check_styles', 'find_text', 'preview_rules', 'run_validation', 'search_docs', 'survey_book']);
+    expect(names.sort()).toEqual(['build_report', 'check_figures', 'check_page_list', 'check_publication', 'check_styles', 'compress_images', 'find_text', 'preview_rules', 'run_validation', 'search_docs', 'survey_book']);
 });
 
 test('survey_book: devolve o resumo do livro como está agora', () => {
@@ -258,4 +259,15 @@ test('sugestões: as verificações com algo corrigível oferecem o passo seguin
     expect(labels(e)).toEqual(['Propor correções']);
     const f = setup([], { validate: async () => digest(0) }); await runValidationTool.run({ type: 'epub' }, f.ctx);
     expect(f.suggestions).toEqual([]);
+});
+
+test('compress_images: passa as opções ao editor e resume a poupança; em leitura ou se falhar é erro', async () => {
+    let seen: unknown;
+    const ok = setup([], { compressImages: async (o: unknown) => { seen = o; return { total: 10, compressed: 8, before: 20e6, after: 5e6, maxWidth: 1200, quality: 82 }; } });
+    const out = JSON.parse((await compressImagesTool.run({ max_width: 1200 }, ok.ctx)).content);
+    expect(seen).toEqual({ maxWidth: 1200, quality: undefined });
+    expect(out).toMatchObject({ imagens: 10, comprimidas: 8, antes: '20.0 MB', depois: '5.0 MB', poupado: '75%' });
+
+    expect((await compressImagesTool.run({}, setup([]).ctx)).is_error).toBe(true); // memoryWorkspace: falhou (null)
+    expect((await compressImagesTool.run({}, setup([], { readOnly: () => true }).ctx)).is_error).toBe(true);
 });

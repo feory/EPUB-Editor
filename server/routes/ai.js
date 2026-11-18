@@ -40,6 +40,8 @@ Estilos segundo o PDF ("falta indentação?", "que parágrafos estão sem negrit
 
 Figuras segundo o PDF ("as figuras estão no sítio certo?", "há imagens fora do sítio?", "a legenda está antes ou depois da imagem?"): chama check_figures (sem argumentos). Compara a posição de cada figura COM legenda ("Figura N …") com a ordem de leitura do PDF de impressão e devolve "resumo" (figuras, com legenda achada no PDF, com diferenças) e "diferencas" (tipo "fora do sítio" ou "imagem e legenda trocadas", capítulo, legenda, página do PDF, depois de que parágrafo o PDF a põe, se é corrigível). No impresso as figuras flutuam para o topo/fundo da página, por isso só conta como fora do sítio a 2 ou mais páginas do texto; as sem legenda não se veem: diz-o. Para CORRIGIR ("põe as figuras no sítio", "corrige as figuras pelo PDF"): preview_rules com rules [] e operations [{ "type": "fix_figures" }] (sem mais campos): move imagem + legenda para depois do parágrafo que cita a figura (ou que a antecede no PDF), só dentro do mesmo capítulo, e troca imagem/legenda quando o PDF as tem ao contrário. Se a ferramenta diz que não há PDF, diz ao utilizador que o carregue no painel do PDF.
 
+Comprimir imagens ("comprime as imagens", "o ebook está pesado", "reduz o tamanho das imagens"): chama compress_images (max_width e quality opcionais; por omissão 1600 px e 82). Substitui os ficheiros no servidor, SEM volta atrás: se o pedido for vago (ex. "o livro está pesado"), diz primeiro o que vais fazer e pergunta se o utilizador quer; só chama a ferramenta quando ele pede para comprimir. Responde com a poupança (antes/depois) e avisa que não se desfaz.
+
 Relatório ("prepara um relatório com todas as falhas", "quero um .txt com os problemas do livro", "lista tudo o que está mal"): chama build_report (sem argumentos; demora porque corre as validações). Junta publicação, lista de páginas, estilos e figuras (estes contra o PDF) e validações num texto com cada falha, a sua localização (capítulo, página do PDF, ficheiro) e um excerto do texto. O relatório NÃO vem na resposta da ferramenta: a interface mostra por baixo da tua resposta um botão "Descarregar .txt". Responde com uma linha por secção com o nº de falhas, diz o que não se fez (ex. sem PDF) e que o relatório se descarrega no botão; não copies o conteúdo para a conversa.
 
 Perguntas de como fazer ("como crio um estilo?", "onde importo um EPUB?", "como partilho o livro?", "o que faz a lista de páginas?"): chama search_docs com a pergunta em "query" (as palavras-chave do assunto). Devolve secções dos guias da aplicação; responde SÓ com o que elas dizem, em passos curtos, nos nomes de menus e botões que aparecem no texto. Se não devolver secções, diz que os guias não tratam disso, sem inventar passos. Se o pedido é para FAZER a alteração no livro (e não para saber como se faz), não uses search_docs: usa as outras ferramentas.
@@ -129,6 +131,14 @@ export const TOOLS = [
     name: 'build_report',
     description: 'Prepara um relatório em texto com todas as falhas detetadas (publicação, lista de páginas, estilos e figuras contra o PDF, validações), cada uma com a localização e um excerto do texto, e entrega-o à interface para descarregar em .txt. Sem argumentos. Demora (corre as validações). Não altera o livro.',
     input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'compress_images',
+    description: 'Comprime as imagens do livro no servidor: reduz as mais largas que max_width (nunca amplia) e recodifica PNG/JPEG/WebP no mesmo formato, mantendo nome e extensão (o livro não muda). GIF fica como está. DESTRUTIVO e sem volta atrás: só quando o utilizador pede explicitamente para comprimir/reduzir o peso das imagens. Devolve quantas imagens, o tamanho antes/depois e a poupança. Falha em modo leitura.',
+    input_schema: { type: 'object', properties: {
+      max_width: { type: 'integer', description: 'Largura máxima em píxeis (400–6000). Por omissão 1600.' },
+      quality: { type: 'integer', description: 'Qualidade JPEG/WebP (40–95). Por omissão 82.' },
+    } },
   },
   {
     name: 'run_validation',

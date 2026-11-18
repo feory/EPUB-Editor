@@ -255,6 +255,9 @@ export const ebooksApi = {
     listImages: (isbn: string) =>
         apiClient.get<{ images: Array<{ id: string; filename: string; size: number; modified: number; dimensions: { width: number; height: number } | null }> }>(`/ebooks/${isbn}/images`),
 
+    compressImages: (isbn: string, opts: { maxWidth?: number; quality?: number } = {}) =>
+        apiClient.post<{ total: number; compressed: number; before: number; after: number; maxWidth: number; quality: number }>(`/ebooks/${isbn}/images/compress`, opts, { timeout: 300_000 }),
+
     deleteImage: (isbn: string, imageId: string) =>
         apiClient.delete(`/ebooks/${isbn}/images/${imageId}`),
 

@@ -11,5 +11,6 @@ import { checkFiguresTool } from './checkFigures';
 import { buildReportTool } from './buildReport';
 import { searchDocsTool } from './searchDocs';
 import { findTextTool } from './findText';
+import { compressImagesTool } from './compressImages';
 
-export const AI_TOOLS: readonly AiTool[] = [surveyBookTool, previewRulesTool, runValidationTool, checkPublicationTool, checkPageListTool, checkStylesTool, checkFiguresTool, buildReportTool, searchDocsTool, findTextTool];
+export const AI_TOOLS: readonly AiTool[] = [surveyBookTool, previewRulesTool, runValidationTool, checkPublicationTool, checkPageListTool, checkStylesTool, checkFiguresTool, buildReportTool, searchDocsTool, findTextTool, compressImagesTool];

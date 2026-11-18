@@ -276,6 +276,7 @@ export const server = Bun.serve({
           if (parts.length === 5 && method === "GET") return images.listImages(req, isbn);
           if (parts.length >= 6) {
             const imageId = parts[5];
+            if (imageId === 'compress' && method === "POST") return images.compressImages(req, isbn);
             if (imageId !== 'batch' && !safeSegment(imageId)) {
               return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
             }

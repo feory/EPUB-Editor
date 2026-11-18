@@ -65,6 +65,7 @@ import { blockOffset } from './work/ai/aiLinks';
 const HistoryModal = lazy(() => import('./work/modals/HistoryModal').then(m => ({ default: m.HistoryModal })));
 const CompareModal = lazy(() => import('./work/modals/CompareModal').then(m => ({ default: m.CompareModal })));
 const ShortcutsModal = lazy(() => import('./work/modals/ShortcutsModal').then(m => ({ default: m.ShortcutsModal })));
+const CompressImagesModal = lazy(() => import('./work/modals/CompressImagesModal').then(m => ({ default: m.CompressImagesModal })));
 const StatisticsModal = lazy(() => import('./work/modals/StatisticsModal').then(m => ({ default: m.StatisticsModal })));
 const EpubPreviewModal = lazy(() => import('./work/components/EpubPreviewModal').then(m => ({ default: m.EpubPreviewModal })));
 const StyleEditorModal = lazy(() => import('./work/components/StyleEditorModal').then(m => ({ default: m.StyleEditorModal })));
@@ -162,6 +163,7 @@ export function WorkPage() {
   }, []);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showCompressImages, setShowCompressImages] = useState(false);
   const [showStyleEditor, setShowStyleEditor] = useState(false);
   const [showFonts, setShowFonts] = useState(false);
   const [editorFont, setEditorFont] = useState<string>(getStoredFont);
@@ -512,6 +514,7 @@ export function WorkPage() {
           onLinkIndexPages={() => editorRef.current?.linkIndexPagesSelection()}
           onIndentIndex={() => editorRef.current?.indentIndexSubentries()}
           onConversions={() => setShowConversions(true)}
+          onCompressImages={() => setShowCompressImages(true)}
           onUpdatePageList={() => setShowPagelistUpdate(true)}
           onLinkIndiceEntries={work.handleLinkIndiceEntries}
           onEditToc={() => setShowToc(true)}
@@ -738,6 +741,11 @@ export function WorkPage() {
         </Suspense></ErrorBoundary>
       )}
 
+      {showCompressImages && isbn && (
+        <ErrorBoundary><Suspense fallback={<ModalLoadingFallback />}>
+          <CompressImagesModal isbn={isbn} onDone={refreshGallery} onClose={() => setShowCompressImages(false)} />
+        </Suspense></ErrorBoundary>
+      )}
       {showStats && (
         <ErrorBoundary><Suspense fallback={<ModalLoadingFallback />}>
           <StatisticsModal stats={work.getStats()} onClose={() => setShowStats(false)} />

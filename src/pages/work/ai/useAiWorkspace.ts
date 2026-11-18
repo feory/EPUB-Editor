@@ -50,6 +50,11 @@ export function useAiWorkspace({ isbn, work, css }: { isbn: string | undefined; 
         pageListAudit: () => withPrintPdf(live.current, auditPageList),
         pageLines: () => withPrintPdf(live.current, pageLinesFromPages),
         pdfStyles: () => withPrintPdf(live.current, (pages) => pdfStyles(pages)),
+        compressImages: async (opts) => {
+            const { isbn, work } = live.current;
+            if (!isbn || work.readOnly) return null;
+            return ebooksApi.compressImages(isbn, opts).then((r) => r.data, () => null);
+        },
         locate: (selection) => locateBlocks(live.current.work.getBookParts(), selection, live.current.work.activeChapterIndex),
     }), [live]);
 }
