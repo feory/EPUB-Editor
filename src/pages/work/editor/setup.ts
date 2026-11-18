@@ -64,6 +64,20 @@ export function createEditorSetup(deps: SetupDeps) {
     return (editor: Editor) => {
         // Ação de menu/atalho como edição de bloco (blockEdit.ts): passo de undo + change + nodeChanged.
         const undoable = (fn: () => void) => () => editBlocks(editor, fn);
+        /** Envolve em `<div class="cls">` os BLOCOS DE TOPO da seleção (nunca vai para dentro de um p/h2: seria HTML inválido, o título perdia-se ao
+         *  recarregar, e `selection.setContent` partia o parágrafo onde a seleção começa deixando um parágrafo extra por cima). */
+        const wrapSelectedBlocks = (cls: string) => {
+            const html = editor.selection.getContent({ format: 'html' });
+            if (!html.trim()) return;
+            const body = editor.getBody();
+            const tops = [...new Set(editor.selection.getSelectedBlocks()
+                .map((b) => editor.dom.getParent(b, (n: Node) => n.parentNode === body) as HTMLElement | null)
+                .filter((b): b is HTMLElement => !!b && !isBreakClass(b.className)))];
+            if (tops.length === 0) return editor.selection.setContent(`<div class="${cls}">${html}</div>`);
+            const wrapper = editor.dom.create('div', { class: cls });
+            tops[0].before(wrapper);
+            wrapper.append(...tops);
+        };
         registerEphemeralMarks(editor); // marcas de UI que o serializer nunca emite (ephemeral.ts)
         // Âncora manual no cursor: span.manual-anchor vazio (destino de ligações do Índice, ver
         // findSubtitles em indice-links.ts). id único pela hora (sem varrer o livro todo).
@@ -712,18 +726,7 @@ export function createEditorSetup(deps: SetupDeps) {
                 if (existingBox) {
                     editor.dom.setOuterHTML(existingBox, existingBox.innerHTML);
                 } else {
-                    const html = editor.selection.getContent({ format: 'html' });
-                    if (html.trim()) {
-                        // A caixa envolve os BLOCOS da seleção (nunca vai para dentro de um p/h2: seria HTML inválido e o título perdia-se ao recarregar).
-                        const body = editor.getBody();
-                        const tops = [...new Set(editor.selection.getSelectedBlocks()
-                            .map((b) => editor.dom.getParent(b, (n: Node) => n.parentNode === body) as HTMLElement | null)
-                            .filter((b): b is HTMLElement => !!b && !isBreakClass(b.className)))];
-                        if (tops.length === 0) return editor.selection.setContent(`<div class="box">${html}</div>`);
-                        const box = editor.dom.create('div', { class: 'box' });
-                        tops[0].before(box);
-                        box.append(...tops);
-                    }
+                    wrapSelectedBlocks('box');
                 }
             }),
             onSetup: (api) => {
@@ -757,7 +760,7 @@ export function createEditorSetup(deps: SetupDeps) {
             icon: 'ps-union',
             tooltip: 'União entre título e o parágrafo',
             onAction: undoable(() => {
-                // Wrap manual (igual ao botão "box") em vez de editor.formatter.apply: o
+                // Wrap manual (igual ao botão "box", ver wrapSelectedBlocks) em vez de editor.formatter.apply: o
                 // formatter nativo do TinyMCE, ao abranger seleção com vários <p>, funde-os
                 // num só bloco em vez de os envolver preservando cada um.
                 const selectedNode = editor.selection.getNode();
@@ -765,10 +768,7 @@ export function createEditorSetup(deps: SetupDeps) {
                 if (existingWrap) {
                     editor.dom.setOuterHTML(existingWrap, existingWrap.innerHTML);
                 } else {
-                    const html = editor.selection.getContent({ format: 'html' });
-                    if (html.trim()) {
-                        editor.selection.setContent(`<div class="noBreak">${html}</div>`);
-                    }
+                    wrapSelectedBlocks('noBreak');
                 }
             }),
             onSetup: (api) => {
