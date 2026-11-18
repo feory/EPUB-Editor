@@ -99,7 +99,7 @@ ${GRID_CSS}
     .p-legendas { font-size: 0.85em !important; margin-bottom: 30px !important; text-indent: 0 !important; }
 
     /* === TABELAS === */
-    table { border-collapse: collapse; margin: 1em 0; font-size: 0.85em; width: 100%; table-layout: fixed; }
+    table { border-collapse: collapse; margin: 1em 0; font-size: 0.85em; width: 100%; table-layout: fixed; page-break-inside: avoid; break-inside: avoid; }
     table th, table td { border: 1px solid #333; padding: 4px 8px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }
     table th { font-weight: bold; }
 
