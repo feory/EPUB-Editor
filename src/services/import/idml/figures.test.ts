@@ -24,6 +24,12 @@ test('legenda com formatação do InDesign: rótulo em negrito e maiúsculas, ce
     expect(html).toContain('<p class="p-legendas p-center"><strong>FIGURA 1.1</strong> Alicerces do marketing 7.0.</p>');
 });
 
+test('legenda com estrangeirismo a itálico: <em> só nessa palavra, com rótulo em negrito', () => {
+    const f = { ...fig('c05f002'), captionLines: ['figura 5.2 O mapa cognitivo: um enquadramento de insights sobre o cliente.'], captionRuns: [{ text: 'insights', italic: true, bold: false }, { text: 'cliente', italic: false, bold: true }], captionFmt: { labelLen: 10, bold: true, upper: true, cls: 'p-center' } };
+    const { html } = insertFigures('<p>Ver (Figura 1.1).</p>'.replace('1.1', '5.2'), [{ ...f, label: { kind: 'fig' as const, num: '5.2' } }]);
+    expect(html).toContain('<strong>FIGURA 5.2</strong> O mapa cognitivo: um enquadramento de <em>insights</em> sobre o <strong>cliente</strong>.</p>');
+});
+
 const ids = (html: string) => [...html.matchAll(/data-image-id="([^"]+)"/g)].map(m => m[1]);
 
 test('placeFigures: livro com legendas em texto — as imagens sem legenda (nome com nº) NÃO colam a "Figura N" do corpo', async () => {
