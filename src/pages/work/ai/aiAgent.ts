@@ -9,6 +9,7 @@ import type { Proposal, Suggestion, ToolContext, ToolResult } from './tools/aiTo
 import { charStyles, paragraphStyles } from '../../../utils/user-styles';
 import { EDITOR_CLASSES } from '../../../utils/editor-classes';
 import { classesForRules } from '../../../utils/book-styles';
+import { TOOL_SPECS } from '../../../../shared/ai-contract.js';
 
 type Block = { type: string; [key: string]: unknown };
 export interface AgentMessage { role: 'user' | 'assistant'; content: string | Block[] }
@@ -26,13 +27,8 @@ export interface AgentResult {
 
 const MAX_TURNS = 8;
 
-/** O que se diz ao utilizador enquanto cada ferramenta corre (as validações e o PDF demoram segundos). */
-const STEP_LABELS: Record<string, string> = {
-    survey_book: 'A ler o livro…', preview_rules: 'A simular as alterações…', find_text: 'A procurar no livro…', search_docs: 'A consultar os guias…',
-    run_validation: 'A correr a validação…', check_publication: 'A verificar a publicação (inclui as validações)…', build_report: 'A preparar o relatório (corre as validações)…',
-    check_page_list: 'A comparar a lista de páginas com o PDF…', check_styles: 'A comparar os estilos com o PDF…', check_figures: 'A comparar as figuras com o PDF…', check_text: 'A comparar o texto com o PDF…',
-};
-export const stepLabel = (tool: string) => STEP_LABELS[tool] ?? 'A trabalhar…';
+/** O que se diz ao utilizador enquanto cada ferramenta corre (as validações e o PDF demoram segundos): o `step` da especificação partilhada. */
+export const stepLabel = (tool: string) => (TOOL_SPECS as Record<string, { step: string } | undefined>)[tool]?.step ?? 'A trabalhar…';
 const textOf = (content: Block[]) => content.filter((b) => b.type === 'text').map((b) => String(b.text ?? '')).join('\n').trim();
 
 export async function runAgent(opts: {

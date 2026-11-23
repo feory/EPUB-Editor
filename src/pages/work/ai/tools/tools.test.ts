@@ -16,6 +16,7 @@ import { compressImagesTool } from './compressImages';
 import { searchDocsTool, searchDocs } from './searchDocs';
 import type { PdfStyles } from '../../../../services/page-list/pdf-styles';
 import { AI_TOOLS } from './index';
+import { TOOL_SPECS } from '../../../../../shared/ai-contract.js';
 import type { Proposal, Suggestion, ToolContext } from './aiTool';
 import type { ValidationDigest, ValidationKind } from '../../../../utils/validation-digest';
 
@@ -32,7 +33,7 @@ const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = nu
 test('o registo tem uma ferramenta por nome', () => {
     const names = AI_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.sort()).toEqual(['build_report', 'check_figures', 'check_page_list', 'check_publication', 'check_styles', 'check_text', 'compress_images', 'find_text', 'preview_rules', 'run_validation', 'search_docs', 'survey_book']);
+    expect(names.sort()).toEqual(Object.keys(TOOL_SPECS).sort()); // o registo do cliente e a especificação partilhada têm as mesmas ferramentas
 });
 
 test('survey_book: devolve o resumo do livro como está agora', () => {

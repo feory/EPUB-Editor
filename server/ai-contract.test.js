@@ -63,9 +63,15 @@ test('as ferramentas do servidor são EXATAMENTE as do registo do cliente (um sc
   expect(TOOLS.map((t) => t.name).sort()).toEqual(AI_TOOLS.map((t) => t.name).sort());
 });
 
-test('o schema de cada ferramenta oferecida ao modelo é o da fonte partilhada', () => {
-  for (const t of TOOLS) expect(t.input_schema).toBe(contract.TOOL_SCHEMAS[t.name]);
-  expect(Object.keys(contract.TOOL_SCHEMAS).sort()).toEqual(TOOLS.map((t) => t.name).sort());
+test('cada ferramenta da especificação partilhada é oferecida ao modelo tal como está e tem tudo o que o painel e o prompt precisam', () => {
+  expect(TOOLS.map((t) => t.name)).toEqual(Object.keys(contract.TOOL_SPECS));
+  for (const t of TOOLS) {
+    const spec = contract.TOOL_SPECS[t.name];
+    expect(t.description).toBe(spec.description);
+    expect(t.input_schema).toBe(spec.schema);
+    expect(spec.step.length).toBeGreaterThan(0); // o que se mostra enquanto a ferramenta corre
+    expect(SYSTEM).toContain(t.name); // o guia de quando a usar
+  }
 });
 
 test('as validações do run_validation são as do editor (mais "all") e os limites da compressão valem no servidor', async () => {
