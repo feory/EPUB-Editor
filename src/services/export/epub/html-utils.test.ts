@@ -14,6 +14,7 @@ test('cleanHtmlForXhtml dá epub:type + role às variantes de caixa e ignora .bo
     const out = cleanHtmlForXhtml('<div class="box box--aviso"><p>a</p></div><div class="box"><p>b</p></div>');
     expect(out).toContain('<div class="box box--aviso" epub:type="warning" role="note"><p>a</p></div>');
     expect(out).toContain('<div class="box"><p>b</p></div>');
+    expect(cleanHtmlForXhtml('<div class="box box--nota"><p>n</p></div>')).toContain('epub:type="notice" role="doc-notice"'); // ACE: epub-type-has-matching-role
 });
 
 test('linkUrls: URL solto vira link sem a pontuação final; não toca em URLs já ligados', () => {

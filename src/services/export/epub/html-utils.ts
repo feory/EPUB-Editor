@@ -68,10 +68,12 @@ const ENTITY_TOKEN = /&[a-zA-Z][a-zA-Z0-9]*;?/g;
 
 // Variantes de caixa (editor: div.box.box--X) → semântica EPUB; o resto da caixa não muda.
 const BOX_EPUB_TYPE: Record<string, string> = { aviso: 'warning', nota: 'notice', destaque: 'sidebar' };
+// O ACE exige o papel ARIA que corresponde ao epub:type (epub-type-has-matching-role): "notice" → doc-notice; os outros ficam "note".
+const BOX_ROLE: Record<string, string> = { nota: 'doc-notice' };
 const BOX_VARIANT_DIV = /<div\b([^>]*\bclass="[^"]*\bbox--(aviso|nota|destaque)\b[^"]*"[^>]*)>/g;
 const addBoxSemantics = (html: string): string =>
     html.replace(BOX_VARIANT_DIV, (tag, attrs: string, variant: string) =>
-        /\bepub:type=/.test(attrs) ? tag : `<div${attrs} epub:type="${BOX_EPUB_TYPE[variant]}" role="note">`);
+        /\bepub:type=/.test(attrs) ? tag : `<div${attrs} epub:type="${BOX_EPUB_TYPE[variant]}" role="${BOX_ROLE[variant] ?? 'note'}">`);
 
 export const cleanHtmlForXhtml = (html: string): string => {
     let cleaned = html.replace(ENTITY_TOKEN, (tok) => ENTITY_MAP.get(tok) ?? tok);
