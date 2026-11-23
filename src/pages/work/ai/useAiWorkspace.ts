@@ -10,20 +10,18 @@ import type { AiCssSide } from './aiPlan';
 import { locateBlocks } from './aiSelection';
 import { collectFacts } from './publicationChecklist';
 import { auditPageList, pageLinesFromPages } from '../../../services/page-list/audit';
-import type { PdfPageText } from '../../../services/page-list/pdf-pages';
+import type { PrintPdf } from '../../../services/page-list/print-pdf';
+import { printPdfs } from '../printPdfs';
 import { auditText } from '../../../services/page-list/text-audit';
-import { pdfStyles } from '../../../services/page-list/pdf-styles';
 
 type Work = ReturnType<typeof useEbookWork>;
 
-/** Corre `fn` sobre as páginas do PDF de impressão do livro e o HTML atual; null se não há PDF ou não se consegue lê-lo. O pdfjs (pdf-pages) só carrega quando se pede. */
-async function withPrintPdf<T>({ isbn, work }: { isbn: string | undefined; work: Work }, fn: (pages: PdfPageText[], html: string) => T): Promise<T | null> {
+/** Corre `fn` sobre o PDF de impressão do livro e o HTML atual; null se não há PDF ou não se consegue lê-lo. O PDF é partilhado (ver printPdfs): lê-se uma vez, não por ferramenta. */
+async function withPrintPdf<T>({ isbn, work }: { isbn: string | undefined; work: Work }, fn: (pdf: PrintPdf, html: string) => Promise<T>): Promise<T | null> {
     if (!isbn) return null;
-    const res = await ebooksApi.getPrintPdf(isbn).catch(() => null);
-    if (!res || res.status !== 200) return null;
     try {
-        const { createPrintPdf } = await import('../../../services/page-list/print-pdf');
-        return fn(await createPrintPdf(res.data as ArrayBuffer).pages(), work.getBookParts().join(''));
+        const entry = await printPdfs.get(isbn);
+        return entry ? await fn(entry.pdf, work.getBookParts().join('')) : null;
     } catch { return null; }
 }
 
@@ -48,10 +46,10 @@ export function useAiWorkspace({ isbn, work, css }: { isbn: string | undefined; 
                 indiceTitles: work.chapters.filter((c) => isIndiceChapterTitle(c.title)).map((c) => c.title),
             });
         },
-        pageListAudit: () => withPrintPdf(live.current, auditPageList),
-        pageLines: () => withPrintPdf(live.current, pageLinesFromPages),
-        pdfStyles: () => withPrintPdf(live.current, (pages) => pdfStyles(pages)),
-        textAudit: () => withPrintPdf(live.current, auditText),
+        pageListAudit: () => withPrintPdf(live.current, async (pdf, html) => auditPageList(await pdf.pages(), html)),
+        pageLines: () => withPrintPdf(live.current, async (pdf, html) => pageLinesFromPages(await pdf.pages(), html)),
+        pdfStyles: () => withPrintPdf(live.current, (pdf) => pdf.styles()),
+        textAudit: () => withPrintPdf(live.current, async (pdf, html) => auditText(await pdf.pages(), html)),
         compressImages: async (opts) => {
             const { isbn, work } = live.current;
             if (!isbn || work.readOnly) return null;

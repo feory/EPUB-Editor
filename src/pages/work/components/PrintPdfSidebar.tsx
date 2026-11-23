@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, FileText, ChevronLeft, ChevronRight, Loader2, Upload, ZoomIn, ZoomOut } from 'lucide-react';
 import type { PDFDocumentProxy, TextLayer } from 'pdfjs-dist';
-import { ebooksApi } from '../../../api/ebooks-api';
-import { readPdfPages } from '../../../services/page-list/pdf-pages';
+import { printPdfs } from '../printPdfs';
 import { anchorsFromPages, type PageAnchor } from '../../../services/page-list/pdf-text';
 import { nearestPdfPage } from '../../../services/page-list/nearest-page';
 import 'pdfjs-dist/web/pdf_viewer.css';
@@ -59,20 +58,18 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
         setStatus('loading');
         setAnchorsReady(false);
         try {
-            const res = await ebooksApi.getPrintPdf(isbn);
-            if (res.status === 404) { setStatus('missing'); return; }
-            const buf = res.data as ArrayBuffer;
+            const entry = await printPdfs.get(isbn);
+            if (!entry) { setStatus('missing'); return; }
             const pdfjsLib = await import('pdfjs-dist');
             pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).toString();
-            // getDocument neutraliza o ArrayBuffer que recebe — cópias próprias para o proxy
-            // do viewer e para readPdfPages (também chama getDocument internamente).
-            const pdf = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+            // getDocument neutraliza o ArrayBuffer que recebe: cópia própria para o proxy do viewer (os bytes são partilhados, ver printPdfs).
+            const pdf = await pdfjsLib.getDocument({ data: entry.data.slice(0) }).promise;
             pdfRef.current = pdf;
             setPageCount(pdf.numPages);
             pageCountRef.current = pdf.numPages;
             setPage(1);
             setStatus('ready');
-            const anchors = anchorsFromPages(await readPdfPages(buf.slice(0)));
+            const anchors = anchorsFromPages(await entry.pdf.pages());
             anchorsRef.current = anchors;
             folioMapRef.current = new Map(anchors.map(a => [a.page, a.pdfPageIndex]));
             indexToFolioRef.current = new Map(anchors.map(a => [a.pdfPageIndex, a.page]));
@@ -162,7 +159,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
         if (!file) return;
         setUploading(true);
         try {
-            await ebooksApi.uploadPrintPdf(isbn, file);
+            await printPdfs.save(isbn, file);
             await loadPdf(); // já lê o PDF para as âncoras — reaproveitado abaixo, sem reparse
             onPdfUploaded?.(anchorsRef.current);
         } finally {

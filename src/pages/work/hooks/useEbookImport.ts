@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ebooksApi } from '../../../api/ebooks-api';
+import { printPdfs } from '../printPdfs';
 import { extractFile, finalizeImport, type ImportDecisions } from '../../../services/import/import-file';
 import { useStyles, DEFAULT_CSS } from '../../../context/StyleContext';
 import type { DocxStyleMapping } from '../../../services/import/document-importer';
@@ -73,7 +74,7 @@ export function useEbookImport({ isbn, onImport, showNotification }: UseEbookImp
         mutationFn: async ({ file, options, styleMapping, epubClassMapping }: { file: File; options: ImportOptions; styleMapping?: DocxStyleMapping; epubClassMapping?: Record<string, string> }) => {
             const result = await importFromScratch(file, { options, styleMapping, epubClassMapping });
             // Fire-and-forget: PDF de impressão do zip IDML, para o viewer lado a lado no editor.
-            if (result.printPdf) ebooksApi.uploadPrintPdf(isbn!, result.printPdf).catch(() => {});
+            if (result.printPdf) printPdfs.save(isbn!, result.printPdf).catch(() => {});
             return result;
         },
         onSuccess: ({ html, pageBreaks, figuresPlaced }) => {
