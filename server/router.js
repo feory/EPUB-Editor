@@ -1,5 +1,5 @@
 import { stmt } from './database.js';
-import { corsHeaders, safeSegment } from './response.js';
+import { corsHeaders, safeSegment, bodyTooLarge } from './response.js';
 import { requireAuth } from './middleware/auth.js';
 import * as authRoutes from './routes/auth.js';
 import * as notifications from './routes/notifications.js';
@@ -11,7 +11,9 @@ import * as ebooks from './routes/ebooks.js';
 import * as aiAdmin from './routes/ai-admin.js';
 import * as docs from './routes/docs.js';
 import * as presence from './presence.js';
-import { matchEbookRoute, isPublic, isLockExempt } from './ebook-routes.js';
+import { matchEbookRoute, isPublic, isLockExempt, bodyLimit, DEFAULT_MAX_BODY } from './ebook-routes.js';
+
+const AUTH_MAX_BODY = 16 * 1024; // login, sessão, palavra-passe, utilizadores: só campos de texto
 
 // O router da API: pedido → resposta. Sem arranque nem tarefas de fundo (isso é server/index.js), por isso os testes chamam-no
 // diretamente com um Request, sem portas.
@@ -21,6 +23,12 @@ export async function handleRequest(req) {
   const method = req.method;
 
   if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // Fora dos pedidos por-ebook (que levam o limite da sua rota) ninguém envia mais que um JSON pequeno; o login/sessão, aberto a todos, menos ainda.
+  if (!path.startsWith("/api/ebooks/")) {
+    const tooBig = bodyTooLarge(req, path.startsWith("/api/auth/") ? AUTH_MAX_BODY : DEFAULT_MAX_BODY);
+    if (tooBig) return tooBig;
+  }
 
   try {
     // Public auth routes
@@ -142,6 +150,8 @@ export async function handleRequest(req) {
       const clientId = req.headers.get('x-client-id') || `u:${user.sub}`;
       const rest = parts.slice(4);
       const hit = matchEbookRoute(method, rest);
+      const tooBig = bodyTooLarge(req, bodyLimit(hit));
+      if (tooBig) return tooBig;
 
       // Write-lock: só o detentor do lock pode escrever quando alguém está presente
       if ((method === "POST" || method === "PUT" || method === "DELETE") && !isLockExempt(hit, rest)

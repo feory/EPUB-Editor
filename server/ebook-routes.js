@@ -3,6 +3,8 @@
 //   public      — responde sem login (o <img> do browser não leva token); `true` ou um predicado dos parâmetros
 //   lockExempt  — escrever é permitido a quem NÃO detém o lock de edição (presença e partilhas)
 //   prefix      — o caminho pode ter segmentos a mais (só as imagens)
+//   maxBody     — bytes de corpo aceites (Content-Length, verificado ANTES de ler; ver bodyTooLarge). Por omissão DEFAULT_MAX_BODY: só os
+//                 uploads e os JSON grandes precisam de mais, e cada um diz quanto.
 import { corsHeaders, safeSegment } from './response.js';
 import { stmt } from './database.js';
 import * as presence from './presence.js';
@@ -24,6 +26,11 @@ const safeImage = (fn) => (c) => (safeSegment(c.params.imageId) ? fn(c) : notFou
 const touchPresence = ({ isbn, user, clientId }) =>
   Response.json(presence.touch(isbn, clientId, stmt.getDisplayName.get(Number(user.sub))?.name ?? user.email), { headers: corsHeaders });
 
+const MB = 1024 * 1024;
+export const DEFAULT_MAX_BODY = 1 * MB;
+/** O limite de corpo da rota (pedidos sem rota conhecida ficam com o por omissão). */
+export const bodyLimit = (hit) => hit?.opts.maxBody ?? DEFAULT_MAX_BODY;
+
 /** [método, caminho, handler({ req, url, isbn, user, clientId, params }), opções] */
 export const EBOOK_ROUTES = [
   ['GET', '', ({ isbn }) => ebooks.getEbook(isbn)],
@@ -34,34 +41,34 @@ export const EBOOK_ROUTES = [
 
   ['PUT', 'status', ({ req, isbn, user }) => ebooks.updateStatus(req, isbn, user)],
   ['PUT', 'metadata', ({ req, isbn }) => ebooks.updateMetadata(req, isbn)],
-  ['POST', 'content', ({ req, isbn }) => content.saveContent(req, isbn)],
+  ['POST', 'content', ({ req, isbn }) => content.saveContent(req, isbn), { maxBody: 55 * MB }], // 50M caracteres (MAX_CONTENT_SIZE) + o JSON à volta
   ['GET', 'content', ({ req, isbn, url }) => content.getContent(req, isbn, url)],
   ['GET', 'history', ({ req, isbn }) => content.getHistory(req, isbn)],
-  ['POST', 'history-style', ({ req, isbn }) => content.saveStyleSnapshot(req, isbn)],
+  ['POST', 'history-style', ({ req, isbn }) => content.saveStyleSnapshot(req, isbn), { maxBody: 6 * MB }],
   ['GET', 'cover', ({ isbn }) => epub.getCover(isbn), { public: true }],
-  ['POST', 'cover', ({ req, isbn }) => epub.saveCover(req, isbn)],
+  ['POST', 'cover', ({ req, isbn }) => epub.saveCover(req, isbn), { maxBody: 4 * MB }], // 3 MB (MAX_COVER_SIZE) + multipart
   ['DELETE', 'cover', ({ isbn }) => epub.deleteCover(isbn)],
   ['GET', 'grammar', ({ isbn }) => grammar.getGrammar(isbn)],
-  ['POST', 'grammar', ({ req, isbn }) => grammar.saveGrammar(req, isbn)],
+  ['POST', 'grammar', ({ req, isbn }) => grammar.saveGrammar(req, isbn), { maxBody: 2 * MB }],
   ['GET', 'comments', ({ isbn }) => comments.getComments(isbn)],
   ['POST', 'comments', ({ req, isbn, user }) => comments.addComment(req, isbn, user)],
-  ['POST', 'validate', ({ req }) => validation.validate(req)],
-  ['POST', 'ai', ({ req, isbn, user }) => ai.chat(req, user, isbn)],
-  ['POST', 'report', ({ req, isbn }) => report.saveReport(req, isbn), { lockExempt: true }], // não altera o livro
+  ['POST', 'validate', ({ req }) => validation.validate(req), { maxBody: 128 * MB }],
+  ['POST', 'ai', ({ req, isbn, user }) => ai.chat(req, user, isbn), { maxBody: 2 * MB }], // MAX_BODY_CHARS 500 000, até 3 bytes por caractere
+  ['POST', 'report', ({ req, isbn }) => report.saveReport(req, isbn), { lockExempt: true, maxBody: 2.1 * MB }], // não altera o livro
   ['GET', 'report/:file', ({ isbn, params }) => report.getReport(isbn, params.file), { public: true }],
   ['POST', 'ai-alt', ({ req, isbn, user }) => ai.altText(req, isbn, user)],
   ['GET', 'ai-changes', ({ isbn }) => aiChanges.list(isbn)],
   ['POST', 'ai-changes', ({ req, isbn, user }) => aiChanges.add(req, isbn, user)],
-  ['POST', 'validate-accessibility', ({ req, isbn }) => validation.validateAccessibility(req, isbn)],
-  ['POST', 'epub', ({ req, isbn }) => epub.saveEpub(req, isbn)],
+  ['POST', 'validate-accessibility', ({ req, isbn }) => validation.validateAccessibility(req, isbn), { maxBody: 128 * MB }],
+  ['POST', 'epub', ({ req, isbn }) => epub.saveEpub(req, isbn), { maxBody: 31 * MB }], // 30 MB (MAX_EPUB_SIZE) + multipart
   ['GET', 'epub', ({ isbn }) => epub.getEpub(isbn)],
   ['GET', 'epubs', ({ isbn }) => epub.getEpubHistory(isbn)],
   ['GET', 'style', ({ isbn }) => epub.getStyle(isbn)],
-  ['PUT', 'style', ({ req, isbn }) => epub.saveStyle(req, isbn)],
+  ['PUT', 'style', ({ req, isbn }) => epub.saveStyle(req, isbn), { maxBody: 6 * MB }],
   ['GET', 'share', ({ isbn, user }) => ebooks.listShares(isbn, user)],
   ['POST', 'share', ({ req, isbn, user }) => ebooks.shareEbook(req, isbn, user)],
   ['GET', 'print-pdf', ({ isbn }) => printPdf.getPrintPdf(isbn)],
-  ['POST', 'print-pdf', ({ req, isbn }) => printPdf.savePrintPdf(req, isbn)],
+  ['POST', 'print-pdf', ({ req, isbn }) => printPdf.savePrintPdf(req, isbn), { maxBody: 151 * MB }],
 
   ['GET', 'epubs/:file', ({ isbn, params }) => epub.getEpubFile(isbn, params.file)],
   ['PUT', 'ai-changes/:id', ({ req, isbn, user, params }) => aiChanges.revert(isbn, params.id, user, req)],
@@ -74,11 +81,11 @@ export const EBOOK_ROUTES = [
 
   ['GET', 'images', ({ req, isbn }) => images.listImages(req, isbn)],
   ['POST', 'images/compress', ({ req, isbn }) => images.compressImages(req, isbn), { prefix: true }],
-  ['POST', 'images/batch', ({ req, isbn }) => images.batchImages(req, isbn), { prefix: true }],
+  ['POST', 'images/batch', ({ req, isbn }) => images.batchImages(req, isbn), { prefix: true, maxBody: 500 * MB }], // o import IDML pode passar de 200 MB num pedido (ver nginx.conf)
   ['GET', 'images/:imageId', safeImage(({ req, url, isbn, params }) => images.getImage(isbn, params.imageId, url, req)), { prefix: true, public: (p) => !!p.imageId && p.imageId !== 'batch' }],
   ['PUT', 'images/:imageId', safeImage(({ req, isbn, params }) => images.renameImage(req, isbn, params.imageId)), { prefix: true }],
   ['DELETE', 'images/:imageId', safeImage(({ isbn, params }) => images.deleteImage(isbn, params.imageId)), { prefix: true }],
-  ['POST', 'images/:imageId', safeImage(({ req, isbn, params }) => images.saveSingleImage(req, isbn, params.imageId)), { prefix: true }],
+  ['POST', 'images/:imageId', safeImage(({ req, isbn, params }) => images.saveSingleImage(req, isbn, params.imageId)), { prefix: true, maxBody: 3 * MB }], // 2 MB (MAX_IMAGE_SIZE) + multipart
 ];
 
 function matchPath(pattern, rest, prefix) {

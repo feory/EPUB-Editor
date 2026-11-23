@@ -119,3 +119,35 @@ test('relatório HTML: grava com login, abre sem token (só o último), com CSP;
   expect((await call(null, 'GET', first)).status).toBe(404);
   expect((await call(null, 'GET', `/api/ebooks/${isbn}/report/..%2Fcontent.html`)).status).toBe(404);
 });
+
+// ---- limites de corpo (antes de ler) e entradas do login ----
+const declared = (bytes) => ({ 'content-length': String(bytes), 'content-type': 'application/json' });
+const send = async (user, method, path, headers, body = '{}') => {
+  const h = { ...headers };
+  if (user) h.authorization = `Bearer ${await token(user)}`;
+  return handleRequest(new Request(`http://x${path}`, { method, headers: h, body }));
+};
+
+test('login: um corpo declarado grande é 413 sem ser lido; email e palavra-passe têm limite e tipo', async () => {
+  expect((await send(null, 'POST', '/api/auth/login', declared(20_000))).status).toBe(413);
+  const post = (body) => send(null, 'POST', '/api/auth/login', { 'content-type': 'application/json' }, JSON.stringify(body));
+  expect((await post({ email: 'a'.repeat(300) + '@x.pt', password: 'p' })).status).toBe(400);
+  expect((await post({ email: 'a@x.pt', password: 'p'.repeat(2000) })).status).toBe(400);
+  expect((await post({ email: { $ne: 1 }, password: 'p' })).status).toBe(400);
+});
+
+test('limite de corpo por rota: o por omissão é 1 MiB, os uploads têm o seu e o resto da API também', async () => {
+  const owner = makeUser();
+  const isbn = makeEbook(owner);
+  const MB = 1024 * 1024;
+  // por omissão
+  expect((await send(owner, 'POST', `/api/ebooks/${isbn}/comments`, declared(2 * MB))).status).toBe(413);
+  // o PDF aceita até 151 MB (o corpo real é pequeno: só o cabeçalho declarado conta para a verificação)
+  expect((await send(owner, 'POST', `/api/ebooks/${isbn}/print-pdf`, declared(100 * MB), 'x')).status).not.toBe(413);
+  expect((await send(owner, 'POST', `/api/ebooks/${isbn}/print-pdf`, declared(200 * MB), 'x')).status).toBe(413);
+  // o conteúdo do livro: 55 MB
+  expect((await send(owner, 'POST', `/api/ebooks/${isbn}/content`, declared(10 * MB))).status).not.toBe(413);
+  expect((await send(owner, 'POST', `/api/ebooks/${isbn}/content`, declared(60 * MB))).status).toBe(413);
+  // fora dos livros: 1 MiB
+  expect((await send(owner, 'PUT', '/api/docs/x', declared(2 * MB))).status).toBe(413);
+});

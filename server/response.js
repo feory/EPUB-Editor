@@ -44,6 +44,17 @@ export function getClientIp(req) {
     ?? null;
 }
 
+/**
+ * 413 se o pedido DECLARA (Content-Length) um corpo maior que `max` bytes — antes de qualquer leitura: `req.json()`/`formData()`/`blob()`
+ * carregam o corpo todo para a memória, e um limite verificado depois de ler não protege nada. null se cabe.
+ * shortcut: um corpo sem Content-Length (chunked) passa; os browsers e o nginx (proxy_request_buffering off) mantêm o cabeçalho, e o
+ * `maxRequestBodySize` do Bun (500 MB) é o teto. Subir se aparecerem clientes que enviem chunked.
+ */
+export function bodyTooLarge(req, max) {
+  const declared = Number(req.headers.get('content-length'));
+  return declared > max ? Response.json({ error: 'Payload too large' }, { status: 413, headers: corsHeaders }) : null;
+}
+
 export function safeSegment(seg) {
   return typeof seg === 'string' && /^[a-zA-Z0-9_\-.]{1,200}$/.test(seg) && !seg.includes('..');
 }

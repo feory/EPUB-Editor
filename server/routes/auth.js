@@ -10,6 +10,9 @@ import { displayName } from '../display-name.js';
 const COOKIE_SECURE = Bun.env.COOKIE_SECURE === 'true';
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 const VALID_ROLES = new Set(['admin', 'user']);
+// O login é aberto a todos e guarda o email no registo de atividade: sem limites, um pedido grande enchia a BD e o Argon2 gastava CPU na palavra-passe.
+const MAX_EMAIL = 254;
+const MAX_PASSWORD = 1024;
 
 function sha256Hex(str) {
   return createHash('sha256').update(str).digest('hex');
@@ -76,6 +79,9 @@ export async function login(req) {
   if (!email || !password) {
     return new Response(JSON.stringify({ error: 'Email and password required' }), { status: 400, headers: corsHeaders });
   }
+  if (typeof email !== 'string' || typeof password !== 'string' || email.length > MAX_EMAIL || password.length > MAX_PASSWORD) {
+    return new Response(JSON.stringify({ error: 'Invalid input' }), { status: 400, headers: corsHeaders });
+  }
 
   const user = stmt.getUserByEmail.get(email);
   if (!user || !(await Bun.password.verify(password, user.password))) {
@@ -100,6 +106,7 @@ export async function changePassword(req, user) {
   const { currentPassword, newPassword } = body ?? {};
   if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') return fail('Missing fields');
   if (newPassword.length < 12) return fail('Password must be at least 12 characters');
+  if (newPassword.length > MAX_PASSWORD || currentPassword.length > MAX_PASSWORD) return fail('Password too long');
   if (newPassword === currentPassword) return fail('New password must differ from the current one');
 
   const id = Number(user.sub);
