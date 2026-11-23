@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ebooksApi } from '../../../api/ebooks-api';
 import { runAgent, appliedNote, discardedNote, renameProposalStyle, summarizeProposal, type AgentMessage, type AgentResult } from './aiAgent';
 import { blockContext, type SelectedBlocks } from './aiSelection';
@@ -109,10 +109,11 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
     }, [proposal]);
     const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setReport(null); setSuggestions([]); setError(''); }, []); // o efeito apaga o que estava guardado
 
-    /** O CSS do livro antes e depois da proposta (para o exemplo visual). */
-    const previewCss = useCallback(() => {
+    /** O CSS do livro antes e depois da proposta (para o exemplo visual): calculado uma vez por proposta, não a cada render. */
+    const previewCss = useMemo(() => {
+        if (!proposal) return null;
         const before = workspace.css();
-        return { before, after: proposal ? applyStylePlan(before, proposal.styles, proposal.edits, proposal.removals).css : before };
+        return { before, after: applyStylePlan(before, proposal.styles, proposal.edits, proposal.removals).css };
     }, [proposal, workspace]);
 
     return { lines, proposal, previewCss, report, suggestions, busy, step, error, scoped, clearScope, send, stop, apply, discard, renameStyle, noteReverted, reset };

@@ -167,7 +167,7 @@ export const AiSidebar: React.FC<{ ai: Ai; chapterTitles: string[]; onGoTo: (cha
                                 <button key={v} onClick={() => setProposalView(v)} className={`px-2.5 h-6 rounded-md ${proposalView === v ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{v === 'example' ? 'Exemplo' : 'Código'}</button>
                             ))}
                         </div>
-                        {proposalView === 'example' && <ProposalPreview proposal={ai.proposal} css={ai.previewCss()} />}
+                        {proposalView === 'example' && ai.previewCss && <ProposalPreview proposal={ai.proposal} css={ai.previewCss} />}
                         {ai.proposal.styles.map((s) => (
                             <NewStyleRow key={s.cls} cls={s.cls} body={s.body} disabled={ai.busy} onRename={(name) => ai.renameStyle(s.cls, name)} />
                         ))}

@@ -33,7 +33,7 @@ const Pair: React.FC<{ label: string; before?: string; after: string; css: { bef
 );
 
 /** Exemplo visual da proposta: estilos novos/alterados e amostras das regras, desenhados com o CSS do livro antes e depois. */
-export const ProposalPreview: React.FC<{ proposal: Proposal; css: { before: string; after: string } }> = ({ proposal, css }) => {
+export const ProposalPreview = React.memo(function ProposalPreview({ proposal, css }: { proposal: Proposal; css: { before: string; after: string } }) {
     const c = { before: forEditor(css.before), after: forEditor(css.after) };
     const samples = proposal.reports.flatMap((r, i) => r.samples.slice(0, 1).map((s) => ({ ...s, rule: i + 1 })));
     if (!proposal.styles.length && !proposal.edits.length && !samples.length) return <p className="text-xs text-text-muted">Sem exemplo visual para esta proposta.</p>;
@@ -44,4 +44,4 @@ export const ProposalPreview: React.FC<{ proposal: Proposal; css: { before: stri
             {samples.map((s, i) => <Pair key={i} label={`Regra ${s.rule}, cap. ${s.chapter}`} before={s.before} after={s.after || ''} css={c} />)}
         </div>
     );
-};
+});
