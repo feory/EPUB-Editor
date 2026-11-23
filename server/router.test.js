@@ -101,3 +101,21 @@ test('a tabela de rotas por-ebook: caminhos com parâmetros, imagens com segment
   expect((await call(owner, 'GET', `/api/ebooks/${isbn}/images`)).status).toBe(200);
   expect((await call(owner, 'GET', `/api/ebooks/${isbn}/ai-changes`)).status).toBe(200);
 });
+
+test('relatório HTML: grava com login, abre sem token (só o último), com CSP; nomes inseguros são 404', async () => {
+  const owner = makeUser();
+  const isbn = makeEbook(owner);
+  expect((await call(null, 'POST', `/api/ebooks/${isbn}/report`, { body: 'x' })).status).toBe(401);
+  const save = async (html) => {
+    const res = await handleRequest(new Request(`http://x/api/ebooks/${isbn}/report`, { method: 'POST', headers: { authorization: `Bearer ${await token(owner)}` }, body: html }));
+    return (await res.json()).url;
+  };
+  const first = await save('<p>um</p>');
+  const second = await save('<p>dois</p>');
+  const open = await call(null, 'GET', second);
+  expect(open.status).toBe(200);
+  expect(await open.text()).toBe('<p>dois</p>');
+  expect(open.headers.get('content-security-policy')).toContain("default-src 'none'");
+  expect((await call(null, 'GET', first)).status).toBe(404);
+  expect((await call(null, 'GET', `/api/ebooks/${isbn}/report/..%2Fcontent.html`)).status).toBe(404);
+});

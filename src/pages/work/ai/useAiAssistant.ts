@@ -4,6 +4,7 @@ import { runAgent, appliedNote, discardedNote, renameProposalStyle, summarizePro
 import { blockContext, type SelectedBlocks } from './aiSelection';
 import type { AiWorkspace } from './aiWorkspace';
 import { aiErrorMessage } from './aiError';
+import { applyStylePlan } from '../../../utils/book-styles';
 import { chatKey, compactHistory, loadChat, saveChat } from './chatStore';
 
 export interface AiLine { role: 'user' | 'assistant'; text: string }
@@ -108,5 +109,11 @@ export function useAiAssistant({ isbn, userId, workspace, selected }: {
     }, [proposal]);
     const reset = useCallback(() => { history.current = []; setLines([]); setProposal(null); setReport(null); setSuggestions([]); setError(''); }, []); // o efeito apaga o que estava guardado
 
-    return { lines, proposal, report, suggestions, busy, step, error, scoped, clearScope, send, stop, apply, discard, renameStyle, noteReverted, reset };
+    /** O CSS do livro antes e depois da proposta (para o exemplo visual). */
+    const previewCss = useCallback(() => {
+        const before = workspace.css();
+        return { before, after: proposal ? applyStylePlan(before, proposal.styles, proposal.edits, proposal.removals).css : before };
+    }, [proposal, workspace]);
+
+    return { lines, proposal, previewCss, report, suggestions, busy, step, error, scoped, clearScope, send, stop, apply, discard, renameStyle, noteReverted, reset };
 }

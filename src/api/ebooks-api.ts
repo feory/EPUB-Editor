@@ -231,6 +231,10 @@ export const ebooksApi = {
         apiClient.post<{ results: ({ id: string; alt: string; decorative: boolean } | { id: string; error: string })[]; usage: { input_tokens: number; output_tokens: number } }>(
             `/ebooks/${isbn}/ai-alt`, { images, language }, { timeout: 180_000 }),
 
+    // Relatório do assistente como página HTML (devolve o endereço)
+    saveReport: (isbn: string, html: string) =>
+        apiClient.post<{ url: string }>(`/ebooks/${isbn}/report`, html, { headers: { 'Content-Type': 'text/html' }, transformRequest: [(d) => d] }),
+
     // Print PDF (viewer lado a lado no editor)
     getPrintPdf: (isbn: string) =>
         apiClient.get(`/ebooks/${isbn}/print-pdf`, { responseType: 'arraybuffer', validateStatus: s => s === 200 || s === 404 }),

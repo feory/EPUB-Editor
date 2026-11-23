@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Trash2, Check, ImageIcon, MessageSquare, History, Download } from 'lucide-react';
+import { X, Send, Trash2, Check, ImageIcon, MessageSquare, History, Download, ExternalLink } from 'lucide-react';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { useEditorFrame } from '../hooks/useEditorFrame';
 import type { useAiAssistant } from '../ai/useAiAssistant';
@@ -7,9 +7,12 @@ import type { useAltReview } from '../ai/useAltReview';
 import { AltReview } from './AltReview';
 import type { useAiChanges } from '../ai/useAiChanges';
 import { ChangesView } from './ChangesView';
+import { ProposalPreview } from './ProposalPreview';
 import { charStyles, paragraphStyles } from '../../../utils/user-styles';
 import { recallStep, recalled } from '../ai/promptHistory';
 import { splitLinks } from '../ai/aiLinks';
+import { ebooksApi } from '../../../api/ebooks-api';
+import { reportToHtml } from '../ai/bookReportHtml';
 
 type Ai = ReturnType<typeof useAiAssistant>;
 type Alt = ReturnType<typeof useAltReview>;
@@ -62,6 +65,15 @@ function downloadReport(text: string, isbn: string) {
     URL.revokeObjectURL(url);
 }
 
+/** Abre o relatório como página HTML noutro separador (grava-o no servidor para o endereço ser limpo). A janela abre já, no clique, para o browser não a bloquear. */
+async function openReport(text: string, isbn: string) {
+    const win = window.open('', '_blank');
+    try {
+        const { data } = await ebooksApi.saveReport(isbn, reportToHtml(text));
+        if (win) win.location.href = data.url; else window.open(data.url, '_blank');
+    } catch { win?.close(); }
+}
+
 const ICON = 'p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-all';
 
 export const AiSidebar: React.FC<{ ai: Ai; chapterTitles: string[]; onGoTo: (chapter: number, block?: number) => void; alt: Alt; changes: Changes; isbn: string; readOnly: boolean; onClose: () => void; width: number; onResize: (w: number) => void }> = ({ ai, chapterTitles, onGoTo, alt, changes, isbn, readOnly, onClose, width, onResize }) => {
@@ -71,6 +83,7 @@ export const AiSidebar: React.FC<{ ai: Ai; chapterTitles: string[]; onGoTo: (cha
     // ↑/↓ recuperam os pedidos anteriores; `recall` = quantos para trás (null = o rascunho, guardado em `draft`).
     const [recall, setRecall] = useState<number | null>(null);
     const draft = useRef('');
+    const [proposalView, setProposalView] = useState<'example' | 'code'>('example');
     const go = (next: View) => { if (next === 'alt') alt.load(); setView(next); };
     const listRef = useRef<HTMLDivElement>(null);
     // Ao chegar uma resposta (ou a proposta, ou um erro) a lista desce até ao fim.
@@ -137,18 +150,28 @@ export const AiSidebar: React.FC<{ ai: Ai; chapterTitles: string[]; onGoTo: (cha
                 )}
 
                 {ai.report && (
-                    <div className="rounded-xl border border-border p-3 flex items-center justify-between gap-2">
+                    <div className="rounded-xl border border-border p-3 flex flex-col gap-2">
                         <p className="text-xs text-slate-600"><span className="font-semibold">Relatório pronto</span> ({ai.report.split('\n').length} linhas)</p>
-                        <button onClick={() => downloadReport(ai.report!, isbn)} className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold"><Download size={14} />Descarregar .txt</button>
+                        <div className="flex gap-2">
+                            <button onClick={() => void openReport(ai.report!, isbn)} className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold"><ExternalLink size={14} />Abrir página</button>
+                            <button onClick={() => downloadReport(ai.report!, isbn)} className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold"><Download size={14} />.txt</button>
+                        </div>
                     </div>
                 )}
 
                 {ai.proposal && (
                     <div className="rounded-xl border border-border p-3 flex flex-col gap-2">
                         <p className="font-bold text-slate-700">Proposta: {total} {total === 1 ? 'bloco' : 'blocos'}{ai.proposal.styles.length > 0 && ` + ${ai.proposal.styles.length} ${ai.proposal.styles.length === 1 ? 'estilo novo' : 'estilos novos'}`}{ai.proposal.opResults.some((o) => o.changed) && ` + ${ai.proposal.opResults.filter((o) => o.changed).length} ${ai.proposal.opResults.filter((o) => o.changed).length === 1 ? 'operação' : 'operações'}`}{ai.proposal.edits.length > 0 && ` + ${ai.proposal.edits.length} ${ai.proposal.edits.length === 1 ? 'estilo alterado' : 'estilos alterados'}`}{ai.proposal.removals.length > 0 && ` + ${ai.proposal.removals.length} ${ai.proposal.removals.length === 1 ? 'estilo apagado' : 'estilos apagados'}`}</p>
+                        <div className="flex gap-1 text-xs font-bold">
+                            {(['example', 'code'] as const).map((v) => (
+                                <button key={v} onClick={() => setProposalView(v)} className={`px-2.5 h-6 rounded-md ${proposalView === v ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{v === 'example' ? 'Exemplo' : 'Código'}</button>
+                            ))}
+                        </div>
+                        {proposalView === 'example' && <ProposalPreview proposal={ai.proposal} css={ai.previewCss()} />}
                         {ai.proposal.styles.map((s) => (
                             <NewStyleRow key={s.cls} cls={s.cls} body={s.body} disabled={ai.busy} onRename={(name) => ai.renameStyle(s.cls, name)} />
                         ))}
+                        {proposalView === 'code' && <>
                         {ai.proposal.opResults.filter((o) => o.changed).map((o, i) => (
                             <p key={i} className="text-xs text-slate-600"><span className="font-semibold">{o.label}</span>: {o.summary}</p>
                         ))}
@@ -166,6 +189,7 @@ export const AiSidebar: React.FC<{ ai: Ai; chapterTitles: string[]; onGoTo: (cha
                                 ))}
                             </div>
                         ))}
+                        </>}
                         <div className="flex gap-2 pt-1">
                             <button onClick={() => void ai.apply()} disabled={ai.busy || readOnly} title={readOnly ? 'Modo leitura — outro utilizador está a editar' : undefined}
                                 className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-50"><Check size={14} />Aplicar</button>

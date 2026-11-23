@@ -16,6 +16,7 @@ import * as printPdf from './routes/print-pdf.js';
 import * as validation from './routes/validation.js';
 import * as ai from './routes/ai.js';
 import * as aiChanges from './routes/ai-changes.js';
+import * as report from './routes/report.js';
 
 const notFound = () => new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
 /** Um imageId que não é um nome de ficheiro seguro nunca chega ao handler. */
@@ -46,6 +47,8 @@ export const EBOOK_ROUTES = [
   ['POST', 'comments', ({ req, isbn, user }) => comments.addComment(req, isbn, user)],
   ['POST', 'validate', ({ req }) => validation.validate(req)],
   ['POST', 'ai', ({ req, isbn, user }) => ai.chat(req, user, isbn)],
+  ['POST', 'report', ({ req, isbn }) => report.saveReport(req, isbn), { lockExempt: true }], // não altera o livro
+  ['GET', 'report/:file', ({ isbn, params }) => report.getReport(isbn, params.file), { public: true }],
   ['POST', 'ai-alt', ({ req, isbn, user }) => ai.altText(req, isbn, user)],
   ['GET', 'ai-changes', ({ isbn }) => aiChanges.list(isbn)],
   ['POST', 'ai-changes', ({ req, isbn, user }) => aiChanges.add(req, isbn, user)],
