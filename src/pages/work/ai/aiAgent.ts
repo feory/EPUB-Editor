@@ -30,7 +30,7 @@ const MAX_TURNS = 8;
 const STEP_LABELS: Record<string, string> = {
     survey_book: 'A ler o livro…', preview_rules: 'A simular as alterações…', find_text: 'A procurar no livro…', search_docs: 'A consultar os guias…',
     run_validation: 'A correr a validação…', check_publication: 'A verificar a publicação (inclui as validações)…', build_report: 'A preparar o relatório (corre as validações)…',
-    check_page_list: 'A comparar a lista de páginas com o PDF…', check_styles: 'A comparar os estilos com o PDF…', check_figures: 'A comparar as figuras com o PDF…',
+    check_page_list: 'A comparar a lista de páginas com o PDF…', check_styles: 'A comparar os estilos com o PDF…', check_figures: 'A comparar as figuras com o PDF…', check_text: 'A comparar o texto com o PDF…',
 };
 export const stepLabel = (tool: string) => STEP_LABELS[tool] ?? 'A trabalhar…';
 const textOf = (content: Block[]) => content.filter((b) => b.type === 'text').map((b) => String(b.text ?? '')).join('\n').trim();

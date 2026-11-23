@@ -11,6 +11,7 @@ import { locateBlocks } from './aiSelection';
 import { collectFacts } from './publicationChecklist';
 import { auditPageList, pageLinesFromPages } from '../../../services/page-list/audit';
 import type { PdfPageText } from '../../../services/page-list/pdf-pages';
+import { auditText } from '../../../services/page-list/text-audit';
 import { pdfStyles } from '../../../services/page-list/pdf-styles';
 
 type Work = ReturnType<typeof useEbookWork>;
@@ -50,6 +51,7 @@ export function useAiWorkspace({ isbn, work, css }: { isbn: string | undefined; 
         pageListAudit: () => withPrintPdf(live.current, auditPageList),
         pageLines: () => withPrintPdf(live.current, pageLinesFromPages),
         pdfStyles: () => withPrintPdf(live.current, (pages) => pdfStyles(pages)),
+        textAudit: () => withPrintPdf(live.current, auditText),
         compressImages: async (opts) => {
             const { isbn, work } = live.current;
             if (!isbn || work.readOnly) return null;

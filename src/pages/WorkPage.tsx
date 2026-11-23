@@ -27,7 +27,7 @@ import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { CommentSidebar } from './work/components/CommentSidebar';
 import { BlockSidebar } from './work/components/BlockSidebar';
 import { TextSidebar } from './work/components/TextSidebar';
-import { AiSidebar } from './work/components/AiSidebar';
+import { AiSidebar, type PdfTarget } from './work/components/AiSidebar';
 import { useAiAssistant } from './work/ai/useAiAssistant';
 import { useAltReview } from './work/ai/useAltReview';
 import { useAiWorkspace } from './work/ai/useAiWorkspace';
@@ -361,6 +361,12 @@ export function WorkPage() {
     if (wholeBook || chapter === work.activeChapterIndex) scroll();
     else { editor.afterChapterChange(scroll); work.setActiveChapterIndex(chapter); }
   };
+  // Botões de página nas respostas do assistente ([[pdf:N]] / [[pag:N]]): abre o painel do PDF e salta para lá. `n` muda a cada clique (repetir a mesma página volta a saltar).
+  const [pdfJump, setPdfJump] = useState<(PdfTarget & { n: number }) | null>(null);
+  const handleGoToAiPdfPage = (page: PdfTarget) => {
+    if (!sidebars.showPrintPdfSidebar) panels.open('printPdf');
+    setPdfJump({ ...page, n: (pdfJump?.n ?? 0) + 1 });
+  };
   const handleGoToVersionDiffItem = useGoToParagraph(
     editorRef, work.fullHtmlContent, work.activeChapterIndex, work.setActiveChapterIndex,
   );
@@ -667,7 +673,7 @@ export function WorkPage() {
       )}
 
       {sidebars.showAiSidebar && (
-        <AiSidebar ai={ai} alt={altReview} chapterTitles={work.chapters.map((c) => c.title)} onGoTo={handleGoToAiLocation} changes={aiChanges} isbn={isbn ?? ''} readOnly={work.readOnly} onClose={() => sidebars.setShowAiSidebar(false)} width={panelWidth} onResize={handlePanelResize} />
+        <AiSidebar ai={ai} alt={altReview} chapterTitles={work.chapters.map((c) => c.title)} onGoTo={handleGoToAiLocation} onGoToPdf={handleGoToAiPdfPage} changes={aiChanges} isbn={isbn ?? ''} readOnly={work.readOnly} onClose={() => sidebars.setShowAiSidebar(false)} width={panelWidth} onResize={handlePanelResize} />
       )}
 
       {sidebars.showTextSidebar && (
@@ -787,6 +793,7 @@ export function WorkPage() {
           syncFolio={editorVisiblePage}
           getEditorFolio={() => editorRef.current?.getCurrentFolio() ?? null}
           onPageClick={handleGoToPdfPage}
+          jump={pdfJump}
           onPdfUploaded={work.handleGeneratePageList}
           width={panelWidth}
           onResize={handlePanelResize}

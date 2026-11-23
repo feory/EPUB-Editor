@@ -9,6 +9,7 @@ import { checkPublicationTool } from './checkPublication';
 import { checkPageListTool } from './checkPageList';
 import { checkStylesTool } from './checkStyles';
 import { checkFiguresTool } from './checkFigures';
+import { checkTextTool } from './checkText';
 import { buildReportTool } from './buildReport';
 import { findTextTool } from './findText';
 import { compressImagesTool } from './compressImages';
@@ -31,7 +32,7 @@ const setup = (parts: string[] = [], over = {}, scope: ToolContext['scope'] = nu
 test('o registo tem uma ferramenta por nome', () => {
     const names = AI_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.sort()).toEqual(['build_report', 'check_figures', 'check_page_list', 'check_publication', 'check_styles', 'compress_images', 'find_text', 'preview_rules', 'run_validation', 'search_docs', 'survey_book']);
+    expect(names.sort()).toEqual(['build_report', 'check_figures', 'check_page_list', 'check_publication', 'check_styles', 'check_text', 'compress_images', 'find_text', 'preview_rules', 'run_validation', 'search_docs', 'survey_book']);
 });
 
 test('survey_book: devolve o resumo do livro como está agora', () => {
@@ -168,6 +169,15 @@ test('preview_rules + fix_styles: o PDF entra na operação; sem PDF é erro; ki
 const lin = (key: string, y: number) => ({ key, y, x0: 60, x1: 360, size: 11, bold: false, italic: false });
 const pdfFigura: PdfStyles = { body: 11, pages: ['primeiroparagrafodolivro', 'segundoparagrafodolivro', 'terceiroparagrafodolivro', 'quartoparagrafodolivro'].map((k, i) => ({ left: 60, right: 360, gap: 14, lines: i ? [lin(k, 600)] : [lin(k, 600), lin('figura11legendadaprimeirafigura', 300)] })) };
 const livroFigura = chapter('Um', ['Primeiro', 'Segundo', 'Terceiro', 'Quarto'].map((n) => `<p>${n} paragrafo do livro</p>`).join('') + '<img data-image-id="a" src="x" alt=""><p class="p-legendas">Figura 1.1 Legenda da primeira figura</p>');
+
+test('check_text: sem PDF é erro; com PDF agrupa as linhas em falta por página e não mostra o ruído', async () => {
+    expect((await checkTextTool.run({}, setup().ctx)).is_error).toBe(true);
+    const textAudit = async () => ({ pdfLines: 40, bookBlocks: 10, missing: [{ page: 3, text: 'linha perdida um' }, { page: 3, text: 'linha perdida dois' }], extra: [{ chapter: 'Cap 1', text: 'só no livro' }], columnPages: [5, 6], columnBlocks: 2, figureText: [{ page: 8, text: 'texto de diagrama' }] });
+    const out = JSON.parse((await checkTextTool.run({}, setup([], { textAudit }).ctx)).content);
+    expect(out.resumo).toEqual({ linhasDoPdf: 40, linhasQueFaltamNoLivro: 2 });
+    expect(out.faltaNoLivro).toEqual([{ paginaPdf: 3, linhas: 2, exemplos: ['linha perdida um', 'linha perdida dois'] }]);
+    expect(Object.keys(out).sort()).toEqual(['faltaNoLivro', 'nota', 'paginasComFaltas', 'resumo']);
+});
 
 test('check_figures: sem PDF é erro; com PDF lista a figura fora do sítio', async () => {
     expect((await checkFiguresTool.run({}, setup().ctx)).is_error).toBe(true);

@@ -17,19 +17,23 @@ import { reportToHtml } from '../ai/bookReportHtml';
 type Ai = ReturnType<typeof useAiAssistant>;
 type Alt = ReturnType<typeof useAltReview>;
 type Changes = ReturnType<typeof useAiChanges>;
+/** Página do PDF de impressão a abrir: `pdf` = posição no ficheiro, `folio` = número impresso. */
+export type PdfTarget = { pdf: number } | { folio: number };
 type View = 'chat' | 'alt' | 'changes';
 const TITLES: Record<View, string> = { chat: 'Assistente', alt: 'Texto alternativo', changes: 'Alterações da IA' };
 
-// O modelo escreve **negrito**, `código` e [[cap:N,bloco:M]] (botão que salta para o sítio); o painel não é markdown, por isso só se desenham estas marcas.
-const inline = (text: string, go?: (chapter: number, block?: number) => void, titles: string[] = []): React.ReactNode[] =>
-    splitLinks(text).flatMap((piece, k) => typeof piece !== 'string'
-        ? [<button key={`l${k}`} onClick={() => go?.(piece.chapter, piece.block)} title={titles[piece.chapter] ?? undefined}
-            className="mx-0.5 inline-flex items-center rounded-md bg-sky-50 hover:bg-sky-100 border border-sky-200 px-1.5 py-0.5 text-xs font-semibold text-sky-800 align-baseline">
-            Cap. {piece.chapter}{titles[piece.chapter] ? ` · ${titles[piece.chapter].replace(/^\[hidden\]/, '').slice(0, 24)}` : ''} ▸</button>]
-        : piece.split(/(\*\*[^*]+\*\*|`[^`]+`)/).map((part, i) =>
+// O modelo escreve **negrito**, `código` e [[cap:N,bloco:M]], [[pdf:N]] e [[pag:N]] (botões que saltam para o sítio); o painel não é markdown, por isso só se desenham estas marcas.
+const LINK_BTN = 'mx-0.5 inline-flex items-center rounded-md bg-sky-50 hover:bg-sky-100 border border-sky-200 px-1.5 py-0.5 text-xs font-semibold text-sky-800 align-baseline';
+const inline = (text: string, go?: (chapter: number, block?: number) => void, titles: string[] = [], goPdf?: (page: PdfTarget) => void): React.ReactNode[] =>
+    splitLinks(text).flatMap((piece, k) => typeof piece === 'string'
+        ? piece.split(/(\*\*[^*]+\*\*|`[^`]+`)/).map((part, i) =>
             part.startsWith('**') ? <strong key={`${k}.${i}`}>{part.slice(2, -2)}</strong>
                 : part.startsWith('`') && part.length > 2 ? <code key={`${k}.${i}`}>{part.slice(1, -1)}</code>
-                    : part));
+                    : part)
+        : 'chapter' in piece
+            ? [<button key={`l${k}`} onClick={() => go?.(piece.chapter, piece.block)} title={titles[piece.chapter] ?? undefined} className={LINK_BTN}>
+                Cap. {piece.chapter}{titles[piece.chapter] ? ` · ${titles[piece.chapter].replace(/^\[hidden\]/, '').slice(0, 24)}` : ''} ▸</button>]
+            : [<button key={`l${k}`} onClick={() => goPdf?.(piece)} title="Abrir o PDF nesta página" className={LINK_BTN}>p. {'pdf' in piece ? piece.pdf : piece.folio} ▸</button>]);
 
 /** Estilo novo da proposta, com o nome editável (a classe troca-se em todo o lado onde a proposta a usa). */
 const NewStyleRow: React.FC<{ cls: string; body: string; onRename: (name: string) => string | null; disabled: boolean }> = ({ cls, body, onRename, disabled }) => {
@@ -76,7 +80,7 @@ async function openReport(text: string, isbn: string) {
 
 const ICON = 'p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-all';
 
-export const AiSidebar: React.FC<{ ai: Ai; chapterTitles: string[]; onGoTo: (chapter: number, block?: number) => void; alt: Alt; changes: Changes; isbn: string; readOnly: boolean; onClose: () => void; width: number; onResize: (w: number) => void }> = ({ ai, chapterTitles, onGoTo, alt, changes, isbn, readOnly, onClose, width, onResize }) => {
+export const AiSidebar: React.FC<{ ai: Ai; chapterTitles: string[]; onGoTo: (chapter: number, block?: number) => void; onGoToPdf: (page: PdfTarget) => void; alt: Alt; changes: Changes; isbn: string; readOnly: boolean; onClose: () => void; width: number; onResize: (w: number) => void }> = ({ ai, chapterTitles, onGoTo, onGoToPdf, alt, changes, isbn, readOnly, onClose, width, onResize }) => {
     const frame = useEditorFrame();
     const [text, setText] = useState('');
     const [view, setView] = useState<View>('chat');
@@ -135,7 +139,7 @@ export const AiSidebar: React.FC<{ ai: Ai; chapterTitles: string[]; onGoTo: (cha
                     <p className="text-text-muted">O que posso ajudar?</p>
                 )}
                 {ai.lines.map((l, i) => (
-                    <div key={i} className={l.role === 'user' ? 'self-end max-w-[85%] rounded-xl bg-slate-700 text-white px-3 py-2' : 'self-start max-w-[90%] rounded-xl bg-slate-100 text-slate-800 px-3 py-2 whitespace-pre-wrap'}>{l.role === 'user' ? l.text : inline(l.text, onGoTo, chapterTitles)}</div>
+                    <div key={i} className={l.role === 'user' ? 'self-end max-w-[85%] rounded-xl bg-slate-700 text-white px-3 py-2' : 'self-start max-w-[90%] rounded-xl bg-slate-100 text-slate-800 px-3 py-2 whitespace-pre-wrap'}>{l.role === 'user' ? l.text : inline(l.text, onGoTo, chapterTitles, onGoToPdf)}</div>
                 ))}
                 {ai.busy && <p className="text-text-muted flex items-center gap-2">{ai.step || 'A trabalhar…'} <button onClick={ai.stop} className="px-2 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold">Parar</button></p>}
                 {ai.error && <p className="text-rose-600">{ai.error}</p>}

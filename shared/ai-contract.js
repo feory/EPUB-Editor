@@ -54,6 +54,7 @@ export const TOOL_SCHEMAS = {
   check_page_list: none,
   check_styles: none,
   check_figures: none,
+  check_text: none,
   search_docs: { type: 'object', properties: { query: { type: 'string', description: 'A pergunta ou as palavras-chave do assunto.' } }, required: ['query'] },
   find_text: {
     type: 'object',

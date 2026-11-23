@@ -14,6 +14,7 @@ interface PrintPdfSidebarProps {
     syncFolio?: number | null; // folio (nº impresso) visível no editor — salta o viewer para lá
     getEditorFolio?: () => number | null; // folio onde o editor está AGORA — a página que abre com o PDF
     onPageClick?: (folio: number) => void; // clique na página → editor salta para o marcador
+    jump?: ({ pdf: number } | { folio: number }) & { n: number } | null; // pedido do assistente: abrir nesta página (`n` distingue pedidos iguais)
     onPdfUploaded?: (anchors: PageAnchor[]) => void; // PDF acabado de carregar → gerar page-list
     width: number;
     onResize: (width: number) => void;
@@ -25,10 +26,12 @@ const MIN_SCALE = 0.6;
 const MAX_SCALE = 3;
 const SCALE_STEP = 0.2;
 
-export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, getEditorFolio, onPageClick, onPdfUploaded, width, onResize }) => {
+export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, getEditorFolio, onPageClick, jump, onPdfUploaded, width, onResize }) => {
     const [status, setStatus] = useState<Status>('loading');
     const [page, setPage] = useState(1);
     const [pageCount, setPageCount] = useState(0);
+    const [anchorsReady, setAnchorsReady] = useState(false); // o mapa folio↔página só existe depois de ler o texto do PDF
+    const pageCountRef = useRef(0); // para os saltos pedidos de fora, que não podem depender do render
     const [scale, setScale] = useState(1.4);
     const [uploading, setUploading] = useState(false);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -50,8 +53,11 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
         if (target) setPage(target);
     }, []);
 
+    const showPdfPage = useCallback((target: number) => setPage(Math.min(Math.max(1, target), pageCountRef.current || 1)), []);
+
     const loadPdf = useCallback(async () => {
         setStatus('loading');
+        setAnchorsReady(false);
         try {
             const res = await ebooksApi.getPrintPdf(isbn);
             if (res.status === 404) { setStatus('missing'); return; }
@@ -63,12 +69,14 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
             const pdf = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
             pdfRef.current = pdf;
             setPageCount(pdf.numPages);
+            pageCountRef.current = pdf.numPages;
             setPage(1);
             setStatus('ready');
             const anchors = anchorsFromPages(await readPdfPages(buf.slice(0)));
             anchorsRef.current = anchors;
             folioMapRef.current = new Map(anchors.map(a => [a.page, a.pdfPageIndex]));
             indexToFolioRef.current = new Map(anchors.map(a => [a.pdfPageIndex, a.page]));
+            setAnchorsReady(true);
             // Abre na página mais próxima de onde o editor está (o mapa só existe agora, depois do
             // parse das âncoras — antes ficava sempre na 1.ª e o sync só reagia a scroll).
             showFolio(getEditorFolio?.());
@@ -89,6 +97,16 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
         if (status !== 'ready' || syncFolio == null) return;
         showFolio(syncFolio);
     }, [syncFolio, status, showFolio]);
+
+    // Pedido do assistente (depois do sync com o editor, para o ganhar quando o painel acaba de abrir): o PDF e o editor vão juntos para a página.
+    // Corre de novo quando o mapa folio↔página fica pronto (o pedido pode chegar antes); páginas sem folio (front matter) só movem o PDF.
+    useEffect(() => {
+        if (status !== 'ready' || !jump) return;
+        const folio = 'folio' in jump ? jump.folio : indexToFolioRef.current.get(jump.pdf);
+        if ('folio' in jump) showFolio(jump.folio); else showPdfPage(jump.pdf);
+        if (anchorsReady && folio != null) onPageClick?.(folio);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onPageClick muda a cada render do pai; só o pedido (`jump`) e o fim do carregamento disparam o salto
+    }, [jump, status, anchorsReady, showFolio, showPdfPage]);
 
     useEffect(() => {
         if (status !== 'ready' || !pdfRef.current || !canvasRef.current) return;

@@ -10,6 +10,7 @@ import type { PublicationFacts } from './publicationChecklist';
 import type { RuleBlock, SelectedBlocks } from './aiSelection';
 import type { PageListAudit } from '../../../services/page-list/audit';
 import type { PageLines } from '../../../services/page-list/alignment';
+import type { TextAudit } from '../../../services/page-list/text-audit';
 import type { PdfStyles } from '../../../services/page-list/pdf-styles';
 
 export interface AiWorkspace {
@@ -35,6 +36,8 @@ export interface AiWorkspace {
     pageLines(): Promise<PageLines[] | null>;
     /** A geometria e o estilo (margens, recuos, negrito/itálico, tamanhos) do PDF de impressão, o que fix_styles e check_styles comparam com o livro; null sem PDF. */
     pdfStyles(): Promise<PdfStyles | null>;
+    /** Compara o texto do livro com o do PDF de impressão (o que falta de cada lado); null sem PDF. */
+    textAudit(): Promise<TextAudit | null>;
     /** Comprime as imagens do livro no servidor (reduz a largura e recodifica; sem volta atrás); null se não foi possível (modo leitura, ou falhou). */
     compressImages(opts: { maxWidth?: number; quality?: number }): Promise<{ total: number; compressed: number; before: number; after: number; maxWidth: number; quality: number } | null>;
     /** Onde estão os blocos selecionados no editor, nas partes do livro; null se já não se encontram. */

@@ -8,6 +8,11 @@ test('splitLinks: texto e ligações por ordem, com ou sem bloco', () => {
     expect(splitLinks('[[cap:0]]')).toEqual([{ chapter: 0 }]);
 });
 
+test('splitLinks: páginas do PDF e folios', () => {
+    expect(splitLinks('Ver [[pdf:151]] e a [[pag:12]].')).toEqual(['Ver ', { pdf: 151 }, ' e a ', { folio: 12 }, '.']);
+    expect(splitLinks('[[pdf:x]] [[pag:]]')).toEqual(['[[pdf:x]] [[pag:]]']);
+});
+
 test('splitLinks: marcas mal formadas ficam como texto', () => {
     expect(splitLinks('[[cap:x]] [[cap:]] [[bloco:3]]')).toEqual(['[[cap:x]] [[cap:]] [[bloco:3]]']);
 });

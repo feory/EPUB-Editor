@@ -8,9 +8,10 @@ import { checkPublicationTool } from './checkPublication';
 import { checkPageListTool } from './checkPageList';
 import { checkStylesTool } from './checkStyles';
 import { checkFiguresTool } from './checkFigures';
+import { checkTextTool } from './checkText';
 import { buildReportTool } from './buildReport';
 import { searchDocsTool } from './searchDocs';
 import { findTextTool } from './findText';
 import { compressImagesTool } from './compressImages';
 
-export const AI_TOOLS: readonly AiTool[] = [surveyBookTool, previewRulesTool, runValidationTool, checkPublicationTool, checkPageListTool, checkStylesTool, checkFiguresTool, buildReportTool, searchDocsTool, findTextTool, compressImagesTool];
+export const AI_TOOLS: readonly AiTool[] = [surveyBookTool, previewRulesTool, runValidationTool, checkPublicationTool, checkPageListTool, checkStylesTool, checkFiguresTool, checkTextTool, buildReportTool, searchDocsTool, findTextTool, compressImagesTool];
