@@ -61,6 +61,7 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import { imageTag } from '../utils/book-image';
 import { splitChapters } from '../utils/chapters';
 import { blockOffset } from './work/ai/aiLinks';
+import { scrollInChapter, type ChapterPorts } from './work/hooks/chapterJump';
 
 const HistoryModal = lazy(() => import('./work/modals/HistoryModal').then(m => ({ default: m.HistoryModal })));
 const CompareModal = lazy(() => import('./work/modals/CompareModal').then(m => ({ default: m.CompareModal })));
@@ -322,6 +323,12 @@ export function WorkPage() {
   const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true); }, []);
   const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(false); }, []);
 
+  // O que o protocolo "trocar de capítulo e saltar" precisa do editor e do capítulo ativo (ver chapterJump.ts).
+  const chapterPorts = (): ChapterPorts => ({
+    active: work.activeChapterIndex,
+    afterChapterChange: (then) => editorRef.current?.afterChapterChange(then),
+    setActive: work.setActiveChapterIndex,
+  });
   const handleGoToIssue = (context: string, paragraphIndex?: number) => {
     editorRef.current?.scrollToContent(context, paragraphIndex);
   };
@@ -332,10 +339,8 @@ export function WorkPage() {
     const go = () => { if (!(target?.html && editorRef.current?.scrollToHtml(target.html))) handleGoToIssue(context); };
     const n = /section(\d+)\.xhtml/.exec(target?.file ?? '');
     const chapter = n ? Number(n[1]) - 1 : -1;
-    if (chapter >= 0 && chapter < work.chapters.length && work.activeChapterIndex !== -1 && chapter !== work.activeChapterIndex) {
-      editorRef.current?.afterChapterChange(go);
-      work.setActiveChapterIndex(chapter);
-    } else go();
+    if (chapter >= 0 && chapter < work.chapters.length) scrollInChapter(chapterPorts(), chapter, go);
+    else go();
   };
 
   // Clique numa página do painel de PDF → salta para o marcador de page-list correspondente;
@@ -357,9 +362,7 @@ export function WorkPage() {
     const editor = editorRef.current;
     if (!editor || chapter < 0 || chapter >= work.chapters.length) return;
     const wholeBook = work.activeChapterIndex === -1;
-    const scroll = () => editorRef.current?.scrollToBlock((wholeBook ? blockOffset(splitChapters(work.fullHtmlContent), chapter) : 0) + (block ?? 0));
-    if (wholeBook || chapter === work.activeChapterIndex) scroll();
-    else { editor.afterChapterChange(scroll); work.setActiveChapterIndex(chapter); }
+    scrollInChapter(chapterPorts(), chapter, () => editorRef.current?.scrollToBlock((wholeBook ? blockOffset(splitChapters(work.fullHtmlContent), chapter) : 0) + (block ?? 0)));
   };
   // Botões de página nas respostas do assistente ([[pdf:N]] / [[pag:N]]): abre o painel do PDF e salta para lá. `n` muda a cada clique (repetir a mesma página volta a saltar).
   const [pdfJump, setPdfJump] = useState<(PdfTarget & { n: number }) | null>(null);

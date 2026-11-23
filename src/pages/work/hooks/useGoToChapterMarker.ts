@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { RefObject } from 'react';
 import { splitChapters } from '../../../utils/chapters';
+import { chapterOwning } from './chapterJump';
 import type { WorkEditorRef } from '../components/WorkEditor';
 
 /**
@@ -19,8 +20,7 @@ export function useGoToChapterMarker<T>(
     const goTo = useCallback((value: T): boolean => {
         if (editorRef.current && scrollTo(editorRef.current, value)) return true;
         const needle = marker(value);
-        const parts = splitChapters(fullHtmlContent);
-        const chapterIndex = parts.findIndex(p => p.includes(needle));
+        const chapterIndex = chapterOwning(splitChapters(fullHtmlContent), needle);
         if (chapterIndex === -1) return false;
         editorRef.current?.afterChapterChange(() => { if (editorRef.current) scrollTo(editorRef.current, value); });
         setActiveChapterIndex(chapterIndex);

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { RefObject } from 'react';
 import { splitChapters } from '../../../utils/chapters';
 import { extractParagraphs } from '../../../utils/diff-text';
+import { locateParagraph } from './chapterJump';
 import type { WorkEditorRef } from '../components/WorkEditor';
 
 /**
@@ -17,17 +18,12 @@ export function useGoToParagraph(
     setActiveChapterIndex: (index: number) => void,
 ): (globalIndex: number) => void {
     const goTo = useCallback((globalIndex: number) => {
-        const parts = splitChapters(fullHtmlContent);
-        let rest = globalIndex;
-        for (let c = 0; c < parts.length; c++) {
-            const count = extractParagraphs(parts[c]).length;
-            if (rest >= count) { rest -= count; continue; }
-            if (c === activeChapterIndex) editorRef.current?.scrollToParagraph(rest);
-            else {
-                editorRef.current?.afterChapterChange(() => editorRef.current?.scrollToParagraph(rest));
-                setActiveChapterIndex(c);
-            }
-            return;
+        const at = locateParagraph(splitChapters(fullHtmlContent), globalIndex, (part) => extractParagraphs(part).length);
+        if (!at) return;
+        if (at.chapter === activeChapterIndex) editorRef.current?.scrollToParagraph(at.local);
+        else {
+            editorRef.current?.afterChapterChange(() => editorRef.current?.scrollToParagraph(at.local));
+            setActiveChapterIndex(at.chapter);
         }
     }, [editorRef, fullHtmlContent, activeChapterIndex, setActiveChapterIndex]);
 
