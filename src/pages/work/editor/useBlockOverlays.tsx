@@ -227,7 +227,12 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
                 case 'before': case 'after': { const p = bm.insertEmptyParagraph(el, action); editor.focus(); place(p); break; }
                 case 'pasteStyles': if (styleClipRef.current) bm.applyStyles(el, styleClipRef.current); editor.focus(); break;
                 case 'group': bm.groupInBox(el); editor.focus(); place(bm.blockOf(el)); break;
-                case 'ungroup': { const box = bm.boxOf(el); if (box) bm.ungroup(box); editor.focus(); place(bm.blockOf(el)); break; }
+                case 'ungroup': { // se `el` é a própria caixa, ela já não existe: o cursor vai para o 1.º filho (senão perde-se e o foco salta para o início)
+                    const box = bm.boxOf(el); const first = box ? bm.ungroup(box) : null;
+                    const target = bm.blockOf(el).isConnected ? bm.blockOf(el) : first;
+                    if (target) { place(target); editor.getBody().focus({ preventScroll: true }); } else editor.focus();
+                    break;
+                }
                 case 'delete': remove(el); break;
                 case 'duplicateContainer': if (container) { const c = bm.duplicate(container); editor.focus(); place(c.querySelector('p,h1,h2,h3,h4,h5,h6') ?? c); } break;
                 case 'deleteContainer': if (container) remove(container); break;
