@@ -54,6 +54,7 @@ import { useGoToChapterMarker } from './work/hooks/useGoToChapterMarker';
 import { useGoToParagraph } from './work/hooks/useGoToParagraph';
 import { useGrammarAvailable } from './work/hooks/useGrammarAvailable';
 import { useNotification } from '../context/NotificationContext';
+import { printPdfs } from './work/printPdfs';
 import { useStyles, DEFAULT_CSS } from '../context/StyleContext';
 import { forEditor } from '../utils/book-css';
 import { sanitizeImageFilename } from '../utils/format';
@@ -92,6 +93,11 @@ export function WorkPage() {
   const work = useEbookWork(isbn, editorRef);
   const { user } = useAuth();
   const comments = useComments(isbn);
+  // "Ligação e Recuos do Índice Remissivo": liga as páginas e lê os recuos do PDF de impressão, se o livro o tiver (a lógica está em bookEdit.formatIndex).
+  const handleFormatIndex = async () => {
+    const entry = isbn ? await printPdfs.get(isbn).catch(() => null) : null;
+    work.handleFormatIndex(entry ? await entry.pdf.pages().catch(() => null) : null);
+  };
   const resume = useResumePosition({
     isbn, userId: user?.id, editorRef, ready: !work.isLoadingChapter && work.fullHtmlContent.length > 0,
     chapterCount: work.chapters.length, activeChapterIndex: work.activeChapterIndex, setActiveChapterIndex: work.setActiveChapterIndex,
@@ -527,12 +533,11 @@ export function WorkPage() {
           onShowStyleEditor={() => setShowStyleEditor(true)}
           onShowFonts={() => setShowFonts(true)}
           onCleanIndex={() => editorRef.current?.cleanIndexSelection()}
-          onLinkIndexPages={() => editorRef.current?.linkIndexPagesSelection()}
-          onIndentIndex={() => editorRef.current?.indentIndexSubentries()}
           onConversions={() => setShowConversions(true)}
           onCompressImages={() => setShowCompressImages(true)}
           onUpdatePageList={() => setShowPagelistUpdate(true)}
           onLinkIndiceEntries={() => setShowIndiceLinks(true)}
+          onFormatIndex={handleFormatIndex}
           onEditToc={() => setShowToc(true)}
           readOnly={work.readOnly}
         />

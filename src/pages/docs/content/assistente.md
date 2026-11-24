@@ -226,7 +226,7 @@ Se o livro tem o **PDF de impressão carregado** (painel do PDF, o ícone de pá
 
 ### 4.6 Relatório de falhas
 
-*«Prepara um relatório com todas as falhas.»* — o assistente junta a lista de verificação para publicar, a lista de páginas, os estilos e as figuras (contra o PDF) e as validações. Demora um pouco, porque corre as validações. No fim aparece o cartão **Relatório pronto**:
+*«Prepara um relatório com todas as falhas.»* — o assistente junta a lista de verificação para publicar, a lista de páginas, os estilos e as figuras (contra o PDF), os erros que o PDF deixou no texto (hífen partido em qualquer capítulo, palavras coladas no Índice Remissivo) e as validações. Demora um pouco, porque corre as validações. No fim aparece o cartão **Relatório pronto**:
 
 - **Abrir página** — abre o relatório bem organizado (secções, subtítulos e listas, com o capítulo e a página do PDF de cada falha) num separador novo. Fica num endereço do servidor que **não pede login**: quem o tiver abre-o. Só se guarda o último relatório de cada livro.
 - **.txt** — descarrega o mesmo relatório em texto simples.

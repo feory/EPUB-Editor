@@ -5,11 +5,12 @@ import { VALIDATION_ORDER, type ValidationKind, type ValidationDigest } from '..
 import { classEffects } from '../../../utils/css-rule';
 import { reviewStyles } from '../../../services/page-list/style-audit';
 import { reviewFigures } from '../../../services/page-list/figure-audit';
+import { textSuspects } from '../../../services/page-list/pdf-text-suspects';
 import { buildChecklist } from './publicationChecklist';
 import { WHY } from './tools/checkPageList';
 import type { AiWorkspace } from './aiWorkspace';
 
-export interface ReportCounts { publicacao: number; listaDePaginas: number; estilos: number; figuras: number; validacoes: number }
+export interface ReportCounts { publicacao: number; listaDePaginas: number; estilos: number; figuras: number; textoPdf: number; validacoes: number }
 export interface BookReport { text: string; counts: ReportCounts; /** Secções que não se puderam fazer (sem PDF, validação falhou…). */ skipped: string[] }
 
 const VALIDATION_NAMES: Record<ValidationKind, string> = { footnotes: 'Notas de rodapé', links: 'Links', epub: 'EPUBCheck (conformidade EPUB 3.3)', accessibility: 'Acessibilidade (ACE)' };
@@ -28,7 +29,7 @@ function groupBy<T>(items: T[], key: (t: T) => string): [string, T[]][] {
 }
 
 export async function buildBookReport(workspace: AiWorkspace, now = new Date()): Promise<BookReport> {
-    const counts: ReportCounts = { publicacao: 0, listaDePaginas: 0, estilos: 0, figuras: 0, validacoes: 0 };
+    const counts: ReportCounts = { publicacao: 0, listaDePaginas: 0, estilos: 0, figuras: 0, textoPdf: 0, validacoes: 0 };
     const skipped: string[] = [];
     const sections: string[] = [];
     const add = (title: string, lines: string[]) => sections.push([title, '='.repeat(title.length), ...lines].join('\n'));
@@ -76,6 +77,13 @@ export async function buildBookReport(workspace: AiWorkspace, now = new Date()):
         add('FIGURAS (comparadas com o PDF)', figLines);
     } else { skipped.push('estilos e figuras'); add('ESTILOS E FIGURAS (comparados com o PDF)', [NO_PDF]); }
 
+    // Erros do PDF no texto, em qualquer capítulo: hífen partido ("instabili- dade") e, no Índice Remissivo, palavras coladas. Só o HTML: não precisa do PDF.
+    const suspects = textSuspects(html);
+    if (suspects.length) {
+        counts.textoPdf = suspects.length;
+        add('TEXTO (erros do PDF por rever)', suspects.map((s) => `- [${chapterOf(s.chapter)} · ${s.kind === 'hifen-partido' ? 'hífen partido' : 'palavras coladas'}] ${quote(s.context)}\n    rever ${quote(s.text)}`));
+    }
+
     // Validações: cada grupo com a regra, a contagem, os ficheiros e exemplos do HTML.
     const lines: string[] = [];
     for (const { kind, digest } of validations) {
@@ -90,6 +98,6 @@ export async function buildBookReport(workspace: AiWorkspace, now = new Date()):
     add('VALIDAÇÕES', lines.length ? lines : ['Sem dados.']);
 
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
-    const head = [`RELATÓRIO DE FALHAS — ${workspace.title() || 'Livro'}`, `Gerado em ${now.toLocaleString('pt-PT')}`, `Total: ${total} ${total === 1 ? 'falha' : 'falhas'} (publicação ${counts.publicacao}, lista de páginas ${counts.listaDePaginas}, estilos ${counts.estilos}, figuras ${counts.figuras}, validações ${counts.validacoes})`, skipped.length ? `Não feito: ${skipped.join(', ')}` : ''].filter(Boolean).join('\n');
+    const head = [`RELATÓRIO DE FALHAS — ${workspace.title() || 'Livro'}`, `Gerado em ${now.toLocaleString('pt-PT')}`, `Total: ${total} ${total === 1 ? 'falha' : 'falhas'} (publicação ${counts.publicacao}, lista de páginas ${counts.listaDePaginas}, estilos ${counts.estilos}, figuras ${counts.figuras}, texto do PDF ${counts.textoPdf}, validações ${counts.validacoes})`, skipped.length ? `Não feito: ${skipped.join(', ')}` : ''].filter(Boolean).join('\n');
     return { text: `${head}\n\n${sections.join('\n\n')}\n`, counts, skipped };
 }

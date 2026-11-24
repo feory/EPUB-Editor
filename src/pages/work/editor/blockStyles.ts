@@ -24,6 +24,8 @@ export const BLOCK_STYLES: readonly BlockStyle[] = [
     { format: 'p-center', label: 'Centrado', group: 'extra', more: null },
     { format: 'p-non-indent', label: 'Sem Indentação', group: 'extra', more: null },
     { format: 'p-asterisk', label: 'Separador (*)', group: 'paragraph', more: null },
+    { format: 'p-indice', label: 'Índice: entrada', group: 'paragraph', more: null },
+    { format: 'p-indice-sub', label: 'Índice: subentrada', group: 'paragraph', more: null },
     { format: 'p-border-top', label: 'Borda Superior', group: 'border', more: 'other' },
     { format: 'p-border-bottom', label: 'Borda Inferior', group: 'border', more: 'other' },
     { format: 'p-border-sides', label: 'Borda Lateral', group: 'border', more: 'other' },

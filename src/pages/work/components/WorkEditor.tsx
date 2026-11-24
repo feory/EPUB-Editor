@@ -8,7 +8,7 @@ import { applyImportOptions, convertListsToDialogue } from '../../../utils/html-
 import { splitChapterSegments } from '../../../utils/chapters';
 import { isBreakClass } from '../../../utils/chapter-filler';
 import type { ImportOptions } from '../../../utils/html-cleaner';
-import { cleanIndexText, indentIndexSubentries, linkIndexPages, wrapPageLinks, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
+import { cleanIndexText, INDEX_PAGE_LIST, isPageContinuation } from '../../../utils/index-cleaner';
 import { sanitizeImageFilename } from '../../../utils/format';
 import {
     getContentBlocks, getNonEmptyBlocks, unwrapNode, clearMarkers,
@@ -168,8 +168,6 @@ export interface WorkEditorRef {
     // à vista, senão o topo da vista. null sem marcadores no que está carregado no editor.
     getCurrentFolio: () => number | null;
     cleanIndexSelection: () => void;
-    linkIndexPagesSelection: () => void;
-    indentIndexSubentries: () => void;
     applyConversions: (options: ImportOptions) => void;
 
     // Edita o que está sob o cursor (painel lateral): caixa, bloco de texto, imagem, colunas, estilo
@@ -502,81 +500,6 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
             editBlocks(editor, () => {
                 if (useSelection) editor.selection.setContent(out.join(''));
                 else editor.setContent(out.join(''));
-            });
-        },
-
-        // Como cleanIndexSelection, mas em vez de descartar a lista de páginas de cada entrada,
-        // embrulha cada número num <span class="idx-link" data-target="page-N"> (só vira <a href>
-        // real no export do EPUB, apontando para o marcador de page-list dessa página — ver
-        // linkIndexPages/index-cleaner.ts).
-        linkIndexPagesSelection: () => {
-            const editor = editorRef.current;
-            if (!editor) return;
-            const selected = editor.selection.getContent({ format: 'html' });
-            const useSelection = !!selected.trim();
-            const html = useSelection ? selected : editor.getContent();
-            if (!html.trim()) return;
-
-            const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const doc = new DOMParser().parseFromString(html, 'text/html');
-            const range = doc.createRange(); // reusado por linkPageNumbers (createContextualFragment não precisa de posição)
-            const isBoundary = (block: Element) => /^H[1-6]$/.test(block.tagName) || isBreakClass(block.className);
-
-            // Envolve, num text node, cada número dentro de uma lista de páginas — preservando a
-            // formatação inline (<em>/<strong>/versaletes/notas) e o texto à volta tal e qual.
-            const linkPageNumbers = (el: Element) => {
-                const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-                const texts: Text[] = [];
-                for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n as Text);
-                for (const t of texts) {
-                    const raw = t.textContent || '';
-                    if (!INDEX_PAGE_LIST.test(raw)) continue; // .replace() abaixo reseta lastIndex sozinho (regex global)
-                    const linked = esc(raw).replace(INDEX_PAGE_LIST, (m) => wrapPageLinks(m));
-                    t.replaceWith(range.createContextualFragment(linked));
-                }
-            };
-
-            const blocks = Array.from(doc.body.children);
-            const out: string[] = [];
-            if (blocks.length === 0) {
-                // Sem blocos (texto solto): passa pelo mesmo pipeline de reconstrução do Limpar Índice.
-                out.push(...linkIndexPages(doc.body.textContent ?? '').map(e => `<p>${e}</p>`));
-            } else {
-                // Funde linhas de continuação (só páginas, sem termo) no bloco anterior antes de ligar.
-                const merged: Element[] = [];
-                for (const block of blocks) {
-                    const text = block.textContent ?? '';
-                    if (!isBoundary(block) && merged.length > 0 && isPageContinuation(text)) {
-                        merged[merged.length - 1].append(doc.createTextNode(' ' + text.trim()));
-                        continue;
-                    }
-                    merged.push(block);
-                }
-                for (const block of merged) {
-                    if (isBoundary(block)) { out.push(block.outerHTML); continue; }
-                    if (!(block.textContent ?? '').trim()) continue;
-                    linkPageNumbers(block);
-                    out.push(block.outerHTML);
-                }
-            }
-            if (out.length === 0) return;
-            editBlocks(editor, () => {
-                if (useSelection) editor.selection.setContent(out.join(''));
-                else editor.setContent(out.join(''));
-            });
-        },
-
-        // Subentradas do Índice Remissivo (começam por minúscula) com recuo à esquerda; a seleção, ou o capítulo todo.
-        indentIndexSubentries: () => {
-            const editor = editorRef.current;
-            if (!editor) return;
-            const selected = editor.selection.getContent({ format: 'html' });
-            const useSelection = !!selected.trim();
-            const { html, changed } = indentIndexSubentries(useSelection ? selected : editor.getContent());
-            if (!changed) return;
-            editBlocks(editor, () => {
-                if (useSelection) editor.selection.setContent(html);
-                else editor.setContent(html);
             });
         },
 

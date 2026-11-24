@@ -179,7 +179,7 @@ Marca-se o texto da nota com o estilo «Nota de Rodapé». No EPUB exportado fic
 
 ### Índice remissivo
 - **Limpeza de Índice Remissivo**: remove os números de páginas do índice remissivo importado.
-- **Ligação Páginas do Índice Remissivo**: liga as entradas às páginas.
+- **Ligação e Recuos do Índice Remissivo**: liga cada número de página ao marcador dessa página e, se o livro tiver PDF de impressão, lê dele o recuo de cada entrada: entrada principal (`p-indice`) ou subentrada (`p-indice-sub`). Sem PDF, só liga as páginas. Podes repetir à vontade.
 
 ### Lista de páginas (page-list)
 Para os leitores poderem saltar «para a página 57» como no livro em papel. A aplicação:

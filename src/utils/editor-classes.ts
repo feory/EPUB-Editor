@@ -39,6 +39,8 @@ const STYLE_TRAITS: Record<string, Traits> = {
     'p-quote': { notInHeading: true, protectsFromAlinea: true, noDropCap: true },
     'p-legendas': { notInHeading: true, protectsFromAlinea: true },
     'p-asterisk': { notInHeading: true, controlsIndent: true, specialIndent: true, protectsFromAlinea: true },
+    'p-indice': { notInHeading: true, controlsIndent: true, specialIndent: true, protectsFromAlinea: true },
+    'p-indice-sub': { notInHeading: true, controlsIndent: true, specialIndent: true, protectsFromAlinea: true },
     'p-border-top': { notInHeading: true, controlsIndent: true, specialIndent: true },
     'p-border-bottom': { notInHeading: true, controlsIndent: true, specialIndent: true },
     'p-border-sides': { notInHeading: true, controlsIndent: true, specialIndent: true },

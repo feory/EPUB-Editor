@@ -5,7 +5,6 @@
 // por heurística de dicionário (corta no termo conhecido mais longo).
 
 import { idxLinkHtml } from './indice-marker';
-import { isBreakClass } from './chapter-filler';
 
 // Marcador interno de fronteira de entrada (vinda de quebra de linha do original).
 const SEP = '';
@@ -136,38 +135,4 @@ export function cleanIndexText(raw: string): string[] {
 // do idx-link.
 export function wrapPageLinks(pages: string): string {
     return pages.replace(/\d+/g, (n) => idxLinkHtml(`page-${n}`, n));
-}
-
-/** O recuo das subentradas do Índice Remissivo (inline: vence as classes do livro). */
-export const INDEX_SUB_PADDING = 'padding-left:40px';
-
-/**
- * Recua as SUBENTRADAS: os `<p>` que começam por letra minúscula ("aumentadas, 197–198") ganham `padding-left:40px`; as
- * entradas principais (maiúscula) ficam como estão. Idempotente (quem já tem padding-left não muda). Só `<p>` de topo.
- */
-export function indentIndexSubentries(html: string): { html: string; changed: number } {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    let changed = 0;
-    for (const p of Array.from(doc.body.children)) {
-        if (p.tagName !== 'P' || isBreakClass(p.className) || p.classList.contains('footnote')) continue;
-        const first = (p.textContent ?? '').trim().charAt(0);
-        if (!first || first !== first.toLowerCase() || first === first.toUpperCase()) continue; // minúscula (letra; não dígito/pontuação)
-        const style = p.getAttribute('style') ?? '';
-        if (/(^|;)\s*padding-left\s*:/i.test(style)) continue;
-        const base = style.trim().replace(/;$/, '');
-        p.setAttribute('style', `${base ? `${base}; ` : ''}${INDEX_SUB_PADDING};`);
-        changed++;
-    }
-    return { html: changed ? doc.body.innerHTML : html, changed };
-}
-
-// Como cleanIndexText, mas em vez de descartar a lista de páginas de cada entrada, mantém-na —
-// ligada via wrapPageLinks. `onTerm` (esc) escapa cada termo assim que nasce, antes de ganhar
-// vizinhos — nunca corre sobre a entrada já concatenada, por isso um dígito do próprio termo
-// (ex. "Web 2.0, 12") nunca é confundido com a lista de páginas (que já chega HTML-safe de
-// wrapPageLinks, sem precisar de escape). Entradas devolvidas já em HTML; o chamador só precisa
-// de embrulhar cada uma em <p>.
-export function linkIndexPages(raw: string): string[] {
-    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return buildEntries(raw, esc, wrapPageLinks);
 }

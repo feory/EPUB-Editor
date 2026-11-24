@@ -22,6 +22,8 @@ const RULES: BaselineRule[] = [
 .p-bold-italic { font-weight: bold !important; font-style: italic !important; }` },
     { guard: '.p-uppercase', css: '.p-uppercase { text-transform: uppercase !important; }', targets: ['editor', 'export'] },
     { guard: '.p-asterisk', css: '.p-asterisk { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }', targets: ['export'] },
+    { guard: '.p-indice', targets: ['editor', 'export'], css: `.p-indice { margin: 0 0 0 1.2em !important; text-indent: -1.2em !important; text-align: left !important; }
+.p-indice-sub { margin: 0 0 0 2.4em !important; text-indent: -1.2em !important; text-align: left !important; }` },
     { guard: '.img-inline', css: 'img.img-inline { display: inline-block; float: none; max-width: none; height: 1.2em; width: auto; margin: 0 0.2em; vertical-align: middle; }', targets: ['editor', 'export'] },
     { guard: '.grid', css: GRID_CSS, targets: ['editor', 'export'] },
     // Livros antigos sem regra de `hr`: o default do e-reader é ~100% de largura e a divisória "Pequena"

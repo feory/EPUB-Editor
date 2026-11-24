@@ -3,7 +3,7 @@ import { BLOCK_STYLES, BLOCK_CLASS_STYLES } from './blockStyles';
 import { STYLE_FORMATS, BLOCK_STYLE_OPTIONS, MORE_STYLES_PARA, MORE_STYLES_HEAD, PARAGRAPH_QUICK_STYLES } from './config';
 
 const EXTRA = ['p-bottom', 'p-center', 'p-non-indent']; // só formato + chip do painel (group 'extra')
-const OLD_REGISTERED = ['p-indent', 'p-top', 'p-space', 'footnote', 'drop-cap', 'p-small', 'p-legendas', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-quote', 'p-asterisk', 'p-border-top', 'p-border-bottom', 'p-border-sides'];
+const OLD_REGISTERED = ['p-indent', 'p-top', 'p-space', 'footnote', 'drop-cap', 'p-small', 'p-legendas', 'p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase', 'p-quote', 'p-asterisk', 'p-indice', 'p-indice-sub', 'p-border-top', 'p-border-bottom', 'p-border-sides'];
 
 test('o registo regista os mesmos formatos de classe de antes (e nunca o wrapper box)', () => {
     expect(BLOCK_CLASS_STYLES.map((s) => s.format).sort()).toEqual([...OLD_REGISTERED, ...EXTRA].sort());

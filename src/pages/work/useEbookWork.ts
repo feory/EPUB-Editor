@@ -14,6 +14,7 @@ import { drafts } from '../../utils/local-draft';
 import { sendOnUnload } from './sendOnUnload';
 import type { Draft } from '../../utils/local-draft';
 import { listSubtitles, listParagraphStyles } from '../../utils/indice-links';
+import type { PdfPageText } from '../../services/page-list/pdf-pages';
 import type { DocxStyleMapping } from '../../services/import/document-importer';
 import type { PageAnchor } from '../../services/page-list/pdf-text';
 
@@ -259,6 +260,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         applyEdit(bookEdit.removeCommentAnchor(getBook(), anchorId)), [applyEdit, getBook]);
     const handleApplyDropCaps = useCallback(() => applyEdit(bookEdit.applyDropCaps(getBook())), [applyEdit, getBook]);
     const handleLinkIndiceEntries = useCallback((subtitleStyles?: readonly string[]) => applyEdit(bookEdit.linkIndice(getBook(), subtitleStyles)), [applyEdit, getBook]);
+    const handleFormatIndex = useCallback((pages: PdfPageText[] | null) => applyEdit(bookEdit.formatIndex(getBook(), pages)), [applyEdit, getBook]);
     const getParagraphStyles = useCallback(() => listParagraphStyles(getBook().parts), [getBook]); // para o diálogo de "Criação Links Índice"
     // Mini-menu do editor ("Ligar a…"): uma entrada, ou null no alvo = remover a ligação.
     const handleLinkIndiceEntryManual = useCallback((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) =>
@@ -424,6 +426,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         handleRenameStyle,
         handleLinkIndiceEntries,
         getParagraphStyles,
+        handleFormatIndex,
         handleLinkIndiceEntryManual,
         getIndiceSubtitles,
         handleFixLinks,

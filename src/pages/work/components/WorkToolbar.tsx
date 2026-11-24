@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NotificationsBell } from '../../home/NotificationsBell';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, FileUp, Save, History, Download, Loader2, Eye, AlertTriangle, Keyboard, Hash, ChevronDown, ChevronRight, Palette, Shield, Accessibility, GitCompare, ListX, IndentIncrease, Wand2, Link2, Link, Wrench, Type, ListTree, RefreshCw, BookMarked, MessageSquare, ImageDown
+  ArrowLeft, FileUp, Save, History, Download, Loader2, Eye, AlertTriangle, Keyboard, Hash, ChevronDown, ChevronRight, Palette, Shield, Accessibility, GitCompare, ListX, Wand2, Link2, Link, Wrench, Type, ListTree, RefreshCw, BookMarked, MessageSquare, ImageDown
 } from 'lucide-react';
 
 interface WorkToolbarProps {
@@ -29,19 +29,18 @@ interface WorkToolbarProps {
   onShowStyleEditor: () => void;
   onShowFonts: () => void;
   onCleanIndex: () => void;
-  onLinkIndexPages: () => void;
-  onIndentIndex: () => void;
   onConversions: () => void;
   onCompressImages: () => void;
   onEditToc: () => void;
   onUpdatePageList: () => void;
   onLinkIndiceEntries: () => void;
+  onFormatIndex: () => void;
   readOnly?: boolean;
 }
 
 const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
   isLoading, htmlContent, lastSaved,
-  onSave, onFetchHistory, onValidate, onValidateEpub, onValidateAccessibility, onValidateLinks, onPreview, onExport, onFileSelect, onToggleGrammar, grammarAvailable, onToggleImageGallery, onToggleComments, unresolvedCommentsCount, onOpenCompare, onShowShortcuts, onShowStats, onShowStyleEditor, onShowFonts, onCleanIndex, onLinkIndexPages, onIndentIndex, onConversions, onCompressImages, onEditToc, onUpdatePageList, onLinkIndiceEntries,
+  onSave, onFetchHistory, onValidate, onValidateEpub, onValidateAccessibility, onValidateLinks, onPreview, onExport, onFileSelect, onToggleGrammar, grammarAvailable, onToggleImageGallery, onToggleComments, unresolvedCommentsCount, onOpenCompare, onShowShortcuts, onShowStats, onShowStyleEditor, onShowFonts, onCleanIndex, onConversions, onCompressImages, onEditToc, onUpdatePageList, onLinkIndiceEntries, onFormatIndex,
   readOnly
 }) => {
   const navigate = useNavigate();
@@ -231,18 +230,12 @@ const WorkToolbarComponent: React.FC<WorkToolbarProps> = ({
                       <span className="flex-1 text-left">Limpeza de Índice Remissivo</span>
                     </button>
                     <button
-                      onClick={() => { onLinkIndexPages(); setActiveMenu(null); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
+                      onClick={() => { onFormatIndex(); setActiveMenu(null); }}
+                      disabled={readOnly}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors disabled:opacity-50"
                     >
                       <Link size={16} className="text-slate-400 shrink-0" />
-                      <span className="flex-1 text-left">Ligação Páginas do Índice Remissivo</span>
-                    </button>
-                    <button
-                      onClick={() => { onIndentIndex(); setActiveMenu(null); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-200 transition-colors"
-                    >
-                      <IndentIncrease size={16} className="text-slate-400 shrink-0" />
-                      <span className="flex-1 text-left">Recuar Subentradas do Índice Remissivo</span>
+                      <span className="flex-1 text-left">Ligação e Recuos do Índice Remissivo</span>
                     </button>
                   </div>
                   )}

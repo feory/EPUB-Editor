@@ -110,6 +110,8 @@ export const EPUB_CSS = `
     .p-bold-italic { font-weight: bold !important; font-style: italic !important; }
     .p-uppercase   { text-transform: uppercase !important; }
     .p-asterisk    { text-align: center !important; text-indent: 0 !important; font-style: italic; font-size: 1.3em; margin: 1.5em 0 !important; }
+    .p-indice      { margin: 0 0 0 1.2em !important; text-indent: -1.2em !important; text-align: left !important; }
+    .p-indice-sub  { margin: 0 0 0 2.4em !important; text-indent: -1.2em !important; text-align: left !important; }
 
     /* === BORDAS === */
     .p-border-top    { border-top: 2px solid #555; padding-top: 0.6em; margin-top: 0.6em; text-indent: 0 !important; }

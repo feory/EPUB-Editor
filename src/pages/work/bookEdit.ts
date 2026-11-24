@@ -18,6 +18,8 @@ import type { UserStyleKind } from '../../utils/user-styles';
 import { fixLinks, validateLinks } from '../../services/validation/link-validator';
 import { insertPageBreaks } from '../../services/page-list/alignment';
 import type { PageAnchor } from '../../services/page-list/pdf-text';
+import type { PdfPageText } from '../../services/page-list/pdf-pages';
+import { reviewIndex } from '../../services/page-list/index-levels';
 
 export type Level = ChapterLevel;
 
@@ -131,6 +133,20 @@ export function linkIndice(book: Book, subtitleStyles?: readonly string[]): Book
     const html = parts.join('');
     if (html === book.html) return info('Nenhum Índice encontrado, ou nenhuma entrada correspondeu a um capítulo.');
     return keep(html, `${plural(linked, 'entrada ligada', 'entradas ligadas')} a ${plural(anchored, 'capítulo', 'capítulos')}.`);
+}
+
+/** Índice Remissivo: liga os nº de página aos marcadores de página e (com o PDF de impressão) marca principal / subentrada (p-indice / p-indice-sub). */
+export function formatIndex(book: Book, pages: PdfPageText[] | null): BookEdit {
+    const r = reviewIndex(book.html, pages);
+    if (!r.found) return fail('Não encontrei o capítulo "Índice Remissivo".');
+    // Os trechos que o PDF estragou (hífen partido, palavras coladas) não se corrigem sozinhos: vão no relatório para rever à mão.
+    const review = r.suspects.length ? ` A rever à mão (${r.suspects.length}): ${r.suspects.slice(0, 5).map((s) => `«${s.text}»`).join(', ')}${r.suspects.length > 5 ? '…' : ''}.` : '';
+    if (r.html === book.html) return info(`${r.linked + r.main + r.sub ? 'O Índice Remissivo já está ligado e com os recuos certos.' : 'Nada a fazer no Índice Remissivo.'}${review}`);
+    const parts = [plural(r.linked, 'entrada com páginas ligadas', 'entradas com páginas ligadas')];
+    if (r.dashes) parts.push(plural(r.dashes, 'travessão duplo corrigido', 'travessões duplos corrigidos'));
+    if (r.levels) parts.push(`${plural(r.main, 'entrada', 'entradas')} e ${plural(r.sub, 'subentrada', 'subentradas')} com recuo${r.unmatched ? ` (${plural(r.unmatched, 'sem correspondência no PDF', 'sem correspondência no PDF')})` : ''}`);
+    else parts.push(pages ? 'recuos por fazer: o título do capítulo não está no PDF' : 'recuos por fazer: o livro não tem PDF de impressão');
+    return keep(r.html, `Índice Remissivo: ${parts.join('; ')}.${review}`);
 }
 
 const LINK_FAIL: Record<string, string> = {

@@ -282,3 +282,16 @@ test('compress_images: passa as opções ao editor e resume a poupança; em leit
     expect((await compressImagesTool.run({}, setup([]).ctx)).is_error).toBe(true); // memoryWorkspace: falhou (null)
     expect((await compressImagesTool.run({}, setup([], { readOnly: () => true }).ctx)).is_error).toBe(true);
 });
+
+test('build_report: o hífen partido do PDF aparece em qualquer capítulo e as palavras coladas no Índice Remissivo, sem precisar do PDF', async () => {
+    const corpo = chapter('Um', '<p>A vulnerabilidade devido à instabili- dade ecológica ficou por resolver.</p><p>Texto sobre eadensidadeenergética no corpo.</p>');
+    const indice = '<p class="chapter-break-h1" data-title="ÍNDICE REMISSIVO">&nbsp;</p><h1>ÍNDICE REMISSIVO</h1><p>e eadensidadeenergética, 169</p><p>animismo, 54</p>';
+    const { ctx, report } = setup([corpo, indice], { title: () => 'Livro X' });
+    const out = JSON.parse((await buildReportTool.run({}, ctx)).content);
+    expect(out.falhasPorSecao).toMatchObject({ textoPdf: 2 });   // palavras coladas só contam no Índice Remissivo
+    const text = report()!;
+    expect(text).toContain('TEXTO (erros do PDF por rever)\n===');
+    expect(text).toContain('- [Um · hífen partido] "A vulnerabilidade devido à instabili- dade ecológica ficou por resolver."\n    rever "instabili- dade"');
+    expect(text).toContain('[ÍNDICE REMISSIVO · palavras coladas] "e eadensidadeenergética, 169"');
+    expect(text).toContain('texto do PDF 2');
+});
