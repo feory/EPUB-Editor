@@ -18,7 +18,7 @@ export type OpenMenu =
     | { kind: 'grip'; pos: Pos }
     | { kind: 'element'; state: ElementMenuState }
     | { kind: 'grid'; state: Pos & { up: boolean } }
-    | { kind: 'style'; state: Pos & { kind: 'para' | 'head' } };
+    | { kind: 'style'; state: Pos & { kind: 'para' | 'head'; /** O bloco de topo onde está o cursor tem marcador de página (só então se oferece "Remover marcador de página"). */ hasPageMarker: boolean } };
 
 export interface MenuHost {
     suppressMiniMenu(reason: 'plusMenu' | 'gripMenu', on: boolean): void;

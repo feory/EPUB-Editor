@@ -35,7 +35,7 @@ test('pega e elemento escondem mini-menu e "+" (classe no body); grelha e estilo
     menus.show({ kind: 'grid', state: { ...pos, up: false } }); // substitui: o "+" volta
     expect(log).toEqual(['mini:gripMenu:false', 'class:false']);
     log.length = 0;
-    menus.show({ kind: 'style', state: { ...pos, kind: 'para' } });
+    menus.show({ kind: 'style', state: { ...pos, kind: 'para', hasPageMarker: false } });
     expect(log).toEqual([]);
 });
 

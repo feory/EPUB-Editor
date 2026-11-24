@@ -40,7 +40,7 @@ export interface BlockOverlaysProps {
     closeElementMenu: () => void;
     elementAction: (action: ElementAction) => void;
     dropLine: { top: number; left: number; width: number } | null;
-    styleMenu: { top: number; left: number; kind: 'para' | 'head' } | null;
+    styleMenu: { top: number; left: number; kind: 'para' | 'head'; hasPageMarker: boolean } | null;
     closePlusMenu: () => void;
     plusAction: (type: string) => void;
     dismissGripMenu: (x: number, y: number) => void;
@@ -154,6 +154,7 @@ export function BlockOverlays({
                             >
                                 <Anchor size={14} className="text-slate-400" /> Âncora (ligar ao Índice)
                             </button>
+                            {!styleMenu.hasPageMarker && (
                             <button
                                 type="button"
                                 onMouseDown={(ev) => ev.preventDefault()}
@@ -162,6 +163,8 @@ export function BlockOverlays({
                             >
                                 <BookOpen size={14} className="text-slate-400" /> Marcador de página
                             </button>
+                            )}
+                            {styleMenu.hasPageMarker && (
                             <button
                                 type="button"
                                 onMouseDown={(ev) => ev.preventDefault()}
@@ -170,6 +173,7 @@ export function BlockOverlays({
                             >
                                 <Trash2 size={14} className="text-slate-400" /> Remover marcador de página
                             </button>
+                            )}
                         </div>
                     </div>
                 </>

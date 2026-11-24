@@ -74,7 +74,9 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     const styleMenuGuardRef = useRef(0);
     const openStyleMenu = (kind: 'para' | 'head') => {
         if (Date.now() < styleMenuGuardRef.current) return; // acabou de fechar (2º clique no ⋮) → não reabrir
-        menus.show({ kind: 'style', state: { ...miniMenuAnchor(), kind } });
+        const editor = editorRef.current;
+        const top = editor ? topLevelBlock(editor.selection.getNode() as HTMLElement, editor.getBody()) : null;
+        menus.show({ kind: 'style', state: { ...miniMenuAnchor(), kind, hasPageMarker: !!top?.querySelector('span.pagebreak') } });
     };
     // Fechar ao clicar fora (⋮ novamente, outro botão do mini-menu, o iframe do editor, Esc, scroll). O pop do
     // mini-menu (TinyMCE aux) fica acima de um backdrop React — daí o listener global em usePopupDismiss.
