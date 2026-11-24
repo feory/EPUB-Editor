@@ -365,6 +365,8 @@ export function WorkPage() {
     scrollInChapter(chapterPorts(), chapter, () => editorRef.current?.scrollToBlock((wholeBook ? blockOffset(splitChapters(work.fullHtmlContent), chapter) : 0) + (block ?? 0)));
   };
   // Botões de página nas respostas do assistente ([[pdf:N]] / [[pag:N]]): abre o painel do PDF e salta para lá. `n` muda a cada clique (repetir a mesma página volta a saltar).
+  // Separador pedido ao abrir o painel do bloco (o lápis da caixa pede o da Caixa); `n` muda a cada pedido e remonta o painel nesse separador.
+  const [blockTab, setBlockTab] = useState<{ tab: 'caixa'; n: number } | null>(null);
   const [pdfJump, setPdfJump] = useState<(PdfTarget & { n: number }) | null>(null);
   const handleGoToAiPdfPage = (page: PdfTarget) => {
     if (!sidebars.showPrintPdfSidebar) panels.open('printPdf');
@@ -594,7 +596,7 @@ export function WorkPage() {
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 getIndiceSubtitles={work.getIndiceSubtitles}
                 onAddComment={(anchorId) => { commentSync.startDraft(anchorId); panels.open('comments'); }}
-                onOpenPanel={(panel) => panels.open(panel)}
+                onOpenPanel={(panel, tab) => { panels.open(panel); if (tab) setBlockTab((t) => ({ tab, n: (t?.n ?? 0) + 1 })); }}
                 textPanelOpen={sidebars.showTextSidebar}
                 onBlockChange={setBlockInfo}
                 onSelectedBlock={setSelectedBlock}
@@ -664,6 +666,8 @@ export function WorkPage() {
 
       {sidebars.showBoxSidebar && (
         <BlockSidebar
+          key={blockTab?.n ?? 0}
+          initialTab={blockTab?.tab}
           info={blockInfo}
           css={getCurrentCss()}
           onEdit={(edit) => editorRef.current?.editBlock(edit)}

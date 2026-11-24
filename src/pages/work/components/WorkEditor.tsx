@@ -93,7 +93,7 @@ interface WorkEditorProps {
     onLinkIndiceEntry?: (pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) => void; // null = remover ligação
     getIndiceSubtitles?: () => IndiceLinkSubtitle[];
     onAddComment?: (anchorId: string) => void;
-    onOpenPanel?: (panel: 'box' | 'text') => void; // abre o painel de edição do bloco ('box') ou do texto selecionado ('text')
+    onOpenPanel?: (panel: 'box' | 'text', tab?: 'caixa') => void; // abre o painel de edição do bloco ('box', com `tab` o separador) ou do texto selecionado ('text')
     textPanelOpen?: boolean;
     onBlockChange?: (info: BlockInfo) => void;
     onSelectedBlock?: (block: SelectedBlocks | null) => void;
@@ -205,7 +205,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
     const overlays = useBlockOverlays(editorRef, {
         activeChapterIndex, onCountInWholeBook, onReplaceInWholeBook,
         readOnly, wholeBookLoaded: activeChapterIndex === -1, chapterLabel: chapters[activeChapterIndex]?.title || 'Capítulo',
-        onOpenPanel: () => live.current.onOpenPanel?.('box'),
+        onOpenPanel: (tab) => live.current.onOpenPanel?.('box', tab),
     });
     const isDiffHighlightingRef = useRef(false);
     // Canal de conteúdo (editor/contentChannel.ts): o ÚNICO caminho de entrada (load) e saída
@@ -1116,7 +1116,7 @@ const WorkEditorComponent = forwardRef<WorkEditorRef, WorkEditorProps>((
                             wireOverlays: overlays.mount,
                             onCropImage: imageCrop.handleOpenCrop,
                             onAddComment,
-                            openPanel: (panel) => live.current.onOpenPanel?.(panel),
+                            openPanel: (panel, tab) => live.current.onOpenPanel?.(panel, tab),
                         }),
                         automatic_uploads: true,
                         paste_data_images: true,

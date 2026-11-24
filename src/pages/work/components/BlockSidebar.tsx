@@ -17,6 +17,7 @@ import { BLOCK_CLASS_STYLES } from '../editor/blockStyles';
 import { readCustomStyle, updateCustomStyle } from '../../../utils/book-css';
 
 interface BlockSidebarProps {
+    initialTab?: 'bloco' | 'caixa';                   // separador com que abre (só conta dentro de uma caixa; o pai remonta o painel a cada pedido)
     info: BlockInfo;                                  // caixa / bloco de texto sob o cursor
     css: string;                                      // CSS atual do livro (modo "Estilo")
     onEdit: (edit: BlockEdit) => void;                                     // edita o que está sob o cursor
@@ -493,10 +494,10 @@ const TextSection: React.FC<{
     );
 };
 
-export const BlockSidebar: React.FC<BlockSidebarProps> = ({ info, css, onEdit, onTextStyle, styles, onClose, width, onResize }) => {
+export const BlockSidebar: React.FC<BlockSidebarProps> = ({ initialTab, info, css, onEdit, onTextStyle, styles, onClose, width, onResize }) => {
     const frame = useEditorFrame();
     const [mode, setMode] = useState<Mode>('block');
-    const [tab, setTab] = useState<'bloco' | 'caixa'>('bloco');
+    const [tab, setTab] = useState<'bloco' | 'caixa'>(initialTab ?? 'bloco');
     const showBox = !!info.box && (tab === 'caixa' || !(info.text || info.image || info.grid)); // separador "Caixa" só existe dentro de uma caixa; caixa sozinha = só ele
     // Repor: tudo o que o painel mostra com valores próprios; o "Estilo" do texto edita regras do livro, não se repõe aqui.
     const resetText = !!info.text && mode === 'block';

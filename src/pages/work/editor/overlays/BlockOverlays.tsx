@@ -1,7 +1,7 @@
 import {
     Pilcrow, Heading1, Heading2, Heading3, Quote, Type,
     StickyNote, Image as ImageIcon, Copy, Trash2, Minus, BookMarked, Columns2, LayoutGrid, Plus, Square,
-    MoreVertical, ChevronDown, Anchor, BookOpen, SlidersHorizontal, Scissors, CopyPlus, ArrowUpToLine, ArrowDownToLine, Paintbrush, ClipboardPaste, Group, Ungroup,
+    MoreVertical, ChevronDown, Anchor, BookOpen, SlidersHorizontal, Scissors, CopyPlus, ArrowUpToLine, ArrowDownToLine, Paintbrush, ClipboardPaste, Group, Ungroup, Pencil,
 } from 'lucide-react';
 import { openUpIfClipped, miniMenuTop } from './popupDismiss';
 import { MORE_STYLES_PARA, MORE_STYLES_HEAD } from '../config';
@@ -29,6 +29,7 @@ export interface BlockOverlaysProps {
     selectParent: () => void;
     boxBar: (Pos & { kind: 'box' | 'grid'; variant: BoxVariant }) | null;   // mini-menu da caixa/grelha selecionada
     openGridPanel: () => void;                       // "Atributos" da grelha → painel de edição
+    openBoxPanel: () => void;                        // lápis da caixa → painel de edição no separador Caixa
     setBoxVariant: (variant: BoxVariant) => void;
     gridPlus: Pos | null;                          // "+" interno da grelha
     gridMenu: (Pos & { up: boolean }) | null;
@@ -58,7 +59,7 @@ type Props = BlockOverlaysProps;
 
 /** Overlays estilo Notion renderizados FORA do iframe (posição fixed em coords da viewport). */
 export function BlockOverlays({
-    plusMenu, gripMenu, hrCtl, menuBtn, parentHandle, selectParent, boxBar, setBoxVariant, openGridPanel, gridPlus, gridMenu, openGridMenu, closeGridMenu, gridAction, elMenu, openElementMenu, closeElementMenu, elementAction, dropLine, closePlusMenu, plusAction,
+    plusMenu, gripMenu, hrCtl, menuBtn, parentHandle, selectParent, boxBar, setBoxVariant, openGridPanel, openBoxPanel, gridPlus, gridMenu, openGridMenu, closeGridMenu, gridAction, elMenu, openElementMenu, closeElementMenu, elementAction, dropLine, closePlusMenu, plusAction,
     dismissGripMenu, gripAction, setHrWidth, deleteHr,
     styleMenu, styleAction, anchorAction, pageBreakAction, pageBreakRemoveAction, closeStyleMenu, readOnly,
 }: Props) {
@@ -222,6 +223,7 @@ export function BlockOverlays({
                         <MoreVertical size={22} />
                     </button>
                     {boxBar.kind === 'box' ? (
+                        <>
                         <label className="relative flex items-center" title="Tipo de caixa">
                             <select
                                 value={boxBar.variant}
@@ -232,6 +234,14 @@ export function BlockOverlays({
                             </select>
                             <ChevronDown size={16} className="pointer-events-none absolute right-2 text-slate-500" />
                         </label>
+                        <button
+                            type="button" title="Editar a caixa (fundo, contorno…)" aria-label="Editar a caixa"
+                            onMouseDown={(ev) => ev.preventDefault()} onClick={openBoxPanel}
+                            className="h-9 w-9 flex items-center justify-center rounded-md text-slate-600 hover:bg-slate-200 transition-colors"
+                        >
+                            <Pencil size={18} />
+                        </button>
+                        </>
                     ) : (
                         <button
                             type="button" title="Editar os atributos da grelha (borda, espessura, cantos, fundo…)" aria-label="Atributos"

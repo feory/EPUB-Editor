@@ -46,7 +46,7 @@ interface SetupDeps {
     openIndiceLinkPanel: (pIndex: number, currentTarget: string) => void; // '' = entrada sem ligação
     onCropImage: (imageId: string) => void;
     onAddComment?: (anchorId: string) => void;
-    openPanel: (panel: 'box' | 'text') => void;   // painel lateral de edição: 'box' = bloco, 'text' = texto selecionado
+    openPanel: (panel: 'box' | 'text', tab?: 'caixa') => void;   // painel lateral de edição: 'box' = bloco, 'text' = texto selecionado
     // Props que mudam a cada render, lidas por ref: setup() só corre 1x no mount, uma prop direta ficava presa à
     // closure desse 1.º render (livro ainda vazio nessa altura) e nunca via as edições seguintes.
     live: React.MutableRefObject<SetupLive>;
@@ -247,7 +247,7 @@ export function createEditorSetup(deps: SetupDeps) {
         editor.ui.registry.addMenuItem('boxedit-item', {
             text: 'Edição',
             icon: 'edit-block',
-            onAction: () => openPanel('box'),
+            onAction: () => openPanel('box', 'caixa'),
         });
         // Variante da caixa (classe box--X; o CSS vive no livro e o export dá-lhe epub:type).
         const blocks = tinymceEditorLike(editor);

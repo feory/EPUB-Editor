@@ -35,7 +35,7 @@ export interface BlockOverlaysOptions {
     readOnly?: boolean;
     wholeBookLoaded: boolean;
     chapterLabel: string;
-    onOpenPanel?: () => void;   // abre o painel de edição (botão "Atributos" da barra da grelha)
+    onOpenPanel?: (tab?: 'caixa') => void;   // abre o painel de edição: "Atributos" da grelha (sem separador) e o lápis da caixa (separador Caixa)
 }
 
 /**
@@ -642,7 +642,7 @@ export function useBlockOverlays(editorRef: React.MutableRefObject<TinyMCEEditor
     };
 
     const internal: BlockOverlaysInternal = {
-        plusMenu, gripMenu, hrCtl, dropLine, styleMenu, menuBtn, boxBar, setBoxVariant, parentHandle, selectParent: () => { const c = parentTargetRef.current; if (c) selectBoxRef.current(c); }, openGridPanel: () => onOpenPanel?.(), gridPlus, gridMenu, openGridMenu, closeGridMenu: () => menus.close('grid'), gridAction, elMenu, openElementMenu, elementAction, closeElementMenu: () => menus.close('element'),
+        plusMenu, gripMenu, hrCtl, dropLine, styleMenu, menuBtn, boxBar, setBoxVariant, parentHandle, selectParent: () => { const c = parentTargetRef.current; if (c) selectBoxRef.current(c); }, openGridPanel: () => onOpenPanel?.(), openBoxPanel: () => onOpenPanel?.('caixa'), gridPlus, gridMenu, openGridMenu, closeGridMenu: () => menus.close('grid'), gridAction, elMenu, openElementMenu, elementAction, closeElementMenu: () => menus.close('element'),
         closePlusMenu: () => menus.close('plus'), plusAction,
         dismissGripMenu, gripAction, setHrWidth, deleteHr,
         styleAction, anchorAction, pageBreakAction, pageBreakRemoveAction, closeStyleMenu: () => menus.close('style'),
