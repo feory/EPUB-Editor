@@ -47,7 +47,9 @@ export function fontStyleOf(name: string): { bold: boolean; italic: boolean } {
 }
 
 export async function readPdfPages(data: ArrayBuffer): Promise<PdfPageText[]> {
-    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    // fontExtraProperties: sem isto o pdfjs (6.5) não dá o nome real da fonte ("…NewBaskerville-Bold") em commonObjs, só um id interno, e
+    // nenhuma fonte parecia negrito/itálico: o check_styles mandava tirar o p-bold de todos os subtítulos (37 num livro de 444 páginas).
+    const pdf = await pdfjsLib.getDocument({ data, fontExtraProperties: true }).promise;
     const pages: PdfPageText[] = [];
     const byFont = new Map<string, { bold: boolean; italic: boolean }>(); // id interno do pdfjs → estilo (cache por documento)
     for (let i = 1; i <= pdf.numPages; i++) {

@@ -31,7 +31,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 export const extractHtmlFromPdf = async (file: File, options: ExtractionOptions = {}): Promise<ExtractionResult> => {
   const { headerMargin = 0, footerMargin = 0, imageSettings } = options;
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  // fontExtraProperties: sem isto o pdfjs não dá o nome real da fonte ("…Baskerville-Bold") em commonObjs e getFontStyles nunca vê negrito/itálico (ver readPdfPages).
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, fontExtraProperties: true }).promise;
   const heuristics = new PdfHeuristics();
 
   let fullHtml = '';
