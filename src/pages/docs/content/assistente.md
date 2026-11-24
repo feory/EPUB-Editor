@@ -69,6 +69,8 @@ Funciona por *regras*: «a todos os parágrafos que sejam assim, será replicado
 - *«Centra todos os parágrafos que são só uma linha em negrito.»*
 - *«Os parágrafos com a letra pequena passam a letra normal.»*
 - *«Nos capítulos 3 a 5, põe os parágrafos com avanço.»*
+- *«Põe espaço acima do primeiro parágrafo de cada conjunto de citações.»* (o primeiro de cada sequência seguida)
+- *«Tira o avanço dos parágrafos de citação que começam por minúscula.»* (os que continuam o anterior)
 - *«Apaga os parágrafos vazios.»*
 - *«Transforma os parágrafos a negrito em subtítulos.»*
 

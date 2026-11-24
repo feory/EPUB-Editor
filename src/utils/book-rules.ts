@@ -26,6 +26,8 @@ export interface RuleSelect {
     noClass?: string[];
     /** O texto do bloco começa por isto (sem contar espaços repetidos nem maiúsculas): aponta para um título ou parágrafo concreto. */
     startsWith?: string;
+    /** A 1.ª LETRA do texto (sem contar aspas, travessões, números…) é minúscula ou maiúscula: a minúscula marca um parágrafo que continua o anterior (ex. a segunda parte de uma citação). */
+    startsCase?: 'lower' | 'upper';
     /** Tem, no atributo style (inline), TODAS estas propriedades (ex. ["margin-left"]). */
     hasStyle?: string[];
     /** O bloco de conteúdo imediatamente anterior é um destes títulos (salta marcadores, âncoras, `hr` e vazios). */
@@ -34,6 +36,8 @@ export interface RuleSelect {
     afterClass?: string[];
     /** O bloco de conteúdo imediatamente SEGUINTE tem TODAS estas classes (o inverso de `afterClass`; o mesmo salto de marcadores, âncoras, `hr` e vazios). */
     beforeClass?: string[];
+    /** O bloco de conteúdo imediatamente anterior NÃO tem TODAS estas classes (a negação de `afterClass`, o mesmo salto): com `hasClass` igual, é o PRIMEIRO de cada sequência seguida (ex. o 1.º parágrafo de cada conjunto de citações). */
+    notAfterClass?: string[];
     /**
      * Com `afterClass` ou `afterHeading`: não só o bloco imediatamente a seguir, mas TODOS os seguintes. A zona acaba no próximo bloco
      * com essas classes (`afterClass`), no próximo título h1–h3 ou no fim do capítulo; com `afterHeading` conta o título mais próximo.
@@ -110,10 +114,10 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
         const { select: s, action: a } = rule;
         if (!s.tag?.length || !s.tag.every((t) => TAG_RE.test(t))) errors.push(`${at}: "tag" obrigatória (ex. ["p"])`);
         if (s.block && !(Number.isInteger(s.block.chapter) && s.block.chapter >= 0 && Number.isInteger(s.block.index) && s.block.index >= 0 && (s.block.item === undefined || (Number.isInteger(s.block.item) && s.block.item >= 0)) && Array.isArray(s.block.texts) && s.block.texts.length > 0 && s.block.texts.length <= MAX_BLOCKS && s.block.texts.every((t) => typeof t === 'string'))) errors.push(`${at}: "block" inválido`);
-        if (s.deep && (s.afterHeading || s.afterClass || s.beforeClass)) errors.push(`${at}: "afterHeading"/"afterClass"/"beforeClass" só valem ao nível do corpo (sem "deep")`);
+        if (s.deep && (s.afterHeading || s.afterClass || s.beforeClass || s.notAfterClass)) errors.push(`${at}: "afterHeading"/"afterClass"/"beforeClass"/"notAfterClass" só valem ao nível do corpo (sem "deep")`);
         if (s.position && s.position !== 'first' && s.position !== 'last') errors.push(`${at}: "position" tem de ser "first" ou "last"`);
         if (s.following && !s.afterClass && !s.afterHeading) errors.push(`${at}: "following" só vale com "afterClass" ou "afterHeading"`);
-        for (const key of ['afterClass', 'beforeClass'] as const) {
+        for (const key of ['afterClass', 'beforeClass', 'notAfterClass'] as const) {
             const list = s[key];
             if (list && (!Array.isArray(list) || !list.length || !list.every((c) => CLASS_RE.test(c)))) errors.push(`${at}: "${key}" tem de ser uma lista de classes`);
         }
@@ -126,6 +130,7 @@ export function validateRules(rules: BookRule[], knownClasses?: ReadonlySet<stri
         if (a.type === 'retag' && !RETAG_TARGETS.includes(a.to)) errors.push(`${at}: retag só para ${RETAG_TARGETS.join('/')}`);
         // h2 sem marcador de capítulo é só um título (ex. corrigir h1 → h3): só a partir de outros títulos, nunca de parágrafos.
         if (a.type === 'retag' && a.to === 'h2' && s.tag?.some((t) => !/^h[3-6]$/.test(t))) errors.push(`${at}: retag para h2 só a partir de h3–h6`);
+        if (s.startsCase !== undefined && s.startsCase !== 'lower' && s.startsCase !== 'upper') errors.push(`${at}: "startsCase" tem de ser "lower" ou "upper"`);
         if (s.startsWith !== undefined && (typeof s.startsWith !== 'string' || blockKey(s.startsWith).length < 2 || s.startsWith.length > 120)) errors.push(`${at}: "startsWith" tem de ter 2–120 caracteres`);
         if (a.type === 'addClass' || a.type === 'removeClass') {
             if (!CLASS_RE.test(a.value) || a.value.startsWith('chapter-')) errors.push(`${at}: classe inválida "${a.value}"`);
@@ -150,6 +155,13 @@ const nextContent = (el: Element): Element | null => {
     let next = el.nextElementSibling;
     while (next && isFillerBlock(next)) next = next.nextElementSibling;
     return next;
+};
+/** A 1.ª letra do texto é minúscula ou maiúscula? (null se não há letras, ou se a letra não tem caixa) */
+const firstLetterCase = (text: string | null): 'lower' | 'upper' | null => {
+    const letter = /\p{L}/u.exec(text ?? '')?.[0];
+    if (!letter) return null;
+    if (letter === letter.toLowerCase() && letter !== letter.toUpperCase()) return 'lower';
+    return letter === letter.toUpperCase() && letter !== letter.toLowerCase() ? 'upper' : null;
 };
 const hasAll = (el: Element | null, classes: string[]): boolean => !!el && classes.every((c) => el.classList.contains(c));
 /** `el` vem depois de um título destes, sem outro título h1–h3 pelo meio (o mais próximo decide). */
@@ -190,10 +202,12 @@ function select(doc: Document, s: RuleSelect): Element[] {
         if (s.hasClass && !s.hasClass.every((c) => el.classList.contains(c))) return false;
         if (s.noClass && s.noClass.some((c) => el.classList.contains(c))) return false;
         if (s.hasStyle && !s.hasStyle.every((p) => styleDecls(el).some((d) => d.name === p))) return false;
+        if (s.startsCase && firstLetterCase(el.textContent) !== s.startsCase) return false;
         if (s.startsWith !== undefined && !blockKey(el.textContent).toLowerCase().startsWith(blockKey(s.startsWith).toLowerCase())) return false;
         if (s.afterHeading && !(s.following ? inRunAfterHeading(el, s.afterHeading) : afterHeadingOk(el, s.afterHeading))) return false;
         if (s.afterClass && !(s.following ? inRunAfterClass(el, s.afterClass) : hasAll(prevContent(el), s.afterClass))) return false;
         if (s.beforeClass && !hasAll(nextContent(el), s.beforeClass)) return false;
+        if (s.notAfterClass && hasAll(prevContent(el), s.notAfterClass)) return false;
         return true;
     });
 }

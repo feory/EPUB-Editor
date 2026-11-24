@@ -212,6 +212,28 @@ test('beforeClass: o bloco imediatamente seguinte tem as classes (o inverso de a
     expect(validateRules([{ ...rule, select: { ...rule.select, deep: true } }]).length).toBeGreaterThan(0);
 });
 
+test('startsCase: a 1.ª letra do texto, sem contar aspas, travessões nem números', () => {
+    const rule: BookRule = { select: { tag: ['p'], hasClass: ['p-quote'], startsCase: 'lower' }, action: { type: 'removeClass', value: 'p-indent' } };
+    const html = '<p class="p-quote p-indent">Começa</p><p class="p-quote p-indent">continua</p><p class="p-quote p-indent">«ainda minúscula»</p><p class="p-quote p-indent">— Árvore</p><p class="p-quote p-indent">123</p><p class="p-indent">minúscula sem p-quote</p>';
+    const out = runRules([chapter('Um', html)], [rule]).parts[0];
+    expect(out).toContain('<p class="p-quote p-indent">Começa</p><p class="p-quote">continua</p><p class="p-quote">«ainda minúscula»</p>');
+    expect(out).toContain('<p class="p-quote p-indent">— Árvore</p><p class="p-quote p-indent">123</p><p class="p-indent">minúscula sem p-quote</p>'); // maiúscula, sem letras e sem p-quote ficam
+    const upper = runRules([chapter('Um', html)], [{ ...rule, select: { ...rule.select, startsCase: 'upper' } }]).parts[0];
+    expect(upper).toContain('<p class="p-quote">Começa</p><p class="p-quote p-indent">continua</p>');
+    expect(upper).toContain('<p class="p-quote">— Árvore</p>');
+    expect(validateRules([{ ...rule, select: { ...rule.select, startsCase: 'x' as 'lower' } }]).length).toBeGreaterThan(0);
+});
+
+test('notAfterClass: com hasClass igual apanha o PRIMEIRO de cada sequência seguida (o início do capítulo conta)', () => {
+    const rule: BookRule = { select: { tag: ['p'], hasClass: ['p-quote'], notAfterClass: ['p-quote'] }, action: { type: 'addClass', value: 'p-top' } };
+    const out = runRules([chapter('Um', '<p class="p-quote">q1</p><p class="p-quote">q2</p><p>t</p><p class="p-quote">q3</p><hr><p class="p-quote">q4</p><h3>T</h3><p class="p-quote">q5</p>')], [rule]).parts[0];
+    expect(out).toContain('<p class="p-quote p-top">q1</p><p class="p-quote">q2</p>'); // 1.º do capítulo; q2 segue um p-quote
+    expect(out).toContain('<p class="p-quote p-top">q3</p><hr><p class="p-quote">q4</p>'); // q3 abre outra sequência; q4 continua-a (o hr salta-se)
+    expect(out).toContain('<p class="p-quote p-top">q5</p>'); // depois de um título é o primeiro de novo
+    expect(validateRules([{ ...rule, select: { ...rule.select, deep: true } }]).length).toBeGreaterThan(0);
+    expect(validateRules([{ ...rule, select: { ...rule.select, notAfterClass: [] } }]).length).toBeGreaterThan(0);
+});
+
 test('afterHeading + following: todos os parágrafos de cada secção, até ao próximo título', () => {
     const rule: BookRule = { select: { tag: ['p'], afterHeading: ['h2'], following: true }, action: { type: 'addClass', value: 'p-indent' } };
     const out = runRules([chapter('Um', '<p>antes</p><h2>S1</h2><p>a</p><p>b</p><h3>T</h3><p>c</p><h2>S2</h2><p>d</p>')], [rule]).parts[0];
