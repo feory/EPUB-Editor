@@ -4,6 +4,7 @@
 import { PAGEBREAK_MARKER_RE } from './marker';
 import { normalize, CHAPTER_MIN_ANCHOR, type PageAnchor } from './pdf-text';
 import { splitChapterSegments } from '../../utils/chapters';
+import { isNoteElement } from '../notes/read-notes';
 import { isIndiceChapterTitle } from '../../utils/indice-links';
 import { BREAK_SELECTOR, LEVEL_BREAK_SELECTOR, createPageHolder } from '../../utils/chapter-filler';
 
@@ -99,16 +100,6 @@ export function fillMissingPageBreaks(html: string, pages: PageLines[]): { html:
 const INDICE_ENTRY_MAX = 150;
 interface IndiceIndex { flat: string; map: { node: Text; offset: number }[]; markers: { page: number; pos: number }[]; /** Onde o Índice começa, em `flat` do corpo (-1 = não há Índice). */ at: number }
 
-/**
- * Um bloco de nota? A de rodapé (`footnote`) ou a do fim do capítulo, que abre com o número em `<sup>` (`<p><sup>6</sup> texto</p>`). A lista de
- * páginas não entra nas notas: o marcador caía dentro do `<sup>` do número e partia a nota.
- */
-export function isNoteBlock(block: Element | null): boolean {
-    if (!block) return false;
-    if (/(^| )footnote( |$)/.test(block.className)) return true;
-    const first = Array.from(block.childNodes).find((n) => !(n.nodeType === 3 && !n.textContent?.trim()) && !(n.nodeType === 1 && (n as Element).matches('span.pagebreak')));
-    return first?.nodeType === 1 && (first as Element).tagName === 'SUP' && /^(\d+|\*+)$/.test((first.textContent ?? '').trim());
-}
 const NOTE_BLOCK_SELECTOR = 'p, li, aside';
 
 function textIndex(doc: Document): { flat: string; map: { node: Text; offset: number }[]; markers: { page: number; pos: number }[]; indice: IndiceIndex } {
@@ -128,7 +119,7 @@ function textIndex(doc: Document): { flat: string; map: { node: Text; offset: nu
             if (el.matches(BREAK_SELECTOR)) inIndice = isIndiceChapterTitle(el.getAttribute('data-title') ?? '');
             // Na importação ainda não há marcadores de capítulo: o Índice é só um bloco com o texto "Índice".
             else if (el.matches('p,h1,h2,h3') && isIndiceChapterTitle(el.textContent ?? '')) inIndice = true;
-            else if (el.matches('span.pagebreak[data-page]') && !isNoteBlock(el.closest(NOTE_BLOCK_SELECTOR))) {
+            else if (el.matches('span.pagebreak[data-page]') && !isNoteElement(el.closest(NOTE_BLOCK_SELECTOR))) {
                 const page = parseInt(el.getAttribute('data-page')!, 10);
                 if (inIndice) indice.markers.push({ page, pos: indice.flat.length }); else markers.push({ page, pos: flat.length });
             }
@@ -136,7 +127,7 @@ function textIndex(doc: Document): { flat: string; map: { node: Text; offset: nu
             continue;
         }
         const node = n as Text;
-        if (isNoteBlock(node.parentElement?.closest(NOTE_BLOCK_SELECTOR) ?? null)) continue; // as notas ficam fora (ver isNoteBlock)
+        if (isNoteElement(node.parentElement?.closest(NOTE_BLOCK_SELECTOR) ?? null)) continue; // as notas ficam fora (ver isNoteElement)
         // O Índice acaba no 1.º bloco longo (entradas são curtas); nem sempre há outro marcador de capítulo a seguir.
         if (inIndice && (node.parentElement?.closest('p,div,li,h1,h2,h3,h4,h5,h6')?.textContent ?? '').length > INDICE_ENTRY_MAX) inIndice = false;
         if (inIndice) {
