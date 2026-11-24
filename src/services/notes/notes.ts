@@ -7,6 +7,8 @@
  * role="doc-footnote"> com backlink. É a operação inversa de reverseFootnotes (import/epub-importer.ts).
  */
 
+import { isExponent } from './read-notes';
+
 // Aceita classe combinada (ex. "p-small footnote"), não só class="footnote" exato — hoisted
 // (em vez de literal dentro do replace()) porque corre por cada <sup>marker</sup> do corpo.
 const FOOTNOTE_CLASS_RE = /class="[^"]*\bfootnote\b[^"]*"/;
@@ -45,7 +47,7 @@ export function linkFootnotes(html: string, idPrefix: string = ''): string {
     result = result.replace(refPattern, (match, offset) => {
       if (fnIndex >= fns.length) return match;
       const context = result.substring(Math.max(0, offset - 200), offset);
-      if (FOOTNOTE_CLASS_RE.test(context)) return match;
+      if (FOOTNOTE_CLASS_RE.test(context) || isExponent(context.slice(-120), marker)) return match; // dentro de uma nota, ou um expoente (10<sup>12</sup>)
       const fn = fns[fnIndex++];
       fn.refFound = true;
       return `<sup id="${fn.refId}"><a epub:type="noteref" role="doc-noteref" href="#${fn.fnId}">${marker}</a></sup>`;

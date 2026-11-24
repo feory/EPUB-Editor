@@ -38,6 +38,13 @@ export function isNoteElement(el: Element | null): boolean {
     return is;
 }
 
+/** `<sup>` que é expoente e não referência de nota: "10<sup>12</sup>" (potência de dez), "m<sup>2</sup>", "km<sup>3</sup>", "ha<sup>2</sup>". `before` = o texto (ou HTML, com algumas etiquetas de permeio) que o antecede. */
+export function isExponent(before: string, marker: string): boolean {
+    const text = before.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
+    if (/(?:^|[^\p{L}\d.,])10$/u.test(text)) return true;
+    return /^[23]$/.test(marker) && /(?:^|[^\p{L}])(?:[kcdm]?m|ha)$/u.test(text);
+}
+
 export function readNotes(html: string): Notes {
     const clean = html.replace(PAGEBREAK, '');
     const defs: NoteDef[] = [];
@@ -52,7 +59,7 @@ export function readNotes(html: string): Notes {
     }
     const skip = new Set(leadSups);
     for (const m of clean.matchAll(SUP)) {
-        if (skip.has(m.index)) continue;
+        if (skip.has(m.index) || isExponent(clean.slice(Math.max(0, m.index - 120), m.index), m[1])) continue;
         refs.push({ marker: m[1], context: plain(clean.slice(Math.max(0, m.index - 60), m.index)).slice(-30) });
     }
     return { defs, refs };

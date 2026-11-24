@@ -52,3 +52,10 @@ test('import: duas chamadas de nota seguidas no mesmo <sup> ficam as duas (uma p
     expect(html).toContain('<sup>1</sup> <sup>2</sup>');
     expect(refs(linkFootnotes(html))).toBe(2);
 });
+
+test('linkFootnotes: um expoente (10<sup>12</sup>) antes da referência não lhe rouba a nota', () => {
+  const html = '<p>18 x 10<sup>12</sup> watts e um facto.<sup>12</sup></p><p class="footnote" id="footnote-12">(<sup>12</sup>) A nota.</p>';
+  const out = linkFootnotes(html);
+  expect(out).toContain('10<sup>12</sup> watts');                                      // o expoente fica como está
+  expect(out).toMatch(/facto\.<sup id="fnref-1"><a epub:type="noteref" role="doc-noteref" href="#fn-1">12<\/a><\/sup>/);
+});

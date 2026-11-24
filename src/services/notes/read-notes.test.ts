@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import '../indesign/happy-dom'; // DOMParser no bun
-import { readNotes, noteLead, isNoteElement } from './read-notes';
+import { readNotes, noteLead, isNoteElement, isExponent } from './read-notes';
 import { validateFootnotes } from '../validation/footnote-validator';
 
 const marker = (n: number) => `<span class="pagebreak" data-page="${n}"></span>`;
@@ -56,4 +56,24 @@ test('validateFootnotes: referência sem nota, nota sem referência e nota de ro
 test('validateFootnotes: asteriscos do tradutor e números do autor no mesmo capítulo não se confundem', () => {
     const html = '<p>x<sup>*</sup> y<sup>1</sup></p><p class="footnote">(<sup>*</sup>) do T.</p><p><sup>1</sup> do autor</p>';
     expect(validateFootnotes(html).issues).toEqual([]);
+});
+
+test('isExponent: potências de dez e unidades (10<sup>12</sup>, m<sup>2</sup>) não são referências de nota', () => {
+    expect(isExponent('(18 x 10', '12')).toBe(true);
+    expect(isExponent('em 10', '3')).toBe(true);
+    expect(isExponent('uma área de 5 km', '2')).toBe(true);
+    expect(isExponent('2010', '5')).toBe(false);        // ano: o 10 faz parte do número
+    expect(isExponent('no mundo', '12')).toBe(false);
+    expect(isExponent('em 3 m', '12')).toBe(false);     // só ² e ³ contam como unidade
+});
+
+test('readNotes/validateFootnotes: um expoente não é referência (o aviso "Referência [12] sem nota correspondente")', () => {
+    const html = '<p>Cerca de 18 terawatts (18 x 10<sup>12</sup> watts) e 5 km<sup>2</sup>, e um facto.<sup>12</sup></p><p class="footnote">(<sup>12</sup>) A nota.</p>';
+    expect(readNotes(html).refs.map((r) => r.marker)).toEqual(['12']);
+    expect(validateFootnotes(html).issues).toEqual([]);
+});
+
+test('isExponent: o expoente dentro de <span style> (o editor embrulha a cor) também se reconhece', () => {
+    expect(isExponent('(18 x 10<span style="color: #000000;">', '12')).toBe(true);
+    expect(validateFootnotes('<p>(18 x 10<span style="color: #000000;"><sup>12</sup></span> <em>watts</em>)</p>').issues).toEqual([]);
 });
