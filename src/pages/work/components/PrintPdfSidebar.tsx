@@ -13,6 +13,7 @@ interface PrintPdfSidebarProps {
     syncFolio?: number | null; // folio (nº impresso) visível no editor — salta o viewer para lá
     getEditorFolio?: () => number | null; // folio onde o editor está AGORA — a página que abre com o PDF
     onPageClick?: (folio: number) => void; // clique na página → editor salta para o marcador
+    freeMode?: boolean; // modo livre: o viewer não segue o scroll do editor e a navegação no viewer não move o editor
     jump?: ({ pdf: number } | { folio: number }) & { n: number } | null; // pedido do assistente: abrir nesta página (`n` distingue pedidos iguais)
     onPdfUploaded?: (anchors: PageAnchor[]) => void; // PDF acabado de carregar → gerar page-list
     width: number;
@@ -25,7 +26,7 @@ const MIN_SCALE = 0.6;
 const MAX_SCALE = 3;
 const SCALE_STEP = 0.2;
 
-export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, getEditorFolio, onPageClick, jump, onPdfUploaded, width, onResize }) => {
+export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, getEditorFolio, onPageClick, jump, freeMode, onPdfUploaded, width, onResize }) => {
     const [status, setStatus] = useState<Status>('loading');
     const [page, setPage] = useState(1);
     const [pageCount, setPageCount] = useState(0);
@@ -91,9 +92,9 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
 
     // Scroll no editor → salta para a página física correspondente ao folio visível.
     useEffect(() => {
-        if (status !== 'ready' || syncFolio == null) return;
+        if (status !== 'ready' || syncFolio == null || freeMode) return;
         showFolio(syncFolio);
-    }, [syncFolio, status, showFolio]);
+    }, [syncFolio, status, showFolio, freeMode]);
 
     // Pedido do assistente (depois do sync com o editor, para o ganhar quando o painel acaba de abrir): o PDF e o editor vão juntos para a página.
     // Corre de novo quando o mapa folio↔página fica pronto (o pedido pode chegar antes); páginas sem folio (front matter) só movem o PDF.
@@ -147,10 +148,11 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     // Navegação do utilizador (setas ou clique na página) → resolve o folio e reencaminha o
     // editor. Distinto do setPage direto usado pelo sync editor→PDF (evita ping-pong entre os
     // dois sentidos: aquele já chega à página certa, não precisa de voltar a mandar o editor lá).
-    const goToPage = (target: number) => {
+    // `follow`: mover também o editor. Por omissão não o faz no modo livre; o clique na própria página ("localizar no editor") pede-o sempre.
+    const goToPage = (target: number, follow = !freeMode) => {
         setPage(target);
         const folio = indexToFolioRef.current.get(target);
-        if (folio != null) onPageClick?.(folio);
+        if (folio != null && follow) onPageClick?.(folio);
     };
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -216,7 +218,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
                     <div
                         ref={pageBoxRef}
                         // Clicar (sem ter selecionado texto) leva o editor a esta página.
-                        onClick={() => { if (!window.getSelection()?.toString()) goToPage(page); }}
+                        onClick={() => { if (!window.getSelection()?.toString()) goToPage(page, true); }}
                         title="Ir para esta página no editor"
                         // m-auto (não a centragem do container, items-center/justify-center):
                         // quando a página renderizada é maior que o painel, justify/items-center

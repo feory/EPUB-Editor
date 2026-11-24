@@ -32,6 +32,8 @@ export interface SetupLive {
     onTogglePrintPdf?: () => void;
     onToggleAi?: () => void;
     showPrintPdfPanel?: boolean;                    // painel de PDF aberto → botão "Ver PDF" ativo
+    onToggleFreeMode?: () => void;
+    freeMode?: boolean;                             // modo livre ligado → botão "Modo livre" ativo
     textPanelOpen?: boolean;                        // painel "Editor de Texto" aberto → a barra da seleção esconde-se
     chapters: { title: string; level: string }[];   // capítulos do livro + índice do aberto (botão "Ligar a capítulo…")
     activeChapterIndex: number;
@@ -710,6 +712,17 @@ export function createEditorSetup(deps: SetupDeps) {
                 update();
                 editor.on('pdfpanelchange', update); // despachado pelo WorkEditor quando a prop muda
                 return () => editor.off('pdfpanelchange', update);
+            },
+        });
+        // Modo livre: o PDF e o editor deixam de se acompanhar (scroll de um não move o outro).
+        editor.ui.registry.addToggleButton('freemode', {
+            icon: 'unlock', tooltip: 'Modo livre (o PDF e o editor deixam de se acompanhar)',
+            onAction: () => live.current.onToggleFreeMode?.(),
+            onSetup: (api) => {
+                const update = () => api.setActive(!!live.current.freeMode);
+                update();
+                editor.on('freemodechange', update); // despachado pelo WorkEditor quando a prop muda
+                return () => editor.off('freemodechange', update);
             },
         });
         editor.ui.registry.addButton('focusmode', {

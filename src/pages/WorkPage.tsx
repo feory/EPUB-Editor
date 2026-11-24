@@ -365,6 +365,9 @@ export function WorkPage() {
     scrollInChapter(chapterPorts(), chapter, () => editorRef.current?.scrollToBlock((wholeBook ? blockOffset(splitChapters(work.fullHtmlContent), chapter) : 0) + (block ?? 0)));
   };
   // Botões de página nas respostas do assistente ([[pdf:N]] / [[pag:N]]): abre o painel do PDF e salta para lá. `n` muda a cada clique (repetir a mesma página volta a saltar).
+  // Modo livre: o PDF e o editor deixam de se acompanhar (o scroll de um não move o outro). Fica guardado no browser.
+  const [freeMode, setFreeMode] = useState(() => { try { return localStorage.getItem('pdf-free-mode') === '1'; } catch { return false; } });
+  const toggleFreeMode = () => setFreeMode((on) => { const next = !on; try { localStorage.setItem('pdf-free-mode', next ? '1' : '0'); } catch { /* sem localStorage: só vale nesta sessão */ } return next; });
   // Separador pedido ao abrir o painel do bloco (o lápis da caixa pede o da Caixa); `n` muda a cada pedido e remonta o painel nesse separador.
   const [blockTab, setBlockTab] = useState<{ tab: 'caixa'; n: number } | null>(null);
   const [pdfJump, setPdfJump] = useState<(PdfTarget & { n: number }) | null>(null);
@@ -592,6 +595,8 @@ export function WorkPage() {
                 onTogglePrintPdf={() => panels.toggle('printPdf')}
                 onToggleAi={() => panels.toggle('ai')}
                 showPrintPdfPanel={sidebars.showPrintPdfSidebar}
+                onToggleFreeMode={toggleFreeMode}
+                freeMode={freeMode}
                 onVisiblePageChange={setEditorVisiblePage}
                 onLinkIndiceEntry={work.handleLinkIndiceEntryManual}
                 getIndiceSubtitles={work.getIndiceSubtitles}
@@ -801,6 +806,7 @@ export function WorkPage() {
           getEditorFolio={() => editorRef.current?.getCurrentFolio() ?? null}
           onPageClick={handleGoToPdfPage}
           jump={pdfJump}
+          freeMode={freeMode}
           onPdfUploaded={work.handleGeneratePageList}
           width={panelWidth}
           onResize={handlePanelResize}
