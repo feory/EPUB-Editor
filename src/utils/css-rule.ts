@@ -46,3 +46,47 @@ export const removeRule = (css: string, selector: string): string =>
         .replace(/\n[ \t]*\n[ \t]*\n/g, '\n\n');
 
 export const hasRule = (css: string, selector: string): boolean => ruleRe(selector).test(css);
+
+export type Effect = 'bold' | 'italic' | 'center' | 'small' | 'indent' | 'top';
+/** Para cada efeito, as classes do livro cuja regra o dá. */
+export type ClassEffects = Record<Effect, Set<string>>;
+
+const bare = (v: string) => v.replace(/\s*!important/i, '').trim();
+/** O que uma regra diz de cada efeito: true/false, ou undefined se não fala dele. */
+const EFFECT_OF: Record<Effect, (d: Map<string, string>) => boolean | undefined> = {
+    bold: (d) => { const v = d.get('font-weight'); return v === undefined ? undefined : /^(bold|bolder)$/i.test(bare(v)) || parseInt(bare(v), 10) >= 600; },
+    italic: (d) => { const v = d.get('font-style'); return v === undefined ? undefined : /^(italic|oblique)/i.test(bare(v)); },
+    center: (d) => { const v = d.get('text-align'); return v === undefined ? undefined : /^center$/i.test(bare(v)); },
+    // letra pequena: só valores relativos ao corpo (em/rem < 1, % < 100, smaller/small…); px/pt não se sabe comparar
+    small: (d) => {
+        const v = d.get('font-size');
+        if (v === undefined) return undefined;
+        const m = /^([\d.]+)(em|rem|%)$/i.exec(bare(v));
+        return m ? parseFloat(m[1]) < (m[2] === '%' ? 100 : 1) : /^(smaller|small|x-small|xx-small)$/i.test(bare(v));
+    },
+    indent: (d) => { const v = d.get('text-indent'); return v === undefined ? undefined : parseFloat(bare(v)) > 0; },
+    top: (d) => { const v = d.get('margin-top') ?? d.get('margin')?.split(/\s+/)[0]; return v === undefined ? undefined : parseFloat(bare(v)) > 0; },
+};
+
+/**
+ * O que cada classe do livro FAZ, lido do CSS: quais dão negrito, itálico, centrado, letra pequena, recuo da 1.ª linha e espaço acima. A auditoria
+ * de estilos usa-o para não depender dos NOMES (um estilo renomeado, como p-bold → p-subtitulo, continua a contar). Só regras de uma classe sozinha
+ * (as de `.a .b` ou `p.a` dependem do contexto); numa classe repetida vale a última declaração de cada propriedade.
+ */
+export function classEffects(css: string): ClassEffects {
+    const state = new Map<string, Map<Effect, boolean>>();
+    for (const chunk of css.replace(/\/\*[\s\S]*?\*\//g, '').split('}')) {
+        const open = chunk.indexOf('{');
+        const cls = /^\.([\w-]+)$/.exec(chunk.slice(0, open < 0 ? 0 : open).trim())?.[1];
+        if (!cls) continue;
+        const decls = new Map(parse(chunk.slice(open + 1)));
+        const effects = state.get(cls) ?? state.set(cls, new Map()).get(cls)!;
+        for (const [effect, read] of Object.entries(EFFECT_OF) as [Effect, (typeof EFFECT_OF)[Effect]][]) {
+            const on = read(decls);
+            if (on !== undefined) effects.set(effect, on);
+        }
+    }
+    const out: ClassEffects = { bold: new Set(), italic: new Set(), center: new Set(), small: new Set(), indent: new Set(), top: new Set() };
+    for (const [cls, effects] of state) for (const [effect, on] of effects) if (on) out[effect].add(cls);
+    return out;
+}

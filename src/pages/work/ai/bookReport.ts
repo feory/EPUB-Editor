@@ -2,6 +2,7 @@
 // lista de páginas, estilos e figuras contra o PDF, validações — cada falha com a sua localização (capítulo, página do PDF, ficheiro) e um
 // excerto do texto. Só lê o livro; quem o pede (a ferramenta build_report) entrega o texto à interface, que o oferece para descarregar.
 import { VALIDATION_ORDER, type ValidationKind, type ValidationDigest } from '../../../utils/validation-digest';
+import { classEffects } from '../../../utils/css-rule';
 import { reviewStyles } from '../../../services/page-list/style-audit';
 import { reviewFigures } from '../../../services/page-list/figure-audit';
 import { buildChecklist } from './publicationChecklist';
@@ -57,7 +58,7 @@ export async function buildBookReport(workspace: AiWorkspace, now = new Date()):
     // Estilos e figuras contra o PDF
     const pdf = await workspace.pdfStyles();
     if (pdf) {
-        const { diffs, checked, seen } = reviewStyles(html, pdf);
+        const { diffs, checked, seen } = reviewStyles(html, pdf, undefined, classEffects(workspace.css()));
         counts.estilos = diffs.length;
         const lines = [`${checked} de ${seen} parágrafos soltos encontrados no PDF e comparados (caixas, listas, tabelas, citações, legendas, notas e Índice não se comparam).`];
         for (const [kind, ds] of groupBy(diffs, (d) => d.kind)) {

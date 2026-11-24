@@ -4,6 +4,7 @@
 import type { RuleReport } from '../../../utils/book-rules';
 import { setImageAlts, type AltDecision } from '../../../utils/image-alt-scan';
 import { convertSpanStyles } from '../../../utils/inline-styles';
+import { classEffects } from '../../../utils/css-rule';
 import { fixTypography, TYPOGRAPHY_FIXES, type TypographyFix } from '../../../utils/typography';
 import { fillMissingPageBreaks, type PageLines } from '../../../services/page-list/alignment';
 import { reviewStyles, STYLE_KINDS, type StyleKind } from '../../../services/page-list/style-audit';
@@ -24,7 +25,7 @@ export type BookOp =
     | { type: 'inline_style_to_class'; style: Record<string, string>; cls: string; scope?: string[] }
     | { type: 'typography'; fixes?: TypographyFix[] }
     | { type: 'fix_page_list'; pages?: PageLines[] } // `pages` não é do modelo: a ferramenta preenche-o a partir do PDF
-    | { type: 'fix_styles'; kinds?: StyleKind[]; pdf?: PdfStyles } // idem `pdf`
+    | { type: 'fix_styles'; kinds?: StyleKind[]; pdf?: PdfStyles; css?: string } // idem `pdf`; `css` = o CSS do livro (o que cada classe faz: classEffects)
     | { type: 'fix_figures'; pdf?: PdfStyles }
     | { type: 'keep_figures_together' };
 
@@ -155,10 +156,11 @@ export const OPS: { [K in BookOp['type']]: OpDef<K> } = {
             const errors: string[] = [];
             if (op.kinds !== undefined && (!Array.isArray(op.kinds) || !op.kinds.length || !op.kinds.every((k) => (STYLE_KINDS as readonly string[]).includes(k)))) errors.push(`${at}: "kinds" tem de ser uma lista de ${STYLE_KINDS.join('/')}`);
             if (!validPdf(op.pdf)) errors.push(NO_PDF(at));
+            if (op.css !== undefined && (typeof op.css !== 'string' || op.css.length > 1_000_000)) errors.push(`${at}: "css" inválido`);
             return errors;
         },
         run: (book, op) => {
-            const { html, diffs } = reviewStyles(book.html, op.pdf!, op.kinds);
+            const { html, diffs } = reviewStyles(book.html, op.pdf!, op.kinds, classEffects(op.css ?? ''));
             if (!diffs.length) return { summary: 'O estilo dos parágrafos já bate com o PDF (nos que se encontraram nele)' };
             const NAMES: Record<StyleKind, string> = { indent: 'indentação', emphasis: 'negrito/itálico', center: 'centrado', small: 'letra pequena', spacing: 'espaço acima' };
             const what = STYLE_KINDS.map((k) => [k, diffs.filter((d) => d.kind === k).length] as const).filter(([, n]) => n).map(([k, n]) => `${NAMES[k]} ${n}`).join(', ');

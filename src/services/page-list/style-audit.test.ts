@@ -4,6 +4,7 @@ import '../indesign/happy-dom';
 (globalThis as { DOMMatrix?: unknown }).DOMMatrix ??= class {};
 const { pdfStyles } = await import('./pdf-styles');
 const { reviewStyles } = await import('./style-audit');
+const { classEffects } = await import('../../utils/css-rule');
 const { fontStyleOf } = await import('./pdf-pages');
 type Page = import('./pdf-pages').PdfPageText;
 
@@ -82,6 +83,30 @@ test('espaço acima: p-top quando há salto no PDF; tira-o quando não há; com 
     expect(reviewStyles(html, pdf, ['spacing']).html).toBe(`<p>${joined(A)}</p><p class="p-top">${joined(B)}</p>`);
     expect(reviewStyles(`<p>antes</p><p class="p-top">${joined(A)}</p><p>${joined(B)}</p>`, pdf, ['spacing']).html).toBe(`<p>antes</p><p>${joined(A)}</p><p class="p-top">${joined(B)}</p>`);
     expect(reviewStyles(`<p>${joined(A)}</p><h2>x</h2><p>${joined(B)}</p>`, pdf, ['spacing']).diffs).toEqual([]);
+});
+
+test('espaço acima: um estilo que já dá espaço (p-bold, ou um do utilizador) evita o aviso; sem ele, avisa', () => {
+    const pdf = pdfStyles([page(text(filler(10), para(A), para(B).map((l, i) => (i === 0 ? { ...l, extra: 10 } : l))))]);
+    const html = (cls: string) => `<p>${joined(A)}</p><p class="${cls}">${joined(B)}</p>`;
+    const fx = classEffects('.p-bold { font-weight: bold; margin-top: 1.5em; } .destaque { margin-top: 2em; }');
+    expect(reviewStyles(html('p-bold'), pdf, ['spacing'], fx).diffs).toEqual([]);
+    expect(reviewStyles(html('destaque x'), pdf, ['spacing'], fx).diffs).toEqual([]);
+    // o p-bold NÃO dá espaço neste livro (CSS sem margin-top): avisa
+    const sem = classEffects('.p-bold { font-weight: bold; }');
+    expect(reviewStyles(html('p-bold'), pdf, ['spacing'], sem).diffs.map((d) => [d.add, d.text.slice(0, 10)])).toEqual([[['p-top'], B[0].slice(0, 10)]]);
+    expect(reviewStyles(html('p-bold'), pdf, ['spacing']).diffs.length).toBe(1); // sem CSS conta só o p-top
+});
+
+test('estilo renomeado (p-bold → p-subtitulo): conta como o original, pelo que o CSS diz que faz', () => {
+    const fx = classEffects('.p-subtitulo { font-weight: bold !important; margin-top: 1.5em; }');
+    const pdf = pdfStyles([page(text(filler(10), para(A), para(B, 0, { bold: true }).map((l, i) => (i === 0 ? { ...l, extra: 10 } : l))))]);
+    const html = `<p>${joined(A)}</p><p class="p-subtitulo">${joined(B)}</p>`;
+    // sem o CSS: manda acrescentar p-bold (e p-top); com ele, o p-subtitulo já é negrito e já tem espaço
+    expect(reviewStyles(html, pdf, ['emphasis', 'spacing']).diffs.map((d) => d.add)).toEqual([['p-bold'], ['p-top']]);
+    expect(reviewStyles(html, pdf, ['emphasis', 'spacing'], fx).diffs).toEqual([]);
+    // o PDF sem negrito: manda tirar o p-subtitulo (é ele que dá o negrito)
+    const plain = pdfStyles([page(text(filler(10), para(A), para(B)))]);
+    expect(reviewStyles(html, plain, ['emphasis'], fx).diffs.map((d) => [d.add, d.remove])).toEqual([[[], ['p-subtitulo']]]);
 });
 
 test('capitular: a 1.ª letra é uma linha à parte no PDF e o parágrafo acha-se na mesma, sem mexer na indentação', () => {

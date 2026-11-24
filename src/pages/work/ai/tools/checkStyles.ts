@@ -1,3 +1,4 @@
+import { classEffects } from '../../../../utils/css-rule';
 import { reviewStyles } from '../../../../services/page-list/style-audit';
 import type { AiTool } from './aiTool';
 
@@ -9,7 +10,7 @@ export const checkStylesTool: AiTool = {
     async run(_input, { workspace, suggest }) {
         const pdf = await workspace.pdfStyles();
         if (!pdf) return { content: 'Não há PDF de impressão carregado para este livro (ou não foi possível lê-lo): sem ele não se sabe como o livro impresso está formatado. Carrega-o no painel do PDF.', is_error: true };
-        const { diffs, checked, seen } = reviewStyles(workspace.parts().join(''), pdf);
+        const { diffs, checked, seen } = reviewStyles(workspace.parts().join(''), pdf, undefined, classEffects(workspace.css()));
         const grupos: Record<string, { add: string[]; remove: string[]; exemplos: { capitulo: string; pagina: number; texto: string }[]; total: number }> = {};
         for (const d of diffs) {
             const g = (grupos[`${d.kind}: ${d.why}`] ??= { add: d.add, remove: d.remove, exemplos: [], total: 0 });

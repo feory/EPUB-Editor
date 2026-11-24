@@ -2,6 +2,7 @@
 // indentação, o negrito/itálico, o centrado, o tamanho e o espaço acima batem com as classes do HTML. `reviewStyles` devolve as
 // diferenças e o HTML já corrigido (a ferramenta de leitura ignora o HTML; a operação fix_styles usa-o). Puro: recebe o `PdfStyles` já lido.
 import { INDENT_CONTROLLED_CLASSES, SPECIAL_INDENT_CLASSES } from '../../utils/editor-classes';
+import type { ClassEffects, Effect } from '../../utils/css-rule';
 import { STYLE_KINDS as SHARED_STYLE_KINDS } from '../../../shared/ai-contract.js';
 import { fold, type PdfStyles, type StyledLine, type StylePage } from './pdf-styles';
 
@@ -61,12 +62,12 @@ export function findLines(flat: FlatLine[], from: number, whole: string, minKey 
     return null;
 }
 
-const emphasisOf = (el: Element): { bold: boolean; italic: boolean } => {
+const emphasisOf = (el: Element, fx?: ClassEffects): { bold: boolean; italic: boolean } => {
     const text = fold(el.textContent ?? '');
     const covered = (sel: string) => fold(Array.from(el.querySelectorAll(sel)).map((n) => n.textContent ?? '').join('')).length >= text.length;
     return {
-        bold: el.classList.contains('p-bold') || el.classList.contains('p-bold-italic') || covered('strong, b'),
-        italic: el.classList.contains('p-italic') || el.classList.contains('p-bold-italic') || covered('em, i'),
+        bold: el.classList.contains('p-bold') || el.classList.contains('p-bold-italic') || Array.from(el.classList).some((c) => fx?.bold.has(c)) || covered('strong, b'),
+        italic: el.classList.contains('p-italic') || el.classList.contains('p-bold-italic') || Array.from(el.classList).some((c) => fx?.italic.has(c)) || covered('em, i'),
     };
 };
 
@@ -78,7 +79,7 @@ function unwrapInline(el: Element) {
  * Revê o estilo dos parágrafos de topo do livro contra o PDF. `kinds` limita o que se revê. Só toca em parágrafos que o PDF
  * confirma (ver findLines); os que não se acham ficam como estão. Corrigir duas vezes dá o mesmo (a 2.ª já não encontra diferenças).
  */
-export function reviewStyles(html: string, pdf: PdfStyles, kinds: readonly StyleKind[] = STYLE_KINDS): { html: string; diffs: StyleDiff[]; /** Parágrafos de topo que o PDF confirmou (os únicos que se reveem) e os que se viram. */ checked: number; seen: number } {
+export function reviewStyles(html: string, pdf: PdfStyles, kinds: readonly StyleKind[] = STYLE_KINDS, fx?: ClassEffects): { html: string; diffs: StyleDiff[]; /** Parágrafos de topo que o PDF confirmou (os únicos que se reveem) e os que se viram. */ checked: number; seen: number } {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const flat = flatLines(pdf);
     const diffs: StyleDiff[] = [];
@@ -119,40 +120,44 @@ export function reviewStyles(html: string, pdf: PdfStyles, kinds: readonly Style
             if (el.getAttribute('style') === '') el.removeAttribute('style');
         };
         const has = (c: string) => el.classList.contains(c);
+        // As classes do parágrafo que dão um efeito: pelo nome conhecido (p-bold…) OU pelo que o CSS do livro diz que fazem (`fx`), para um estilo
+        // renomeado (p-bold → p-subtitulo) contar como o original.
+        const withEffect = (effect: Effect, known: string) => Array.from(el.classList).filter((c) => c === known || fx?.[effect].has(c));
+        const gives = (effect: Effect, known: string) => withEffect(effect, known).length > 0;
 
         // Centrado: todas as linhas com o meio no meio da coluna e longe das margens (uma linha justificada nunca cumpre).
         const mid = (m.page.left + m.page.right) / 2;
         const centered = lines.every((l) => Math.abs((l.x0 + l.x1) / 2 - mid) <= CENTER_TOL * width && l.x0 - m.page.left >= CENTER_INSET * width && m.page.right - l.x1 >= CENTER_INSET * width);
         if (want('center')) {
-            if (centered && !has('p-center')) diff('center', ['p-center'], ['p-indent', 'p-non-indent'], 'o PDF tem a linha centrada');
-            else if (has('p-center') && !centered && m.first.x0 - m.page.left < FLUSH_LEFT * width) diff('center', [], ['p-center'], 'o PDF tem a linha encostada à margem');
+            if (centered && !gives('center', 'p-center')) diff('center', ['p-center'], ['p-indent', 'p-non-indent'], 'o PDF tem a linha centrada');
+            else if (gives('center', 'p-center') && !centered && m.first.x0 - m.page.left < FLUSH_LEFT * width) diff('center', [], withEffect('center', 'p-center'), 'o PDF tem a linha encostada à margem');
         }
 
         // Negrito/itálico do parágrafo inteiro (só com o texto todo coberto pelas linhas do PDF e sem ser título).
         if (want('emphasis') && m.full && m.first.size / body <= HEADING_SIZE) {
             const bold = lines.every((l) => l.bold), italic = lines.every((l) => l.italic);
-            const now = emphasisOf(el);
+            const now = emphasisOf(el, fx);
             const target = bold && italic ? 'p-bold-italic' : bold ? 'p-bold' : italic ? 'p-italic' : null;
             const current = now.bold && now.italic ? 'p-bold-italic' : now.bold ? 'p-bold' : now.italic ? 'p-italic' : null;
             if (target && target !== current) diff('emphasis', [target], EMPHASIS.filter((c) => c !== target).concat(target === 'p-italic' ? [] : ['p-indent']), `o PDF tem o parágrafo todo em ${target === 'p-bold' ? 'negrito' : target === 'p-italic' ? 'itálico' : 'negrito itálico'}`);
-            else if (!target && has('p-bold')) diff('emphasis', [], ['p-bold'], 'o PDF tem o parágrafo sem negrito');
-            else if (!target && has('p-italic')) diff('emphasis', [], ['p-italic'], 'o PDF tem o parágrafo sem itálico');
+            else if (!target && gives('bold', 'p-bold')) diff('emphasis', [], withEffect('bold', 'p-bold'), 'o PDF tem o parágrafo sem negrito');
+            else if (!target && gives('italic', 'p-italic')) diff('emphasis', [], withEffect('italic', 'p-italic'), 'o PDF tem o parágrafo sem itálico');
         }
 
         // Indentação: só em parágrafos normais (os que já controlam a indentação por classe, como p-bold/p-center, ficam de fora).
-        const controlled = found.dropCap || Array.from(el.classList).some((c) => INDENT_CONTROLLED_CLASSES.includes(c) && c !== 'p-indent' && c !== 'p-non-indent') || SPECIAL_INDENT_CLASSES.some(has);
+        const controlled = found.dropCap || Array.from(el.classList).some((c) => INDENT_CONTROLLED_CLASSES.includes(c) && c !== 'p-indent' && c !== 'p-non-indent') || SPECIAL_INDENT_CLASSES.some(has) || Array.from(el.classList).some((c) => fx?.bold.has(c) || fx?.center.has(c));
         if (want('indent') && !controlled && !centered) {
             const d = (m.first.x0 - m.page.left) / em;
             const block = lines.length > 1 && lines.every((l) => (l.x0 - m.page.left) / em > INDENT_MIN); // recuo de bloco (citação)
-            if (!block && d >= INDENT_MIN && d <= INDENT_MAX && !has('p-indent')) diff('indent', ['p-indent'], ['p-non-indent'], 'o PDF tem a 1.ª linha recuada');
-            else if (!block && Math.abs(d) <= FLUSH && has('p-indent')) diff('indent', [], ['p-indent'], 'o PDF tem a 1.ª linha encostada à margem');
+            if (!block && d >= INDENT_MIN && d <= INDENT_MAX && !gives('indent', 'p-indent')) diff('indent', ['p-indent'], ['p-non-indent'], 'o PDF tem a 1.ª linha recuada');
+            else if (!block && Math.abs(d) <= FLUSH && gives('indent', 'p-indent')) diff('indent', [], withEffect('indent', 'p-indent'), 'o PDF tem a 1.ª linha encostada à margem');
         }
 
         // Tamanho
         if (want('small')) {
             const ratio = m.first.size / body;
-            if (ratio < SMALL_ON && !has('p-small')) diff('small', ['p-small'], [], 'o PDF tem letra mais pequena que o corpo');
-            else if (ratio >= SMALL_OFF && has('p-small')) diff('small', [], ['p-small'], 'o PDF tem a letra do corpo');
+            if (ratio < SMALL_ON && !gives('small', 'p-small')) diff('small', ['p-small'], [], 'o PDF tem letra mais pequena que o corpo');
+            else if (ratio >= SMALL_OFF && gives('small', 'p-small')) diff('small', [], withEffect('small', 'p-small'), 'o PDF tem a letra do corpo');
         }
 
         // Espaço acima: só entre dois parágrafos (com um título pelo meio a margem do título explica o salto) e sem p-bottom/p-space a fazê-lo.
@@ -160,7 +165,8 @@ export function reviewStyles(html: string, pdf: PdfStyles, kinds: readonly Style
         const spaced = (e: Element) => ['p-bottom', 'p-space', 'p-quote', 'p-legendas'].some((c) => e.classList.contains(c)) || Array.from(e.classList).some((c) => c.startsWith('p-border'));
         if (want('spacing') && m.lineIndex >= 2 && m.page.gap > 0 && prev?.tagName === 'P' && !spaced(prev) && !has('p-space')) {
             const gap = (m.page.lines[m.lineIndex - 1].y - m.first.y) / m.page.gap;
-            if (gap > GAP_ON && !has('p-top')) diff('spacing', ['p-top'], [], 'o PDF tem espaço acima do parágrafo');
+            // Já tem espaço acima por um estilo (p-top, p-bold, um do utilizador…)? Vê-se no CSS do livro; sem ele só conta o p-top. Só o p-top se tira.
+            if (gap > GAP_ON && !gives('top', 'p-top')) diff('spacing', ['p-top'], [], 'o PDF tem espaço acima do parágrafo');
             else if (gap <= GAP_OFF && has('p-top')) diff('spacing', [], ['p-top'], 'o PDF não tem espaço acima do parágrafo');
         }
     }

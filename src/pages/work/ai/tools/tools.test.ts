@@ -159,7 +159,7 @@ test('preview_rules + fix_styles: o PDF entra na operação; sem PDF é erro; ki
     expect(out.errors).toEqual([]);
     expect(out.operations[0]).toMatchObject({ label: 'Estilos segundo o PDF', changed: true });
     expect(out.operations[0].summary).toContain('indentação 1');
-    expect(proposal()!.ops[0]).toEqual({ type: 'fix_styles', pdf: pdfRecuado }); // a proposta leva os dados: aplicar repete o que se viu
+    expect(proposal()!.ops[0]).toEqual({ type: 'fix_styles', pdf: pdfRecuado, css: '' }); // a proposta leva os dados: aplicar repete o que se viu
 
     const so = JSON.parse((await previewRulesTool.run({ rules: [], operations: [{ type: 'fix_styles', kinds: ['center'] }] }, ctx)).content);
     expect(so.operations[0].changed).toBe(false);
