@@ -242,6 +242,9 @@ body {
 .tox .tox-editor-header .tox-toolbar__group { padding: 0 2px; }
 
 /* Toolbar do editor sem sombra (normal e sticky) */
+/* A moldura do editor é a do contentor (WorkEditor: 1px, cantos de 16px): sem a borda de 2px e os cantos próprios do TinyMCE, que faziam uma dupla borda. */
+.tox.tox-tinymce { border: 0; border-radius: 0; }
+
 .tox:not(.tox-tinymce-inline) .tox-editor-header,
 .tox:not(.tox-tinymce-inline).tox-tinymce--toolbar-sticky-on .tox-editor-header { box-shadow: none; }
 
