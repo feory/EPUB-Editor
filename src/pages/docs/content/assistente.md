@@ -2,7 +2,7 @@
 
 O assistente é um ajudante que vive dentro do editor. Tu dizes-lhe, por palavras tuas, o que queres mudar no livro, e ele faz o trabalho chato por ti: procurar, corrigir e uniformizar.
 
-> **A regra de ouro: o assistente nunca mexe no livro sem tu deixares.** Primeiro mostra o que pretende fazer (uma *proposta*). Só depois de carregares em **Aplicar** é que o livro muda. E se te arrependeres, há sempre **Reverter**.
+> **A regra de ouro: o assistente nunca mexe no livro sem tu deixares.** Primeiro mostra o que pretende fazer (uma *proposta*). Só depois de carregares em **Aplicar** é que o livro muda. E se te arrependeres, há sempre **Reverter**. (Só há uma exceção, e o assistente pergunta antes: comprimir imagens, na secção 3.10.)
 
 ---
 
@@ -12,6 +12,21 @@ O assistente é um ajudante que vive dentro do editor. Tu dizes-lhe, por palavra
 2. Escreve o que queres numa frase normal, como falarias com um colega. Carrega em **Enter** para enviar.
 3. O assistente responde e, se o pedido implicar alterações, aparece uma caixa **Proposta** com o resumo do que vai mudar.
 4. Lê a proposta. Se estiver bem, carrega em **Aplicar**. Se não, em **Descartar** (nada acontece).
+
+### Ver a proposta antes de aplicar
+
+A proposta tem dois separadores:
+
+- **Exemplo** (aparece primeiro): mostra a alteração **desenhada**, com o aspeto real do livro. Serve para o que se vê, como a cor de um texto ou um fundo. Num estilo novo vês o *depois*; num estilo alterado, o *antes* e o *depois* lado a lado; nas regras, um exemplo (o primeiro) de cada regra.
+- **Código**: o detalhe em texto: as regras, as operações (por exemplo a tipografia), os estilos com o valor antigo e o novo, e exemplos do HTML antes e depois.
+
+Há alterações que não têm exemplo desenhado (trocar texto, tipografia, mexer em capítulos): ficam no resumo em texto.
+
+### Pequenos atalhos
+
+- Enquanto trabalha, o painel diz o que está a fazer («A ler o livro…», «A comparar os estilos com o PDF…») e há um botão **Parar** que cancela o pedido.
+- Na caixa de escrita, **↑** (no início do texto) e **↓** (no fim) percorrem os pedidos anteriores. Se um pedido falhar, o texto volta à caixa e não tens de o escrever de novo.
+- As respostas podem trazer botões azuis. **Cap. 12 ▸** leva o editor ao capítulo (e ao bloco) citado. **p. 79 ▸** abre o PDF de impressão nessa página **e** leva o editor ao mesmo ponto. Se o livro não tiver o marcador dessa página, só o PDF se move.
 
 Os ícones no topo do painel:
 
@@ -123,6 +138,22 @@ Mostra-te quantas alterações faz de cada tipo e um exemplo antes de aplicares.
 
 *«Liga as entradas do Índice aos capítulos.»* — cada linha do Índice passa a levar o leitor ao capítulo certo.
 
+### 3.9 Acertar o espaçamento das ligações
+
+*«Corrige o espaçamento dos links.»* — acerta o espaçamento das ligações do livro. Mostra-te o resumo do que mudou antes de aplicares.
+
+### 3.10 Comprimir imagens
+
+Se o EPUB está pesado, o assistente reduz as imagens: as que forem **mais largas** que o limite passam a esse limite (nunca as aumenta) e são guardadas com menos qualidade. Por omissão, 1600 px de largura e qualidade 82; podes pedir outros valores (largura de 400 a 6000 px, qualidade de 40 a 95). Mostra no fim quanto poupou, antes e depois.
+
+**Exemplos**
+
+- *«Comprime as imagens.»*
+- *«Reduz as imagens para 1200 px de largura.»*
+- *«O ebook está pesado.»* → o assistente explica o que faria e **pergunta** se queres, antes de mexer.
+
+> **Atenção:** é a única coisa que o assistente faz **sem Aplicar e sem Reverter**: os ficheiros das imagens são substituídos no servidor e **não se desfaz**. Por isso ele só comprime quando lho pedes. Fazer isto também está em Ferramentas → Auxílio → Compressão de Imagens.
+
 ---
 
 ## 4. Perguntas e verificações
@@ -176,6 +207,28 @@ Faz uma lista de verificação antes de exportar: dados do livro (metadados), ca
 
 Se estiver tudo certo, responde só: *«Está tudo pronto para exportar.»*
 
+### 4.4 Procurar no livro
+
+*«Onde aparece "Stanley"?»* — mostra até 20 sítios, cada um com o capítulo, o tipo de bloco e um excerto, e um botão **Cap. N ▸** para saltares para lá. Também serve para contar: *«Quantas vezes escrevi "marketing"?»*
+
+### 4.5 Comparar com o PDF de impressão
+
+Se o livro tem o **PDF de impressão carregado** (painel do PDF, o ícone de página na barra do editor), o assistente compara o livro com ele. Sem PDF, diz-te que não consegue.
+
+- **Lista de páginas** — *«Que páginas não têm marcador?»* Diz quantas páginas têm marcador e porque faltam as outras: em branco, do Índice, só figura, abre com figura, ou fora de ordem (as duas últimas são as que vale a pena rever). O botão **Corrigir lista de páginas** insere os marcadores que faltam.
+- **Estilos** — *«Os estilos batem com o PDF?»* Compara os parágrafos soltos com o impresso: indentação, negrito/itálico, centrado, letra pequena e espaço acima. O botão **Corrigir estilos pelo PDF** aplica as diferenças (como sempre, primeiro vês a proposta). Só vê parágrafos soltos que encontra no PDF: caixas, listas, tabelas, citações, legendas, notas, Índice e ficha técnica ficam de fora.
+- **Figuras** — *«As figuras estão no sítio certo?»* Compara a posição de cada figura **com legenda** («Figura 3.1 …») com a ordem do PDF e diz as que estão fora do sítio ou com a imagem e a legenda trocadas. No impresso as figuras flutuam para o topo ou o fundo da página, por isso só conta quando a diferença é de duas ou mais páginas. Para corrigir: *«Põe as figuras no sítio.»* Também podes pedir *«Junta cada figura à legenda»*, para não haver quebra de página entre as duas.
+- **Texto** — *«O livro tem o mesmo texto que o impresso?»* Mostra as linhas do PDF que não encontra no livro, por página, cada uma com o botão **p. N ▸**. Ignora espaços, pontuação e hifenização. Só compara texto de corpo: páginas com colunas ou tabelas, texto de diagramas (que no livro são imagens), Índice, ficha técnica e cabeçalhos ficam de fora, e as notas de rodapé podem dar falsos positivos. Não há correção automática: o texto que falta repõe-se à mão.
+
+### 4.6 Relatório de falhas
+
+*«Prepara um relatório com todas as falhas.»* — o assistente junta a lista de verificação para publicar, a lista de páginas, os estilos e as figuras (contra o PDF) e as validações. Demora um pouco, porque corre as validações. No fim aparece o cartão **Relatório pronto**:
+
+- **Abrir página** — abre o relatório bem organizado (secções, subtítulos e listas, com o capítulo e a página do PDF de cada falha) num separador novo. Fica num endereço do servidor que **não pede login**: quem o tiver abre-o. Só se guarda o último relatório de cada livro.
+- **.txt** — descarrega o mesmo relatório em texto simples.
+
+Sem PDF carregado, as secções que dependem dele ficam marcadas como não feitas.
+
 ---
 
 ## 5. Texto alternativo das imagens
@@ -220,6 +273,9 @@ Para não teres surpresas:
 - **Não apaga estilos em uso**, nem apaga estilos sem lhe pedires.
 - **Aspas só em « »**. Outros estilos de aspas não estão disponíveis.
 - **A tipografia não funciona com blocos selecionados.** Tira o aviso amarelo (×) e pede de novo para o livro todo.
+- **Comprimir imagens não se desfaz** e não passa pelo Aplicar (secção 3.10). É a única exceção.
+- **Não corrige texto em falta** em relação ao PDF: mostra onde está a diferença e tu repões à mão.
+- **As comparações com o PDF precisam do PDF carregado** no painel do PDF.
 - **Em modo de leitura** (quando outra pessoa está a editar o mesmo livro) o botão Aplicar fica desativado.
 - **Pode enganar-se.** Lê sempre a proposta. É para isso que ela existe.
 
