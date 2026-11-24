@@ -93,7 +93,7 @@ test('auditPageList: página cujo texto é do Índice e sem marcador → "indice
 });
 
 
-const { insertPageBreaks } = await import('./alignment');
+const { insertPageBreaks, readBodyText } = await import('./alignment');
 
 // Índice com 2 páginas (9, 10) e o título "PARTE I" no corpo com o mesmo texto da 1.ª entrada do Índice.
 const ENTRADA = 'Parte I A aproximação da mente humana';
@@ -158,4 +158,21 @@ test('chapterAnchorsFromPages: título na página de abertura (letra grande) →
     const r = chapterAnchorsFromPages(pages, ['CAPITULO DOIS']);
     expect(r).toEqual([{ title: 'CAPITULO DOIS', anchor: normalize('Primeira linha do capitulo dois com texto suficiente aqui').slice(0, 60) }]);
     expect(chapterAnchorsFromPages(pages, ['TITULO QUE NAO EXISTE'])).toEqual([]);
+});
+
+test('insertPageBreaks: as notas (rodapé ou do fim do capítulo, que abrem com <sup>N</sup>) não levam marcadores', () => {
+    const pages = [
+        page(1, ['Texto da pagina um que esta no corpo do livro agora']),
+        page(2, ['Nota do fim do capitulo que nao deve ter marcador algum']),
+        page(3, ['Texto da pagina tres que esta no corpo do livro agora']),
+    ];
+    const html = '<p>Texto da pagina um que esta no corpo do livro agora</p><p><sup>1</sup> Nota do fim do capitulo que nao deve ter marcador algum</p><p class="footnote">(<sup>2</sup>) Nota de rodape qualquer</p><p>Texto da pagina tres que esta no corpo do livro agora</p>';
+    const r = insertPageBreaks(html, anchorsFromPages(pages));
+    expect(r.html).toContain('<span class="pagebreak" data-page="1"></span>Texto da pagina um');
+    expect(r.html).toContain('<span class="pagebreak" data-page="3"></span>Texto da pagina tres');
+    expect(r.html).not.toContain('data-page="2"');
+    expect(r.html).toContain('<p><sup>1</sup> Nota do fim do capitulo'); // a nota fica intacta
+    // os marcadores que já estavam numa nota não contam como existentes
+    const comMarcador = '<p><span class="pagebreak" data-page="2"></span><sup>1</sup> Nota do fim do capitulo que nao deve ter marcador algum</p>';
+    expect(readBodyText(comMarcador).markedPages().has(2)).toBe(false);
 });
