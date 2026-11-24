@@ -1,9 +1,9 @@
 // A GEOMETRIA do PDF de impressão, para comparar com o estilo do livro (style-audit.ts): cada linha com a posição, o tamanho e o
 // negrito/itálico, mais as medidas de cada página (margens, entrelinha) e o corpo de letra do livro. Puro (só lê `PdfPageText`).
 import type { PdfImageBox, PdfPageText } from './pdf-pages';
+import { rowsOfPage } from './pdf-rows';
 import { normalize } from './pdf-text';
 
-const SUPER_Y_TOL = 5;   // pt: igual a pdf-text.ts (um sobrescrito tem y ligeiramente diferente do corpo)
 const KEY_LEN = 120;     // chars normalizados guardados por linha (chega para juntar linhas seguidas num parágrafo)
 const MIN_LINES = 8;     // linhas de corpo para confiar nas margens de uma página
 const MIN_GAPS = 5;
@@ -47,16 +47,10 @@ function leftMargin(xs: number[]): number | undefined {
 
 /** As linhas de uma página, topo→baixo. Negrito/itálico = todas as partes COM letras (um nº de nota sobrescrito não conta). */
 export function styledLines(page: PdfPageText): StyledLine[] {
-    const items = page.items.filter((it) => it.str && it.str.trim()).sort((a, b) => b.transform[5] - a.transform[5]);
-    const rows: { y: number; parts: PdfPageText['items'] }[] = [];
-    for (const it of items) {
-        const last = rows[rows.length - 1];
-        if (last && last.y - it.transform[5] < SUPER_Y_TOL) last.parts.push(it);
-        else rows.push({ y: it.transform[5], parts: [it] });
-    }
+    const rows = rowsOfPage(page.items, { dropBlank: true });
     const out: StyledLine[] = [];
     for (const r of rows) {
-        const parts = r.parts.sort((a, b) => a.transform[4] - b.transform[4]);
+        const parts = r.items;
         const key = fold(parts.map((p) => p.str).join('')).slice(0, KEY_LEN);
         if (!key) continue;
         const sized = parts.reduce((a, b) => (b.str.length > a.str.length ? b : a));

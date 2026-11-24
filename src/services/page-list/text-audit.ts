@@ -2,11 +2,11 @@
 // o livro tem e o PDF não (texto a mais ou duplicado). Compara por texto normalizado e contíguo (sem espaços, pontuação nem hífens), por isso a
 // hifenização e a quebra de linha do PDF não contam como diferença. Só lê; não altera nada.
 import type { PdfPageText } from './pdf-pages';
+import { rowsOfPage } from './pdf-rows';
 import { detectFolios } from './pdf-text';
 import { fold } from './pdf-styles';
 import { SKIP_CHAPTER } from './style-audit';
 
-const SUPER_Y_TOL = 5;    // pt: um sobrescrito tem y ligeiramente diferente do corpo (igual a pdf-text.ts)
 const MIN_LINE = 20;      // chars normalizados: abaixo disto uma linha (título curto, nº, "Fim") casa em qualquer lado
 const WINDOW = 30;        // um bloco do livro verifica-se em janelas deste tamanho
 const COLUMN_GAP = 1.5;     // em corpos de letra: um espaço maior que isto entre duas palavras da mesma linha separa colunas (tabelas, diagramas, índice remissivo)
@@ -37,16 +37,10 @@ export interface TextAudit {
 
 /** As linhas de uma página, topo→baixo, partidas onde há um espaço de coluna: células e colunas lado a lado não se colam numa só linha. */
 function rowsOf(items: PdfPageText['items']): string[][] {
-    const sorted = items.filter((it) => it.str).sort((a, b) => b.transform[5] - a.transform[5]);
-    const rows: { y: number; parts: typeof items }[] = [];
-    for (const it of sorted) {
-        const last = rows[rows.length - 1];
-        if (last && last.y - it.transform[5] < SUPER_Y_TOL) last.parts.push(it); else rows.push({ y: it.transform[5], parts: [it] });
-    }
-    return rows.map((r) => {
+    return rowsOfPage(items).map((r) => {
         const out: string[] = [];
         let cur = '', end = NaN;
-        for (const it of r.parts.sort((a, b) => a.transform[4] - b.transform[4])) {
+        for (const it of r.items) {
             const size = Math.abs(it.transform[0]) || 1;
             if (cur && it.width !== undefined && it.transform[4] - end > COLUMN_GAP * size) { out.push(cur); cur = ''; }
             cur += it.str;

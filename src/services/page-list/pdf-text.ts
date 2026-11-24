@@ -2,6 +2,7 @@
 // Tudo puro: sem pdfjs nem DOM, por isso testa-se com páginas sintéticas.
 import { fillFolioGaps, dropFolioOutliers } from './folio';
 import type { PdfPageText } from './pdf-pages';
+import { rowsOfPage } from './pdf-rows';
 
 // `page` = folio impresso (nº que aparece na página, usado para casar com o editor);
 // `pdfPageIndex` = posição física no PDF (1-based, pode divergir do folio por causa de
@@ -21,7 +22,6 @@ export function normalize(s: string): string {
 
 export const ANCHOR_LEN = 30;   // chars normalizados usados como âncora
 export const MIN_ANCHOR = 15;   // mínimo para a âncora ser fiável
-const SUPER_Y_TOL = 5;   // pt: desvio vertical máximo de um sobrescrito face à linha do corpo
 
 // Âncoras de capítulo (extractChapterAnchors) precisam de mais chars que as de página: aberturas
 // de capítulo do mesmo livro por vezes começam com a mesma fórmula ("Sun Tzu disse: 1. Na
@@ -91,18 +91,8 @@ export function anchorsFromPages(pages: PdfPageText[]): PageAnchor[] {
         const folio = folios[idx];
         if (folio === null) continue; // sem folio, nem interpolável (front-matter) → saltar
         const hasPrintedFolio = rawFolios[idx] !== null;
-        // Linha = itens com y próximo (SUPER_Y_TOL): o nº de nota sobrescrito tem y ligeiramente
-        // diferente do corpo e, agrupado por y exato, partia a linha (âncora sem "(9)" ≠ texto do editor).
-        const sorted = pages[idx].items.filter(it => 'str' in it && it.str).sort((a, b) => b.transform[5] - a.transform[5]);
-        const lines: { y: number; parts: { x: number; str: string }[] }[] = [];
-        for (const it of sorted) {
-            const y = it.transform[5];
-            const last = lines[lines.length - 1];
-            if (last && last.y - y < SUPER_Y_TOL) last.parts.push({ x: it.transform[4], str: it.str });
-            else lines.push({ y, parts: [{ x: it.transform[4], str: it.str }] });
-        }
         // âncora = 1ª linha de corpo APÓS o cabeçalho corrente (linha de topo); ordenar topo→baixo
-        const ordered = lines.map(l => l.parts.sort((a, b) => a.x - b.x).map(p => p.str).join(''));
+        const ordered = pdfLines(pages[idx].items).map(l => l.text); // linhas topo→baixo (rowsOfPage)
         const usable = (hasPrintedFolio ? ordered.slice(1) : ordered).map(l => normalize(l).slice(0, ANCHOR_LEN)).filter(a => a.length >= MIN_ANCHOR);
         if (usable.length) anchors.push({ page: folio, pdfPageIndex: idx + 1, anchor: usable[0], lines: usable.slice(0, MAX_ANCHOR_LINES) });
     }
@@ -146,15 +136,7 @@ const MAX_PAGES_AFTER_OPENING = 4;
 
 // Linhas de uma página (topo→baixo, itens com y próximo agrupados) + o maior corpo de letra de cada uma.
 export function pdfLines(items: PdfPageText['items']): { text: string; size: number }[] {
-    const sorted = items.filter(it => 'str' in it && it.str).sort((a, b) => b.transform[5] - a.transform[5]);
-    const lines: { y: number; parts: { x: number; str: string }[]; size: number }[] = [];
-    for (const it of sorted) {
-        const y = it.transform[5];
-        const last = lines[lines.length - 1];
-        if (last && last.y - y < SUPER_Y_TOL) { last.parts.push({ x: it.transform[4], str: it.str }); last.size = Math.max(last.size, Math.abs(it.transform[0])); }
-        else lines.push({ y, parts: [{ x: it.transform[4], str: it.str }], size: Math.abs(it.transform[0]) });
-    }
-    return lines.map(l => ({ text: l.parts.sort((a, b) => a.x - b.x).map(p => p.str).join(''), size: l.size }));
+    return rowsOfPage(items).map(r => ({ text: r.items.map(it => it.str).join(''), size: Math.max(...r.items.map(it => Math.abs(it.transform[0]))) }));
 }
 
 /**
