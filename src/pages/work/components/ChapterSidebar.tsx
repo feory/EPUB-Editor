@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
+import { OverflowMenu } from '../../../components/OverflowMenu';
 import { PanelLeftClose, PanelLeftOpen, Edit2, GripVertical, Trash2, Check, X, Copy, Eye, EyeOff } from 'lucide-react';
 import { ModalCloseButton } from '../../../components/ModalCloseButton';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
@@ -69,7 +70,9 @@ const ChapterItem = React.memo<ChapterItemProps>(({
     >
         <button
             onClick={() => onSelectChapter(index)}
-            className={`w-full text-left ${readOnly ? 'pl-4' : 'pl-8'} pr-32 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-start gap-3 ${
+            onDoubleClick={readOnly ? undefined : () => onRequestEdit(index, editValue(chapter))}
+            title={readOnly ? undefined : 'Duplo clique para editar o título'}
+            className={`w-full text-left ${readOnly ? 'pl-4' : 'pl-8'} pr-16 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-start gap-3 ${
                 isActive
                     ? 'bg-slate-200 text-slate-800'
                     : 'hover:bg-slate-50 text-text-muted'
@@ -112,27 +115,15 @@ const ChapterItem = React.memo<ChapterItemProps>(({
                     >
                         {chapter.level === 'break' ? <Eye size={14} /> : <EyeOff size={14} />}
                     </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onRequestEdit(index, editValue(chapter)); }}
-                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-all"
-                        title="Editar título"
-                    >
-                        <Edit2 size={14} />
-                    </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onRequestDuplicate(index); }}
-                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-all"
-                        title={childCount > 0 ? `Duplicar capítulo (+${childCount} sub-capítulo${childCount > 1 ? 's' : ''})` : 'Duplicar capítulo'}
-                    >
-                        <Copy size={14} />
-                    </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onRequestDelete(index); }}
-                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-rose-600 transition-all"
-                        title={childCount > 0 ? `Eliminar capítulo (+${childCount} sub-capítulo${childCount > 1 ? 's' : ''})` : 'Eliminar capítulo'}
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    <OverflowMenu
+                        iconSize={14}
+                        buttonClassName="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-all"
+                        items={[
+                            { icon: <Edit2 size={14} />, label: 'Editar título', onClick: () => onRequestEdit(index, editValue(chapter)) },
+                            { icon: <Copy size={14} />, label: childCount > 0 ? `Duplicar (+${childCount} sub)` : 'Duplicar', onClick: () => onRequestDuplicate(index) },
+                            { icon: <Trash2 size={14} />, label: childCount > 0 ? `Eliminar (+${childCount} sub)` : 'Eliminar', onClick: () => onRequestDelete(index) },
+                        ]}
+                    />
                 </div>
             )
         )}
