@@ -28,6 +28,18 @@ function clearImageVariants(imagesDir, thumbnailsDir, id, keepFilename) {
   }
 }
 
+// Se a pasta desaparecer a meio do pedido (ENOENT no open; bind mount do Docker no macOS), recria-a e tenta uma vez.
+async function writeImageFile(imagesDir, name, data) {
+  const path = join(imagesDir, name);
+  try { await Bun.write(path, data); }
+  catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+    mkdirSync(imagesDir, { recursive: true });
+    await Bun.sleep(50);
+    await Bun.write(path, data);
+  }
+}
+
 // Rasteriza um EPS (Illustrator vetorial) para PNG a 300dpi com Ghostscript (cor, nítido).
 // Fallback: o preview raster embutido no DOS-EPS (cinza, baixa-res) via sharp, se o gs faltar.
 // Antialiasing (-dTextAlphaBits/-dGraphicsAlphaBits=4): sem ele o gs desenha texto e traços vetoriais sem suavizar.
@@ -238,7 +250,7 @@ export async function saveSingleImage(req, isbn, imageId) {
   const validExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
   const ext = validExts.has(rawExt) ? rawExt : 'png';
   clearImageVariants(imagesDir, thumbnailsDir, imageId, `${imageId}.${ext}`);
-  await Bun.write(join(imagesDir, `${imageId}.${ext}`), image);
+  await writeImageFile(imagesDir, `${imageId}.${ext}`, image);
   return Response.json({ message: 'Image saved' }, { headers: corsHeaders });
 }
 
@@ -256,25 +268,13 @@ export async function batchImages(req, isbn) {
     return Response.json({ error: 'Image too large' }, { status: 413, headers: corsHeaders });
   }
 
-  // Se a pasta desaparecer a meio do pedido (ENOENT no open), recria-a e tenta uma vez.
-  const writeImage = async (name, data) => {
-    const path = join(imagesDir, name);
-    try { await Bun.write(path, data); }
-    catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-      mkdirSync(imagesDir, { recursive: true });
-      await Bun.sleep(50);
-      await Bun.write(path, data);
-    }
-  };
-
   // Em série: com a pasta num bind mount do Docker (macOS) muitas escritas em paralelo davam ENOENT no open.
   for (const file of images) {
     // EPS vetorial → rasterizar com Ghostscript (cor, alta-res) e guardar como PNG.
     if (/\.eps$/i.test(file.name)) {
       const id = sanitizeName(file.name.replace(/\.eps$/i, '')) || 'image';
       const png = await epsToPng(await file.arrayBuffer());
-      if (png) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.png`); await writeImage(`${id}.png`, png); saved.push({ id, filename: `${id}.png` }); }
+      if (png) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.png`); await writeImageFile(imagesDir, `${id}.png`, png); saved.push({ id, filename: `${id}.png` }); }
       else debugLog(`[EPS] conversão falhou (gs ausente?): ${file.name}`);
       continue;
     }
@@ -282,7 +282,7 @@ export async function batchImages(req, isbn) {
     if (/\.psd$/i.test(file.name)) {
       const id = sanitizeName(file.name.replace(/\.psd$/i, '')) || 'image';
       const png = await psdToPng(await file.arrayBuffer());
-      if (png) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.png`); await writeImage(`${id}.png`, png); saved.push({ id, filename: `${id}.png` }); }
+      if (png) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.png`); await writeImageFile(imagesDir, `${id}.png`, png); saved.push({ id, filename: `${id}.png` }); }
       else debugLog(`[PSD] conversão falhou (ImageMagick ausente?): ${file.name}`);
       continue;
     }
@@ -290,7 +290,7 @@ export async function batchImages(req, isbn) {
     if (/\.tiff?$/i.test(file.name)) {
       const id = sanitizeName(file.name.replace(/\.tiff?$/i, '')) || 'image';
       const jpeg = await tiffToJpeg(await file.arrayBuffer());
-      if (jpeg) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.jpg`); await writeImage(`${id}.jpg`, jpeg); saved.push({ id, filename: `${id}.jpg` }); }
+      if (jpeg) { clearImageVariants(imagesDir, thumbnailsDir, id, `${id}.jpg`); await writeImageFile(imagesDir, `${id}.jpg`, jpeg); saved.push({ id, filename: `${id}.jpg` }); }
       else debugLog(`[TIFF] conversão falhou (sharp ausente?): ${file.name}`);
       continue;
     }
@@ -298,7 +298,7 @@ export async function batchImages(req, isbn) {
     if (!filename.match(/\.(png|jpg|jpeg|gif|webp)$/i)) filename += '.png';
     const id = filename.replace(/\.(png|jpg|jpeg|gif|webp)$/i, '');
     clearImageVariants(imagesDir, thumbnailsDir, id, filename);
-    await writeImage(filename, file);
+    await writeImageFile(imagesDir, filename, file);
     saved.push({ id, filename });
   }
 
