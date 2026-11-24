@@ -46,9 +46,8 @@ body {
   box-sizing: border-box;
 }
 
-/* Texto selecionado nos campos (número do contorno, nomes…): o realce do sistema (no macOS depende da cor de destaque, e em «grafite» é cinzento escuro) escondia o texto. Cinza claro com texto escuro lê-se sempre. */
-input::selection,
-textarea::selection {
+/* Texto selecionado em toda a aplicação (campos, assistente, ajuda, dicas…): o realce do sistema (no macOS depende da cor de destaque, e em «grafite» é cinzento escuro) escondia o texto, sobretudo nos campos e sobre fundos escuros. Cinza claro com texto escuro lê-se sempre. O texto do editor (TinyMCE) vive noutro documento e não é afetado. */
+::selection {
   background: #e2e8f0;
   color: #0f172a;
 }
