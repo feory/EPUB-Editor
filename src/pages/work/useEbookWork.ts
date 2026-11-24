@@ -13,7 +13,7 @@ import type { ImportOptions } from '../../utils/html-cleaner';
 import { drafts } from '../../utils/local-draft';
 import { sendOnUnload } from './sendOnUnload';
 import type { Draft } from '../../utils/local-draft';
-import { listSubtitles } from '../../utils/indice-links';
+import { listSubtitles, listParagraphStyles } from '../../utils/indice-links';
 import type { DocxStyleMapping } from '../../services/import/document-importer';
 import type { PageAnchor } from '../../services/page-list/pdf-text';
 
@@ -258,7 +258,8 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
     const handleRemoveCommentAnchor = useCallback((anchorId: string) =>
         applyEdit(bookEdit.removeCommentAnchor(getBook(), anchorId)), [applyEdit, getBook]);
     const handleApplyDropCaps = useCallback(() => applyEdit(bookEdit.applyDropCaps(getBook())), [applyEdit, getBook]);
-    const handleLinkIndiceEntries = useCallback(() => applyEdit(bookEdit.linkIndice(getBook())), [applyEdit, getBook]);
+    const handleLinkIndiceEntries = useCallback((subtitleStyles?: readonly string[]) => applyEdit(bookEdit.linkIndice(getBook(), subtitleStyles)), [applyEdit, getBook]);
+    const getParagraphStyles = useCallback(() => listParagraphStyles(getBook().parts), [getBook]); // para o diálogo de "Criação Links Índice"
     // Mini-menu do editor ("Ligar a…"): uma entrada, ou null no alvo = remover a ligação.
     const handleLinkIndiceEntryManual = useCallback((pIndex: number, indiceChapterIndex: number, targetChapterIndex: number | null, subIndex?: number) =>
         applyEdit(bookEdit.linkIndiceEntry(getBook(), pIndex, indiceChapterIndex, targetChapterIndex, subIndex)), [applyEdit, getBook]);
@@ -422,6 +423,7 @@ export function useEbookWork(isbn: string | undefined, editorRef?: RefObject<Wor
         handleRemoveStyle,
         handleRenameStyle,
         handleLinkIndiceEntries,
+        getParagraphStyles,
         handleLinkIndiceEntryManual,
         getIndiceSubtitles,
         handleFixLinks,

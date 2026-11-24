@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import '../services/indesign/happy-dom'; // DOMParser no bun
-import { linkIndiceEntries, linkOneIndiceEntry, listSubtitles, unlinkOneIndiceEntry, entryIndexOf } from './indice-links';
+import { linkIndiceEntries, linkOneIndiceEntry, listParagraphStyles, listSubtitles, unlinkOneIndiceEntry, entryIndexOf } from './indice-links';
 import { chapterOfTarget, chapterTargetId, subTargetId, pickedSubTargetId, newManualAnchorId, manualAnchorHtml, unwrapTrailingIdxLink, idxLinkHtml } from './indice-marker';
 
 const toc = (body: string) => `<p class="chapter-break-h1" data-title="Índice"></p><h1>Índice</h1>${body}`;
@@ -386,4 +386,40 @@ test('entryIndexOf (DOM) e findEntryParagraph (string) apontam para o mesmo <p>,
         expect(out.parts[0]).toContain(`<span class="idx-link" data-target="idx-anchor-1">${p.textContent}</span>`); // ligou ESTA entrada
         expect(out.parts[0].match(/idx-link/g)).toHaveLength(1);
     }
+});
+
+test('linkIndiceEntries: os estilos de subtítulo são os que o utilizador escolhe (p-subtitulo), não só os 4 de origem', () => {
+    const parts = [
+        toc('<p>Um fantasma assombra o mundo . . . 358</p><p>Introdução . . . 359</p>'),
+        chapter('1', 'Um fantasma assombra o mundo', '<p class="p-top p-subtitulo">Introdução</p><p>texto</p>'),
+    ];
+    expect(linkIndiceEntries(parts).linked).toBe(1);                       // por omissão p-subtitulo não conta
+    const r = linkIndiceEntries(parts, ['p-subtitulo']);
+    expect(r.linked).toBe(2);
+    expect(r.parts[1]).toMatch(/<p class="p-top p-subtitulo">Introdução<\/p><p class="chapter-anchor" id="idx-anchor-1-1">/);
+    expect(linkIndiceEntries(parts, []).linked).toBe(1);                   // nenhum estilo escolhido
+});
+
+test('linkIndiceEntries: um estilo escolhido não apanha outro que só comece igual (p-sub vs p-sub-2)', () => {
+    const parts = [
+        toc('<p>Um fantasma assombra o mundo . . . 358</p><p>Introdução . . . 359</p>'),
+        chapter('1', 'Um fantasma assombra o mundo', '<p class="p-sub-2">Introdução</p>'),
+    ];
+    expect(linkIndiceEntries(parts, ['p-sub']).linked).toBe(1);
+    expect(linkIndiceEntries(parts, ['p-sub-2']).linked).toBe(2);
+});
+
+test('listParagraphStyles: classes dos parágrafos por uso, sem quebras, âncoras nem notas', () => {
+    const parts = ['<p class="chapter-break-h1" data-title="x"></p><p class="p-bold">a</p><p class="p-top p-subtitulo">b</p><p class="p-subtitulo">c</p><p class="footnote" id="f1">n</p><p class="chapter-anchor" id="i"></p><p>sem</p>'];
+    expect(listParagraphStyles(parts)).toEqual([{ cls: 'p-subtitulo', count: 2 }, { cls: 'p-bold', count: 1 }, { cls: 'p-top', count: 1 }]);
+});
+
+test('linkIndiceEntries: capítulo com o marcador de página antes do título, ou com o título em dois (<h2>I</h2><h1>CÉU</h1>), também recebe as ligações', () => {
+    const parts = [
+        toc('<p>I — CÉU 67</p><p>Contexto 67</p><p>Mitos 76</p>'),
+        '<p class="chapter-break-h2" data-title="I CÉU">&nbsp;</p>\n<div><span class="pagebreak" data-page="67"></span>&nbsp;</div>\n<h2>I</h2>\n<h1>CÉU</h1>\n<p class="p-subtitulo">Contexto</p><p>texto</p><p class="p-subtitulo">Mitos</p>',
+    ];
+    const r = linkIndiceEntries(parts, ['p-subtitulo']);
+    expect(r.linked).toBe(3);
+    expect(r.parts[1]).toContain('</h1><p class="chapter-anchor" id="idx-anchor-1"></p>'); // âncora depois do último título
 });

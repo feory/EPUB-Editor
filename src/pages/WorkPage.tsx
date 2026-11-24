@@ -22,6 +22,7 @@ import { WorkEditor } from './work/components/WorkEditor';
 import type { WorkEditorRef } from './work/components/WorkEditor';
 import { ChapterSidebar } from './work/components/ChapterSidebar';
 import { TocModal } from './work/components/TocModal';
+import { IndiceLinksModal } from './work/components/IndiceLinksModal';
 import { FocusModeBar } from './work/components/FocusModeBar';
 import { GrammarSidebar } from './work/components/GrammarSidebar';
 import { CommentSidebar } from './work/components/CommentSidebar';
@@ -173,6 +174,7 @@ export function WorkPage() {
   const [showPagelistUpdate, setShowPagelistUpdate] = useState(false);
   const [pdfVersion, setPdfVersion] = useState(0);
   const [showToc, setShowToc] = useState(false);
+  const [showIndiceLinks, setShowIndiceLinks] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [grammarFilter, setGrammarFilter] = useState<'all' | 'spelling' | 'grammar'>('all');
   const [grammarChoiceOpen, setGrammarChoiceOpen] = useState(false);
@@ -530,7 +532,7 @@ export function WorkPage() {
           onConversions={() => setShowConversions(true)}
           onCompressImages={() => setShowCompressImages(true)}
           onUpdatePageList={() => setShowPagelistUpdate(true)}
-          onLinkIndiceEntries={work.handleLinkIndiceEntries}
+          onLinkIndiceEntries={() => setShowIndiceLinks(true)}
           onEditToc={() => setShowToc(true)}
           readOnly={work.readOnly}
         />
@@ -858,6 +860,15 @@ export function WorkPage() {
           isbn={isbn!}
           onGenerate={handlePagelistUpdated}
           onClose={() => setShowPagelistUpdate(false)}
+        />
+      )}
+
+      {showIndiceLinks && (
+        <IndiceLinksModal
+          isbn={isbn!}
+          styles={work.getParagraphStyles()}
+          onConfirm={work.handleLinkIndiceEntries}
+          onClose={() => setShowIndiceLinks(false)}
         />
       )}
 

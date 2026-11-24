@@ -70,15 +70,40 @@ function headingPrefixLength(part: string): number {
     const marker = matchChapterMarkerElement(part);
     if (!marker) return 0;
     const after = part.slice(marker.raw.length);
-    const h = after.match(/^\s*<h[123][^>]*>[\s\S]*?<\/h[123]>/i);
+    // Entre o marcador e o título pode haver um bloco só com o marcador de página (<div><span class="pagebreak"…></span>&nbsp;</div>), e um título
+    // pode vir em dois (<h2>I</h2><h1>CÉU</h1>): o prefixo vai até ao último título seguido.
+    const PAGE_BLOCK = '<(?:div|p)[^>]*>\\s*<span class="pagebreak"[^>]*><\\/span>(?:&nbsp;|\\s)*<\\/(?:div|p)>';
+    const HEADING = '<h[123][^>]*>[\\s\\S]*?<\\/h[123]>';
+    const h = after.match(new RegExp(`^(?:\\s|${PAGE_BLOCK})*${HEADING}(?:\\s*${HEADING})*`, 'i'));
     return h ? marker.raw.length + h[0].length : 0;
 }
 
-// Acha, dentro do conteúdo de UM capítulo, o 1º parágrafo p-bold/p-italic/p-bold-italic/p-uppercase
+// Acha, dentro do conteúdo de UM capítulo, o 1º parágrafo com um dos estilos de subtítulo `styles`
 // ainda não usado cujo texto bata com `lineNorm`. `used` evita casar o mesmo parágrafo físico com
 // duas entradas diferentes do Índice.
-function findSubHeading(partContent: string, lineNorm: string, used: Set<number>): { start: number; end: number; headingNorm: string } | null {
-    const re = /<p\b[^>]*\bclass="[^"]*\b(?:p-bold|p-italic|p-bold-italic|p-uppercase)\b[^"]*"[^>]*>([\s\S]*?)<\/p>/gi;
+/** Estilos que a ligação em lote trata como subtítulo por omissão (o utilizador escolhe os seus no diálogo de "Criação Links Índice"). */
+export const DEFAULT_SUBTITLE_STYLES: readonly string[] = ['p-bold', 'p-italic', 'p-bold-italic', 'p-uppercase'];
+
+/** `<p class="… estilo …">…</p>` para qualquer um de `styles` (classe inteira: `p-sub` não apanha `p-sub-2`). Sem estilos, não casa com nada. */
+function styleParagraphRe(styles: readonly string[]): RegExp {
+    if (!styles.length) return /(?!)/g;
+    const alt = styles.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    return new RegExp(`<p\\b[^>]*\\bclass="(?:[^"]*\\s)?(?:${alt})(?:\\s[^"]*)?"[^>]*>([\\s\\S]*?)<\\/p>`, 'gi');
+}
+
+/** Classes de parágrafo usadas no livro (menos quebras, âncoras e notas), da mais usada para a menos — as candidatas a "estilo de subtítulo". */
+export function listParagraphStyles(rawParts: string[]): { cls: string; count: number }[] {
+    const counts = new Map<string, number>();
+    for (const m of rawParts.join('').matchAll(/<p\b[^>]*\bclass="([^"]*)"/gi)) {
+        for (const cls of m[1].split(/\s+/)) {
+            if (cls && !/^(?:chapter-break.*|chapter-anchor|footnote.*)$/.test(cls)) counts.set(cls, (counts.get(cls) ?? 0) + 1);
+        }
+    }
+    return [...counts].map(([cls, count]) => ({ cls, count })).sort((a, b) => b.count - a.count || a.cls.localeCompare(b.cls));
+}
+
+function findSubHeading(partContent: string, lineNorm: string, used: Set<number>, styles: readonly string[]): { start: number; end: number; headingNorm: string } | null {
+    const re = styleParagraphRe(styles);
     let m: RegExpExecArray | null;
     while ((m = re.exec(partContent)) !== null) {
         if (used.has(m.index)) continue;
@@ -125,7 +150,8 @@ export interface LinkIndiceResult {
     anchored: number;
 }
 
-export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
+/** `subtitleStyles`: classes de parágrafo que contam como subtítulo (as entradas do Índice sem capítulo próprio ligam-se a elas). */
+export function linkIndiceEntries(rawParts: string[], subtitleStyles: readonly string[] = DEFAULT_SUBTITLE_STYLES): LinkIndiceResult {
     const parts = rawParts.map(stripPart); // reexecução idempotente: tira marcadores desta feature primeiro
 
     const classified = parts.map((p, i) => ({ i, ...classifyChapterPart(p, i) }));
@@ -183,7 +209,7 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
         // capítulo corrente (ex. "Conclusão" do Cap. 1 vs. capítulo final "Conclusão"): é a
         // sub-secção — senão o ponteiro saltava para o fim e o resto do Índice ficava por ligar.
         if (topTarget && currentChapter && topTargetIdx > topSearchFrom &&
-            findSubHeading(parts[currentChapter.i], lineNorm, usedSubHeadings.get(currentChapter.i) ?? new Set<number>())) {
+            findSubHeading(parts[currentChapter.i], lineNorm, usedSubHeadings.get(currentChapter.i) ?? new Set<number>(), subtitleStyles)) {
             topTarget = undefined;
         }
         if (topTarget) {
@@ -216,7 +242,7 @@ export function linkIndiceEntries(rawParts: string[]): LinkIndiceResult {
         // 2. sub-entrada — só procura DENTRO do capítulo corrente (mesmo texto repete-se entre capítulos)
         if (currentChapter) {
             const used = usedSubHeadings.get(currentChapter.i) ?? new Set<number>();
-            const match = findSubHeading(parts[currentChapter.i], lineNorm, used);
+            const match = findSubHeading(parts[currentChapter.i], lineNorm, used, subtitleStyles);
             if (match) {
                 used.add(match.start);
                 usedSubHeadings.set(currentChapter.i, used);

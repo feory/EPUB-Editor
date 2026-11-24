@@ -126,8 +126,8 @@ export function applyDropCaps(book: Book): BookEdit {
 }
 
 /** Ligar as entradas do Índice aos capítulos, em lote. */
-export function linkIndice(book: Book): BookEdit {
-    const { parts, linked, anchored } = linkIndiceEntries(book.parts);
+export function linkIndice(book: Book, subtitleStyles?: readonly string[]): BookEdit {
+    const { parts, linked, anchored } = linkIndiceEntries(book.parts, subtitleStyles);
     const html = parts.join('');
     if (html === book.html) return info('Nenhum Índice encontrado, ou nenhuma entrada correspondeu a um capítulo.');
     return keep(html, `${plural(linked, 'entrada ligada', 'entradas ligadas')} a ${plural(anchored, 'capítulo', 'capítulos')}.`);
