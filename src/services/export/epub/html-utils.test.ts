@@ -22,3 +22,15 @@ test('linkUrls: URL solto vira link sem a pontuação final; não toca em URLs j
     expect(linkUrls('<p>(http://a.pt/b_(c))</p>')).toBe('<p>(<a href="http://a.pt/b_(c)">http://a.pt/b_(c)</a>)</p>');
     expect(linkUrls('<p><a href="http://a.pt">http://a.pt</a></p>')).toBe('<p><a href="http://a.pt">http://a.pt</a></p>');
 });
+
+test('linkUrls: endereços com www. (sem http) também ficam clicáveis, com href https://', () => {
+    expect(linkUrls('<p>Ver www.exemplo.pt/pagina, e depois www.un.org.</p>')).toBe('<p>Ver <a href="https://www.exemplo.pt/pagina">www.exemplo.pt/pagina</a>, e depois <a href="https://www.un.org">www.un.org</a>.</p>');
+    expect(linkUrls('<p>(www.bbc.com/future/article-1)</p>')).toBe('<p>(<a href="https://www.bbc.com/future/article-1">www.bbc.com/future/article-1</a>)</p>');
+    expect(linkUrls('<p>http://a.pt e www.b.pt</p>')).toBe('<p><a href="http://a.pt">http://a.pt</a> e <a href="https://www.b.pt">www.b.pt</a></p>');
+    // não conta: já dentro de <a>, no meio de uma palavra, num email, dentro de outro endereço, ou sem domínio
+    expect(linkUrls('<p><a href="https://www.a.pt">www.a.pt</a></p>')).toBe('<p><a href="https://www.a.pt">www.a.pt</a></p>');
+    expect(linkUrls('<p>awww.a.pt</p>')).toBe('<p>awww.a.pt</p>');
+    expect(linkUrls('<p>rui@www.a.pt</p>')).toBe('<p>rui@www.a.pt</p>');
+    expect(linkUrls('<p>https://x.pt/www.a.pt</p>')).toBe('<p><a href="https://x.pt/www.a.pt">https://x.pt/www.a.pt</a></p>');
+    expect(linkUrls('<p>www. e www.pt</p>')).toBe('<p>www. e www.pt</p>');
+});

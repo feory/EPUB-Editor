@@ -144,6 +144,8 @@ Mostra-te quantas alterações faz de cada tipo e um exemplo antes de aplicares.
 
 *«Corrige o espaçamento dos links.»* — acerta o espaçamento das ligações do livro. Mostra-te o resumo do que mudou antes de aplicares.
 
+Os **endereços escritos no texto** (`http://…`, `https://…` e `www.…`) não precisam de nada disto: o editor não guarda ligações, e ao **exportar o EPUB** esses endereços ficam clicáveis sozinhos. Só ficam sem ligação os que têm um espaço ou uma quebra no meio (`www.exemplo- site.pt`); esses corrigem-se à mão.
+
 ### 3.10 Comprimir imagens
 
 Se o EPUB está pesado, o assistente reduz as imagens: as que forem **mais largas** que o limite passam a esse limite (nunca as aumenta) e são guardadas com menos qualidade. Por omissão, 1600 px de largura e qualidade 82; podes pedir outros valores (largura de 400 a 6000 px, qualidade de 40 a 95). Mostra no fim quanto poupou, antes e depois.

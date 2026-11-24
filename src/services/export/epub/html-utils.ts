@@ -92,6 +92,8 @@ export const cleanHtmlForXhtml = (html: string): string => {
 
 // URLs soltas no texto → <a href> clicável. O editor apaga todo o <a> (cleanHtml), por isso os links só
 // nascem aqui, no export. Ignora o que já está dentro de <a>; a pontuação final não entra no link.
+// Reconhece http(s):// e endereços que começam por "www." (o href leva https://; o texto fica como foi escrito). O "www." não conta no meio
+// de uma palavra nem de um email/endereço (precedido de letra, dígito, @, . ou /), e tem de ter um domínio (www.exemplo.pt).
 export const linkUrls = (html: string): string => {
     let inLink = 0;
     return html.split(/(<[^>]+>)/).map(part => {
@@ -101,14 +103,14 @@ export const linkUrls = (html: string): string => {
             return part;
         }
         if (inLink > 0) return part;
-        return part.replace(/https?:\/\/(?:(?!&nbsp;)[^\s<>"])+/g, (raw) => {
+        return part.replace(/(?:https?:\/\/|(?<![\w@./-])www\.(?=[\w-]+\.[\w-]))(?:(?!&nbsp;)[^\s<>"])+/g, (raw) => {
             let url = raw;
             for (;;) {
                 const last = url.slice(-1);
                 if (/[.,;:!?»]/.test(last) || (last === ')' && url.split(')').length > url.split('(').length)) url = url.slice(0, -1);
                 else break;
             }
-            return `<a href="${url}">${url}</a>${raw.slice(url.length)}`;
+            return `<a href="${/^www\./i.test(url) ? `https://${url}` : url}">${url}</a>${raw.slice(url.length)}`;
         });
     }).join('');
 };
