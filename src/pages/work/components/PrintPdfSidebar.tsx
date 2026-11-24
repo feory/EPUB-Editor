@@ -25,6 +25,7 @@ type Status = 'loading' | 'missing' | 'ready' | 'error';
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 3;
 const SCALE_STEP = 0.2;
+const MAX_CANVAS_PX = 16_000_000;
 
 export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose, syncFolio, getEditorFolio, onPageClick, jump, freeMode, onPdfUploaded, width, onResize }) => {
     const [status, setStatus] = useState<Status>('loading');
@@ -115,8 +116,13 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
             if (cancelled) return;
             const viewport = pdfPage.getViewport({ scale });
             const canvas = canvasRef.current!;
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
+            // Nitidez: o canvas tem píxeis de ECRÃ (devicePixelRatio) e o CSS dá-lhe o tamanho em píxeis CSS; sem isto, num ecrã retina o browser
+            // esticava um canvas com metade dos píxeis. O ratio desce para o canvas não passar de MAX_CANVAS_PX (memória: zoom 3× num ecrã 2× são ~17M).
+            const ratio = Math.min(window.devicePixelRatio || 1, Math.sqrt(MAX_CANVAS_PX / (viewport.width * viewport.height)));
+            canvas.width = Math.floor(viewport.width * ratio);
+            canvas.height = Math.floor(viewport.height * ratio);
+            canvas.style.width = `${viewport.width}px`;
+            canvas.style.height = `${viewport.height}px`;
             // Caixa do tamanho da página: o canvas pinta, a camada de texto (transparente, por cima)
             // dá a seleção/cópia — o canvas sozinho é só imagem.
             const box = pageBoxRef.current!;
@@ -129,7 +135,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
             const { TextLayer } = await import('pdfjs-dist');
             if (cancelled) return;
             textLayer = new TextLayer({ textContentSource: pdfPage.streamTextContent(), container: textDiv, viewport });
-            await Promise.all([pdfPage.render({ canvas, viewport }).promise, textLayer.render()]);
+            await Promise.all([pdfPage.render({ canvas, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] }).promise, textLayer.render()]);
         })().catch(() => { /* render cancelado por mudança de página/zoom */ });
         return () => { cancelled = true; textLayer?.cancel(); };
     }, [status, page, scale]);
