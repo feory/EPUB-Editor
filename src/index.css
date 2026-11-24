@@ -46,6 +46,13 @@ body {
   box-sizing: border-box;
 }
 
+/* Texto selecionado nos campos (número do contorno, nomes…): o realce do sistema (no macOS depende da cor de destaque, e em «grafite» é cinzento escuro) escondia o texto. Cinza claro com texto escuro lê-se sempre. */
+input::selection,
+textarea::selection {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
 .mini-cover {
     width: 40px;
     height: 56px;
