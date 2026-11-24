@@ -3,7 +3,7 @@ import { X, FileText, ChevronLeft, ChevronRight, Loader2, Upload, ZoomIn, ZoomOu
 import type { PDFDocumentProxy, TextLayer } from 'pdfjs-dist';
 import { printPdfs } from '../printPdfs';
 import { anchorsFromPages, type PageAnchor } from '../../../services/page-list/pdf-text';
-import { nearestPdfPage } from '../../../services/page-list/nearest-page';
+import { usePdfSync } from '../hooks/usePdfSync';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import { PanelResizeHandle } from './PanelResizeHandle';
 
@@ -48,13 +48,11 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     // partilhadas com quem carregou o PDF (handleUpload → onPdfUploaded), em vez de o refazer.
     const anchorsRef = useRef<PageAnchor[]>([]);
 
-    // Editor → PDF, num só sítio: folio do editor → página física mais próxima (abrir e scroll).
-    const showFolio = useCallback((folio: number | null | undefined) => {
-        const target = folio != null ? nearestPdfPage(folioMapRef.current, folio) : undefined;
-        if (target) setPage(target);
-    }, []);
-
-    const showPdfPage = useCallback((target: number) => setPage(Math.min(Math.max(1, target), pageCountRef.current || 1)), []);
+    // Quem segue quem (editor ↔ PDF): as regras estão em services/page-list/pdf-sync.ts (pura); o hook lê o estado, pede a ação e aplica-a.
+    const { send: sync, opened } = usePdfSync({
+        free: !!freeMode, ready: status === 'ready', mapsReady: anchorsReady, pageCountRef, folioToPageRef: folioMapRef, pageToFolioRef: indexToFolioRef,
+        setPage, onPageClick, getEditorFolio,
+    });
 
     const loadPdf = useCallback(async () => {
         setStatus('loading');
@@ -78,12 +76,11 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
             setAnchorsReady(true);
             // Abre na página mais próxima de onde o editor está (o mapa só existe agora, depois do
             // parse das âncoras — antes ficava sempre na 1.ª e o sync só reagia a scroll).
-            showFolio(getEditorFolio?.());
+            opened();
         } catch {
             setStatus('error');
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- getEditorFolio só é lido ao carregar o PDF
-    }, [isbn, showFolio]);
+    }, [isbn, opened]);
 
     // Fetch-on-mount/isbn-change: setStatus('loading') no arranque de loadPdf é síncrono de
     // propósito (mostra o loading antes do fetch), não estado derivado — sem migração para
@@ -91,21 +88,12 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { loadPdf(); }, [loadPdf]);
 
-    // Scroll no editor → salta para a página física correspondente ao folio visível.
-    useEffect(() => {
-        if (status !== 'ready' || syncFolio == null || freeMode) return;
-        showFolio(syncFolio);
-    }, [syncFolio, status, showFolio, freeMode]);
+    // Scroll no editor → o PDF mostra a página do folio visível (no modo livre não; ao desligá-lo volta a alinhar).
+    useEffect(() => { sync({ type: 'editorAt', folio: syncFolio ?? null }); }, [syncFolio, status, freeMode, sync]);
 
     // Pedido do assistente (depois do sync com o editor, para o ganhar quando o painel acaba de abrir): o PDF e o editor vão juntos para a página.
     // Corre de novo quando o mapa folio↔página fica pronto (o pedido pode chegar antes); páginas sem folio (front matter) só movem o PDF.
-    useEffect(() => {
-        if (status !== 'ready' || !jump) return;
-        const folio = 'folio' in jump ? jump.folio : indexToFolioRef.current.get(jump.pdf);
-        if ('folio' in jump) showFolio(jump.folio); else showPdfPage(jump.pdf);
-        if (anchorsReady && folio != null) onPageClick?.(folio);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onPageClick muda a cada render do pai; só o pedido (`jump`) e o fim do carregamento disparam o salto
-    }, [jump, status, anchorsReady, showFolio, showPdfPage]);
+    useEffect(() => { if (jump) sync({ type: 'jump', to: 'folio' in jump ? { folio: jump.folio } : { pdf: jump.pdf } }); }, [jump, status, anchorsReady, sync]);
 
     useEffect(() => {
         if (status !== 'ready' || !pdfRef.current || !canvasRef.current) return;
@@ -144,22 +132,15 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
     // ao valor atual (o `key={page}` no input remonta-o com o defaultValue certo).
     const commitPageInput = (input: HTMLInputElement) => {
         const target = Math.round(Number(input.value));
-        if (Number.isFinite(target) && target >= 1 && target <= pageCount) goToPage(target);
+        if (Number.isFinite(target) && target >= 1 && target <= pageCount) step(target);
         else input.value = String(page);
     };
 
     const zoomIn = () => setScale(s => Math.min(MAX_SCALE, +(s + SCALE_STEP).toFixed(2)));
     const zoomOut = () => setScale(s => Math.max(MIN_SCALE, +(s - SCALE_STEP).toFixed(2)));
 
-    // Navegação do utilizador (setas ou clique na página) → resolve o folio e reencaminha o
-    // editor. Distinto do setPage direto usado pelo sync editor→PDF (evita ping-pong entre os
-    // dois sentidos: aquele já chega à página certa, não precisa de voltar a mandar o editor lá).
-    // `follow`: mover também o editor. Por omissão não o faz no modo livre; o clique na própria página ("localizar no editor") pede-o sempre.
-    const goToPage = (target: number, follow = !freeMode) => {
-        setPage(target);
-        const folio = indexToFolioRef.current.get(target);
-        if (folio != null && follow) onPageClick?.(folio);
-    };
+    // Navegação do utilizador: as setas e o campo de página (stepped) e o clique na própria página (clicked); o que o editor faz é de syncAction.
+    const step = (target: number) => sync({ type: 'stepped', page: target });
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -224,7 +205,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
                     <div
                         ref={pageBoxRef}
                         // Clicar (sem ter selecionado texto) leva o editor a esta página.
-                        onClick={() => { if (!window.getSelection()?.toString()) goToPage(page, true); }}
+                        onClick={() => { if (!window.getSelection()?.toString()) sync({ type: 'clicked', page }); }}
                         title="Ir para esta página no editor"
                         // m-auto (não a centragem do container, items-center/justify-center):
                         // quando a página renderizada é maior que o painel, justify/items-center
@@ -251,7 +232,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
                     <div className="sticky bottom-0 left-1/2 -translate-x-1/2 pt-6 pb-3 flex items-center gap-3 bg-gradient-to-t from-white via-white/95 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300">
                         {pageCount > 1 && (
                             <>
-                                <button onClick={() => goToPage(Math.max(1, page - 1))} disabled={page <= 1} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                                <button onClick={() => step(Math.max(1, page - 1))} disabled={page <= 1} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors">
                                     <ChevronLeft size={16} />
                                 </button>
                                 <span className="flex items-center gap-1 text-xs font-semibold text-slate-600 tabular-nums">
@@ -269,7 +250,7 @@ export const PrintPdfSidebar: React.FC<PrintPdfSidebarProps> = ({ isbn, onClose,
                                     />
                                     / {pageCount}
                                 </span>
-                                <button onClick={() => goToPage(Math.min(pageCount, page + 1))} disabled={page >= pageCount} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                                <button onClick={() => step(Math.min(pageCount, page + 1))} disabled={page >= pageCount} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors">
                                     <ChevronRight size={16} />
                                 </button>
                                 <span className="w-px h-4 bg-slate-200 mx-1" />

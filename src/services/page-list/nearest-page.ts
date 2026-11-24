@@ -19,7 +19,7 @@ export function pickFolio(markers: { page: number; top: number }[], refTop: numb
 
 /** Página física do PDF para um folio: a exata, senão a do folio numericamente mais próximo
  *  (em empate, o anterior). `undefined` se não há mapa. */
-export function nearestPdfPage(folioMap: Map<number, number>, folio: number): number | undefined {
+export function nearestPdfPage(folioMap: ReadonlyMap<number, number>, folio: number): number | undefined {
     const exact = folioMap.get(folio);
     if (exact !== undefined) return exact;
     let best: number | undefined;
