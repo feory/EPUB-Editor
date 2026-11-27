@@ -1,4 +1,4 @@
-// Definições da IA que o administrador muda no Painel: a chave e o modelo da OpenRouter. SÓ há esta via (sem variáveis de
+// Definições da IA que o administrador muda no Painel: a chave, o modelo e as opções de fornecedor da OpenRouter. SÓ há esta via (sem variáveis de
 // ambiente). Ficam na tabela `settings`; a chave CIFRADA (AES-256-GCM, chave derivada do JWT_SECRET) e nunca sai do
 // servidor — o Painel só vê se existe e os últimos 4 caracteres.
 import { createCipheriv, createDecipheriv, randomBytes, hkdfSync } from 'crypto';
@@ -7,6 +7,10 @@ import { JWT_SECRET } from './config.js';
 
 const KEY_SETTING = 'ai_openrouter_key';
 const MODEL_SETTING = 'ai_openrouter_model';
+const SORT_SETTING = 'ai_openrouter_sort';
+const DENY_DATA_SETTING = 'ai_openrouter_deny_data';
+/** Ordem dos fornecedores do modelo; 'auto' = o equilíbrio de carga da própria OpenRouter. */
+export const PROVIDER_SORTS = ['price', 'throughput', 'latency', 'auto'];
 const secret = Buffer.from(hkdfSync('sha256', JWT_SECRET, '', 'epub-ai-settings', 32));
 
 /** iv | tag | texto cifrado, em base64. */
@@ -37,8 +41,21 @@ export function effectiveOpenRouter() {
   };
 }
 
-/** `apiKey` guarda (cifrada); `clearKey` apaga a chave; `model` guarda ('' apaga). */
-export function saveAiSettings({ apiKey, clearKey, model }) {
+/** As opções de fornecedor guardadas; sem nada guardado, o mais barato e sem restrição de dados. */
+export function providerSettings() {
+  return { providerSort: setting(SORT_SETTING) || 'price', denyData: setting(DENY_DATA_SETTING) === '1' };
+}
+
+/** O campo `provider` do pedido à OpenRouter. */
+export function providerPreferences() {
+  const { providerSort, denyData } = providerSettings();
+  return { ...(providerSort !== 'auto' ? { sort: providerSort } : {}), ...(denyData ? { data_collection: 'deny' } : {}) };
+}
+
+/** `apiKey` guarda (cifrada); `clearKey` apaga a chave; `model` guarda ('' apaga); o que vier `undefined` não muda. */
+export function saveAiSettings({ apiKey, clearKey, model, providerSort, denyData }) {
+  if (providerSort !== undefined) stmt.setSetting.run(SORT_SETTING, providerSort);
+  if (denyData !== undefined) stmt.setSetting.run(DENY_DATA_SETTING, denyData ? '1' : '0');
   if (clearKey) db.prepare('DELETE FROM settings WHERE key = ?').run(KEY_SETTING);
   else if (apiKey) stmt.setSetting.run(KEY_SETTING, encrypt(apiKey));
   if (model === '') db.prepare('DELETE FROM settings WHERE key = ?').run(MODEL_SETTING);
@@ -53,5 +70,6 @@ export function publicAiSettings() {
     keyConfigured: !!e.apiKey,
     keyHint: e.apiKey ? e.apiKey.slice(-4) : null,
     model: e.model,
+    ...providerSettings(),
   };
 }

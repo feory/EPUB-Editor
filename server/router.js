@@ -97,7 +97,7 @@ export async function handleRequest(req) {
       if (method === "PUT") return aiAdmin.putSettings(req, user);
     }
     if (path === "/api/ai/settings/test" && method === "POST") return aiAdmin.testConnection(user);
-    if (path === "/api/ai/models"        && method === "GET")  return aiAdmin.listModels(user);
+    if (path === "/api/ai/models"        && method === "GET")  return aiAdmin.listModels(url, user);
     if (path === "/api/ai/usage"         && method === "GET")  return aiAdmin.getUsage(url, user);
 
     // Documentação: GET qualquer utilizador; editar/repor só admin

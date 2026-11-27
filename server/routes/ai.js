@@ -4,7 +4,7 @@
 // cliente corre-as, acrescenta os tool_result e volta a chamar. O modelo nunca aplica nada: propõe com `preview_rules` e o
 // utilizador confirma na UI.
 import { corsHeaders, safeSegment } from '../response.js';
-import { effectiveOpenRouter } from '../ai-settings.js';
+import { effectiveOpenRouter, providerPreferences } from '../ai-settings.js';
 import { openrouterBackend } from '../ai-openrouter.js';
 import { loadImageForModel } from '../ai-images.js';
 import { recordAiUsage } from '../ai-usage.js';
@@ -204,8 +204,9 @@ let openrouterCache = { sig: '', backend: null };
 export function resolveBackend() {
   const { apiKey, model } = effectiveOpenRouter();
   if (!apiKey || !model) return null;
-  const sig = `${apiKey}|${model}`;
-  if (openrouterCache.sig !== sig) openrouterCache = { sig, backend: openrouterBackend({ apiKey, model, maxTokens: MAX_TOKENS }) };
+  const provider = providerPreferences();
+  const sig = `${apiKey}|${model}|${JSON.stringify(provider)}`;
+  if (openrouterCache.sig !== sig) openrouterCache = { sig, backend: openrouterBackend({ apiKey, model, provider, maxTokens: MAX_TOKENS }) };
   return openrouterCache.backend;
 }
 

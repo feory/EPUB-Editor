@@ -1,11 +1,16 @@
 import apiClient from './client';
 
 /** O que o Painel vê da OpenRouter: nunca a chave inteira (só os últimos 4 caracteres). */
+export type ProviderSort = 'price' | 'throughput' | 'latency' | 'auto';
+
 export interface AiSettings {
     configured: boolean;
     keyConfigured: boolean;
     keyHint: string | null;
     model: string | null;
+    providerSort: ProviderSort;
+    /** Só fornecedores que não guardam nem treinam com os dados enviados. */
+    denyData: boolean;
 }
 
 export interface AiModel {
@@ -32,8 +37,8 @@ export interface AiUsage {
 export const aiAdminApi = {
     getSettings: () => apiClient.get<AiSettings>('/ai/settings').then((r) => r.data),
     /** `apiKey` guarda a chave; `clearKey` apaga a do Painel; `model` ('' apaga) guarda o modelo. */
-    saveSettings: (body: { apiKey?: string; clearKey?: boolean; model?: string }) => apiClient.put<AiSettings>('/ai/settings', body).then((r) => r.data),
+    saveSettings: (body: { apiKey?: string; clearKey?: boolean; model?: string; providerSort?: ProviderSort; denyData?: boolean }) => apiClient.put<AiSettings>('/ai/settings', body).then((r) => r.data),
     testConnection: () => apiClient.post<{ ok: boolean; message: string }>('/ai/settings/test').then((r) => r.data),
     getUsage: (days: number) => apiClient.get<AiUsage>('/ai/usage', { params: { days } }).then((r) => r.data),
-    getModels: () => apiClient.get<{ models: AiModel[] }>('/ai/models').then((r) => r.data.models),
+    getModels: (sort: ProviderSort) => apiClient.get<{ models: AiModel[] }>('/ai/models', { params: { sort } }).then((r) => r.data.models),
 };

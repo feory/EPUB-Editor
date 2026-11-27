@@ -11,7 +11,7 @@ const admin = { sub: '1', role: 'admin', email: 'a@t.pt' };
 const user = { sub: '2', role: 'user', email: 'u@t.pt' };
 const KEY = 'sk-or-v1-0123456789abcdef0123456789abcdef';
 
-afterEach(() => { saveAiSettings({ clearKey: true, model: '' }); resetModelsCache(); });
+afterEach(() => { saveAiSettings({ clearKey: true, model: '', providerSort: 'price', denyData: false }); resetModelsCache(); });
 
 test('cifra: ida e volta; texto cifrado não contém a chave; adulterado → null', () => {
   const blob = encrypt(KEY);
@@ -27,7 +27,7 @@ test('guardar: a BD tem a chave cifrada, o Painel só vê os últimos 4 caracter
   const stored = db.prepare("SELECT value FROM settings WHERE key = 'ai_openrouter_key'").get().value;
   expect(stored).not.toContain(KEY);
   const pub = publicAiSettings();
-  expect(pub).toEqual({ configured: true, keyConfigured: true, keyHint: KEY.slice(-4), model: 'openai/gpt-6-luna' });
+  expect(pub).toEqual({ configured: true, keyConfigured: true, keyHint: KEY.slice(-4), model: 'openai/gpt-6-luna', providerSort: 'price', denyData: false });
   expect(JSON.stringify(pub)).not.toContain(KEY);
   expect(effectiveOpenRouter().apiKey).toBe(KEY);
 });
@@ -68,13 +68,24 @@ test('lista de modelos: só os com ferramentas, ordenados por nome, com visão e
 test('GET modelos: admin; vai buscar uma vez (cache); falha da OpenRouter → 502', async () => {
   let calls = 0;
   const fetchImpl = async () => { calls++; return Response.json(catalog); };
-  expect((await listModels(user, fetchImpl)).status).toBe(403);
-  const res = await listModels(admin, fetchImpl);
+  const url = new URL('http://x/api/ai/models');
+  expect((await listModels(url, user, fetchImpl)).status).toBe(403);
+  const res = await listModels(url, admin, fetchImpl);
   expect((await res.json()).models).toHaveLength(2);
-  await listModels(admin, fetchImpl);
+  await listModels(url, admin, fetchImpl);
   expect(calls).toBe(1);
   resetModelsCache();
-  expect((await listModels(admin, async () => new Response('x', { status: 500 }))).status).toBe(502);
+  expect((await listModels(url, admin, async () => new Response('x', { status: 500 }))).status).toBe(502);
+});
+
+test('GET modelos: a ordem de fornecedor pede a lista já ordenada e mantém essa ordem; cache por ordem', async () => {
+  const asked = [];
+  const fetchImpl = async (u) => { asked.push(String(u).split('/models')[1]); return Response.json({ data: [catalog.data[0], catalog.data[1]] }); };
+  const ids = async (sort) => (await (await listModels(new URL(`http://x/api/ai/models?sort=${sort}`), admin, fetchImpl)).json()).models.map((m) => m.id);
+  expect(await ids('price')).toEqual(['b/vision', 'a/text']);
+  expect(await ids('auto')).toEqual(['a/text', 'b/vision']);
+  await ids('throughput'); await ids('latency'); await ids('price'); await ids('x%26y');
+  expect(asked).toEqual(['?sort=pricing-low-to-high', '', '?sort=throughput-high-to-low', '?sort=latency-low-to-high']);
 });
 
 test('testar ligação: sem chave, chave recusada, modelo inexistente, modelo sem visão, tudo bem', async () => {
@@ -117,4 +128,22 @@ test('sem variáveis de ambiente para a OpenRouter: a chave e o modelo só vêm 
   expect(cfg.OPENROUTER_MODEL).toBeUndefined();
   expect(cfg.AI_PROVIDER).toBeUndefined();
   expect(effectiveOpenRouter()).toEqual({ apiKey: null, model: null });
+});
+
+test('opções de fornecedor: valida, guarda e vão no pedido à OpenRouter sem reiniciar', async () => {
+  expect((await putSettings(put({ providerSort: 'barato' }), admin)).status).toBe(400);
+  expect((await putSettings(put({ denyData: 'sim' }), admin)).status).toBe(400);
+  const sent = [];
+  const realFetch = globalThis.fetch;
+  // o backend apanha o `fetch` global quando é criado: o falso tem de estar posto antes de qualquer resolveBackend()
+  globalThis.fetch = async (_u, init) => { sent.push(JSON.parse(init.body)); return Response.json({ choices: [] }); };
+  try {
+    const ask = async () => { await resolveBackend().create({ system: 'S', tools: [], messages: [] }); return sent.at(-1).provider; };
+    saveAiSettings({ apiKey: KEY, model: 'm/opcoes' });
+    expect(await ask()).toEqual({ sort: 'price' });
+    await putSettings(put({ providerSort: 'latency', denyData: true }), admin);
+    expect(await ask()).toEqual({ sort: 'latency', data_collection: 'deny' });
+    await putSettings(put({ providerSort: 'auto', denyData: false }), admin);
+    expect(await ask()).toBeUndefined();
+  } finally { globalThis.fetch = realFetch; }
 });
